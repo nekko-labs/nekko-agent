@@ -12,8 +12,9 @@ app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((req, done) => done({ cancel: !/^(file:|data:|blob:)/.test(req.url) }));
   session.defaultSession.setPermissionRequestHandler((_c, _p, done) => done(false));
   session.defaultSession.setPermissionCheckHandler(() => false);
-  const x = Math.min(...screen.getAllDisplays().map(d => d.bounds.x));
-  const y = Math.min(...screen.getAllDisplays().map(d => d.bounds.y));
+  const displays = screen.getAllDisplays().map(d => d.bounds);
+  const x = Math.min(...displays.map(d => d.x));
+  const y = Math.min(...displays.map(d => d.y));
   const win = new BrowserWindow({ width: 1280, height: 980, useContentSize: true, show: false, focusable: false, skipTaskbar: true, x: x - 3000, y: y - 1600, webPreferences: { sandbox: true, contextIsolation: true, backgroundThrottling: false } });
   win.on('focus', () => report.errors.push('Fixture took focus'));
   win.webContents.on('console-message', e => { if (e.level === 'error') report.errors.push(e.message); });
@@ -22,6 +23,10 @@ app.whenReady().then(async () => {
   const wait = async (source) => { for (let i = 0; i < 80; i++) { if (await run(source)) return; await sleep(100); } throw Error(`Timed out: ${source}`); };
   const click = (label) => run(`[...document.querySelectorAll('button')].find(b=>b.getAttribute('aria-label')===${JSON.stringify(label)} || b.textContent.trim()===${JSON.stringify(label)}).click()`);
   const jump = section => run(`(() => { const workspace = document.querySelector('.models-workspace'); const target = document.querySelector('[data-models-section=${section}]'); workspace.scrollTo({ top: workspace.scrollTop + target.getBoundingClientRect().top - workspace.getBoundingClientRect().top, behavior: 'instant' }); })()`);
+  const familyOrder = `Array.from(document.querySelectorAll('[data-model-family]'), el => el.dataset.modelFamily).join(',')`;
+  const variantOrder = `Array.from(document.querySelectorAll('[data-library-row]'), el => el.dataset.libraryRow).join(',')`;
+  const sort = value => run(`(() => { const el = document.querySelector('[data-model-sort]'); el.value = '${value}'; el.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  const toggle = id => `document.querySelector('[data-library-row="${id}"] [data-model-row-toggle]')`;
   const capture = async (name, width, height, theme, section = 'local') => {
     win.setContentSize(width, height);
     await run(`fixture.theme('${theme}')`);
@@ -36,21 +41,58 @@ app.whenReady().then(async () => {
   };
   const check = async (name, source) => { await wait(source); report.checks.push(name); };
   try {
+    const bounds = win.getBounds();
+    report.background = { bounds, visible: win.isVisible(), focused: win.isFocused(), focusable: win.isFocusable() };
+    assert(!report.background.visible && !report.background.focused && !report.background.focusable && bounds.x + bounds.width < x && bounds.y + bounds.height < y, 'Fixture must start hidden, non-focusable, and off display');
     await win.loadFile(path.join(out, 'index.html'));
     await wait("!!document.querySelector('[data-model-family=gemma4e4b]')");
     assert(await run("getComputedStyle(document.querySelector('.models-workspace')).overflowY === 'auto'"), 'Renderer stylesheet must be active');
     await run("document.querySelector('details[aria-label=\"System models\"], details[data-models-section=system]').open=true");
     await run("document.querySelector('[data-model-family=gemma4e4b]').click()");
     await wait("document.body.innerText.includes('Apple speech')");
+    await wait("!!document.querySelector('[data-library-row=gemma]')");
     for (const [name, w, h, theme] of [['desktop-light', 1280, 1050, 'light'], ['desktop-dark', 1280, 1050, 'dark'], ['narrow-dark', 390, 1050, 'dark']]) await capture(name, w, h, theme);
+    await capture('narrow-library', 390, 1050, 'dark', 'library');
     if (!baseline) {
       await check('System models precedes the general library', "!!(document.querySelector('[data-models-section=system]').compareDocumentPosition(document.querySelector('[data-models-section=library]')) & Node.DOCUMENT_POSITION_FOLLOWING)");
       await check('No page overflow at narrow width', 'document.documentElement.scrollWidth===innerWidth && document.querySelector(".models-workspace").scrollWidth===document.querySelector(".models-workspace").clientWidth');
       await check('Installed facts use effective parameters, disk size, and type', `document.querySelector('[data-model-family=gemma4e4b] [data-model-facts]').innerText.replace(/\\s/g,' ')==='Vision · 4B effective parameters · 5.0 GB'`);
+      await check('Installed model sort offers Recent, Name, and Size', `Array.from(document.querySelector('[data-model-sort]').options).map(o => o.text).join(',')==='Recent,Name,Size'`);
+      await check('Installed families default to newest added variant first', `document.querySelector('[data-model-sort]').value==='recent' && ${familyOrder}==='gemma4e4b,qwen359b,flux2klein4b,bgesmall'`);
+      await check('Sort icon and value do not overlap', `(() => { const select=document.querySelector('[data-model-sort]'); const icon=select.previousElementSibling.getBoundingClientRect(); return icon.right < select.getBoundingClientRect().left + parseFloat(getComputedStyle(select).paddingLeft); })()`);
+      await sort('name');
+      await check('Name sorts installed families A to Z and preserves selection', `${familyOrder}==='bgesmall,flux2klein4b,gemma4e4b,qwen359b' && document.querySelector('[data-model-family=gemma4e4b]').getAttribute('aria-expanded')==='true'`);
+      await sort('size');
+      await check('Size sorts by total installed family bytes, largest first', `${familyOrder}==='qwen359b,gemma4e4b,flux2klein4b,bgesmall'`);
+      await run(`document.querySelector('[data-model-family=qwen359b]').click()`);
+      await check('Size sorts variants across folders', `${variantOrder}==='qwen-f16,qwen'`);
+      await check('Measured partial and too-large variants have warning icons', `!!document.querySelector('[data-model-family=qwen359b] [data-model-fit=partial] svg') && !!document.querySelector('[data-library-row=qwen-f16] [data-model-fit=wont] svg')`);
+      await sort('recent');
+      await check('Recent sorts variants across folders, newest first', `${variantOrder}==='qwen,qwen-f16'`);
+      await run(`document.querySelector('[data-model-family=gemma4e4b]').click()`);
+      await check('Measured fits get a check; estimates do not', `!!document.querySelector('[data-model-family=gemma4e4b] [data-model-fit=full] svg') && !!document.querySelector('[data-library-row=gemma] [data-model-fit=full] svg') && !document.querySelector('[data-model-family=flux2klein4b] [data-model-fit]')`);
+      await run(`document.querySelector('[data-model-family=gemma4e4b]').click()`);
+      await check('Clicking the selected installed row closes its right-hand details', `!document.querySelector('[data-model-family-header]')`);
+      await run(`document.querySelector('[data-model-family=gemma4e4b]').click()`);
+      await check('Opening an installed row shows a disclosure header', `!!document.querySelector('[data-model-family-header]')`);
+      await run(`document.querySelector('[data-model-family-header]').click()`);
+      await check('The right-hand header collapses the family and restores focus', `!document.querySelector('[data-model-family-header]') && document.activeElement===document.querySelector('[data-model-family=gemma4e4b]')`);
+      await run(`document.querySelector('[data-model-family=gemma4e4b]').click()`);
+      await check('Family and variant switches contain no nested actions', `!document.querySelector('[data-model-family] button, [data-model-row-toggle] button')`);
+      await run(`${toggle('gemma')}.click()`);
+      await check('Clicking the variant row opens its own settings', `${toggle('gemma')}.getAttribute('aria-expanded')==='true' && !!document.querySelector('[data-library-row=gemma] [data-engine-load-drawer]')`);
+      await capture('wide-variant-expanded', 1280, 1050, 'dark', 'library');
+      await run(`${toggle('gemma')}.click()`);
+      await check('Clicking the variant row again closes settings, not the family', `${toggle('gemma')}.getAttribute('aria-expanded')==='false' && !document.querySelector('[data-engine-load-drawer]') && !!document.querySelector('[data-model-family-header]')`);
+      await run(`Array.from(document.querySelectorAll('[data-library-row=gemma] button')).find(b=>b.textContent.trim()==='On start').click()`);
+      await check('On start targets the variant, without opening settings', `fixture.autoload().join(',')==='gemma' && ${toggle('gemma')}.getAttribute('aria-expanded')==='false'`);
+      await run(`Array.from(document.querySelectorAll('[data-library-row=gemma] button')).find(b=>b.textContent.trim()==='Load').click()`);
+      await check('Load targets the variant, without opening settings', `fixture.loaded.join(',')==='nekko-engine::gemma' && ${toggle('gemma')}.getAttribute('aria-expanded')==='false'`);
       await click('Favorite Gemma-4-E4B');
       await check('Favorite uses the shared provider/model key without changing existing favorites', `fixture.saved().favoriteModels.join(',')==='cloud::other,nekko-engine::gemma'`);
       await click('Set Gemma-4-E4B as default');
       await check('Default saves the provider/model together and marks the row', `fixture.saved().defaultProviderId==='nekko-engine' && fixture.saved().defaultModelId==='gemma' && document.querySelector('[data-model-family=gemma4e4b]').innerText.includes('Default')`);
+      await check('Favorite and default leave the open family and variant disclosure unchanged', `document.querySelector('[data-model-family=gemma4e4b]').getAttribute('aria-expanded')==='true' && ${toggle('gemma')}.getAttribute('aria-expanded')==='false'`);
       await capture('narrow-actions', 390, 900, 'dark', 'library');
       if (process.env.NEKKO_MODELS_RECORD) {
         const { GifFrame, GifUtil } = require('gifwrap');
@@ -65,12 +107,14 @@ app.whenReady().then(async () => {
             await sleep(65);
           }
         };
-        await framesFor(5); await click('System models'); await framesFor(13);
-        await click('Models'); await framesFor(13);
-        await GifUtil.write(path.join(out, 'models-section-navigation.gif'), frames);
+        await framesFor(5); await run(`${toggle('gemma')}.click()`); await framesFor(10);
+        await run(`${toggle('gemma')}.click()`); await framesFor(10);
+        const file = path.join(out, 'model-row-disclosure.gif');
+        await GifUtil.write(file, frames);
+        report.recording = file;
       }
       await click('Delete Gemma-4-E4B');
-      await check('Delete waits for a decision', `!!document.querySelector('[role=dialog]') && fixture.deleted.length===0`);
+      await check('Delete waits for a decision', `!!document.querySelector('[role=dialog]') && fixture.deleted.length===0 && ${toggle('gemma')}.getAttribute('aria-expanded')==='false'`);
       await click('Cancel');
       await check('Cancel preserves the file', `!document.querySelector('[role=dialog]') && fixture.deleted.length===0`);
       await click('Delete Gemma-4-E4B');
@@ -80,6 +124,9 @@ app.whenReady().then(async () => {
       await check('Borrowed files cannot be deleted; non-chat models cannot be chat defaults', `!document.querySelector('[aria-label="Delete BGE-Small"]') && !document.querySelector('[aria-label="Set BGE-Small as default"]')`);
       await run(`document.querySelector('[data-model-family="qwen359b"]').click()`);
       await check('Multi-variant families offer exact-file actions on the variant rows', `!!document.querySelector('[data-library-row=qwen-f16] [aria-label="Delete Qwen3.5-9B-F16"]') && !document.querySelector('[aria-label="Delete Qwen3.5-9B"]')`);
+      await run(`document.querySelector('[data-model-family=flux2klein4b]').click()`);
+      await run(`${toggle('flux')}.click()`);
+      await check('Image variants open Image settings, not a chat loading drawer', `${toggle('flux')}.getAttribute('aria-expanded')==='true' && document.querySelector('[data-library-row=flux]').innerText.includes('Open Photo') && !document.querySelector('[data-engine-load-drawer]')`);
       await run('fixture.mount(true)');
       await wait("!!document.querySelector('details[data-models-section=system]')");
       await run("document.querySelector('details[data-models-section=system]').open=true");
