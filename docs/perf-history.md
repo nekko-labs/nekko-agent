@@ -73,6 +73,19 @@ Why: `summaries()` no longer calls `flush_all()` (a running chat's summary is ma
 
 Unmeasured: the real daemon under several running agents (event rate, disk writes saved by the 2 s save debounce now holding), a real chat folder with 1,000+ chats of mixed sizes, Windows.
 
+## iPhone saved chats and chat lists stop encoding and writing on the main thread (#3386, 2026-11-26)
+Area: renderer
+Result: improvement (main-thread time per save); not profiled in the running app
+Conditions: Apple M1 Max, macOS 27.2.1, Xcode 27.2, `swift test` (debug build on a macOS host, not an iPhone or the simulator), other builds running on the same machine so timings drift between runs. `XCTClockMetric`, 5 iterations. Synthetic chat of 300 messages of 2,000 characters (about 600 KB), the shape `SavedTranscripts` caps at 1 MB. Tests: `SavedTranscriptsTests.testMeasureEncodeAndHashOfASave`, `testMeasureMainThreadCostOfASave`, `testMeasureMainThreadCostOfAnUnchangedSave`.
+
+| Metric | Before | After |
+|---|---|---|
+| Main thread, 5 saves of a changed chat (before: encode and hash only, not counting the file write) | 0.475553-0.630217 s (values 0.519456, 0.630217, 0.529841, 0.502801, 0.475553 s) | 0.000058-0.000099 s (values 0.000058, 0.000094, 0.000099, 0.000091, 0.000074 s) |
+| Main thread, 10 saves of the same unchanged chat | the same full encode and hash each time (not measured separately) | 0.000131-0.000464 s (values 0.000169, 0.000191, 0.000464, 0.000131, 0.000209 s) |
+| Writes for 12 saves of one chat in a burst | 12 chat files and 12 index files (one per save; by construction) | 1 chat file and 1 index (`testABurstOfSavesIsOneWrite`) |
+
+Why: `ChatModel.reload` saved the whole session on the main thread after every read: serialise (up to twice), FNV-hash byte by byte, write the file and the index. Now an unchanged chat only moves in the recent list, and a changed one is queued, then encoded, hashed and written on a background queue, newest copy per chat; the chat list files (`saveList` after each summaries read) coalesce the same way. The encode and hash still cost the same, on another thread. Not measured: file write time on an iPhone, hitches in a long chat on a device. Source: #3386.
+
 ## Plum and Indigo window glow steps instead of fading every frame (#3136, 2026-11-20)
 Area: GPU/memory
 Result: improvement expected; after number pending (measured once merged, see below)

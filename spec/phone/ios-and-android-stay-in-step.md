@@ -128,3 +128,4 @@ Nothing is recorded as a true OS exclusive yet.
 | Feature | iPhone | Android | Follow-up |
 | --- | --- | --- | --- |
 | Collapsed progress notes and continuation summaries | Implemented on #2452 branch, native-unverified | Same folds (2026-11-13); the system bar hides the keyboard | None |
+| Saved chats and chat lists written off the main thread, unchanged chats skipped (#3386) | Implemented, unit-tested in NekkoKit | Not implemented: `OfflineFileStore.save` writes synchronously on the caller's thread | https://github.com/nekko-labs/nekko-agent/issues/3419 |
