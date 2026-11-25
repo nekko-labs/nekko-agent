@@ -1,7 +1,10 @@
 use super::*;
 
 fn coordinator() -> Value {
-    json!({ "id": "s_lead", "orchestrate": true, "messages": [] })
+    // Every saved chat has `updatedAt`; without it the store's newest-first
+    // order treats the coordinator as equal to every child and is no longer a
+    // total order, which scrambles the children around it.
+    json!({ "id": "s_lead", "orchestrate": true, "updatedAt": 0, "messages": [] })
 }
 
 fn child(id: &str, parent: &str, updated: u64) -> Value {

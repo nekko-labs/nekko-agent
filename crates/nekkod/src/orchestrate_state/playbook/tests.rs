@@ -56,8 +56,12 @@ fn every_bundled_chat_feed_id_and_download_quant_gets_exact_guidance() {
                 "/models",
                 &|_| false,
             );
-            let id =
-                plan["main"]["dest"].as_str().unwrap().strip_prefix("/models/").unwrap().strip_suffix(".gguf").unwrap();
+            // The plan joins the folder and file with the platform's separator
+            // (`\` on Windows), so compare path components, not a `/` prefix.
+            let dest = std::path::Path::new(plan["main"]["dest"].as_str().unwrap());
+            let rel = dest.strip_prefix("/models").unwrap().with_extension("");
+            let id = rel.components().map(|c| c.as_os_str().to_str().unwrap()).collect::<Vec<_>>().join("/");
+            let id = id.as_str();
             assert_eq!(pick(ProviderKind::Llamacpp, id), exact, "{id}");
         }
     }
