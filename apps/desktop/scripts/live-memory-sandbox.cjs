@@ -19,10 +19,15 @@ app.whenReady().then(async () => {
   win.on('focus', () => { report.errors.push('took focus'); });
   win.webContents.on('console-message', e => { if (e.level === 'error') report.errors.push(e.message.slice(0, 300)); });
   const run = s => win.webContents.executeJavaScript(s, true);
-  const shotAt = async (name, selector, height) => {
+  // Fixed page code per target: nothing is interpolated into what runs in the page.
+  const TOP = {
+    running: "(() => { const e = document.querySelector('[data-running-models]'); return e ? Math.max(0, Math.round(e.getBoundingClientRect().top) - 16) : -1; })()",
+    meter: "(() => { const e = document.querySelector('[data-meter]'); return e ? Math.max(0, Math.round(e.getBoundingClientRect().top) - 16) : -1; })()",
+  };
+  const shotAt = async (name, target, height) => {
     const [width, view] = win.getContentSize();
-    const top = await run(`(() => { const e = document.querySelector(${JSON.stringify(selector)}); return e ? Math.max(0, Math.round(e.getBoundingClientRect().top) - 16) : -1; })()`);
-    if (top < 0) { report.errors.push(`no ${selector} for ${name}`); return; }
+    const top = await run(TOP[target]);
+    if (top < 0) { report.errors.push(`no ${target} for ${name}`); return; }
     win.webContents.invalidate();
     await sleep(350);
     const f = path.join(out, name + '.png');
@@ -115,7 +120,7 @@ app.whenReady().then(async () => {
         await run(`document.documentElement.setAttribute('data-theme', '${theme}')`);
         await sleep(400);
         report.metrics[`overflow-${theme}-${width}`] = await run('document.documentElement.scrollWidth > innerWidth');
-        await shotAt(`loaded-${theme}-${width}`, '[data-running-models]', width === 390 ? 760 : 560);
+        await shotAt(`loaded-${theme}-${width}`, 'running', width === 390 ? 760 : 560);
       }
     }
     win.setContentSize(1600, 2400);
@@ -123,11 +128,11 @@ app.whenReady().then(async () => {
     {
       await run(`window.__gpu = { ...window.__gpu, usedMB: 22.1 * 1024, freeMB: 1.9 * 1024 }; window.__sys = { ...window.__sys, memUsedMB: 38 * 1024 }`);
       await set({ resident: [qwen, coder], loading: [] });
-      await shotAt('hybrid-dark-1600', '[data-running-models]', 560);
+      await shotAt('hybrid-dark-1600', 'running', 560);
       // Pointing at one model lights up its part of both bars.
       await run(`(() => { const r = document.querySelector('[data-live-legend-row="coder-30b-a3b"]'); r && r.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })); })()`);
       await sleep(400);
-      await shotAt('hybrid-hover-dark-1600', '[data-running-models]', 560);
+      await shotAt('hybrid-hover-dark-1600', 'running', 560);
       report.metrics.dimmed = await run(`[...document.querySelectorAll('[data-segment]')].filter(e => getComputedStyle(e).opacity < 0.5).map(e => e.dataset.segment)`);
     }
     // The load drawer for a model with four parallel sessions.
@@ -135,7 +140,7 @@ app.whenReady().then(async () => {
     await run(`(() => { const row = document.querySelector('[data-resident-row="qwen3-8b-q4"]'); [...row.querySelectorAll('button')].find(b => b.textContent === 'Settings').click(); })()`);
     for (let i = 0; i < 40 && !(await run(`!!document.querySelector('[data-meter] [data-memory-bar], [data-meter] [data-meter-bar]')`)); i++) await sleep(100);
     await sleep(800);
-    await shotAt('drawer-sessions-dark-1600', '[data-meter]', 420);
+    await shotAt('drawer-sessions-dark-1600', 'meter', 420);
     report.metrics.drawerParts = await run(`[...document.querySelectorAll('[data-meter-part]')].map(e => e.innerText.replace(/\\s+/g, ' '))`);
     report.metrics.contextSlices = await run(`(() => { const s = document.querySelector('[data-meter-bar="vram"] [data-segment="context"]'); return s ? s.children.length : null; })()`);
     report.metrics.livePools = await run(`[...document.querySelectorAll('[data-live-pool]')].map(e => e.dataset.livePool)`);
