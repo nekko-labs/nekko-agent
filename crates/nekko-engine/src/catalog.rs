@@ -147,6 +147,79 @@ fn quant_label(file: &str) -> String {
     regex_replace(regex!(r"\.gguf$", "i"), base, "")
 }
 
+/// What sets apart builds that share a quantization: a repo that publishes
+/// `M-Q8_0.gguf`, `M-v2-Q8_0.gguf` and `M-v2.1-Q8_0.gguf` holds three releases
+/// of one model, so those come back as `None`, `v2` and `v2.1`. A repo where
+/// every quantization appears once gets `None` throughout, labels as before.
+fn variants_of(groups: &[&str]) -> Vec<Option<String>> {
+    let quants: Vec<String> = groups.iter().map(|g| quant_label(g)).collect();
+    let collides = |q: &String| quants.iter().filter(|x| *x == q).count() > 1;
+    if !quants.iter().any(collides) {
+        return vec![None; groups.len()];
+    }
+    let r = regex!(r"[-_.]((?:IQ|Q)\d+[A-Z0-9_]*|BF16|F16|F32|MXFP4[A-Z0-9_]*)\.gguf$", "i");
+    // The file name before its quantization, or `None` when it names none.
+    let stems: Vec<Option<&str>> = groups
+        .iter()
+        .map(|g| {
+            let base = g.rsplit('/').next().unwrap_or(g);
+            r.find(base).map(|m| &base[..m.range().start])
+        })
+        .collect();
+    let named: Vec<&str> = stems.iter().flatten().copied().collect();
+    let is_sep = |c: u8| matches!(c, b'-' | b'_' | b'.');
+    let mut p = named.iter().map(|s| s.len()).min().unwrap_or(0);
+    while p > 0 && !named.iter().all(|s| s.as_bytes()[..p] == named[0].as_bytes()[..p]) {
+        p -= 1;
+    }
+    // Back off to a word boundary, so `v2` and `v2.1` do not share the `v2`.
+    while p > 0 && !named.iter().all(|s| s.len() == p || is_sep(s.as_bytes()[p]) || is_sep(s.as_bytes()[p - 1])) {
+        p -= 1;
+    }
+    let mut variants: Vec<Option<String>> = stems
+        .iter()
+        .map(|s| {
+            s.map(|s| s[p..].trim_start_matches(|c: char| c.is_ascii() && is_sep(c as u8)).to_string())
+                .filter(|v| !v.is_empty())
+        })
+        .collect();
+    // Same file name in two folders: the folder is what differs.
+    let labels: Vec<(Option<String>, &String)> = variants.iter().cloned().zip(quants.iter()).collect();
+    for (i, v) in variants.iter_mut().enumerate() {
+        if labels.iter().filter(|l| **l == labels[i]).count() > 1 {
+            *v = groups[i].rsplit_once('/').map(|(dir, _)| dir.to_string()).or(v.take());
+        }
+    }
+    variants
+}
+
+/// `a` before `b` with runs of digits compared as numbers (`v2` < `v10`).
+fn natural(a: &str, b: &str) -> std::cmp::Ordering {
+    let chunks = |s: &str| -> Vec<(bool, String)> {
+        let mut out: Vec<(bool, String)> = Vec::new();
+        for c in s.chars() {
+            let d = c.is_ascii_digit();
+            match out.last_mut() {
+                Some((was, run)) if *was == d => run.push(c),
+                _ => out.push((d, c.to_string())),
+            }
+        }
+        out
+    };
+    for (x, y) in chunks(a).iter().zip(chunks(b).iter()) {
+        let o = if x.0 && y.0 {
+            let (xs, ys) = (x.1.trim_start_matches('0'), y.1.trim_start_matches('0'));
+            xs.len().cmp(&ys.len()).then_with(|| xs.cmp(ys))
+        } else {
+            x.1.to_lowercase().cmp(&y.1.to_lowercase())
+        };
+        if o.is_ne() {
+            return o;
+        }
+    }
+    a.len().cmp(&b.len())
+}
+
 fn rank(label: &str) -> usize {
     let upper = label.to_uppercase();
     QUANT_ORDER.iter().position(|q| upper.starts_with(q)).unwrap_or(QUANT_ORDER.len())
@@ -362,7 +435,9 @@ impl Catalog {
         let mut groups: Vec<(String, Vec<(String, f64)>)> = Vec::new();
         for f in ggufs {
             let path = f.path.clone().unwrap_or_default();
-            if test(regex!("mmproj", "i"), &path) {
+            // A projector rides along with a build; a LoRA adapter is not a
+            // model at all and cannot be run on its own.
+            if test(regex!("mmproj", "i"), &path) || test(regex!(r"(^|[-_./])lora([-_.]|$)", "i"), &path) {
                 continue;
             }
             let group = regex_replace(regex!(r"-\d{5}-of-\d{5}\.gguf$", "i"), &path, ".gguf");
@@ -372,25 +447,43 @@ impl Catalog {
             }
         }
         let (projector, sidecars) = companions_of(&tree);
-        let mut quants: Vec<(usize, Value)> = Vec::new();
-        for (group, mut parts) in groups {
+        let variants = variants_of(&groups.iter().map(|(g, _)| g.as_str()).collect::<Vec<_>>());
+        let mut quants: Vec<(Option<String>, usize, Value)> = Vec::new();
+        for ((group, mut parts), variant) in groups.into_iter().zip(variants) {
             parts.sort_by(|a, b| by_locale(&a.0, &b.0));
-            let label = quant_label(&group);
+            let quant = quant_label(&group);
             let mut extra: Vec<String> = parts[1..].iter().map(|p| p.0.clone()).collect();
             extra.extend(projector.clone());
             extra.extend(sidecars.iter().cloned());
             let mut o = Map::new();
+            // The label is how a build is asked for (and its download job
+            // named), so two builds never share one.
+            let label = match &variant {
+                Some(v) => format!("{v} {quant}"),
+                None => quant.clone(),
+            };
             o.insert("label".into(), json!(label));
             o.insert("file".into(), json!(parts[0].0));
             o.insert("sizeBytes".into(), crate::num(parts.iter().fold(0.0, |n, p| n + p.1)));
             o.insert("extraFiles".into(), json!(extra));
-            if let Some(note) = quant_note(&label) {
+            if let Some(note) = quant_note(&quant) {
                 o.insert("note".into(), json!(note));
             }
-            quants.push((rank(&label), Value::Object(o)));
+            if let Some(v) = &variant {
+                o.insert("variant".into(), json!(v));
+                o.insert("quant".into(), json!(quant));
+            }
+            quants.push((variant, rank(&quant), Value::Object(o)));
         }
-        quants.sort_by_key(|(r, _)| *r);
-        quants.into_iter().map(|(_, q)| q).chain(mlx).collect()
+        // Newest release first (`v2.1` before `v2` before the unmarked one),
+        // then smallest build first within each.
+        quants.sort_by(|a, b| match (&a.0, &b.0) {
+            (Some(x), Some(y)) => natural(y, x).then(a.1.cmp(&b.1)),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => a.1.cmp(&b.1),
+        });
+        quants.into_iter().map(|(_, _, q)| q).chain(mlx).collect()
     }
 
     /// The starter list, with each repo's real files and sizes filled in.
