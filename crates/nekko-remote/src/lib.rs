@@ -39,7 +39,8 @@ pub use phone::{Activity, DeviceAccess, Devices, PhoneDevice};
 pub use phone_terminal::PhoneTerminals;
 pub use service::{CHANNELS, Clock, Link, LinkHandle, RemoteService, Verifier, system_clock};
 pub use socket::{
-    ATTENTION_GAP, Dispatcher, Events, Pending, PhoneCall, PhoneDispatcher, RelayAgent, Spawn, Summaries, agent_url,
+    ATTENTION_GAP, Access, AccessTicket, Dispatcher, Events, Pending, PhoneCall, PhoneDispatcher, RelayAgent, Spawn,
+    Summaries, agent_url,
 };
 
 /// Every public IPC channel the host's dispatcher serves (`IpcChannels`,

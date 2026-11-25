@@ -76,7 +76,7 @@ export interface LiveRun {
   retrying?: { attempt: number; maxAttempts: number; delayMs: number; reason: string; at: number };
 }
 
-import { foldSubagentActivity, startSubagentActivity, stopSubagentActivity, resetSubagentActivity, resetSubagentActivityFor } from './subagentActivity.js';
+import { foldSubagentActivity, startSubagentActivity, stopSubagentActivity, resetSubagentActivity, resetSubagentActivityFor, seedSubagentWaits } from './subagentActivity.js';
 
 const runs = new Map<string, LiveRun>();
 /**
@@ -205,6 +205,15 @@ export function reconcileRunning(running: readonly string[], askedAt: number): s
   }
   for (const id of ended) for (const fn of orphanListeners) fn(id);
   return ended;
+}
+
+/**
+ * A call failed because the engine went away mid-call (the engine socket's
+ * wording, preload/engine-socket.ts). A turn it was running is ended by
+ * `reconcileRunning` once the engine is back, not by the caller.
+ */
+export function engineLost(message: string): boolean {
+  return /the engine (?:restarted|stopped responding) before it answered/.test(message);
 }
 
 /** Hear a run `reconcileRunning` ended because the engine no longer has it. */
@@ -413,6 +422,12 @@ export function applyReplay(replay: AgentReplay): void {
 export function startLiveRuns(): () => void {
   const offEvents = window.nekko.onAgentEvent((e: AgentEvent) => applyEvent(e));
   const offReplay = window.nekko.onAgentReplay?.((r) => applyReplay(r));
+  // Waits already open at launch: their events went out before this window
+  // listened, and a sub-agent's must still show on its parent chat (#3270).
+  window.nekko.pendingInput?.().then((pending) => {
+    seedSubagentWaits(pending);
+    for (const id of Object.keys(pending)) markDirty(id);
+  }).catch(() => {});
   // Only while something runs: an idle app asks the engine nothing.
   const reconcile = setInterval(() => {
     if (!runs.size) return;

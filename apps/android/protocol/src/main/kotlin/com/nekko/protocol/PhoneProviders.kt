@@ -6,21 +6,30 @@ import kotlinx.serialization.json.*
 
 @Serializable data class PhoneProvider(val id: String, val kind: String, val label: String, val baseUrl: String, val workspaceId: String? = null, val enabled: Boolean = true)
 /** [acceptsImages]: true or false where the provider's list says, null when it doesn't. [created]: when the provider published it (OpenAI's `created`, seconds since 1970), if it says. */
-@Serializable data class PhoneModel(val id: String, val name: String, val acceptsImages: Boolean? = null, val created: Long? = null)
+/** [contextLength]: the context window in tokens, where the list gives one (OpenRouter, Gemini, Anthropic; #2950). */
+@Serializable data class PhoneModel(val id: String, val name: String, val acceptsImages: Boolean? = null, val created: Long? = null, val contextLength: Long? = null)
 /** [images]: the user's photos as image data URLs; absent in chats saved before photos. */
 @Serializable data class PhoneMessage(val id: String, val role: String, val text: String, val at: Long, val error: String? = null, val images: List<String>? = null)
 @Serializable data class PhoneChat(val id: String, val title: String, val providerId: String, val modelId: String, val createdAt: Long, val updatedAt: Long, val messages: List<PhoneMessage> = emptyList())
-data class PhoneRequest(val url: String, val headers: Map<String, String>, val body: JsonObject? = null, val method: String = "POST")
+/** [form]: an `application/x-www-form-urlencoded` body instead of JSON (ChatGPT's token endpoint). */
+data class PhoneRequest(val url: String, val headers: Map<String, String>, val body: JsonObject? = null, val method: String = "POST", val form: String? = null)
 
-/** Direct phone APIs only. No subscription harnesses, local servers, tools or relay. */
+/** Direct phone APIs only: keys, and the ChatGPT sign-in (#3244). No local servers, tools or relay. */
 object PhoneProviders {
     /**
      * [keyPage]: where the key is made, for the guided setup (open it, copy, come back, Paste);
      * such kinds need no name or address. [signIn]: OpenRouter's browser sign-in hands the key back.
+     * [plan]: signs in to a subscription ([ChatGptSignIn]); there is no key to paste.
      */
-    data class Kind(val id: String, val label: String, val defaultUrl: String, val catalog: List<PhoneModel> = emptyList(), val keyOptional: Boolean = false, val hint: String = "Use your own provider API key.", val keyPage: String? = null, val signIn: Boolean = false)
+    data class Kind(val id: String, val label: String, val defaultUrl: String, val catalog: List<PhoneModel> = emptyList(), val keyOptional: Boolean = false, val hint: String = "Use your own provider API key.", val keyPage: String? = null, val signIn: Boolean = false, val plan: Boolean = false)
     private val claude = listOf("opus-5-5", "sonnet-5-5", "fable-5-1", "haiku-5-5", "opus-4-8", "sonnet-4-6").map { PhoneModel("claude-$it", "Claude $it") }
+    /** ChatGPT's Codex backend, as the desktop and the Codex CLI reach it. */
+    const val CHATGPT_URL = "https://chatgpt.com/backend-api"
+    /** The backend filters its model list by the Codex CLI version a client reports (the desktop's value). */
+    const val CODEX_CLIENT_VERSION = "0.171.0"
+    private const val CODEX_ORIGINATOR = "codex_cli_rs"
     val kinds = listOf(
+        Kind("chatgpt", "ChatGPT", CHATGPT_URL, hint = "Your ChatGPT Plus, Pro or Business plan. No API key, no per-token bill.", plan = true),
         Kind("anthropic", "Claude API", "https://api.anthropic.com", hint = "An API key from console.anthropic.com.", keyPage = "https://console.anthropic.com/settings/keys"),
         Kind("openai", "OpenAI", "https://api.openai.com/v1", hint = "An API key from platform.openai.com.", keyPage = "https://platform.openai.com/api-keys"),
         Kind("openrouter", "OpenRouter", "https://openrouter.ai/api/v1", hint = "An API key from openrouter.ai: one key for many model makers.", keyPage = "https://openrouter.ai/settings/keys", signIn = true),
@@ -38,6 +47,11 @@ object PhoneProviders {
         val k = requireNotNull(kind(kind)) { "Unsupported phone provider." }
         require(label.trim().isNotEmpty()) { "Give the provider a name." }
         val url = baseUrl?.trim()?.ifEmpty { null }?.trimEnd('/') ?: k.defaultUrl
+        // A sign-in's address is fixed and its key is the sign-in itself.
+        if (k.plan) {
+            require(url == k.defaultUrl) { "ChatGPT's address can't be changed." }
+            requireNotNull(ChatGptSignIn.Tokens.decode(key)) { "Sign in with ChatGPT first." }
+        }
         val uri = runCatching { URI(url) }.getOrNull()
         require(uri != null && uri.scheme == "https" && !uri.host.isNullOrEmpty() && uri.rawUserInfo == null && uri.rawQuery == null && uri.rawFragment == null && (uri.port == -1 || uri.port in 1..65535) && !url.contains("YOUR_") && !Regex("(?i)%(?:2e|2f|5c|0[0-9a-f]|1[0-9a-f]|7f)").containsMatchIn(url) && uri.path.split('/').none { it == "." || it == ".." }) { "Use a full HTTPS address without credentials, query, fragment or traversal." }
         require(k.keyOptional || !key.isNullOrBlank()) { "Paste the key." }
@@ -48,6 +62,14 @@ object PhoneProviders {
     private fun anthropic(p: PhoneProvider) = p.kind in setOf("anthropic", "bedrock", "foundry", "vertex")
     private fun headers(p: PhoneProvider, key: String?): Map<String, String> = buildMap {
         put("Content-Type", "application/json")
+        if (p.kind == "chatgpt") {
+            // The access token and the account it belongs to, as the Codex CLI sends them.
+            val t = requireNotNull(ChatGptSignIn.Tokens.decode(key)) { ChatGptSignIn.EXPIRED }
+            put("Authorization", "Bearer ${t.access}")
+            put("chatgpt-account-id", t.accountId)
+            put("originator", CODEX_ORIGINATOR)
+            return@buildMap
+        }
         if (p.kind in setOf("anthropic", "bedrock", "foundry")) put("x-api-key", key.orEmpty().trim())
         else if (!key.isNullOrBlank()) put("Authorization", "Bearer ${key.trim()}")
         if (anthropic(p) && p.kind != "vertex") put("anthropic-version", "2023-06-01")
@@ -67,6 +89,7 @@ object PhoneProviders {
         validate(p, key)
         require(maxTokens > 0) { "The reply token limit must be positive." }
         require(model.isNotBlank() && model.length <= 1024 && model.none { it.isISOControl() } && (p.kind != "vertex" || model.matches(Regex("[a-zA-Z0-9_-][a-zA-Z0-9@._-]*")))) { "Invalid model id." }
+        if (p.kind == "chatgpt") return chatGptRequest(p, key, model, messages, system)
         val a = anthropic(p)
         val body = buildJsonObject {
             put("stream", true)
@@ -90,6 +113,39 @@ object PhoneProviders {
         val path = when { p.kind == "vertex" -> "/publishers/anthropic/models/$model:streamRawPredict"; a -> "/v1/messages"; else -> "/chat/completions" }
         return PhoneRequest(p.baseUrl.trimEnd('/') + path, headers(p, key) + ("Accept" to "text/event-stream"), body)
     }
+    /**
+     * ChatGPT's Responses API on the Codex backend. It takes only the Codex CLI's request
+     * shape: no token cap or temperature (those fail the whole request), the system prompt as
+     * `instructions`, and nothing stored on OpenAI's side.
+     */
+    private fun chatGptRequest(p: PhoneProvider, key: String?, model: String, messages: List<PhoneMessage>, system: String?): PhoneRequest {
+        val body = buildJsonObject {
+            put("model", model)
+            put("instructions", system ?: "Answer in Markdown.")
+            put("stream", true)
+            put("store", false)
+            putJsonArray("input") {
+                messages.filter { it.role in setOf("user", "assistant") }.forEach { m ->
+                    val photos = if (m.role == "user") m.images.orEmpty().mapNotNull(::imagePart) else emptyList()
+                    if (m.text.isBlank() && photos.isEmpty()) return@forEach
+                    add(buildJsonObject {
+                        put("type", "message")
+                        put("role", m.role)
+                        putJsonArray("content") {
+                            if (m.role == "assistant") add(buildJsonObject { put("type", "output_text"); put("text", m.text) })
+                            else {
+                                if (m.text.isNotBlank()) add(buildJsonObject { put("type", "input_text"); put("text", m.text) })
+                                photos.forEach { ph -> add(buildJsonObject { put("type", "input_image"); put("image_url", ph.url) }) }
+                            }
+                        }
+                    })
+                }
+            }
+        }
+        val h = headers(p, key) + mapOf("Accept" to "text/event-stream", "OpenAI-Beta" to "responses=experimental")
+        return PhoneRequest(p.baseUrl.trimEnd('/') + "/codex/responses", h, body)
+    }
+
     /** A message takes this many photos at most, as in a computer chat. */
     const val MAX_IMAGES = 4
     /** The largest photo sent (a data URL); the composer's are about a tenth of this. */
@@ -125,10 +181,13 @@ object PhoneProviders {
 
     fun modelsRequest(p: PhoneProvider, key: String?): PhoneRequest? {
         validate(p, key)
+        // The plan's own list: exactly what this sign-in may run, newer models included.
+        if (p.kind == "chatgpt") return PhoneRequest(p.baseUrl.trimEnd('/') + "/codex/models?client_version=$CODEX_CLIENT_VERSION", headers(p, key) - "Content-Type" + ("Accept" to "application/json"), method = "GET")
         return if (kind(p.kind)?.catalog?.isNotEmpty() == true) null else PhoneRequest(p.baseUrl.trimEnd('/') + if (p.kind == "anthropic") "/v1/models?limit=1000" else "/models", headers(p, key), method = "GET")
     }
     fun models(body: String, kind: String): List<PhoneModel> {
         require(body.length <= 2_000_000) { "The provider's model list is too large." }
+        if (kind == "chatgpt") return chatGptModels(body)
         val data = (Json.parseToJsonElement(body) as? JsonObject)?.get("data") as? JsonArray ?: return emptyList()
         // OpenAI and Gemini list every model they serve; keep the ones that chat.
         val skip = listOf("embedding", "whisper", "tts", "dall-e", "moderation", "image", "audio", "realtime", "transcribe", "search", "davinci", "babbage", "sora", "imagen", "veo", "aqa")
@@ -136,8 +195,26 @@ object PhoneProviders {
             val o = e as? JsonObject ?: return@mapNotNull null
             val id = o.string("id") ?: return@mapNotNull null
             val created = (o["created"] as? JsonPrimitive)?.takeIf { !it.isString }?.longOrNull
-            if (id.isBlank() || id.length > 1024 || id.any { it.isISOControl() } || kind in setOf("openai", "gemini") && skip.any { id.contains(it) }) null else PhoneModel(id, o.string("display_name") ?: o.string("name") ?: id, acceptsImages(o, kind), created)
+            val context = listOf("context_length", "inputTokenLimit", "max_input_tokens", "context_window").firstNotNullOfOrNull { k -> (o[k] as? JsonPrimitive)?.takeIf { !it.isString }?.longOrNull?.takeIf { it > 0 } }
+            if (id.isBlank() || id.length > 1024 || id.any { it.isISOControl() } || kind in setOf("openai", "gemini") && skip.any { id.contains(it) }) null else PhoneModel(id, o.string("display_name") ?: o.string("name") ?: id, acceptsImages(o, kind), created, context)
         }.distinctBy { it.id }
+    }
+
+    /**
+     * ChatGPT's `models`: each has a `slug` (or `id`) and maybe a `display_name`. Entries the
+     * plan hides (`visibility` other than `list`, `show_in_picker: false`) stay out, and the
+     * backend's `priority` orders the rest, as on the desktop.
+     */
+    private fun chatGptModels(body: String): List<PhoneModel> {
+        val list = (runCatching { Json.parseToJsonElement(body) }.getOrNull() as? JsonObject)?.get("models") as? JsonArray ?: return emptyList()
+        return list.mapIndexedNotNull { order, e ->
+            val o = e as? JsonObject ?: return@mapIndexedNotNull null
+            val id = (o.string("slug") ?: o.string("id"))?.takeIf { it.isNotBlank() && it.length <= 1024 && it.none(Char::isISOControl) } ?: return@mapIndexedNotNull null
+            if (o.string("visibility")?.let { it != "list" } == true) return@mapIndexedNotNull null
+            if ((o["show_in_picker"] as? JsonPrimitive)?.booleanOrNull == false) return@mapIndexedNotNull null
+            val priority = (o["priority"] as? JsonPrimitive)?.takeIf { !it.isString }?.longOrNull ?: Long.MAX_VALUE
+            Triple(priority, order, PhoneModel(id, o.string("display_name") ?: o.string("name") ?: id, acceptsImages = true))
+        }.sortedWith(compareBy({ it.first }, { it.second })).map { it.third }.distinctBy { it.id }
     }
 
     /**
@@ -232,6 +309,12 @@ object PhoneProviders {
             "insufficient_quota" in code || status == 402 ->
                 if (kind == "openai") "This key has no credit. Add billing at platform.openai.com, then try again."
                 else "This key has no credit left. Add billing with the provider, then try again."
+            kind == "chatgpt" && (status == 401 || status == 403 || "token_expired" in code) -> ChatGptSignIn.EXPIRED
+            kind == "chatgpt" && (status == 429 || "usage_limit_reached" in code) -> when {
+                wait == null -> "You’ve reached your ChatGPT plan’s limit for now. Try again later."
+                wait > 90 -> "You’ve reached your ChatGPT plan’s limit. Try again in ${kotlin.math.ceil(wait / 60).toInt()} min."
+                else -> "You’ve reached your ChatGPT plan’s limit. Try again in ${maxOf(1, kotlin.math.ceil(wait).toInt())}s."
+            }
             "invalid_api_key" in code || "authentication_error" in code -> "The provider turned the key down ($status). Check the key and paste it again."
             "model_not_found" in code -> "This key can’t use that model. Pick another one."
             "overloaded_error" in code || status == 529 -> "The provider is busy. Try again in a moment."
@@ -387,6 +470,24 @@ class PhoneStreamParser {
         val o = runCatching { Json.parseToJsonElement(value) as? JsonObject }.getOrNull() ?: return fail()
         if (o["error"] != null && o["error"] != JsonNull || o.string("type") == "error") return fail("The provider stopped with an error. Test the provider and retry.")
         if (o.string("type") == "message_stop") { done = true; return listOf(PhoneStreamEvent.Done) }
+        // ChatGPT's Responses API (#3244): text deltas, then `response.completed` with the usage.
+        when (o.string("type")) {
+            "response.output_text.delta" -> {
+                val d = o.string("delta").orEmpty()
+                if (textChars.toLong() + d.length > MAX_TEXT_CHARS) return fail("The provider's reply is too large.")
+                textChars += d.length
+                return if (d.isEmpty()) emptyList() else listOf(PhoneStreamEvent.Text(d))
+            }
+            // `incomplete`: a length or content stop; what streamed is kept.
+            "response.completed", "response.incomplete" -> {
+                done = true
+                val u = (o["response"] as? JsonObject)?.get("usage") as? JsonObject
+                val usage = u?.let { PhoneStreamEvent.Usage(count(it, "input_tokens"), count(it, "output_tokens")) }?.takeIf { it.input != null || it.output != null }
+                return listOfNotNull(usage, PhoneStreamEvent.Done)
+            }
+            "response.failed" -> return fail("ChatGPT stopped with an error. Try again.")
+        }
+        if (o.string("type")?.startsWith("response.") == true) return emptyList()
         val out = mutableListOf<PhoneStreamEvent>()
         usage(o)?.let { out += it }
         if (o.string("type") == "content_block_delta") {

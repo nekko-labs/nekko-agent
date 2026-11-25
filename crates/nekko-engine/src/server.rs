@@ -12,6 +12,7 @@ use crate::launch::{
     resolve_companions, unsupported_load_reason,
 };
 use crate::library::{default_context_tokens, model_facts_for};
+use crate::load_check::{EngineInUse, Level, load_check};
 use crate::{BoxFuture, num};
 use nekko_tools::path::native as path;
 use serde_json::{Map, Value, json};
@@ -44,13 +45,26 @@ pub trait Daemon: Send + Sync {
     fn list(&self) -> BoxFuture<Vec<Value>>;
 }
 
+/// An installed server binary: its path, and which engine it is (managed or the
+/// user's own, and its version) for the load gate.
+#[derive(Clone, Debug)]
+pub struct Engine {
+    pub bin: String,
+    pub in_use: EngineInUse,
+}
+
 /// What the policy reads from the rest of the engine (`EngineServerDeps`).
 pub trait Env: Send + Sync {
     /// The engine settings, over their defaults.
     fn settings(&self) -> Value;
     fn prompt_caching(&self) -> bool;
-    /// The `llama`, `diffusion` or `mlx` server binary, when installed.
-    fn bin(&self, runtime: &'static str) -> BoxFuture<Option<String>>;
+    /// The `llama`, `diffusion` or `mlx` server binary and where it came from, when installed.
+    fn engine(&self, runtime: &'static str) -> BoxFuture<Option<Engine>>;
+    /// Just the binary.
+    fn bin(&self, runtime: &'static str) -> BoxFuture<Option<String>> {
+        let engine = self.engine(runtime);
+        Box::pin(async move { engine.await.map(|e| e.bin) })
+    }
     /// Whether the installed engine can put layers on a GPU; `None` is "assume it can".
     fn gpu_capable(&self) -> BoxFuture<Option<bool>>;
     fn find_model(&self, id: String) -> BoxFuture<Option<Value>>;
@@ -97,7 +111,7 @@ fn needed_bytes(model: &Value, params: &Value, share: f64) -> Option<f64> {
             |v| nekko_js::to_number(Some(v)),
         ),
         parallel_slots: field("parallelSlots").map_or(1.0, |v| nekko_js::to_number(Some(v))),
-        kv_cache_dtype: field("kvCacheDtype").map_or_else(|| "f16".to_string(), nekko_js::display),
+        kv_cache_dtype: crate::launch::effective_kv(params),
         gpu_layer_fraction: 1.0,
     };
     let hw = Hardware { devices: Vec::new(), unified: false, ram_total: f64::NAN, ram_free: f64::NAN };
@@ -766,9 +780,9 @@ impl ModelServer {
         };
         let image = model.get("modality").and_then(Value::as_str) == Some("image");
         let mlx = model.get("format").and_then(Value::as_str) == Some("mlx");
-        let bin = self
+        let engine = self
             .env
-            .bin(if image {
+            .engine(if image {
                 "diffusion"
             } else if mlx {
                 "mlx"
@@ -776,7 +790,7 @@ impl ModelServer {
                 "llama"
             })
             .await;
-        let Some(bin) = bin else {
+        let Some(Engine { bin, in_use }) = engine else {
             let message = if image {
                 "Install stable-diffusion.cpp from Model Server to run this image-generation model.".to_string()
             } else if mlx {
@@ -794,6 +808,17 @@ impl ModelServer {
         if !image && let Some(reason) = unsupported_load_reason(&model) {
             self.set_error(id, &reason);
             return reply(false, reason);
+        }
+        // What this engine makes of the file: the verdict the library rows carry too.
+        if !image
+            && !mlx
+            && let Some(check) = load_check(&model, &in_use)
+        {
+            if check.level == Level::Blocked {
+                self.set_error(id, &check.reason);
+                return reply(false, check.reason);
+            }
+            self.say(check.reason);
         }
         if !mlx {
             let copied = self.env.vc_runtime(&path::dirname(&bin));
@@ -1006,6 +1031,36 @@ impl ModelServer {
             self.push(&log[log.len().saturating_sub(4)..]);
             let exit = outcome.get("message").and_then(Value::as_str);
             let explained = explain_load_error(&log);
+            // A quantized cache that will not start (a llama.cpp build that
+            // breaks it, a backend without the kernel) must not leave the
+            // model unloadable: one more try with the f16 cache (#3325). Not
+            // for a failure we can name that the cache does not cause (memory,
+            // a missing file or runtime): f16 would fail the same way.
+            if !image && !mlx && crate::launch::effective_kv(&params) != "f16" && !is_missing_dll_exit(exit) {
+                let cache_failure = log.iter().any(|l| {
+                    let l = l.to_lowercase();
+                    ["cache_k", "cache_v", "kv cache", "cache type", "flash_attn", "flash attention", "set_rows"]
+                        .iter()
+                        .any(|w| l.contains(w))
+                });
+                // Out of memory, even naming the cache: f16 only needs more.
+                let memory = explained.starts_with("Not enough memory");
+                if !memory && (explained.is_empty() || cache_failure) {
+                    let kv = crate::launch::effective_kv(&params);
+                    self.say(format!("{id} did not start with a {kv} KV cache; trying again with f16."));
+                    let mut retry = params.as_object().cloned().unwrap_or_default();
+                    retry.insert("kvCacheDtype".into(), json!("f16"));
+                    let res = Box::pin(self.do_load(id, Value::Object(retry))).await;
+                    if res.get("ok") == Some(&Value::Bool(true)) {
+                        let message = format!(
+                            "{} It runs with a full-precision (f16) KV cache: the {kv} cache did not start on this machine.",
+                            res.get("message").and_then(Value::as_str).unwrap_or_default()
+                        );
+                        return json!({ "ok": true, "message": message.trim_start(), "kvFallback": "f16" });
+                    }
+                    return res;
+                }
+            }
             let message = if is_missing_dll_exit(exit) {
                 missing_dll_message("The model server")
             } else if explained.is_empty() {

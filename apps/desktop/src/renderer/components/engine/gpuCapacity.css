@@ -1,0 +1,21 @@
+.gpu-capacity-track {
+  display: flex;
+  height: 16px;
+  overflow: hidden;
+  border-radius: 6px;
+  margin-top: var(--q-inline);
+}
+.gpu-capacity-fill { flex-basis: 0; min-width: 0; }
+.gpu-capacity-key { border-radius: 4px; }
+.gpu-capacity-key i { width: 8px; height: 8px; border-radius: 2px; }
+/* Fixed meter colours from styles.css: the same in every theme. */
+[data-model-gpu-facts] [data-band=model] { background: var(--color-meter-model); }
+[data-model-gpu-facts] [data-band=min] { background: var(--color-meter-min); }
+[data-model-gpu-facts] [data-band=rec] { background: var(--color-meter-rec); }
+[data-model-gpu-facts] [data-band=max] { background: var(--color-meter-max); }
+[data-model-gpu-facts] [data-band=free] { background: var(--color-meter-free); }
+[data-model-gpu-facts] [data-band=short] { background: repeating-linear-gradient(125deg, var(--color-meter-track) 0 4px, var(--color-meter-short) 4px 6px); }
+@media (prefers-reduced-motion: no-preference) {
+  .gpu-capacity-track { animation: gpu-capacity-in 160ms ease-out; }
+  @keyframes gpu-capacity-in { from { clip-path: inset(0 100% 0 0 round 6px); } to { clip-path: inset(0 0 0 0 round 6px); } }
+}

@@ -57,6 +57,8 @@ export function ModelsWorkspace() {
     const id = find(to) ? to : 'local';
     const target = find(id);
     if (!target) return;
+    // A folded section (System models) opens when asked for by name.
+    if (target instanceof HTMLDetailsElement) target.open = true;
     setActive(id);
     jumping.current = true;
     target.scrollIntoView?.({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });

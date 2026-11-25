@@ -16,12 +16,22 @@ export function permissionReturnDiagnosticChecklist(source) {
   once('    func refresh() async {\n', '    func refresh() async {\n' + phase('refresh.begin'));
   const settings = '        let settings = await UNUserNotificationCenter.current().notificationSettings()\n';
   once(settings, settings + phase('refresh.notificationSettings.complete'));
-  once('    }\n\n    static func capture(', phase('refresh.complete') + '    }\n\n    static func capture(');
+  // Newer apps refresh local statuses after a request without awaiting notifications.
+  // The historical pinned apps use a single awaited refresh; keep their trace identical.
+  if (source.includes('    func refreshNotifications() async {\n')) {
+    once('        await refreshNotifications()\n    }\n',
+      '        await refreshNotifications()\n' + phase('refresh.complete') + '    }\n');
+    once('        refreshLocal()\n        // A grant answers for itself;',
+      phase('request.refresh.begin') + '        refreshLocal()\n' + phase('request.refresh.complete') +
+      '        // A grant answers for itself;');
+  } else {
+    once('    }\n\n    static func capture(', phase('refresh.complete') + '    }\n\n    static func capture(');
+    once('        await refresh()\n    }\n\n    func stop()', phase('request.refresh.begin') +
+      '        await refresh()\n' + phase('request.refresh.complete') + '    }\n\n    func stop()');
+  }
   once('        case .microphone: _ = await AVAudioApplication.requestRecordPermission()\n',
     '        case .microphone:\n' + phase('request.microphone.begin') +
     '            _ = await AVAudioApplication.requestRecordPermission()\n' + phase('request.microphone.complete'));
-  once('        await refresh()\n    }\n\n    func stop()', phase('request.refresh.begin') +
-    '        await refresh()\n' + phase('request.refresh.complete') + '    }\n\n    func stop()');
   return source;
 }
 

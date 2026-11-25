@@ -13,7 +13,7 @@ import { openWhatsNew } from '../whatsNew.js';
 import { hasNotices, OpenSourceLicenses } from '../components/OpenSourceLicenses.js';
 import { ThemePresetPicker } from '../components/ThemePresetPicker.js';
 import { pixelWaveFor } from '../components/PixelWaveBackground.js';
-import { DEFAULT_SPEC_METHODOLOGY, SPEC_METHODOLOGIES, ORCHESTRATION_STRATEGIES, DEFAULT_ORCHESTRATION, MAX_OUTPUT_TOKENS_DEFAULT, MAX_OUTPUT_TOKENS_RANGE, clampMaxOutputTokens, ONBOARDING_VERSION, updateChecks, DEFAULT_TURN_WRAPPER } from '@nekko-agent/shared';
+import { DEFAULT_SPEC_METHODOLOGY, SPEC_METHODOLOGIES, ORCHESTRATION_STRATEGIES, DEFAULT_ORCHESTRATION, MAX_OUTPUT_TOKENS_RANGE, clampMaxOutputTokens, ONBOARDING_VERSION, updateChecks, DEFAULT_TURN_WRAPPER } from '@nekko-agent/shared';
 import { CloudIcon, GlobeIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, RobotIcon, UserIcon, WandIcon, WrenchIcon } from '../icons.js';
 import { VoiceSettings } from '../components/VoiceSettings.js';
 import { RemoteAccess } from '../components/RemoteAccess.js';
@@ -181,7 +181,9 @@ export function SettingsView() {
     const open = () => {
       const target = takeSettingsTarget();
       if (!target) return;
-      if (!showElement(document.getElementById(`settings-${target}`)) && GROUP_IDS.has(target)) setActive(target as SettingsGroupId);
+      // A section's own id works too (`mcp-servers`), for sections without a `settings-` anchor.
+      const el = document.getElementById(`settings-${target}`) ?? document.getElementById(target);
+      if (!showElement(el) && GROUP_IDS.has(target)) setActive(target as SettingsGroupId);
     };
     open();
     window.addEventListener(SETTINGS_TARGET_EVENT, open);
@@ -518,13 +520,15 @@ export function SettingsView() {
  * Replies have no tool-step limit; the output cap saves on blur/Enter.
  */
 function AgentLoopSection({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => void }) {
+  // 0 is "no limit" and shows as an empty field with a "No limit" placeholder.
+  const outText = (n: number) => (n > 0 ? String(n) : '');
   const savedOut = clampMaxOutputTokens(settings.maxOutputTokens);
-  const [out, setOut] = useState(String(savedOut));
-  useEffect(() => { setOut(String(clampMaxOutputTokens(settings.maxOutputTokens))); }, [settings.maxOutputTokens]);
+  const [out, setOut] = useState(outText(savedOut));
+  useEffect(() => { setOut(outText(clampMaxOutputTokens(settings.maxOutputTokens))); }, [settings.maxOutputTokens]);
 
   const commitOut = () => {
     const next = clampMaxOutputTokens(Number(out));
-    setOut(String(next));
+    setOut(outText(next));
     if (next !== savedOut) update({ maxOutputTokens: next });
   };
 
@@ -549,7 +553,7 @@ function AgentLoopSection({ settings, update }: { settings: AppSettings; update:
       />
       <SettingRow
         title="Output cap per response, local models"
-        detail={<>Stops a local model that repeats itself from streaming until its context fills. Cloud providers are not capped. {MAX_OUTPUT_TOKENS_RANGE.min}–{MAX_OUTPUT_TOKENS_RANGE.max.toLocaleString()}, default {MAX_OUTPUT_TOKENS_DEFAULT.toLocaleString()}.</>}
+        detail={<>No limit by default, so thinking models can finish long plans. Set one only if you want replies to stop at a fixed length; thinking counts towards it. Leave empty for no limit, or {MAX_OUTPUT_TOKENS_RANGE.min}–{MAX_OUTPUT_TOKENS_RANGE.max.toLocaleString()}. Cloud providers are never capped.</>}
         control={<input
           type="number"
           className="quiet-field w-[110px] py-1 tabular-nums"
@@ -557,6 +561,7 @@ function AgentLoopSection({ settings, update }: { settings: AppSettings; update:
           max={MAX_OUTPUT_TOKENS_RANGE.max}
           step={256}
           value={out}
+          placeholder="No limit"
           aria-label="Output cap per response"
           onChange={(e) => setOut(e.target.value)}
           onBlur={commitOut}

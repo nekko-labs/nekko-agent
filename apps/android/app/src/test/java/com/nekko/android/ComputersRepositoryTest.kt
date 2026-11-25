@@ -376,6 +376,36 @@ class ComputersRepositoryTest {
     }
 
     @Test
+    fun `the route choice filters what is dialed, reconnects at once, is saved and defaults to auto`() = runTest {
+        val store = FakeStore()
+        val remotes = FakeRemotes()
+        val repo = repo(store, remotes)
+        val lan = "ws://192.168.1.20:4400"
+        val id = repo.pair(link.copy(alts = listOf(lan)))
+        runCurrent()
+        assertEquals(com.nekko.protocol.RouteChoice.AUTO, repo.routeChoice(id))
+        assertEquals(listOf("wss://relay.example.dev", lan), remotes.last.config.routes)
+        val before = remotes.created.size
+
+        repo.setRouteChoice(id, com.nekko.protocol.RouteChoice.DIRECT)
+        runCurrent()
+        assertTrue("reconnected at once", remotes.created.size > before)
+        assertEquals(listOf(lan), remotes.last.config.routes)
+        assertEquals(com.nekko.protocol.RouteChoice.DIRECT, repo(store).also { it.load() }.state.value.computers.single().routeChoice)
+
+        repo.setRouteChoice(id, com.nekko.protocol.RouteChoice.CLOUD)
+        runCurrent()
+        assertEquals(listOf("wss://relay.example.dev"), remotes.last.config.routes)
+
+        // An old save has no choice: auto.
+        assertEquals(com.nekko.protocol.RouteChoice.AUTO, com.nekko.android.data.StoredJson.decodeIndex(
+            """[{"id":"a","name":"A","relayUrl":"wss://r.example","pairedAt":1}]""",
+        ).single().routeChoice)
+        // A choice the link can't honour dials everything.
+        assertEquals(listOf("wss://r.example"), com.nekko.android.data.Computer("a", "A", "wss://r.example", 0, routeChoice = com.nekko.protocol.RouteChoice.DIRECT).routes)
+    }
+
+    @Test
     fun `the link's routes are kept, given to the connection, and the one in use is shown`() = runTest {
         val store = FakeStore()
         val remotes = FakeRemotes()

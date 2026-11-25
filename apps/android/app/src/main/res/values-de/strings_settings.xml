@@ -381,13 +381,16 @@
     <string name="settings_card_counts">Nur Anzahl</string>
     <string name="settings_card_counts_detail">Wie viele Chats laufen, sonst nichts</string>
     <string name="settings_card_minimal">Minimal</string>
-    <string name="settings_card_minimal_detail">Was der Chat tut, der dich braucht, mit Stoppen und Ablehnen. Kein Chat-Text</string>
+    <string name="settings_card_minimal_detail">Summen der arbeitenden, wartenden und fertigen Chats. Kein Chat-Text</string>
     <string name="settings_card_standard">Standard</string>
-    <string name="settings_card_standard_detail">Zeigt zusätzlich den Namen des Chats, seinen aktuellen Schritt und Erlauben</string>
+    <string name="settings_card_standard_detail">Dieselben Summen wie Minimal; die Karte zeigt keine Chat-Namen oder Schritte</string>
     <string name="settings_card_detailed">Ausführlich</string>
-    <string name="settings_card_detailed_detail">Zeigt zusätzlich die erste Zeile der letzten Antwort</string>
-    <string name="settings_card_footer_private">Kein Chat-Text verlässt deinen Computer für den Sperrbildschirm.</string>
-    <string name="settings_card_footer_text">Chat-Namen und Schritte erscheinen, wenn das Telefon entsperrt ist; ein gesperrtes Telefon, das vertrauliche Inhalte ausblendet, zeigt die Minimal-Texte. Erlauben fragt zuerst nach dem Entsperren.</string>
+    <string name="settings_card_detailed_detail">Dieselben Summen wie Minimal; die Karte zeigt auch keine Antworten</string>
+    <string name="settings_card_footer_none">Keine Karte. Die Verbindungsbenachrichtigung sagt nur, wie viele Chats laufen und auf welchem Computer.</string>
+    <string name="settings_card_footer_minimal">Nur Summen. Auf dem Sperrbildschirm erscheint kein Chat-Text. Mit Nekko sprechen fragt zuerst nach dem Entsperren.</string>
+    <string name="settings_card_footer_standard">Auf Android ist diese Karte dieselbe wie Minimal: Sie zeigt keine Chat-Namen oder Schritte.</string>
+    <string name="settings_card_footer_detailed">Auf Android ist diese Karte dieselbe wie Minimal: Sie zeigt keine Chat-Namen, Schritte oder Antworten.</string>
+    <string name="settings_card_preview">Vorschau der Sperrbildschirm-Karte</string>
     <string name="settings_warn_yolo">Vor YOLO warnen</string>
     <string name="settings_warn_yolo_detail">Erklären, was YOLO durchlässt, bevor ein Chat oder der Standard eines Computers dorthin wechselt</string>
     <!-- Customize (#2426), the iPhone's page. -->

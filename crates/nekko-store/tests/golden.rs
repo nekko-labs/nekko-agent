@@ -147,6 +147,28 @@ fn set_options_accepts_git_isolation() {
 }
 
 #[test]
+fn orchestrate_is_a_boolean_for_one_chat_and_survives_stale_turn_saves() {
+    let data = std::env::temp_dir().join(format!("nekko-orchestrate-{}", std::process::id()));
+    let store = SessionStore::new(&data);
+    let mut stale = store.create(None).unwrap();
+    let other = store.create(None).unwrap();
+    let id = stale["id"].as_str().unwrap().to_string();
+    assert!(stale.get("orchestrate").is_none());
+    store.set_options(&id, &serde_json::json!({ "toolApproach": "code", "orchestrate": true })).unwrap();
+    store.save_turn(&mut stale, None).unwrap();
+    assert_eq!(stale["orchestrate"], true);
+    assert_eq!(stale["toolApproach"], "code");
+    assert!(store.set_options(&id, &serde_json::json!({ "orchestrate": "true" })).is_err());
+    assert_eq!(store.get(&id).unwrap()["orchestrate"], true);
+    store.set_options(&id, &serde_json::json!({ "orchestrate": false })).unwrap();
+    store.save_turn(&mut stale, None).unwrap();
+    assert_eq!(store.get(&id).unwrap()["orchestrate"], false);
+    assert_eq!(stale["toolApproach"], "code");
+    assert!(store.get(other["id"].as_str().unwrap()).unwrap().get("orchestrate").is_none());
+    std::fs::remove_dir_all(&data).ok();
+}
+
+#[test]
 fn creates_and_deletes_chats_the_way_the_ts_host_does() {
     let data = std::env::temp_dir().join(format!("nekko-create-{}", std::process::id()));
     let store = SessionStore::new(&data);

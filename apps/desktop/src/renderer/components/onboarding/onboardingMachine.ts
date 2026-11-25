@@ -10,6 +10,7 @@ export const ONBOARDING_STEPS: WizardStepDef[] = [
   { id: 'detail', title: 'Detail' },
   { id: 'theme', title: 'Look' },
   { id: 'providers', title: 'Providers' },
+  { id: 'dictation', title: 'Dictation' },
   { id: 'integrations', title: 'Integrations' },
   { id: 'tracking', title: 'Work tracking' },
   { id: 'help', title: 'Help improve' },
@@ -19,7 +20,7 @@ export const ONBOARDING_STEPS: WizardStepDef[] = [
 /** Steps laid out wider than the centred column: card grids and the side-by-side preview. */
 export const WIDE_STEP_IDS = new Set(['work', 'detail']);
 
-export const SKIPPABLE_STEP_IDS = new Set(['name', 'email', 'work', 'detail', 'theme', 'providers', 'integrations', 'tracking', 'help']);
+export const SKIPPABLE_STEP_IDS = new Set(['name', 'email', 'work', 'detail', 'theme', 'providers', 'dictation', 'integrations', 'tracking', 'help']);
 
 export interface WizardState {
   index: number;

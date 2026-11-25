@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { AppSettings, WorkProfile } from '@nekko-agent/shared';
+import { useCloudAccountEmail } from '../components/cloud/useCloudAccountEmail.js';
 import { saveEmail } from '../components/onboarding/AboutYouSteps.js';
 import { PROFILES, validEmail } from '../components/onboarding/aboutYou.js';
 import { SettingRow, SettingsSection } from '../components/SettingsSection.js';
@@ -10,13 +11,20 @@ import { SettingRow, SettingsSection } from '../components/SettingsSection.js';
  */
 export function AboutYouSection({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => unknown }) {
   const [name, setName] = useState(settings.userName ?? '');
-  const [email, setEmail] = useState(settings.userEmail ?? '');
+  const cloudEmail = useCloudAccountEmail();
+  const savedEmail = settings.userEmail?.trim() ?? '';
+  const defaultEmail = savedEmail || cloudEmail;
+  const [emailDraft, setEmailDraft] = useState<string>();
+  const email = emailDraft ?? defaultEmail;
   const [note, setNote] = useState('');
   const commitEmail = async () => {
-    if (email.trim() === (settings.userEmail ?? '')) return;
-    if (email.trim() && !validEmail(email)) { setNote("That doesn't look like an email yet."); return; }
-    const error = await saveEmail(email, settings.userName);
-    setNote(error ? `Saved here, but it didn't reach Nekko Cloud: ${error}` : email.trim() ? "Saved. We'll send one email to confirm." : 'Removed from this computer.');
+    if (emailDraft === undefined) return;
+    const clean = emailDraft.trim();
+    if (clean === defaultEmail || clean === savedEmail) { setEmailDraft(undefined); return; }
+    if (clean && !validEmail(clean)) { setNote("That doesn't look like an email yet."); return; }
+    const error = await saveEmail(clean, settings.userName);
+    setEmailDraft(draft => draft === emailDraft ? undefined : draft);
+    setNote(error ? `Saved here, but it didn't reach Nekko Cloud: ${error}` : clean ? "Saved. We'll send one email to confirm." : 'Saved address removed.');
   };
   return (
     <SettingsSection id="about-you" title="About you">
@@ -25,11 +33,11 @@ export function AboutYouSection({ settings, update }: { settings: AppSettings; u
           onChange={(e) => setName(e.target.value)} onBlur={() => void update({ userName: name.trim() })} />
       } />
       <SettingRow title="Email for updates" htmlFor="settings-user-email" detailId="settings-user-email-note"
-        detail={<span aria-live="polite">{note || 'At most one email a month about new features and important fixes. Never sold or shared; unsubscribe from any email.'}</span>}
+        detail={<span aria-live="polite">{note || (!savedEmail && cloudEmail && emailDraft === undefined ? 'From Nekko Cloud. Signing in doesn’t sign you up for updates.' : 'At most one email a month about new features and important fixes. Never sold or shared; unsubscribe from any email.')}</span>}
         control={
           <input id="settings-user-email" type="email" className="quiet-field max-w-[220px] py-1.5" placeholder="Optional" value={email}
-            onChange={(e) => { setEmail(e.target.value); setNote(''); }} onBlur={() => void commitEmail()}
-            onKeyDown={(e) => { if (e.key === 'Enter') void commitEmail(); }} aria-describedby="settings-user-email-note" />
+            onChange={(e) => { setEmailDraft(e.target.value); setNote(''); }} onBlur={() => void commitEmail()}
+            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} aria-describedby="settings-user-email-note" />
         } />
       <SettingRow title="What you mostly do" htmlFor="settings-work-profile" control={
         <select id="settings-work-profile" className="quiet-field w-[220px] py-1" value={settings.workProfile ?? ''}

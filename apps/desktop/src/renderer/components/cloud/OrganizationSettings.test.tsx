@@ -5,7 +5,7 @@ import type { CloudStatus, FleetComputerView, FleetList, OrgDetail, OrgSummary }
 import { OrganizationView, type OrgViewProps } from './OrganizationSettings.js';
 import { Toggle } from '../primitives/Toggle.js';
 import {
-  canManage, canOpen, lastSeen, loadFleet, loadOrgs, openOnComputer, orgErrorText, orgGate, reachNote, setSharing, sortComputers, splitModels,
+  canManage, canOpen, lastSeen, loadFleet, loadOrgs, openOnComputer, orgErrorText, orgGate, orgListErrorText, reachNote, setSharing, sortComputers, splitModels,
   type FleetOpenApi, type OrgApi,
 } from './orgModel.js';
 
@@ -32,7 +32,7 @@ function props(over: Partial<OrgViewProps> = {}): OrgViewProps {
   const detail = over.detail === undefined ? org() : over.detail;
   return {
     gate: 'ready', loading: false, orgs: detail ? [detail as OrgSummary] : [], invites: [], detail, fleet: null, error: '', fleetError: '', busy: '', now: NOW,
-    onSelect: noop, onCreate: noop, onAccept: noop, onInvite: noop, onRevokeInvite: noop, onRemoveMember: noop, onSetSharing: noop, onGoToSync: noop,
+    onSelect: noop, onCreate: async () => {}, onRetry: noop, onAccept: noop, onInvite: noop, onRevokeInvite: noop, onRemoveMember: noop, onSetSharing: noop, onGoToSync: noop,
     ...over,
   };
 }
@@ -61,13 +61,13 @@ describe('Organization section gating', () => {
     expect(out).toContain('Unlock your account on this computer to use organizations');
     expect(out).toContain('recovery key');
     expect(out).toContain('Go to Sync');
-    expect(out).not.toContain('Create an organization');
+    expect(out).not.toContain('Create a fleet');
   });
 
   it('says what to do when sync was never turned on, and when the plan lacks it', () => {
     expect(html(props({ gate: 'needs-setup', detail: null }))).toContain('Turn on sync first');
     const plan = html(props({ gate: 'needs-plan', detail: null }));
-    expect(plan).toContain('Pro and Team');
+    expect(plan).toContain('Pro and Enterprise');
     // Nothing to buy until plans and billing are switched on (#2724).
     expect(plan).not.toContain('See plans');
     expect(html(props({ gate: 'needs-plan', detail: null, onSeePlans: noop }))).toContain('See plans');
@@ -88,9 +88,21 @@ describe('Organization section gating', () => {
 describe('No organization yet', () => {
   it('offers to create one', () => {
     const out = html(props({ detail: null }));
-    expect(out).toContain('Create an organization');
-    expect(out).toContain('Organization name');
+    expect(out).toContain('Create a fleet');
+    expect(out).not.toContain('Fleet name');
     expect(out).not.toContain('Share this computer');
+  });
+
+  it('keeps Create a fleet available when a selected fleet cannot load or when a fleet already exists', () => {
+    expect(html(props())).toContain('Create a fleet');
+    expect(html(props({ detail: null, orgs: [org()], error: "That organization wasn't found." }))).toContain('Create a fleet');
+  });
+
+  it('distinguishes an unavailable cloud from an empty list', () => {
+    const out = html(props({ detail: null, unavailable: true, error: orgListErrorText(new Error("That organization wasn't found.")) }));
+    expect(out).toContain('Fleet management is not available on Nekko Cloud right now.');
+    expect(out).toContain('Try again');
+    expect(out).not.toContain('Create a fleet');
   });
 
   it('lists pending invites with Accept, and keeps the create form', () => {
@@ -98,7 +110,7 @@ describe('No organization yet', () => {
     expect(out).toContain('Join Acme');
     expect(out).toContain('boss@acme.com invited you as a member');
     expect(out).toContain('Accept');
-    expect(out).toContain('Create an organization');
+    expect(out).toContain('Create a fleet');
   });
 
   it('wires Accept to the invite id', () => {
@@ -112,7 +124,7 @@ describe('No organization yet', () => {
   it('fails softly when the engine does not know the channels yet', () => {
     const out = html(props({ detail: null, orgs: [], unavailable: true, error: orgErrorText(new Error('unknown channel: org:list')) }));
     expect(out).toContain('Organizations are not available in this version of Nekko Agent yet');
-    expect(out).not.toContain('Create an organization');
+    expect(out).not.toContain('Create a fleet');
   });
 });
 
@@ -246,7 +258,7 @@ describe('Loading and errors', () => {
 
   it('turns engine errors into plain text', () => {
     expect(orgErrorText(new Error('unknown channel: fleet:list'))).toMatch(/not available in this version/);
-    expect(orgErrorText(new Error('plan-required'))).toMatch(/Pro or Team/);
+    expect(orgErrorText(new Error('plan-required'))).toMatch(/Pro or Enterprise/);
     expect(orgErrorText(new Error('orgs-not-available'))).toMatch(/not available for your account/);
     expect(orgErrorText(new Error('Could not reach Nekko Cloud'))).toBe('Could not reach Nekko Cloud');
   });
@@ -268,6 +280,13 @@ describe('Loading and errors', () => {
     expect(soft.detail?.id).toBe('org1');
     expect(soft.fleet).toBeNull();
     expect(soft.fleetError).toMatch(/not available in this version/);
+  });
+
+  it('preserves fleets and invitations when the selected fleet no longer loads', async () => {
+    const list = { orgs: [org(), org({ id: 'missing' })], invites: [{ id: 'invite1' }] };
+    const api = { orgList: vi.fn().mockResolvedValue(list), orgGet: vi.fn().mockRejectedValue(Error("That organization wasn't found.")), fleetList: vi.fn() } as unknown as OrgApi;
+    expect(await loadOrgs(api, 'missing')).toMatchObject({ list, selectedId: 'missing', detail: null, detailError: "That organization wasn't found." });
+    expect(api.fleetList).not.toHaveBeenCalled();
   });
 
   it('does not ask for computers while this device lacks the key', async () => {

@@ -102,12 +102,40 @@ fn drop_from(v: &dyn Vault, name: &str, from: usize) {
 }
 
 /// The keystore service: `dev.nekkolabs.nekko-agent.<name>.<12 hex of sha256(dir)>`.
-#[cfg_attr(not(any(target_os = "macos", windows)), allow(dead_code))]
+#[cfg(any(target_os = "macos", windows, test))]
 fn service(dir: &Path, name: &str) -> String {
     use sha2::{Digest, Sha256};
-    let scope = Sha256::digest(dir.to_string_lossy().as_bytes());
+    let original = keystore_scope(dir);
+    let scope = Sha256::digest(original.to_string_lossy().as_bytes());
     let hex: String = scope[..6].iter().map(|b| format!("{b:02x}")).collect();
     format!("dev.nekkolabs.nekko-agent.{name}.{hex}")
+}
+
+// A confirmed profile move records its original OS-keystore namespace. Only
+// metadata moves; no credential is exported. Cloud uses the `cloud/` child
+// of a data directory. Never look in arbitrary ancestors such as the home.
+#[cfg(any(target_os = "macos", windows, test))]
+fn keystore_scope(dir: &Path) -> PathBuf {
+    fn marker(root: &Path) -> Option<PathBuf> {
+        let file = root.join("keystore-scope.json");
+        let metadata = std::fs::symlink_metadata(&file).ok()?;
+        if !metadata.is_file() || metadata.len() > 16 * 1024 {
+            return None;
+        }
+        let value: serde_json::Value = serde_json::from_slice(&std::fs::read(file).ok()?).ok()?;
+        let path = PathBuf::from(value.get("path")?.as_str()?);
+        path.is_absolute().then_some(path)
+    }
+
+    if let Some(path) = marker(dir) {
+        return path;
+    }
+    if dir.file_name().is_some_and(|name| name == "cloud")
+        && let Some(path) = dir.parent().and_then(marker)
+    {
+        return path.join("cloud");
+    }
+    dir.to_path_buf()
 }
 
 /// The keystore calls under way. macOS holds a Keychain call until the user
@@ -236,6 +264,22 @@ mod tests {
         assert!(cloud.starts_with("dev.nekkolabs.nekko-agent.cloud.") && cloud.len() == 44);
         assert_eq!(service(dir, "runner"), cloud.replace(".cloud.", ".runner."));
         assert_ne!(service(Path::new("/other"), "cloud"), cloud);
+    }
+
+    #[test]
+    fn migrated_profile_keeps_its_namespaces_without_exporting_keys() {
+        let home = tempfile::tempdir().unwrap();
+        let old = home.path().join(".nekko-agent");
+        let shared = home.path().join(".nekko");
+        let new = shared.join("nekko-agent");
+        std::fs::create_dir_all(&new).unwrap();
+        std::fs::write(new.join("keystore-scope.json"), serde_json::json!({ "path": old }).to_string()).unwrap();
+        for name in ["credentials", "settings", "tokens", "computers", "runner"] {
+            assert_eq!(service(&new, name), service(&old, name));
+        }
+        assert_eq!(service(&new.join("cloud"), "cloud"), service(&old.join("cloud"), "cloud"));
+        assert_ne!(service(&shared.join("another-product"), "settings"), service(&old, "settings"));
+        assert_eq!(keystore_scope(&new.join("other")), new.join("other"));
     }
 
     #[test]

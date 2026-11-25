@@ -381,13 +381,16 @@
     <string name="settings_card_counts">件数のみ</string>
     <string name="settings_card_counts_detail">実行中のチャットの数だけ</string>
     <string name="settings_card_minimal">最小</string>
-    <string name="settings_card_minimal_detail">あなたを待っているチャットの状態と、停止・拒否ボタン。チャットの文章は表示しません</string>
+    <string name="settings_card_minimal_detail">作業中・待機中・完了したチャットの合計。チャットのテキストはなし</string>
     <string name="settings_card_standard">標準</string>
-    <string name="settings_card_standard_detail">チャット名、現在のステップ、許可ボタンも表示します</string>
+    <string name="settings_card_standard_detail">「最小」と同じ合計。カードにはチャット名もステップも表示されません</string>
     <string name="settings_card_detailed">詳細</string>
-    <string name="settings_card_detailed_detail">最新の返信の最初の一文も表示します</string>
-    <string name="settings_card_footer_private">ロック画面のためにチャットの文章がコンピュータから送られることはありません。</string>
-    <string name="settings_card_footer_text">チャット名とステップは端末のロック解除中に表示されます。機密情報を隠す設定のロック中の端末では、「最小」の表示になります。許可するには先にロックを解除する必要があります。</string>
+    <string name="settings_card_detailed_detail">「最小」と同じ合計。カードには返信も表示されません</string>
+    <string name="settings_card_footer_none">カードはありません。接続の通知には、実行中のチャット数とコンピューター名だけが表示されます。</string>
+    <string name="settings_card_footer_minimal">合計のみ。ロック画面にチャットのテキストは表示されません。Nekko と話すには先にロックを解除する必要があります。</string>
+    <string name="settings_card_footer_standard">Android ではこのカードは「最小」と同じです。チャット名もステップも表示されません。</string>
+    <string name="settings_card_footer_detailed">Android ではこのカードは「最小」と同じです。チャット名、ステップ、返信のいずれも表示されません。</string>
+    <string name="settings_card_preview">ロック画面カードのプレビュー</string>
     <string name="settings_warn_yolo">YOLO の前に警告</string>
     <string name="settings_warn_yolo_detail">チャットやコンピューターの既定が YOLO に切り替わる前に、YOLO で何が通るかを説明します</string>
     <!-- Customize (#2426), the iPhone's page. -->

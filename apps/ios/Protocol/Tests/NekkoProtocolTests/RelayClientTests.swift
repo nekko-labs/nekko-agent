@@ -32,6 +32,8 @@ final class RelayClientTests: XCTestCase {
         /// Hosts (host:port) that don't answer: true hangs (a LAN address on
         /// another Wi-Fi), false refuses at once.
         var unreachable: [String: Bool] = [:]
+        /// host:port values whose relay the computer answers `denied: route` on.
+        var routeDenied: Set<String> = []
         /// The computer's phone protocol version in its welcome; nil sends none (an older computer).
         var welcomeProtocol: Int?
         /// Send a challenge to each socket as it opens.
@@ -147,6 +149,7 @@ final class RelayClientTests: XCTestCase {
                         return true
                     }
                     let reply: String? = relay.sync {
+                        if relay.routeDenied.contains(hostPort) { return "route" }
                         if relay.known.contains(id) { return nil }
                         if let pair, pair == relay.code {
                             relay.known.insert(id)

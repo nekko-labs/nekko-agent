@@ -58,11 +58,83 @@ pub trait LinkHandle: Send + Sync {
     fn connected_devices(&self) -> Vec<String>;
     fn is_online(&self) -> bool;
     fn last_error(&self) -> Option<String>;
+    /// Device ids connected through one route (`cloud` or `direct`); all of them for a single relay.
+    fn connected_via(&self, _via: &str) -> Vec<String> {
+        self.connected_devices()
+    }
 }
+
+/// Every relay this computer is reachable through at once (decision 0116):
+/// the same room on each, so a device may come in through Nekko Cloud Relay or
+/// directly (Tailscale, the LAN, the owner's own relay), as its route allows.
+struct Routes {
+    links: Vec<(String, Arc<dyn LinkHandle>)>,
+}
+
+impl LinkHandle for Routes {
+    fn stop(&self) {
+        self.links.iter().for_each(|(_, h)| h.stop());
+    }
+    fn kick_device(&self, device_id: &str) {
+        self.links.iter().for_each(|(_, h)| h.kick_device(device_id));
+    }
+    fn disconnect_device(&self, device_id: &str) {
+        self.links.iter().for_each(|(_, h)| h.disconnect_device(device_id));
+    }
+    fn set_reads(&self, device_id: &str, reads: bool) {
+        self.links.iter().for_each(|(_, h)| h.set_reads(device_id, reads));
+    }
+    fn connected_devices(&self) -> Vec<String> {
+        let mut all: Vec<String> = self.links.iter().flat_map(|(_, h)| h.connected_devices()).collect();
+        all.sort();
+        all.dedup();
+        all
+    }
+    /// Online while any route is: a device can still come in.
+    fn is_online(&self) -> bool {
+        self.links.iter().any(|(_, h)| h.is_online())
+    }
+    fn last_error(&self) -> Option<String> {
+        if self.is_online() {
+            return None;
+        }
+        self.links.iter().find_map(|(_, h)| h.last_error())
+    }
+    fn connected_via(&self, via: &str) -> Vec<String> {
+        self.links
+            .iter()
+            .filter(|(url, _)| crate::route::via(url) == via)
+            .flat_map(|(_, h)| h.connected_devices())
+            .collect()
+    }
+}
+
+impl Routes {
+    fn rows(&self) -> Value {
+        Value::Array(
+            self.links
+                .iter()
+                .map(|(url, h)| {
+                    json!({
+                        "url": url,
+                        "via": crate::route::via(url),
+                        "online": h.is_online(),
+                        "error": if h.is_online() { None } else { h.last_error() },
+                    })
+                })
+                .collect(),
+        )
+    }
+}
+
+/// At most this many relays besides the main one.
+pub const MAX_ALSO_RELAYS: usize = 3;
 
 #[derive(Default)]
 struct State {
     handle: Option<Arc<dyn LinkHandle>>,
+    /// The same agents as `handle`, per relay, while there is more than one.
+    routes: Option<Arc<Routes>>,
     grant: Option<Grant>,
 }
 
@@ -128,6 +200,8 @@ impl RemoteService {
                 JsObj::new()
                     .with("enabled", or(get("enabled"), json!(false)))
                     .with("relayUrl", get("relayUrl"))
+                    // Decision 0116: relays this computer is also reachable through, same room.
+                    .with("alsoRelays", get("alsoRelays"))
                     .with("room", get("room"))
                     .with("secret", get("secret"))
                     .with("hostKey", get("hostKey"))
@@ -219,6 +293,18 @@ impl RemoteService {
         let code_ok = grant.as_ref().is_some_and(|g| {
             hello_frame.get("pair").and_then(Value::as_str) == Some(g.code.as_str()) && g.expires_at > now
         });
+        // Decision 0116: a device limited to one route is turned away on the
+        // other. A live code carries the route its pairing chose instead.
+        if let Some(via) = hello_frame.get("via").and_then(Value::as_str) {
+            let chosen = if code_ok {
+                grant.as_ref().and_then(|g| g.route.clone())
+            } else {
+                known(&cfg).and_then(|d| d.get("route").and_then(Value::as_str).map(str::to_string))
+            };
+            if !crate::route::route_allows(chosen.as_deref(), via) {
+                return json!({ "type": "denied", "reason": "route" });
+            }
+        }
         let room = cfg.get("room").and_then(Value::as_str).unwrap_or_default().to_string();
         let mut keys = self.load_hello_keys();
         let id_text = hello_frame.get("deviceId").and_then(Value::as_str).unwrap_or_default();
@@ -234,6 +320,10 @@ impl RemoteService {
                 o.remove("legacyProtocol");
                 if *enrolled && computer {
                     o.insert("kind".into(), json!(hello::COMPUTER_PLATFORM));
+                }
+                // Paired (or paired again) with a code minted for one route: the device keeps that choice.
+                if code_ok && let Some(route) = grant.as_ref().and_then(|g| g.route.as_deref()) {
+                    o.insert("route".into(), json!(route));
                 }
             }
             let id = device.get("id").cloned();
@@ -385,7 +475,51 @@ impl RemoteService {
             eprintln!("nekkod: remote access has no usable host key; rotate the pairing to make one");
             return;
         };
-        st.handle = Some(self.link.connect(url, room, key, host_key, self.verifier()));
+        st.routes = None;
+        let urls = Self::relay_urls(cfg);
+        if urls.len() <= 1 {
+            st.handle = Some(self.link.connect(url, room, key, host_key, self.verifier_via(crate::route::via(url))));
+            return;
+        }
+        let links = urls
+            .into_iter()
+            .map(|u| {
+                let h = self.link.connect(&u, room, key, host_key.clone(), self.verifier_via(crate::route::via(&u)));
+                (u, h)
+            })
+            .collect();
+        let routes = Arc::new(Routes { links });
+        st.handle = Some(routes.clone());
+        st.routes = Some(routes);
+    }
+
+    /// The main relay, then the others it is also reachable through, each once.
+    fn relay_urls(cfg: &JsObj) -> Vec<String> {
+        let mut urls: Vec<String> = Vec::new();
+        let main = s(cfg.get("relayUrl")).map(str::to_string);
+        let also = cfg.get("alsoRelays").and_then(Value::as_array).cloned().unwrap_or_default();
+        let norm = |u: &str| u.trim().trim_end_matches('/').to_ascii_lowercase();
+        for u in main.into_iter().chain(also.iter().filter_map(|v| v.as_str().map(str::to_string))) {
+            if crate::route::relay_url_problem(&u).is_none() && !urls.iter().any(|x| norm(x) == norm(&u)) {
+                urls.push(u.trim().trim_end_matches('/').to_string());
+            }
+        }
+        urls.truncate(1 + MAX_ALSO_RELAYS);
+        urls
+    }
+
+    /// The HELLO check for one relay: what `verify` checks, told which route
+    /// the HELLO came in on. Set here, over anything the device sent.
+    fn verifier_via(&self, via: &'static str) -> Verifier {
+        let inner = self.verifier();
+        Arc::new(move |h: &Value| match h {
+            Value::Object(m) => {
+                let mut m = m.clone();
+                m.insert("via".into(), json!(via));
+                inner(&Value::Object(m))
+            }
+            other => inner(other),
+        })
     }
 
     /// The running agent, out of the lock: its own lock is taken while the
@@ -397,6 +531,8 @@ impl RemoteService {
     fn status_of(&self, handle: Option<Arc<dyn LinkHandle>>, cfg: &JsObj) -> Value {
         if nekko_js::truthy(cfg.get("enabled")) {
             let h = handle.as_deref();
+            // Out of the lock before asking the agents anything (see `handle`).
+            let routes = lock(&self.state).routes.clone();
             JsObj::new()
                 .with("enabled", Some(json!(true)))
                 .with("relayUrl", cfg.get("relayUrl").cloned())
@@ -409,6 +545,9 @@ impl RemoteService {
                 .with("stoppedBy", cfg.get("stoppedBy").cloned())
                 // Only while one is in: the shape is unchanged for everyone else.
                 .with("fleet", Some(self.fleet_rows()).filter(|r| r.as_array().is_some_and(|a| !a.is_empty())))
+                // Decision 0116, only while there is more than one relay: each route's state.
+                .with("alsoRelays", cfg.get("alsoRelays").cloned().filter(|v| v.as_array().is_some_and(|a| !a.is_empty())))
+                .with("relays", routes.map(|r| r.rows()))
                 .to_value()
         } else {
             JsObj::new()
@@ -495,6 +634,7 @@ impl RemoteService {
         if let Some(h) = st.handle.take() {
             h.stop();
         }
+        st.routes = None;
         st.grant = None;
         drop(st);
         let cfg = self.load().with("enabled", Some(json!(false)));
@@ -537,15 +677,29 @@ impl RemoteService {
     /// the phone in its pairing link). A preset code must be 8 to 16 characters
     /// of the pairing alphabet; anything else is ignored and a random one is made.
     pub fn pair_with(&self, preset: &Value) -> Value {
-        self.mint(preset, false)
+        self.mint(preset, false, None)
+    }
+
+    /// `remote:pair [code, { route }]` (decision 0116): a code for a device
+    /// that connects only through `route` (`cloud` or `direct`); `auto` or
+    /// none lets it use either.
+    pub fn pair_routed(&self, preset: &Value, opts: &Value) -> Result<Value, String> {
+        let route = match opts.get("route") {
+            None | Some(Value::Null) => None,
+            Some(Value::String(r)) if crate::route::DEVICE_ROUTES.contains(&r.as_str()) => {
+                Some(r.clone()).filter(|r| r != "auto")
+            }
+            Some(_) => return Err("remote:pair: route must be auto, cloud or direct".into()),
+        };
+        Ok(self.mint(preset, false, route))
     }
 
     /// `remote:pairComputer`: a one-time code that enrolls a computer, not a phone.
     pub fn pair_computer(&self) -> Value {
-        self.mint(&Value::Null, true)
+        self.mint(&Value::Null, true, None)
     }
 
-    fn mint(&self, preset: &Value, computer: bool) -> Value {
+    fn mint(&self, preset: &Value, computer: bool, route: Option<String>) -> Value {
         let preset = preset
             .as_str()
             .filter(|c| (8..=16).contains(&c.len()) && c.bytes().all(|b| b.is_ascii_uppercase() || b.is_ascii_digit()));
@@ -553,7 +707,7 @@ impl RemoteService {
             Some(c) => c.to_string(),
             None => hello::new_pairing_code(&self.random, 8),
         };
-        let grant = Grant { code, expires_at: (self.clock)() + PAIRING_TTL_MS, computer };
+        let grant = Grant { code, expires_at: (self.clock)() + PAIRING_TTL_MS, computer, route };
         let v = grant.value();
         lock(&self.state).grant = Some(grant);
         v
@@ -647,6 +801,78 @@ impl RemoteService {
         Ok(Value::Array(devices))
     }
 
+    /// `remote:setRoute(deviceId, route)` (decision 0116): how a paired device
+    /// may reach this computer: `cloud` (Nekko Cloud Relay only), `direct`
+    /// (Tailscale, the LAN or the owner's own relay only) or `auto` (either).
+    /// A live connection on a route it no longer has is closed; the device
+    /// comes back on the route it is allowed, if it knows one.
+    pub fn set_route(&self, device_id: &Value, route: &Value) -> Result<Value, String> {
+        let route = route
+            .as_str()
+            .filter(|r| crate::route::DEVICE_ROUTES.contains(r))
+            .ok_or("remote:setRoute: route must be auto, cloud or direct")?;
+        let _io = lock(&self.io);
+        let cfg = self.load();
+        let mut found = false;
+        let devices: Vec<Value> = Self::devices_of(&cfg)
+            .into_iter()
+            .map(|d| match d {
+                Value::Object(mut m) if m.get("id") == Some(device_id) && !nekko_js::truthy(m.get("revoked")) => {
+                    found = true;
+                    if route == "auto" {
+                        m.remove("route");
+                    } else {
+                        m.insert("route".into(), json!(route));
+                    }
+                    Value::Object(m)
+                }
+                d => d,
+            })
+            .collect();
+        if !found {
+            return Err("remote:setRoute: no device with that id".into());
+        }
+        self.save(&cfg.with("devices", Some(Value::Array(devices.clone()))))?;
+        drop(_io);
+        if let (Some(h), Some(id)) = (self.handle(), device_id.as_str()) {
+            for via in ["cloud", "direct"] {
+                if !crate::route::route_allows(Some(route), via) && h.connected_via(via).iter().any(|d| d == id) {
+                    h.disconnect_device(id);
+                }
+            }
+        }
+        Ok(Value::Array(devices))
+    }
+
+    /// `remote:setRelays(urls)` (decision 0116): the relays this computer is
+    /// also reachable through besides its main one, at most three, each held
+    /// to the same rule as the main one. Empty turns the extra routes off.
+    pub fn set_relays(&self, urls: &Value) -> Result<Value, String> {
+        let urls = urls.as_array().ok_or("remote:setRelays needs a list of relay addresses")?;
+        let mut clean: Vec<Value> = Vec::new();
+        for u in urls {
+            let u = u.as_str().ok_or("remote:setRelays: each relay is an address")?.trim().trim_end_matches('/');
+            if let Some(problem) = crate::route::relay_url_problem(u) {
+                return Err(problem);
+            }
+            if !clean.iter().any(|c| c.as_str().is_some_and(|c| c.eq_ignore_ascii_case(u))) {
+                clean.push(json!(u));
+            }
+        }
+        if clean.len() > MAX_ALSO_RELAYS {
+            return Err(format!("remote:setRelays: at most {MAX_ALSO_RELAYS} relays besides the main one"));
+        }
+        let _io = lock(&self.io);
+        let cfg = self.load().with("alsoRelays", Some(Value::Array(clean)).filter(|v| v.as_array().is_some_and(|a| !a.is_empty())));
+        self.save(&cfg)?;
+        let enabled = nekko_js::truthy(cfg.get("enabled")) && nekko_js::truthy(cfg.get("relayUrl"));
+        if enabled {
+            self.connect(&mut lock(&self.state), &cfg);
+        }
+        drop(_io);
+        Ok(self.status_of(self.handle(), &cfg))
+    }
+
     /// Each paired device's HELLO key (`{ [deviceId]: base64 X9.63 P-256 }`),
     /// beside `remote.json` so the registry's shape is unchanged.
     fn hello_keys_file(&self) -> PathBuf {
@@ -727,7 +953,9 @@ impl RemoteService {
     }
 
     pub fn stop(&self) {
-        if let Some(h) = lock(&self.state).handle.take() {
+        let mut st = lock(&self.state);
+        st.routes = None;
+        if let Some(h) = st.handle.take() {
             h.stop();
         }
     }
@@ -741,7 +969,9 @@ impl RemoteService {
             "remote:disable" => self.disable(),
             "remote:status" => Ok(self.status()),
             "remote:pairing" => Ok(self.pairing()),
-            "remote:pair" => Ok(self.pair_with(arg(0))),
+            "remote:pair" => self.pair_routed(arg(0), arg(1)),
+            "remote:setRoute" => self.set_route(arg(0), arg(1)),
+            "remote:setRelays" => self.set_relays(arg(0)),
             "remote:pairComputer" => Ok(self.pair_computer()),
             "remote:devices" => Ok(self.devices()),
             "remote:revoke" => self.revoke(arg(0)),
@@ -946,6 +1176,8 @@ pub const CHANNELS: &[&str] = &[
     "remote:rotate",
     "remote:setAccess",
     "remote:activity",
+    "remote:setRoute",
+    "remote:setRelays",
 ];
 
 /// `ensurePrivateFile`: owner-only, best effort.

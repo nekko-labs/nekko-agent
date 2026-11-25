@@ -1,10 +1,11 @@
 import { useDownloadAction } from './useDownloadAction.js';
 import { DownloadProgress } from './DownloadProgress.js';
+import { engineNotice, engineUpdateText, modelsNeedingNewerEngine } from './engineNotice.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DownloadJob, EngineStatus, LocalModel } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
 import { Toggle } from '../primitives/index.js';
-import { CheckIcon, CopyIcon } from '../../icons.js';
+import { CheckIcon, ChevronIcon, CopyIcon } from '../../icons.js';
 import { SettingsIcon } from '../../gentleface-icons.js';
 import { EngineInstallCard } from './EngineInstallCard.js';
 import { ModelsHome, type ModelsMode } from './ModelsHome.js';
@@ -63,6 +64,8 @@ export function EngineSection({
   useEffect(() => { if (focus) setTab('installed'); }, [focus]);
   const [busy, setBusy] = useState<'starting' | 'stopping' | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
+  // Folded by default: the library below is what most visits are for.
+  const [serverOpen, setServerOpen] = useState(false);
   const logRef = useRef<HTMLElement>(null);
   // A failed start opens Configure on the logs, so the reason is in view.
   const showLog = () => {
@@ -125,6 +128,8 @@ export function EngineSection({
 
   const { install, running } = status;
   const installed = Boolean(install.binPath || status.diffusionInstall?.binPath);
+  const needNewer = modelsNeedingNewerEngine(models);
+  const notice = engineNotice(install, needNewer);
   // A model's weights, shards and helper files are one download, so the count is per model, not per file.
   const active = groupDownloads(jobs).filter((g) => isActive(g.state));
   const borrowed = models.filter((m) => m.managed === false).length;
@@ -132,7 +137,8 @@ export function EngineSection({
   // One click puts a broken engine right: the same build, downloaded again into
   // a clean folder. The server is stopped by the host just before the swap.
   // The CUDA upgrade takes the same path: a different build, downloaded into
-  // its own folder, swapped in when it lands.
+  // its own folder, swapped in when it lands. So does the update of an old
+  // engine: the installed build again, at the pinned release.
   const reinstall = async (buildId: string | undefined, started: string) => {
     if (!buildId) return;
     const res = await runtimeDownload.run(() => window.nekko.engineInstall(buildId));
@@ -183,10 +189,17 @@ export function EngineSection({
           switch say whether it is up, the address is what other apps point
           at, and Configure holds everything else. There used to be a
           "Running" row under it repeating the switch. */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2" data-model-server>
         <StatusDot running={running && installed} busy={busy !== null} />
-        <h2 className="text-base font-semibold">Model server</h2>
+        {/* The header stays: it is the server's state. Folded beneath it are the loaded models. */}
+        <h2 className="text-base font-semibold">
+          <button type="button" className="flex items-center gap-2" aria-expanded={serverOpen} onClick={() => setServerOpen((o) => !o)}>
+            Model server
+            <ChevronIcon className={`h-3.5 w-3.5 text-ink-faint transition-transform duration-150 ${serverOpen ? 'rotate-90' : ''}`} aria-hidden="true" />
+          </button>
+        </h2>
         {installed && running && <AddressPill address={address} />}
+        {!serverOpen && status.resident.length > 0 && <span className="text-xs text-ink-faint">{status.resident.length} loaded</span>}
         <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-2">
           <ServerPowerSwitch
             running={running}
@@ -273,7 +286,7 @@ export function EngineSection({
         {installed && (
           <>
 
-            {install.problem && (
+            {notice === 'repair' && install.problem && (
               <div
                 role="alert"
                 className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border p-3"
@@ -290,7 +303,7 @@ export function EngineSection({
               </div>
             )}
 
-            {install.upgrade && !install.problem && (
+            {notice === 'switch' && install.upgrade && (
               <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border p-3" style={{ borderColor: 'var(--line)' }}>
                 <p className="min-w-0 flex-1 text-xs text-ink-soft">{install.upgrade.message}</p>
                 <button
@@ -299,6 +312,19 @@ export function EngineSection({
                   disabled={repairing || active.some((g) => g.jobs.some((j) => j.kind === 'engine'))}
                 >
                   {repairing ? 'Downloading…' : 'Switch to CUDA'}
+                </button>
+              </div>
+            )}
+
+            {notice === 'update' && install.outdated && (
+              <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border p-3" style={{ borderColor: 'var(--line)' }}>
+                <p className="min-w-0 flex-1 text-xs text-ink-soft">{engineUpdateText(install.outdated, needNewer)}</p>
+                <button
+                  className="btn py-1 text-xs"
+                  onClick={() => void reinstall(install.outdated?.buildId, 'Updating the engine. The server stops while it swaps in, so switch it back on once it finishes.')}
+                  disabled={repairing || active.some((g) => g.jobs.some((j) => j.kind === 'engine'))}
+                >
+                  {repairing ? 'Downloading…' : 'Update'}
                 </button>
               </div>
             )}
@@ -317,12 +343,12 @@ export function EngineSection({
       </div>
       {/* What is running leads: "is it loaded, and how much does it hold" is
           the question a load click is really asking. */}
-      {installed && (
+      {installed && serverOpen && (
         <ErrorBoundary label="Running models">
           <ResidentModels providerId={PROVIDER_ID} resident={status.resident} loading={status.loading} models={models} settings={status.settings} memory={status.memory} onChanged={refresh} />
         </ErrorBoundary>
       )}
-      <div data-models-section="library" className="min-w-0">
+      <div data-models-section="library" className="min-w-0 border-t border-line pt-8">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <h2 className="text-base font-semibold">Models</h2>
           <ModelsModeSwitch

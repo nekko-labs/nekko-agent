@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { LIST_PAGE, pageGroups, showMoreLabel } from '../../listPaging.js';
 import type { EngineMemory, GpuFit, LocalModel, ModelModality, ResidentModel } from '@nekko-agent/shared';
-import { MODEL_FOLDER_PROVIDERS, unsupportedLoadReason } from '@nekko-agent/shared';
+import { MODEL_FOLDER_PROVIDERS, cannotLoadReason } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
 import { notifyModelsChanged } from '../../modelCatalog.js';
 import { WarningIcon } from '../../icons.js';
@@ -12,6 +12,8 @@ import { ImageGeneration } from './ImageGeneration.js';
 import { loadLocalModel } from './localModelShortcuts.js';
 import { gpuGuidance } from './modelFamilies.js';
 import { ModelRowActions, type ModelRowControl } from './ModelRowActions.js';
+import { RunnableAlternativeOffer } from './RunnableAlternativeOffer.js';
+import { loadableFiles } from './runnableAlternative.js';
 import { localTypeLabel, paramsLabel } from './modelFacts.js';
 import { MiddleTruncate } from '../primitives/MiddleTruncate.js';
 
@@ -195,6 +197,9 @@ export function ModelLibrary({
     );
   }, [visible]);
 
+  /** The files already here, so a row's offer never suggests one the family has. */
+  const haveFiles = useMemo(() => loadableFiles(models), [models]);
+
   /** The page of rows on screen: a big library does not mount every row. */
   const paged = useMemo(() => pageGroups(groups, shown), [groups, shown]);
 
@@ -320,7 +325,7 @@ export function ModelLibrary({
   );
 
   function renderRow(m: (typeof models)[number]) {
-    const unsupported = m.modality === 'image' ? undefined : unsupportedLoadReason(m);
+    const unsupported = m.modality === 'image' ? undefined : cannotLoadReason(m);
     const missingProjector = m.modality === 'vision' && !m.hasProjector;
     const live = residentById.get(m.id);
     // A model that cannot fill the GPU wears the warning on its row: it will
@@ -420,6 +425,13 @@ export function ModelLibrary({
                   <p className="mt-(--q-tight) flex items-start gap-2 px-2 text-2xs text-warning-text">
                     <WarningIcon className="mt-0.5 h-3 w-3 shrink-0" />
                     {unsupported}
+                  </p>
+                )}
+                {unsupported && <RunnableAlternativeOffer model={m} have={haveFiles} onChanged={onChanged} />}
+                {!unsupported && m.loadCheck?.level === 'warning' && (
+                  <p className="mt-(--q-tight) flex items-start gap-2 px-2 text-2xs text-warning-text" data-model-load-warning>
+                    <WarningIcon className="mt-0.5 h-3 w-3 shrink-0" />
+                    {m.loadCheck.reason}
                   </p>
                 )}
                 {missingProjector && !unsupported && (

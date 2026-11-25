@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { STARTER_MODES, chatModelScope, defaultSavedMode, matchSavedMode, modePatchSkips, newSavedModeId, savedModes, sessionModeOptions, sessionPatchForMode, savedModeSummary } from './saved-modes.js';
+import { STARTER_MODES, chatModelScope, defaultSavedMode, matchSavedMode, modePatchSkips, newSavedModeId, savedModes, sessionModeOptions, sessionPatchForMode, savedModeSummary, savedModeSummaryParts } from './saved-modes.js';
 
 const starter = (id: string) => STARTER_MODES.find((m) => m.id === id)!;
 
@@ -121,6 +121,8 @@ describe('saved modes', () => {
     expect(sessionPatchForMode(focused.options)).toMatchObject({ memory: 'off', guidance: 'root' });
     expect(sessionPatchForMode(STARTER_MODES[0].options)).not.toHaveProperty('memory');
     expect(savedModeSummary(focused.options)).toBe('worktree · cloud models · memory off · rules root');
+    expect(savedModeSummaryParts({ ...focused.options, mode: 'yolo', effort: 'high' }).map((p) => `${p.key}:${p.value}`))
+      .toEqual(['where:worktree', 'models:cloud', 'approvals:yolo', 'effort:high', 'memory:off', 'guidance:root']);
   });
 
   it('summarizes and names modes', () => {

@@ -67,3 +67,15 @@ it('keeps the hover title and renders no toggle for short single-line text', () 
   expect(html).not.toContain('Show full command');
   expect(html).not.toContain('aria-expanded');
 });
+
+it('draws as a borderless card in the composer column, with the severity as a dot and a word', () => {
+  const docked = renderToStaticMarkup(<ApprovalBar docked approval={approval} onDecide={vi.fn()} />);
+  expect(docked).toContain('data-approval-docked="true"');
+  expect(docked).toContain('rounded-xl');
+  expect(docked).not.toContain('border-t');
+  expect(docked).toContain('data-approval-severity="medium"');
+  expect(docked).not.toContain('text-white');
+  const row = renderToStaticMarkup(<ApprovalBar approval={approval} onDecide={vi.fn()} />);
+  expect(row).not.toContain('data-approval-docked');
+  expect(row).toContain('border-t');
+});

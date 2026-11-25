@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 vi.hoisted(() => { Object.assign(globalThis, { window: {}, localStorage: { getItem: () => null } }); });
 import type { ContextBundle } from '@nekko-agent/shared';
-import { ContextGauge, EffortSlider, effortRungs, formatContextTokens } from './ChatMetrics.js';
+import { ContextGauge, EffortChipGauge, EffortSection, EffortSlider, effortRungs, formatContextTokens } from './ChatMetrics.js';
 
 describe('effort slider', () => {
   const metadata = { levels: ['low', 'medium', 'high', 'xhigh', 'max'].map((effort) => ({ effort })), default: 'medium' };
@@ -14,6 +14,37 @@ describe('effort slider', () => {
     expect(html).toContain('data-effort-index="1"');
     expect(html).toContain('aria-label="Reasoning effort: Medium"');
     expect(html).not.toContain('border-line');
+  });
+  it('has no Effort label on the standalone gauge', () => {
+    expect(renderToStaticMarkup(<EffortSlider modelId="claude-opus-5-5" metadata={metadata} />)).not.toContain('<span>Effort</span>');
+  });
+  it('gives the model chip a gauge and the model menu a section with the same level', () => {
+    const chip = renderToStaticMarkup(<EffortChipGauge modelId="claude-opus-5-5" metadata={metadata} session={{ id: 'c', effort: 'high' }} />);
+    expect(chip).toContain('data-effort-index="2"');
+    expect(chip).toContain('Reasoning effort: High');
+    const section = renderToStaticMarkup(<EffortSection modelId="claude-opus-5-5" metadata={metadata} session={{ id: 'c', effort: 'high' }} />);
+    expect(section).toContain('type="range"');
+    expect(section).toContain('value="2"');
+    expect(section).toContain('>High</span>');
+    expect(section).toContain('aria-valuetext="High"');
+  });
+  it('keeps descriptions out of the compact model menu and preserves the inherited value', () => {
+    const section = renderToStaticMarkup(<EffortSection session={{ id: 'c' }} metadata={{ levels: [
+      { effort: 'medium' }, { effort: 'high', description: 'Greater reasoning depth for complex problems' },
+    ], default: 'high' }} />);
+    expect(section).toContain('aria-valuetext="High"');
+    expect(section).toContain('Following this computer’s effort setting.');
+    expect(section).not.toContain('Greater reasoning depth for complex problems');
+    expect(section).not.toContain('Higher effort thinks longer and spends more tokens.');
+  });
+  it('keeps the unavailable and provider default states distinct', () => {
+    const unavailable = renderToStaticMarkup(<EffortSection modelId="llama3" />);
+    expect(unavailable).not.toContain('type="range"');
+    expect(unavailable).toContain('>Unavailable</span>');
+    const providerDefault = renderToStaticMarkup(<EffortSection modelId="new-model" metadata={{ levels: [{ effort: 'low' }] }} />);
+    expect(providerDefault).toContain('aria-valuetext="Provider default"');
+    expect(providerDefault).toContain('disabled=""');
+    expect(providerDefault).toContain('>Use Low</button>');
   });
   it('shows the chat effort when given a chat', () => {
     const html = renderToStaticMarkup(<EffortSlider modelId="claude-opus-5-5" metadata={metadata} session={{ id: 'c', effort: 'max' }} />);

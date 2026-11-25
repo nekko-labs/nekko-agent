@@ -52,6 +52,14 @@ Design: [nekko-designs/iphone-new-chat-design.html](../../nekko-designs/iphone-n
 - **Limits under the provider's name.** A computer's picker shows each window as the same quiet line as New chat's (replacing the larger bars); This iPhone's picker shows the key's tightest per-minute budget under the provider's name once an answer has reported it. Reload moves into the provider's header.
 - The computer's wire `ModelInfo` now carries `sizeBytes`, `contextLength` and `details` (parameters, family, quantization); the iPhone's `PhoneModel` carries `contextLength`.
 
+## Android (#2950)
+
+`[implemented 2026-11-25 on Android; the rules are ported to the protocol module with the iPhone's test cases and JVM-tested; not yet run on an emulator or device]`
+
+- The same four parts. New chat's device half opens Run on as a menu (Automatic when offered, each paired computer with its state, This phone); This phone opens the phone's own chats screen, where phone chats start on Android. The Run on card under the box is gone; Automatic's note stays under the line.
+- The checklist's rows open pairing, Files (the computer's folders) and Connectors. Saved as `firstMessageSent` and `connectChecklistClosed` in the phone's settings; screens without them (device tests) keep both closed.
+- The phone chats' per-minute budget is read from every answer's headers, refusals included, kept in memory and dropped with a new key or a removed provider.
+
 ## Not yet
 
 - OpenAI API keys on a computer report no limits yet (`limitsKeyFor` in `packages/shared/src/limits.ts` covers Claude, subscription logins, OpenRouter and Anthropic keys); tracked in #2923.

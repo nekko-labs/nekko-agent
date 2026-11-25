@@ -116,7 +116,7 @@ export function SyncSettings({ fleet }: { fleet?: React.ReactNode } = {}) {
 
           {phase === 'needs-plan' && (
             <div className="sync-row">
-              <p className="text-sm text-ink-soft">Sync is part of Nekko Cloud Pro and Team. Your chats stay on this computer until then.</p>
+              <p className="text-sm text-ink-soft">Sync is part of Nekko Cloud Pro and Enterprise. Your chats stay on this computer until then.</p>
             </div>
           )}
 
@@ -127,18 +127,8 @@ export function SyncSettings({ fleet }: { fleet?: React.ReactNode } = {}) {
             </div>
           )}
 
-          {phase === 'needs-join' && <JoinOptions busy={!!busy} act={act} />}
-
-          {phase === 'awaiting-approval' && (
-            <div className="sync-row flex-col items-stretch!">
-              <p className="text-sm text-ink-soft">On a computer or iPhone that already syncs, open <strong>Settings → Sync</strong>, choose <strong>Approve</strong> next to <strong>{status?.sync.devices.find((d) => d.thisDevice)?.label ?? 'this device'}</strong>, and type this code:</p>
-              <div className="fingerprint my-(--q-group)" data-testid="sync-join-code">{status?.sync.joinCode ?? '…'}</div>
-              <p className="mb-(--q-inline) text-center text-xs text-ink-faint">The code proves to each device that the other is really yours. Don't share it with anyone else.</p>
-              <div className="flex justify-center gap-2">
-                <button className="btn btn-ghost py-1! text-xs!" onClick={() => void act('now', () => window.nekko.syncNow())}>Check now</button>
-                <button className="btn btn-ghost py-1! text-xs!" onClick={() => void act('restore', async () => { await window.nekko.syncSetEnabled(false); return window.nekko.cloudRefresh(); })}>Use the recovery key instead</button>
-              </div>
-            </div>
+          {(phase === 'needs-join' || phase === 'awaiting-approval') && status && (
+            <JoinSetup status={status} busy={busy} act={act} />
           )}
 
           {status && synced && (
@@ -210,23 +200,49 @@ export function SyncSettings({ fleet }: { fleet?: React.ReactNode } = {}) {
   );
 }
 
-function JoinOptions({ busy, act }: { busy: boolean; act: (label: string, work: () => Promise<unknown>) => Promise<void> }) {
+function JoinSetup({ status, busy, act }: { status: CloudStatus; busy: string; act: (label: string, work: () => Promise<unknown>) => Promise<void> }) {
+  const [recovery, setRecovery] = useState(false);
   const [key, setKey] = useState('');
+  const checking = busy === 'restore';
+  const awaiting = status.sync.phase === 'awaiting-approval';
   return (
-    <div className="sync-row flex-col items-stretch! gap-3">
-      <p className="text-sm text-ink-soft">Your account already syncs on another device. Add this computer one of two ways:</p>
-      <div className="grid gap-5 sm:grid-cols-2">
-        <div className="min-w-0">
-          <div className="text-sm font-medium">Use my recovery key</div>
-          <textarea className="quiet-field mt-(--q-inline) h-16 w-full resize-none font-mono text-xs" placeholder="XXXXX-XXXXX-…" value={key} onChange={(e) => setKey(e.target.value)} spellCheck={false} aria-label="Recovery key" data-testid="sync-restore-key" />
-          <button className="btn btn-primary mt-(--q-inline) w-full py-1! text-xs!" disabled={busy || key.replace(/[\s-]/g, '').length < 55} onClick={() => void act('restore', () => window.nekko.syncRestore(key))} data-testid="sync-restore">Unlock</button>
-        </div>
-        <div className="min-w-0">
-          <div className="text-sm font-medium">Approve from another device</div>
-          <p className="mt-(--q-tight) text-xs text-ink-faint">We'll show a code here. Approve this computer on a device that already syncs, after checking the code matches.</p>
-          <button className="btn btn-ghost mt-(--q-inline) w-full py-1! text-xs!" disabled={busy} onClick={() => void act('join', () => window.nekko.syncRequestJoin())} data-testid="sync-request-join">Ask to join</button>
-        </div>
+    <div className="sync-row flex-col items-stretch! gap-3" data-testid="sync-join-setup">
+      <div>
+        <h3 className="text-sm font-medium text-ink">Set up encrypted sync on this computer</h3>
+        <p className="mt-(--q-tight) text-xs text-ink-faint">You’re signed in. You set up encryption on another device, so this computer needs the same key to sync your chats.</p>
       </div>
+      {recovery ? (
+        <form onSubmit={(e) => { e.preventDefault(); if (!busy && key.replace(/[\s-]/g, '').length >= 55) void act('restore', () => window.nekko.syncRestore(key)); }}>
+          <label htmlFor="sync-restore-key" className="block text-sm font-medium">Recovery key</label>
+          <textarea id="sync-restore-key" autoFocus className="quiet-field mt-(--q-tight) h-16 w-full resize-none font-mono text-xs" placeholder="XXXXX-XXXXX-…" value={key} onChange={(e) => setKey(e.target.value)} readOnly={checking} spellCheck={false} autoComplete="off" data-testid="sync-restore-key" />
+          <div className="mt-(--q-inline) flex flex-wrap gap-2">
+            <button className="btn btn-primary" type="submit" disabled={!!busy || key.replace(/[\s-]/g, '').length < 55} aria-busy={checking} data-testid="sync-restore">
+              {checking && <span aria-hidden="true" className="mr-1.5 inline-block h-3 w-3 rounded-full border border-current border-r-transparent align-[-2px] motion-safe:animate-spin" />}
+              {checking ? 'Checking recovery key…' : 'Unlock'}
+            </button>
+            <button className="btn btn-ghost" type="button" disabled={!!busy} onClick={() => { setKey(''); setRecovery(false); }} data-testid="sync-recovery-back">Back to device approval</button>
+          </div>
+          <span role="status" className="sr-only">{checking ? 'Checking recovery key…' : ''}</span>
+        </form>
+      ) : (
+        <>
+          {awaiting ? (
+            <div>
+              <p className="text-sm text-ink-soft">On a device that already syncs, open <strong>Settings → Sync</strong>, choose <strong>Approve</strong> next to <strong>{status.sync.devices.find((d) => d.thisDevice)?.label ?? 'this device'}</strong>, and enter this code:</p>
+              <div className="fingerprint my-(--q-group)" data-testid="sync-join-code">{status.sync.joinCode ?? '…'}</div>
+              <p className="text-xs text-ink-faint">Use the code only on a device you trust.</p>
+            </div>
+          ) : <p className="text-xs text-ink-faint">Approve this computer from one that already syncs, or use your recovery key if you can’t access it.</p>}
+          <div className="flex flex-wrap gap-2">
+            {awaiting ? (
+              <button className="btn btn-primary" disabled={!!busy} onClick={() => void act('now', () => window.nekko.syncNow())}>{busy === 'now' ? 'Checking…' : 'Check approval'}</button>
+            ) : (
+              <button className="btn btn-primary" disabled={!!busy} onClick={() => void act('join', () => window.nekko.syncRequestJoin())} data-testid="sync-request-join">{busy === 'join' ? 'Preparing code…' : 'Approve from another device'}</button>
+            )}
+            <button className="btn btn-ghost" disabled={!!busy} onClick={() => setRecovery(true)} data-testid="sync-recovery-open">Use my recovery key</button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

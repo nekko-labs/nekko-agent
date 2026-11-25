@@ -45,6 +45,7 @@ export function ModelPicker({
   placeholder,
   resolvedModelId,
   footer,
+  leading,
   fusionActive = false,
   onFusion,
 }: {
@@ -81,6 +82,8 @@ export function ModelPicker({
   resolvedModelId?: string;
   /** Under the list, for what belongs with the model (such as Auto quality). */
   footer?: React.ReactNode;
+  /** Drawn at the chip's start, before the name (the composer's effort gauge). */
+  leading?: React.ReactNode;
   fusionActive?: boolean;
   onFusion?: () => void;
 }) {
@@ -232,6 +235,8 @@ export function ModelPicker({
         ? claudeCodeResolved
         : currentModel ? modelRowLabel(currentModel, !!currentProvider && isLocalProvider(currentProvider.kind)).name
         : modelId ?? 'No model';
+  // The chip shows the model and version only ("Opus 5.5"): the person knows whose model it is. The tooltip keeps the full name.
+  const chipName = currentModel && modelId !== AUTO_MODEL_ID && !claudeCodeResolved ? shortModelName(currentModel.id, currentName) : currentName;
   // The account rides along in the chip only when it is ambiguous.
   const chipAccount = currentProvider && modelId !== AUTO_MODEL_ID && multiAccount(currentProvider) ? idOf(currentProvider).name : null;
 
@@ -517,7 +522,8 @@ export function ModelPicker({
         aria-expanded={open}
         title={unavailableModel ? `${unavailableModel} is not available right now. Pick a model again.` : needsChoice ? 'This chat has no model yet - pick one' : `Model: ${currentName} · ${providerLabel}`}
       >
-        <span className={`min-w-0 ${placeholder && !modelId ? 'whitespace-nowrap' : 'whitespace-normal'} break-words text-left`} data-model-chip-name>{unavailableModel ? <><s className="opacity-80">{unavailableModel}</s> · unavailable</> : needsChoice ? 'Choose a model' : placeholder && !modelId ? placeholder : currentName}</span>
+        {leading}
+        <span className="min-w-0 truncate text-left" data-model-chip-name>{unavailableModel ? <><s className="opacity-80">{unavailableModel}</s> · unavailable</> : needsChoice ? 'Choose a model' : placeholder && !modelId ? placeholder : chipName}</span>
         {chipAccount && !unavailableModel && !needsChoice && <span className="min-w-0 max-w-[96px] shrink truncate text-ink-faint" data-model-chip-account>{chipAccount}</span>}
         <span className="ctl-caret shrink-0">▾</span>
       </button>}

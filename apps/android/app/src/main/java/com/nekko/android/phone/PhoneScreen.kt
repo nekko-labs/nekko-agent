@@ -125,7 +125,7 @@ fun PhoneScreen(phone: PhoneChats, startChat: String? = null, onBack: () -> Unit
     }
     // OpenRouter's sign-in came back and its provider was kept (#2852): the form closes.
     LaunchedEffect(s.signIn) {
-        if (s.signIn == PhoneChats.SignIn.DONE) { adding = false; providers = true; notice = "OpenRouter connected."; phone.clearSignIn() }
+        if (s.signIn == PhoneChats.SignIn.DONE) { adding = false; providers = true; notice = "${PhoneProviders.kind(s.signInKind ?: "openrouter")?.label ?: "Provider"} connected."; phone.clearSignIn() }
     }
     if (adding) {
         var failed by remember { mutableStateOf<String?>(null) }
@@ -134,9 +134,10 @@ fun PhoneScreen(phone: PhoneChats, startChat: String? = null, onBack: () -> Unit
             busy = busy || s.signIn == PhoneChats.SignIn.ADDING,
             failed = failed ?: s.signInError,
             onDismiss = { adding = false; phone.clearSignIn() },
-            onSignIn = {
+            onSignIn = { kind ->
                 failed = null
-                open(context, phone.startOpenRouterSignIn())
+                if (kind == "chatgpt") phone.startChatGptSignIn()?.let { open(context, it) }
+                else open(context, phone.startOpenRouterSignIn())
             },
             onOpen = { url -> open(context, url) },
         ) { kind, label, url, key, workspace ->
@@ -164,10 +165,49 @@ fun PhoneScreen(phone: PhoneChats, startChat: String? = null, onBack: () -> Unit
         AlertDialog(onDismissRequest = { picking = false }, title = { Text("Choose a model") }, text = {
             LazyColumn { s.providers.filter { it.enabled }.forEach { provider ->
                 item { Text(provider.label, style = MaterialTheme.typography.titleMedium) }
+                // The key's tightest per-minute budget, once an answer has reported it (#2950).
+                item { com.nekko.android.ui.chat.PhoneLimitLine(s.rateLimits[provider.id]) }
                 s.errors[provider.id]?.let { error -> item { Text(error); TextButton(onClick = { action { phone.models(provider.id) } }) { Text("Retry models") } } }
-                items(s.models[provider.id].orEmpty()) { model -> TextButton(onClick = { action { chatId = phone.newChat(provider.id, model.id); picking = false } }, modifier = Modifier.testTag("phone.model.${model.id}")) { Text(model.name) } }
+                // Dated snapshots fold under the model they pin (#2950, the iPhone's #2925).
+                val models = s.models[provider.id].orEmpty()
+                val byId = models.associateBy { it.id }
+                com.nekko.protocol.ModelSnapshots.fold(models.map { it.id }).forEach { fold ->
+                    item(key = "${provider.id}/${fold.main}") {
+                        var open by rememberSaveable(provider.id, fold.main) { mutableStateOf(false) }
+                        Column {
+                            PhoneModelRow(byId.getValue(fold.main)) { action { chatId = phone.newChat(provider.id, fold.main); picking = false } }
+                            if (fold.dated.isNotEmpty()) {
+                                TextButton(onClick = { open = !open }, modifier = Modifier.padding(start = 12.dp).testTag("phone.dated.${fold.main}")) {
+                                    Text(
+                                        if (open) androidx.compose.ui.res.stringResource(com.nekko.android.R.string.model_dated_hide)
+                                        else if (fold.dated.size == 1) androidx.compose.ui.res.stringResource(com.nekko.android.R.string.model_dated_one)
+                                        else androidx.compose.ui.res.stringResource(com.nekko.android.R.string.model_dated_many, fold.dated.size),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = p.inkSoft,
+                                    )
+                                }
+                                if (open) fold.dated.forEach { id ->
+                                    Box(Modifier.padding(start = 16.dp)) { PhoneModelRow(byId.getValue(id)) { action { chatId = phone.newChat(provider.id, id); picking = false } } }
+                                }
+                            }
+                        }
+                    }
+                }
             } }
         }, confirmButton = { TextButton(onClick = { picking = false }) { Text("Cancel") } })
+    }
+}
+
+/** A model in this phone's picker, with its context window where the list gives one (#2950). */
+@Composable
+private fun PhoneModelRow(model: com.nekko.protocol.PhoneModel, onClick: () -> Unit) {
+    val res = androidx.compose.ui.platform.LocalResources.current
+    TextButton(onClick = onClick, modifier = Modifier.testTag("phone.model.${model.id}")) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(model.name, Modifier.weight(1f, fill = false))
+            com.nekko.protocol.ModelMeta.line(local = false, contextLength = model.contextLength) { res.getString(com.nekko.android.R.string.model_context, it) }
+                ?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Nekko.palette.inkFaint, maxLines = 1) }
+        }
     }
 }
 
@@ -186,7 +226,7 @@ private fun ProviderForm(
     busy: Boolean,
     failed: String?,
     onDismiss: () -> Unit,
-    onSignIn: () -> Unit,
+    onSignIn: (String) -> Unit,
     onOpen: (String) -> Unit,
     onSave: (String, String, String, String, String) -> Unit,
 ) {
@@ -210,8 +250,19 @@ private fun ProviderForm(
             TextButton(onClick = { choosing = !choosing }, modifier = Modifier.testTag("phone.kind")) { Text(kind.label) }
             if (choosing) PhoneProviders.kinds.forEach { k -> TextButton(onClick = { kindId = k.id; label = k.label; url = k.defaultUrl; key = ""; opened = false; error = null; choosing = false }, modifier = Modifier.testTag("phone.kind.${k.id}")) { Text(k.label) } }
             Text(kind.hint)
+            // ChatGPT (#3244): the sign-in is the whole form; there is no key to paste.
+            if (kind.plan) {
+                Button(onClick = { onSignIn(kind.id) }, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("phone.signIn")) { Text("Sign in with ${kind.label}") }
+                Text("Approve in the browser and come back. This phone keeps its own sign-in, sealed by its keystore; your computers keep theirs.", style = MaterialTheme.typography.bodySmall)
+                Text("OpenAI’s terms are written around its own apps, so this is offered as-is. An OpenAI API key works too.", style = MaterialTheme.typography.bodySmall)
+                if (busy) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp); Text("Signing in…", style = MaterialTheme.typography.bodySmall)
+                }
+                failed?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("phone.addError")) }
+                return@Column
+            }
             if (kind.signIn) {
-                Button(onClick = onSignIn, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("phone.signIn")) { Text("Sign in with ${kind.label}") }
+                Button(onClick = { onSignIn(kind.id) }, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("phone.signIn")) { Text("Sign in with ${kind.label}") }
                 Text("Approve in the browser and the key comes back to this phone.", style = MaterialTheme.typography.bodySmall)
                 Text("Or use a key", style = MaterialTheme.typography.labelLarge)
             }
@@ -241,7 +292,7 @@ private fun ProviderForm(
             }
             (error ?: failed)?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("phone.addError")) }
         }
-    }, confirmButton = { TextButton(onClick = { save() }, enabled = !busy, modifier = Modifier.testTag("phone.save")) { Text("Add") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
+    }, confirmButton = { if (!kind.plan) TextButton(onClick = { save() }, enabled = !busy, modifier = Modifier.testTag("phone.save")) { Text("Add") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
 }
 
 @Composable
@@ -286,11 +337,18 @@ private fun PhoneConversation(phone: PhoneChats, chat: PhoneChat, running: Boole
         ChatColumns(top = 0.dp, tabletop = tabletop, transcript = { modifier ->
         Column(modifier) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(chat.title, Modifier.weight(1f), color = p.ink, style = MaterialTheme.typography.titleMedium)
+            // One subtitle, model ⟶ This phone, instead of a "no tools" banner (#2950, the iPhone's #2921).
+            Column(Modifier.weight(1f)) {
+                Text(chat.title, color = p.ink, style = MaterialTheme.typography.titleMedium)
+                Row(Modifier.testTag("phone.place"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(chat.modelId, color = p.inkSoft, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.MiddleEllipsis, modifier = Modifier.weight(1f, fill = false))
+                    com.nekko.android.ui.chat.PlaceConnector()
+                    Text(androidx.compose.ui.res.stringResource(com.nekko.android.R.string.chats_this_phone), color = p.inkSoft, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                }
+            }
             TextButton(onClick = onForget) { Text("Forget") }
         }
         LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 20.dp).testTag("phone.transcript"), state = list, verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            item { Text("${chat.modelId} · No tools or computer access", color = p.inkSoft, style = MaterialTheme.typography.bodySmall) }
             items(chat.messages, key = { it.id }) { m -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(if (m.role == "user") "You" else "Nekko", color = p.inkSoft, style = MaterialTheme.typography.labelMedium)
                 m.images?.takeIf { it.isNotEmpty() }?.let { sent -> SentPhotos(sent) }
@@ -306,6 +364,9 @@ private fun PhoneConversation(phone: PhoneChats, chat: PhoneChat, running: Boole
             com.nekko.android.ui.chat.PhotoStrip(photoState.photos, photoState.adding, photos::remove)
         }
         photoState.error?.let { Text(it, Modifier.padding(horizontal = 20.dp), color = p.inkSoft) }
+        // The key's per-minute budget once an answer has reported it, quiet until it nears (#2950).
+        val phoneState by phone.state.collectAsStateWithLifecycle()
+        com.nekko.android.ui.chat.PhoneLimitLine(phoneState.rateLimits[chat.providerId], Modifier.padding(horizontal = 24.dp))
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (takesPhotos) TextButton(onClick = {
                 photos.clearError()

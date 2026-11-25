@@ -40,7 +40,7 @@ final class PhoneProviderSignInTests: XCTestCase {
             XCTAssertEqual(try PhoneProviders.modelsRequest(p, key: "k")?.url, "\(k.defaultUrl)/models")
         }
         // Every API-key kind with a fixed address has a key page to open.
-        for k in PhoneProviders.kinds where !k.urlRequired { XCTAssertNotNil(k.keyPage, k.id) }
+        for k in PhoneProviders.kinds where !k.urlRequired && !k.plan { XCTAssertNotNil(k.keyPage, k.id) }
         let list = Data(#"{"data":[{"id":"models/gemini-2.5-flash"},{"id":"models/text-embedding-004"}]}"#.utf8)
         XCTAssertEqual(PhoneProviders.models(from: list, kind: "gemini").map(\.id), ["models/gemini-2.5-flash"])
     }

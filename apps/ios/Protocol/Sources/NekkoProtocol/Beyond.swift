@@ -22,11 +22,14 @@ public struct RunOption: Sendable, Identifiable, Equatable {
         RunOption(key: "incognito", values: []),
         RunOption(key: "gitIsolation", values: []),
         RunOption(key: "workMode", values: ["default", "better-review", "design", "best-output"]),
+        RunOption(key: "orchestrate", values: []),
         RunOption(key: "toolApproach", values: ["list", "code"]),
         RunOption(key: "memory", values: ["all", "project", "off"]),
         RunOption(key: "guidance", values: ["rules", "root", "off"]),
         RunOption(key: "privacy", values: ["default", "redact", "off"]),
     ]
+
+    public var isApproach: Bool { key == "workMode" || key == "orchestrate" }
 
     /// The choice shown: Privacy Shield's mode, `default` while the chat follows the computer.
     public func shown(_ v: JSONValue?) -> String? {

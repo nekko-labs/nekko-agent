@@ -123,7 +123,7 @@ async fn answer(res: reqwest::Response) -> Result<Value, HttpError> {
         .map(str::to_string)
         .unwrap_or_else(|| match (status, code.as_str()) {
             (_, "account-not-available") => invite_only.into(),
-            (402, _) => "Sync needs a Pro or Team plan.".into(),
+            (402, _) => "Sync needs a Pro or Enterprise plan.".into(),
             (401, _) => "You're signed out of Nekko Cloud. Sign in again.".into(),
             (429, _) => "Too many requests. Try again in a minute.".into(),
             (500.., "unavailable" | "database-unavailable" | "busy") | (502..=504, _) => UNAVAILABLE.into(),

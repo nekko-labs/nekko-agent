@@ -22,6 +22,12 @@ class ProviderRefusal(message: String) : IOException(message)
 interface PhoneHTTP {
     /** A null line callback reads a small JSON body; otherwise reads bounded SSE lines. */
     suspend fun send(request: PhoneRequest, line: ((String) -> Boolean)? = null): String
+
+    /**
+     * The same, handing the answer's headers (lower-cased) to [headers] before its body is read,
+     * refusals included: the rate-limit budget for the limit line (#2950).
+     */
+    suspend fun send(request: PhoneRequest, line: ((String) -> Boolean)?, headers: (Map<String, String>) -> Unit): String = send(request, line)
 }
 
 /** No redirects: a provider must never forward a device key to a different origin. */
@@ -30,12 +36,17 @@ class DirectPhoneHTTP : PhoneHTTP {
         .connectTimeout(20, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS)
         .callTimeout(5, TimeUnit.MINUTES).build()
 
-    override suspend fun send(request: PhoneRequest, line: ((String) -> Boolean)?): String = suspendCancellableCoroutine { cont ->
+    override suspend fun send(request: PhoneRequest, line: ((String) -> Boolean)?): String = send(request, line) {}
+
+    override suspend fun send(request: PhoneRequest, line: ((String) -> Boolean)?, headers: (Map<String, String>) -> Unit): String = suspendCancellableCoroutine { cont ->
         val url = request.url.toHttpUrl()
         require(url.isHttps && url.username.isEmpty() && url.password.isEmpty() && url.fragment == null) { "Phone providers require HTTPS without credentials or fragments." }
         val builder = Request.Builder().url(url)
         request.headers.forEach { (k, v) -> builder.header(k, v) }
-        builder.method(request.method, request.body?.toString()?.toRequestBody("application/json".toMediaType()))
+        // ChatGPT's token endpoint takes a form; everything else is JSON.
+        val payload = request.form?.toRequestBody("application/x-www-form-urlencoded".toMediaType())
+            ?: request.body?.toString()?.toRequestBody("application/json".toMediaType())
+        builder.method(request.method, payload)
         val call = client.newCall(builder.build())
         cont.invokeOnCancellation { call.cancel() }
         call.enqueue(object : Callback {
@@ -45,15 +56,16 @@ class DirectPhoneHTTP : PhoneHTTP {
             override fun onResponse(call: Call, response: Response) {
                 try {
                     response.use { r ->
+                        val answered = r.headers.associate { (k, v) -> k.lowercase() to v }
+                        headers(answered)
                         if (!r.isSuccessful) {
                             // Only as far as the error code; the rest is not read.
                             val body = r.body?.source()?.let { s ->
                                 s.request(PhoneProviders.ERROR_BODY_CHARS + 1L)
                                 s.buffer.readUtf8(minOf(s.buffer.size, PhoneProviders.ERROR_BODY_CHARS + 1L))
                             }.orEmpty()
-                            val headers = r.headers.associate { (k, v) -> k.lowercase() to v }
-                            val kind = if (url.host == "api.openai.com") "openai" else ""
-                            throw ProviderRefusal(PhoneProviders.failure(r.code, body, headers, kind))
+                            val kind = when (url.host) { "api.openai.com" -> "openai"; "chatgpt.com" -> "chatgpt"; else -> "" }
+                            throw ProviderRefusal(PhoneProviders.failure(r.code, body, answered, kind))
                         }
                         val source = r.body?.source() ?: throw IOException("The provider returned no body.")
                         if (line == null) {

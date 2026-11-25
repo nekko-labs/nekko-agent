@@ -44,7 +44,7 @@ describe("the scope: what the phone lets the cloud see", () => {
 });
 
 describe("machines", () => {
-  it("needs Pro or Team to make one, and hands the phone the pairing link once", async () => {
+  it("needs Pro or Enterprise to make one, and hands the phone the pairing link once", async () => {
     const a = app();
     const free = await user("free");
     expect((await call(a, free.token, "POST", "/v1/machines", {})).statusCode).toBe(402);

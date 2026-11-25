@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import type { ConnectorConfig, ConnectorKind, ConnectorMeta, ConnectorResource, DetectedConnectors, RepoExclusions } from '@nekko-agent/shared';
-import { CONNECTOR_CATALOG } from '@nekko-agent/shared';
+import { CONNECTOR_CATALOG, CONNECTOR_GROUPS } from '@nekko-agent/shared';
 import { ConnectorIcon } from '../connectorIcons.js';
 import { CheckIcon } from '../icons.js';
-import { StatusDot } from './primitives/index.js';
+import { Group, StatusDot } from './primitives/index.js';
 import { ConnectorRepos, Disclosure } from './ConnectorRepos.js';
 import { exclusionsOf } from '../connectorRepos.js';
 import { useStore } from '../store.js';
@@ -142,8 +142,13 @@ export function firstStage(kind: ConnectorKind): SetupStage {
  *
  * `compact` drops the sample-fetch area so the wizard stays skimmable;
  * everything still works from here or from the full Connectors tab later.
+ *
+ * Connectors are grouped by kind (`CONNECTOR_GROUPS`: git providers, project
+ * management, chat and email, docs and files). `children` are more groups
+ * after them (the Connectors page adds Gateways, MCP servers and Messaging
+ * channels), as siblings so the group gap applies to them too.
  */
-export function ConnectorGrid({ compact = false }: { compact?: boolean }) {
+export function ConnectorGrid({ compact = false, children }: { compact?: boolean; children?: React.ReactNode }) {
   const [configs, setLocalConfigs] = useState<ConnectorConfig[]>([]);
   // Mirror into the store so surfaces keyed on connectors (the Agent Monitor's
   // Tasks section) appear or disappear as soon as one is connected.
@@ -250,37 +255,49 @@ export function ConnectorGrid({ compact = false }: { compact?: boolean }) {
   };
 
   return (
-    <div className={compact ? 'grid grid-cols-1 gap-x-5 sm:grid-cols-2' : 'grid grid-cols-1 gap-x-5 @3xl:grid-cols-2 @6xl:grid-cols-3'}>
-      {CONNECTOR_CATALOG.map((meta) => (
-        <ConnectorRow
-          key={meta.kind}
-          meta={meta}
-          compact={compact}
-          connected={Boolean(isConnected(meta.kind))}
-          stage={stageOf(meta.kind)}
-          detected={detected[meta.kind]?.source === 'gh' ? detected[meta.kind]!.account : undefined}
-          token={tokens[meta.kind] ?? ''}
-          fields={fields[meta.kind] ?? {}}
-          data={preview[meta.kind]}
-          exclusions={GIT_KINDS.has(meta.kind) ? exclusionsOf(configs.find((c) => c.kind === meta.kind)) : undefined}
-          onExclude={(next) => void exclude(meta.kind, next)}
-          busy={busy === meta.kind}
-          error={errors[meta.kind]}
-          onStart={() => void start(meta.kind)}
-          onStage={(s) => setStage(meta.kind, s)}
-          onSkipCli={() => {
-            setDetected((d) => ({ ...d, [meta.kind]: undefined }));
-            setStage(meta.kind, firstStage(meta.kind));
-          }}
-          onToken={(v) => setTokens((t) => ({ ...t, [meta.kind]: v }))}
-          onField={(key, v) => setFields((f) => ({ ...f, [meta.kind]: { ...f[meta.kind], [key]: v } }))}
-          onConnect={(pasted) => void connect(meta.kind, pasted)}
-          onDisconnect={() => void disconnect(meta.kind)}
-          onFetch={() => void fetchData(meta.kind)}
-        />
+    <div className="flex min-w-0 flex-col">
+      {CONNECTOR_GROUPS.map((group) => (
+        <Group key={group.id} title={group.label} data-connector-group={group.id}>
+          <div className={connectorGridClass(compact)}>
+            {CONNECTOR_CATALOG.filter((meta) => meta.group === group.id).map((meta) => (
+              <ConnectorRow
+                key={meta.kind}
+                meta={meta}
+                compact={compact}
+                connected={Boolean(isConnected(meta.kind))}
+                stage={stageOf(meta.kind)}
+                detected={detected[meta.kind]?.source === 'gh' ? detected[meta.kind]!.account : undefined}
+                token={tokens[meta.kind] ?? ''}
+                fields={fields[meta.kind] ?? {}}
+                data={preview[meta.kind]}
+                exclusions={GIT_KINDS.has(meta.kind) ? exclusionsOf(configs.find((c) => c.kind === meta.kind)) : undefined}
+                onExclude={(next) => void exclude(meta.kind, next)}
+                busy={busy === meta.kind}
+                error={errors[meta.kind]}
+                onStart={() => void start(meta.kind)}
+                onStage={(s) => setStage(meta.kind, s)}
+                onSkipCli={() => {
+                  setDetected((d) => ({ ...d, [meta.kind]: undefined }));
+                  setStage(meta.kind, firstStage(meta.kind));
+                }}
+                onToken={(v) => setTokens((t) => ({ ...t, [meta.kind]: v }))}
+                onField={(key, v) => setFields((f) => ({ ...f, [meta.kind]: { ...f[meta.kind], [key]: v } }))}
+                onConnect={(pasted) => void connect(meta.kind, pasted)}
+                onDisconnect={() => void disconnect(meta.kind)}
+                onFetch={() => void fetchData(meta.kind)}
+              />
+            ))}
+          </div>
+        </Group>
       ))}
+      {children}
     </div>
   );
+}
+
+/** The connector rows' columns: two in the onboarding step, up to three on the page. */
+export function connectorGridClass(compact = false): string {
+  return compact ? 'grid grid-cols-1 gap-x-5 sm:grid-cols-2' : 'grid grid-cols-1 gap-x-5 @3xl:grid-cols-2 @6xl:grid-cols-3';
 }
 
 export function ConnectorRow({

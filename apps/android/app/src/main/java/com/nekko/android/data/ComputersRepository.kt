@@ -2,6 +2,7 @@ package com.nekko.android.data
 
 import com.nekko.protocol.ConnectionLog
 import com.nekko.protocol.NetworkPath
+import com.nekko.protocol.RouteChoice
 import com.nekko.protocol.Tailnet
 import com.nekko.protocol.RelayHint
 import com.nekko.protocol.DenyReason
@@ -215,7 +216,7 @@ class ComputersRepository(
         try {
             val secret = StoredJson.decodeSecret(store.get(secretKey(computer.id))) ?: return
             val hostKey = secret.pin ?: return
-            val routes = RouteSupervisor.order(listOf(computer.relayUrl) + computer.alts)
+            val routes = RouteSupervisor.order(computer.routes)
             _checks.value = routes.map { RouteReport(it) }
             routes.forEachIndexed { i, url ->
                 val report = if (!routeAllowed(url)) {
@@ -611,7 +612,7 @@ class ComputersRepository(
     /** A connection to one paired computer, not yet dialed. */
     private suspend fun dial(computer: Computer, secret: ComputerSecret, hostKey: String): Remote {
         val config = RelayConfig(
-            relayUrl = computer.relayUrl,
+            relayUrl = computer.routes.first(),
             room = secret.room,
             key = secret.key,
             keyBytes = E2E.fromHex(secret.keyHex),
@@ -620,7 +621,7 @@ class ComputersRepository(
             deviceName = deviceName(),
             pairCode = secret.pair,
             platform = "android",
-            alts = computer.alts,
+            alts = computer.routes.drop(1),
             routeAllowed = routeAllowed,
             helloSigner = helloSigner,
         )
@@ -899,6 +900,25 @@ class ComputersRepository(
         } else {
             if (active) disconnect() else { dropLink(id); lock.withLock { syncFleet() } }
         }
+    }
+
+    /** The route choice for [id] (#3346). */
+    fun routeChoice(id: String): RouteChoice = _state.value.computers.firstOrNull { it.id == id }?.routeChoice ?: RouteChoice.AUTO
+
+    /**
+     * Choose which kinds of route this phone dials to reach [id], then reconnect it at once on the
+     * filtered routes (as the active computer, or as the fleet link beside it).
+     */
+    suspend fun setRouteChoice(id: String, choice: RouteChoice) {
+        lock.withLock {
+            val list = _state.value.computers
+            if (list.none { it.id == id && it.routeChoice != choice }) return
+            val updated = list.map { if (it.id == id) it.copy(routeChoice = choice) else it }
+            saveIndex(updated)
+            _state.update { it.copy(computers = updated) }
+        }
+        if (!connectionEnabled(id)) return
+        if (_state.value.activeId == id) connect(id) else { dropLink(id); lock.withLock { syncFleet() } }
     }
 
     /** Drop the live connection (the pairing stays). */

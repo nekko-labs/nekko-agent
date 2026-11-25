@@ -29,8 +29,11 @@ struct ComputerSettingsEvidenceFixture: View {
             guard !ready else { return }
             store.load()
             let key = "BJ7go4GGB9flqEQfjn77eO+WT5J+xi8WJkMUlZycp+JNohWg8JmKM5w1b22gUGNVRucsADtge0BdgHP9q8HUaE="
-            let link = PairingLink(relayUrl: "wss://fixture.invalid", room: "bbbb",
-                                   key: "00112233445566778899aabbccddeeff", hostKey: key, pair: nil)
+            // `-uiTestRouteChoice`: a link carrying both Tailscale and Nekko Cloud Relay.
+            let both = ProcessInfo.processInfo.arguments.contains("-uiTestRouteChoice")
+            let link = PairingLink(relayUrl: both ? "ws://studio.tail1234.ts.net:4400" : "wss://fixture.invalid", room: "bbbb",
+                                   key: "00112233445566778899aabbccddeeff", hostKey: key, pair: nil,
+                                   alts: both ? ["wss://nekko-agent-relay.fly.dev"] : [])
             if let id = try? await store.pair(link) { store.rename(id, to: "Studio Mac") }
             for _ in 0..<20 { await Task.yield() }
             await store.refresh()

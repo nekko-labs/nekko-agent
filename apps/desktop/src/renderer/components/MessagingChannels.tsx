@@ -6,7 +6,7 @@ import { TelegramIcon } from '../connectorIcons.js';
 /**
  * Inbound messaging channels (T151): let a messaging app drive a chat, so the
  * agent can be reached like a person rather than only through the app window.
- * Unlike the connector cards above, these are listeners: connecting one starts
+ * Unlike the connector rows above, these are listeners: connecting one starts
  * a poll loop in the host, and the allowlist of chat ids is the whole
  * authorization boundary (off + empty list = refuses everyone).
  */
@@ -54,14 +54,14 @@ export function MessagingChannels() {
 
   const running = !!status?.running;
   return (
-    <div className="card p-5">
-      <div className="flex items-start justify-between gap-2">
+    <div className="min-w-0 py-1" data-channel="telegram">
+      <div className="flex items-start justify-between gap-2 py-2">
         <div className="flex min-w-0 items-start gap-3">
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl" style={{ background: 'var(--surface-2)' }}>
+          <span className="grid h-9 w-9 shrink-0 place-items-center">
             <TelegramIcon size={20} />
-          </div>
-          <div>
-            <h3 className="font-semibold">Telegram</h3>
+          </span>
+          <div className="flex min-w-0 flex-col" style={{ gap: 'var(--q-tight)' }}>
+            <h3 className="text-sm font-medium">Telegram</h3>
             <p className="text-xs text-ink-faint">
               Message your agent from Telegram; it replies in the same chat. Long-polls, so no public URL needed.
             </p>
@@ -76,7 +76,7 @@ export function MessagingChannels() {
         )}
       </div>
 
-      <div className="mt-3 space-y-2">
+      <div className="space-y-2" style={{ paddingLeft: 48 }}>
         <input
           className="input py-1 text-xs"
           type="password"
@@ -113,13 +113,13 @@ export function MessagingChannels() {
           questions arrive as buttons; replies stream into one edited message.
         </p>
         {status?.lastError && (
-          <p className="text-2xs" style={{ color: 'var(--danger)' }}>
+          <p className="text-2xs" style={{ color: 'var(--danger-text)' }}>
             {status.lastError}
           </p>
         )}
         {status && status.boundChats > 0 && <p className="text-2xs text-ink-faint">{status.boundChats} chat{status.boundChats === 1 ? '' : 's'} bound to sessions.</p>}
         {error && (
-          <p className="text-2xs" style={{ color: 'var(--danger)' }}>
+          <p className="text-2xs" style={{ color: 'var(--danger-text)' }}>
             {error}
           </p>
         )}

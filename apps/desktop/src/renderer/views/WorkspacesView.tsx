@@ -570,7 +570,8 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
         return [{ key: b.key, name: b.name, ws: b.ws, items, archived }];
       });
     }
-    const all = order(buckets.flatMap((b) => bucketEntries(b.key)).filter(shown));
+    // Across projects, so General (where other computers' synced chats file) can't bury this one's newest under a group's 20-card cut (#3355).
+    const all = buckets.flatMap((b) => bucketEntries(b.key)).filter(shown).sort((a, b) => compareCards(view)(sortable(a), sortable(b)));
     const archived = archivedInGroup(sessions, '*', () => '*').filter(shownArchived);
     const archivedGroups: PanelGroup[] = archived.length > 0 ? [{ key: ARCHIVED_GROUP, name: 'Archived', items: [], archived }] : [];
     if (view.groupBy === 'none') return [{ key: 'all', name: 'All agents', items: all, archived: [], bare: true }, ...archivedGroups];

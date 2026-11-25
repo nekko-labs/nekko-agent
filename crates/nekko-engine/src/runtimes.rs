@@ -1141,6 +1141,9 @@ impl Runtimes {
     }
 
     pub async fn auto_plan(&self, id: &str, model: &str, budget_fraction: &Value, parallel_slots: &Value) -> Value {
+        // The built-in engine loads with a q8_0 cache unless told otherwise;
+        // the other runtimes set theirs server-wide, so they plan with f16.
+        let engine_kv = self.resolve(id).is_some_and(|(kind, _)| kind == "llamacpp");
         match self.planning(id, model).await {
             Some((facts, options, hw, _)) => capacity::auto_fit(&AutoFitInput {
                 facts: &facts,
@@ -1149,6 +1152,7 @@ impl Runtimes {
                 parallel_slots: (!parallel_slots.is_null()).then(|| nekko_js::to_number(Some(parallel_slots))),
                 max_context_tokens: None,
                 options,
+                engine_kv,
             }),
             None => Value::Null,
         }

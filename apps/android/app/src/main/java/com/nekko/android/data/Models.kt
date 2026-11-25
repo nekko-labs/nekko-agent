@@ -24,6 +24,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
+import com.nekko.protocol.RouteChoice
 
 /** A paired computer: the non-secret half, safe to show on screen. */
 data class Computer(
@@ -43,7 +44,12 @@ data class Computer(
      * pairing, saved chats, drafts and queued prompts stay, but the phone doesn't dial it. Null is on.
      */
     val connectionDisabled: Boolean? = null,
-)
+    /** Which kinds of route this phone dials to reach it (#3346). Saves from before this load as [RouteChoice.AUTO]. */
+    val routeChoice: RouteChoice = RouteChoice.AUTO,
+) {
+    /** The addresses this phone dials, in the pairing's order: [routeChoice]'s kinds, or all when that leaves none. */
+    val routes: List<String> get() = routeChoice.filter(listOf(relayUrl) + alts)
+}
 
 /** Secret half of a pairing, kept in [SecureStore] only. */
 data class ComputerSecret(
@@ -160,6 +166,7 @@ internal object StoredJson {
                 c.icon?.let { put("icon", it) }
                 c.nameIsCustom?.let { put("nameIsCustom", it) }
                 if (c.connectionDisabled == true) put("connectionDisabled", true)
+                if (c.routeChoice != RouteChoice.AUTO) put("routeChoice", c.routeChoice.wire)
             })
         }
     }.toString()
@@ -178,6 +185,7 @@ internal object StoredJson {
                 icon = o.str("icon"),
                 nameIsCustom = (o["nameIsCustom"] as? JsonPrimitive)?.booleanOrNull,
                 connectionDisabled = (o["connectionDisabled"] as? JsonPrimitive)?.booleanOrNull?.takeIf { it },
+                routeChoice = RouteChoice.parse(o.str("routeChoice")),
             )
         }
     }

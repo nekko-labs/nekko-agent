@@ -171,7 +171,7 @@ fun NekkoNavHost(
             // Over whatever is open; Back from New chat returns there.
             DeepLink.Share, DeepLink.NewChat -> nav.navigate(Routes.NEW) { launchSingleTop = true }
             DeepLink.Talk -> nav.navigate(Routes.VOICE) { launchSingleTop = true }
-            is DeepLink.OpenRouterKey -> nav.navigate(Routes.phone()) { launchSingleTop = true }
+            is DeepLink.OpenRouterKey, DeepLink.ChatGptSignedIn -> nav.navigate(Routes.phone()) { launchSingleTop = true }
             DeepLink.Dashboard -> nav.navigate(Routes.CHATS) { popUpTo(Routes.CHATS) { inclusive = true }; launchSingleTop = true }
             null -> return@LaunchedEffect
         }
@@ -266,6 +266,8 @@ fun NekkoNavHost(
                 val shared by shareInbox.shared.collectAsStateWithLifecycle()
                 // Taken once, so a later New chat opens on the usual default.
                 val startPick = remember { freshPick.also { freshPick = null } }
+                val newChatApp = LocalContext.current.applicationContext as com.nekko.android.NekkoApp
+                val newChatPhone by newChatApp.phoneChats.state.collectAsStateWithLifecycle()
                 NewChatScreen(
                     repo = repo,
                     phonePick = phonePick,
@@ -285,6 +287,11 @@ fun NekkoNavHost(
                         shareInbox.handOff(id)
                         nav.onMain { navigate(Routes.chat(id)) { popUpTo(Routes.NEW) { inclusive = true } } }
                     },
+                    onThisPhone = { nav.navigate(Routes.phone()) { popUpTo(Routes.NEW) { inclusive = true } } },
+                    onFolders = { nav.navigate(Routes.FILES) },
+                    onConnectors = { nav.navigate(Routes.CONNECTORS) },
+                    connectors = newChatApp.connectors.state,
+                    phoneSent = newChatPhone.chats.any { chat -> chat.messages.any { it.role == "assistant" } },
                 )
             }
             composable(

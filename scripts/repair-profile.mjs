@@ -11,7 +11,7 @@
 //   --keep <providerId>     survivor for its group (repeatable)
 //   --remove <providerId>   drop a provider outright (repeatable)
 //   --account <tokenKey>=<accountId>   tell it two tokens are one account
-//   --data <dir>            default ~/.nekko-agent
+//   --data <dir>            default ~/.nekko/nekko-agent
 //
 // Refuses to write while the app is serving from the folder: it would write
 // its in-memory settings back over this on exit.
@@ -22,7 +22,7 @@ import { dedupeProfile, liveInstance } from '@nekko-agent/profile/legacy-profile
 
 const argv = process.argv.slice(2);
 const many = (flag) => argv.flatMap((a, i) => (a === flag && argv[i + 1] ? [argv[i + 1]] : []));
-const root = many('--data')[0] ?? join(homedir(), '.nekko-agent');
+const root = many('--data')[0] ?? join(homedir(), '.nekko', 'nekko-agent');
 const apply = argv.includes('--apply');
 const keep = Object.fromEntries(many('--keep').map((id, i) => [String(i), id]));
 const removeProviders = many('--remove');

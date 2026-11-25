@@ -45,6 +45,10 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeUp
 import com.nekko.android.ui.panes.PaneLabels
@@ -118,6 +122,36 @@ class ChatModesTest {
         override fun getString(name: String) = map[name]
         override fun putString(name: String, value: String?) { if (value == null) map.remove(name) else map[name] = value }
     })
+
+    @Test fun orchestrateRunSetting() {
+        prefs.set(EXPERT_MODE, true)
+        computer.toolStyle = "code"
+        show()
+        compose.onAllNodesWithTag(ModeTags.MODEL_EFFORT).onFirst().performClick()
+        settle()
+        val toggle = compose.onNodeWithContentDescription("Orchestrate")
+        if (InstrumentationRegistry.getArguments().getString("nekkoOrchestrateBaseline") == "true") {
+            toggle.assertDoesNotExist()
+            compose.onNodeWithTag("run.disabledTools").performScrollTo()
+            settle()
+            shot("run-settings")
+            return
+        }
+        toggle.performScrollTo().assertIsOff()
+        compose.onNodeWithTag("run.disabledTools").performScrollTo()
+        settle()
+        shot("run-settings")
+        for (enabled in listOf(true, false)) {
+            toggle.performClick()
+            compose.waitUntil(5_000) { computer.orchestratePatches.size == if (enabled) 1 else 2 }
+            assertEquals(mapOf("orchestrate" to JsonPrimitive(enabled)), computer.orchestratePatches.last())
+            settle()
+            if (enabled) {
+                toggle.assertIsOn()
+                shot("orchestrate-on")
+            } else toggle.assertIsOff()
+        }
+    }
 
     @Test fun simpleAndExpert() {
         show()
@@ -658,6 +692,9 @@ class ChatModesTest {
         /** Each chat's effort, as `session:setOptions` left it. */
         val efforts = java.util.concurrent.ConcurrentHashMap<String, String>()
         val effort: String? get() = efforts["s1"]
+        var toolStyle: String? = null
+        val orchestratePatches = CopyOnWriteArrayList<kotlinx.serialization.json.JsonObject>()
+        private val orchestrate = java.util.concurrent.ConcurrentHashMap<String, JsonElement>()
         @Volatile var resident = true
         /** The chat has filled most of its window: Simple's "getting long" line. */
         @Volatile var longChat = false
@@ -676,6 +713,8 @@ class ChatModesTest {
             put("providerId", "anthropic")
             put("modelId", "claude-opus-4-7")
             efforts[id]?.let { put("effort", it) }
+            toolStyle?.let { put("toolApproach", it) }
+            orchestrate[id]?.let { put("orchestrate", it) }
             put("updatedAt", 1)
             put("queue", JsonArray(emptyList()))
             put(
@@ -728,6 +767,12 @@ class ChatModesTest {
                 Channels.SESSION_GET -> session(args.first().jsonPrimitive.content)
                 Channels.SESSION_SET_OPTIONS -> {
                     args.getOrNull(1)?.jsonObject?.get("effort")?.let { efforts[args.first().jsonPrimitive.content] = it.jsonPrimitive.content }
+                    args.getOrNull(1)?.jsonObject?.let { patch ->
+                        patch["orchestrate"]?.let { value ->
+                            orchestratePatches += patch
+                            orchestrate[args.first().jsonPrimitive.content] = value
+                        }
+                    }
                     session(args.first().jsonPrimitive.content)
                 }
                 Channels.CONTEXT_PREVIEW -> if (longChat) {

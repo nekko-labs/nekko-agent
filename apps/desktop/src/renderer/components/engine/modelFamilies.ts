@@ -1,6 +1,6 @@
-import { modelModality, type CatalogModel, type EngineMemory, type GpuFit, type ImageRecommendedOption, type LocalModel, type Recommendations } from '@nekko-agent/shared';
+import { cannotLoadReason, modelModality, needsNewerEngine, type CatalogModel, type EngineMemory, type GpuFit, type ImageRecommendedOption, type LocalModel, type Recommendations } from '@nekko-agent/shared';
 
-export type LibraryModel = LocalModel & { loaded: boolean; gpuFit?: GpuFit };
+export type LibraryModel = LocalModel & { loaded: boolean; gpuFit?: GpuFit; gpuFitIdle?: GpuFit };
 export interface ModelFamily {
   key: string;
   name: string;
@@ -34,17 +34,33 @@ export function groupModelFamilies(local: LibraryModel[], catalog: CatalogModel[
   return [...groups.values()].sort((a, b) => Number(b.local.length > 0) - Number(a.local.length > 0) || a.name.localeCompare(b.name));
 }
 
+/**
+ * The smallest file a family's line speaks for: among the ones this engine can load,
+ * since a build it refuses has no fit to report. Every file, when none can.
+ */
+export function smallestVariant(local: LibraryModel[]): LibraryModel | undefined {
+  const runnable = local.filter((m) => m.modality === 'image' || !cannotLoadReason(m));
+  // With none that run, one an engine update would fix, so the line names that fix.
+  const fixable = local.filter((m) => cannotLoadReason(m) === m.loadCheck?.reason && needsNewerEngine(m));
+  const speaking = runnable.length ? runnable : fixable.length ? fixable : local;
+  return speaking.slice().sort((a, b) => a.sizeBytes - b.sizeBytes)[0];
+}
+
 export function gpuGuidance(sizeBytes: number | undefined, memory?: EngineMemory, model?: LibraryModel): string {
+  // The engine will not load it, so no GPU or CPU split applies.
+  if (model?.loadCheck?.level === 'blocked') return needsNewerEngine(model) ? 'Needs a newer engine' : "Can't run here";
   if (model?.gpuFit === 'cpu' || memory?.kind === 'ram') return 'CPU only';
   if (model?.gpuFit === 'wont') return 'Too big';
   if (model?.gpuFit === 'partial') {
     // The planner measures against what is free now, so "partial" also means
     // a GPU that other models or apps are holding: that is not "too big".
+    // `gpuFitIdle` re-plans the same context on the card less the desktop reserve.
     const layers = model.layers ?? 0;
     const capped = model.preset?.gpuLayers != null && layers > 0 && model.preset.gpuLayers < layers;
     if (capped) return 'Part on CPU by its settings';
-    if (!sizeBytes || !memory?.budgetBytes) return 'Not enough free GPU memory';
-    return sizeBytes * 1.2 <= memory.budgetBytes ? 'Fits on a free GPU' : 'Too big';
+    if (model.gpuFitIdle === 'full') return 'Fits when the GPU is free';
+    if (model.gpuFitIdle === 'partial' || model.gpuFitIdle === 'wont') return 'Part on CPU at this context size';
+    return 'Not enough free GPU memory';
   }
   if (model?.gpuFit === 'full') {
     return model.maxContext && model.preset?.contextTokens && model.preset.contextTokens < model.maxContext

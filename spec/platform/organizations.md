@@ -15,12 +15,16 @@ A team in Nekko Cloud. Philip creates the organization "Nekko Labs", this Window
 ## Acceptance criteria
 
 - Signed out: nothing new. Signed in but locked: the Organization section says to unlock the account on this computer first.
-- A Pro or Team account can create an organization and becomes its owner. Any account can be invited by email, accept, and read the org and its roster.
+- A Pro or Enterprise account can create an organization and becomes its owner. Any account can be invited by email, accept, and read the org and its roster.
 - Owners and admins invite, revoke invites, rename and advance the key; only owners delete the org. Any member can leave; the last owner cannot.
 - Sharing a computer with an org is a per-org switch, **off by default**, separate from chat sync consent. It lists the computer and its local models for that org's members, uploads no chats and lets no one run anything.
 - A member sees only computers sealed under the org's current key, published by current members from live, unrevoked devices. Removing a member or revoking a device makes their computers disappear. A non-member cannot tell whether an org exists.
 - The server never holds key material or readable descriptors.
 - Opening a chat on a listed computer: only for a computer of your own account that is online, shares with that org, has remote access on and is verified against the account record. No code. Its relay details are sealed under the account keyring, so other members never see them. The computer lets the device in only while both hold the account's current keys, the device is in the account record and sharing stays on; when any of that changes, the live connection is cut within 15 seconds, not only the listing. Nothing is added to the computer's paired devices, and nothing about the link is saved on either side.
+
+## Fleet creation in Settings (#3216)
+
+On desktop and in the Local Web UI, an unlocked account can choose **Create a fleet** in Settings > Nekko Cloud > Fleet management, whether the list is empty or already has fleets. A failed lookup of one fleet does not hide the list, invitations, or the create action. If the list itself cannot load, the panel explains that and offers **Try again**, rather than treating it as an empty list. The form keeps the name if creation fails and selects the new fleet on success. A fleet is still an organization; creation does not share this computer or any chats. The hosted feature flag, plan and allowlist are unchanged. Production fleet creation is not verified.
 
 ## Implemented: Cloud API slice (#2586)
 
@@ -28,7 +32,7 @@ A team in Nekko Cloud. Philip creates the organization "Nekko Labs", this Window
 
 - Limits: 20 orgs per user, 100 members (open invites count) and 100 computers per org, descriptors 305 to 16,384 bytes, presence lease 90 seconds.
 - The org key epoch is a number on the org. It advances by exactly one, by an unlocked owner or admin. Descriptors of an older epoch are hidden until republished.
-- Org fleet routes need membership and an unlocked device (the same check as the account fleet). Publishing and heartbeat need Pro or Team; reading, membership and withdrawal work on any plan.
+- Org fleet routes need membership and an unlocked device (the same check as the account fleet). Publishing and heartbeat need Pro or Enterprise; reading, membership and withdrawal work on any plan.
 - Deleting an account deletes the orgs it alone owns; its other memberships and computers go with it. Sync deletion and device revocation remove that device's org computers.
 - Tested with Fastify and PGlite request tests using synthetic envelopes. They check server policy, not encryption, key handling, UI or real-device behavior.
 

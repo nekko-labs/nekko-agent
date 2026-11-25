@@ -30,6 +30,7 @@ const OPTION_KEYS: &[&str] = &[
     "memory",
     "guidance",
     "toolApproach",
+    "orchestrate",
     "offline",
     "cloudOnly",
     "incognito",
@@ -165,6 +166,7 @@ const USER_FIELDS: &[&str] = &[
     "memory",
     "guidance",
     "toolApproach",
+    "orchestrate",
     "offline",
     "cloudOnly",
     "incognito",
@@ -227,6 +229,11 @@ fn merge_disk(target: &mut Map<String, Value>, disk: &Meta, queued: Option<(usiz
     if disk.get("titleAuto") == Some(&Value::Bool(false)) {
         target.insert("title".into(), disk.get("title").cloned().unwrap_or(Value::Null));
         target.insert("titleAuto".into(), json!(false));
+    }
+    // The parent records the original delegation after the child settles.
+    // A child chat's own later turn must not overwrite that metadata.
+    if let Some(outcome) = disk.get("spawnOutcome") {
+        target.insert("spawnOutcome".into(), outcome.clone());
     }
     // Ids a phone queued with meanwhile stay remembered beside this turn's own.
     if disk.get("clientMessageIds").and_then(Value::as_array).is_some_and(|a| !a.is_empty()) {
@@ -992,6 +999,9 @@ impl SessionStore {
             && !matches!(m.as_str(), Some("sandbox" | "worktree" | "unified"))
         {
             return Err("Invalid execution mode".into());
+        }
+        if patch.get("orchestrate").is_some_and(|v| !v.is_boolean()) {
+            return Err("Orchestrate must be on or off".into());
         }
         if patch.contains_key("sandbox") {
             return Err("Sandbox setup requires the setup route".into());

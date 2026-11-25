@@ -21,8 +21,8 @@ Someone on the free plan can subscribe to Nekko Cloud Pro, then manage or cancel
 
 ## Paying
 
-- **Pro** is bought through Stripe Checkout (a Stripe-hosted page in the browser). Promotion codes are accepted. One subscription per account: an account already on Pro or Team is sent to manage it instead.
-- **Team** is "talk to us" (hello@nekkoagent.com) until seats can be given to an organization's members. A Team plan is still set by hand.
+- **Pro** is bought through Stripe Checkout (a Stripe-hosted page in the browser). Promotion codes are accepted. One subscription per account: an account already on Pro or Enterprise is sent to manage it instead.
+- **Enterprise** (stored as the plan `team`; called Team until 2026-11-22) is "talk to us" (hello@nekkoagent.com) until seats can be given to an organization's members. An Enterprise plan is still set by hand.
 - **Manage billing** opens Stripe's Customer Portal: card, invoices, cancel. A plan set by hand has nothing to manage there.
 - After paying, the browser lands on a short "You're all set" page; the app shows the new plan on its next refresh.
 - The plan follows Stripe, not the event that announced it: every subscription event makes the service ask Stripe what the customer pays for now. A failed card keeps the plan while Stripe retries (past due); when Stripe gives up, the account drops to Free. Data is not deleted on a downgrade: reading, revoking and deleting synced data never depend on the plan.
@@ -40,5 +40,5 @@ Someone on the free plan can subscribe to Nekko Cloud Pro, then manage or cancel
 - Implemented (desktop and Local Web UI): under the account in Settings > Sync, **Upgrade** with the Pro price on Free and **Manage billing** on a paid plan, both opening Stripe in the browser; the plan refreshes when the window comes back. Team accounts also see **Plans and billing: Off, Team only, Everyone** there (Everyone asks first). While billing is off nothing links to plans: the "See plans" buttons in Sync and Organization are gone, since nekkoagent.com/pricing doesn't exist yet; Organization's points to the Upgrade row once billing is on.
 - Implemented (#3187): the sign-in walkthrough's Choose a plan step. With billing on for the account, Pro there opens the same Stripe Checkout; with billing off it runs a test checkout that charges nothing and changes no plan ([the walkthrough](nekko-cloud-sign-in-walkthrough.md)).
 - Implemented (#3192): a pricing page on nekkoagent.com (still noindex, not linked from nav or sitemap) that renders tiers and the full comparison from `packages/shared/src/plan-catalog.json` via the build. Pro's price comes from the billing API at runtime; until billing is on the page shows "Coming soon" for Pro under the not-yet banner.
-- Planned: a docs page at launch; phones; Team seats per organization; yearly prices.
+- Planned: a docs page at launch; phones; Enterprise seats per organization; yearly prices.
 - Not done, needs Philip: a Stripe account, the Pro product and price, the webhook endpoint, and the secrets on Fly. No live charge has been made.

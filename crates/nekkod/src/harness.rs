@@ -258,9 +258,11 @@ impl Harness {
         }
     }
 
-    /// What a provider's Claude Code last reported about plan usage, if anything.
+    /// What a provider's Claude Code last reported about plan usage, if anything,
+    /// with any window whose reset time has passed read as fresh.
     pub fn plan_usage(&self, provider_id: &str) -> Option<serde_json::Value> {
-        lock(&self.plan_usage).get(provider_id).cloned()
+        let now = nekko_oauth::now_ms() as f64;
+        lock(&self.plan_usage).get(provider_id).map(|l| nekko_usage::roll_over_reset_windows(l, now))
     }
 
     /// A chat's Claude Code now runs `n` background tasks, `watchers` of them watchers.
@@ -285,7 +287,13 @@ impl Harness {
         call_id: &str,
         f: impl FnOnce(&mut crate::subagents::Run) -> T,
     ) -> Option<T> {
-        lock(&self.subagents).get_mut(parent)?.get_mut(call_id).map(f)
+        let mut all = lock(&self.subagents);
+        let runs = all.get_mut(parent)?;
+        if runs.contains_key(call_id) {
+            return runs.get_mut(call_id).map(f);
+        }
+        // A woken sub-agent's lines still carry the `Agent` call that first started it.
+        runs.values_mut().find(|run| run.spawn_call.as_deref() == Some(call_id)).map(f)
     }
 
     pub fn remove_subagent(&self, parent: &str, call_id: &str) -> Option<crate::subagents::Run> {
@@ -660,7 +668,7 @@ pub fn decide(
         // Claude Code's shell keeps its own working directory, which Nekko
         // cannot see: only absolute paths count as inside a delete root.
         let folders: Vec<String> = roots.iter().map(|r| r.to_string_lossy().into_owned()).collect();
-        let app = nekko_js::home_dir().map(|h| h.join(".nekko-agent").to_string_lossy().into_owned());
+        let app = Some(crate::cli_install::cli_link_dir().to_string_lossy().into_owned());
         let scope = nekko_tools::DeleteScope {
             cwd: None,
             roots: nekko_tools::delete_roots(folders.iter().map(String::as_str), app.as_deref()),
@@ -810,7 +818,8 @@ mod tests {
         let bash = |mode: &str, command: String| {
             decide(mode, "Bash", &serde_json::json!({ "command": command }), &rules, std::slice::from_ref(&wt))
         };
-        let inside = format!("rm -rf {}", wt.join("build").to_string_lossy());
+        // As typed into Bash: a Windows path's backslashes are escapes there.
+        let inside = format!("rm -rf {}", wt.join("build").to_string_lossy().replace('\\', "/"));
         assert_eq!(bash("guardrails", inside.clone()), Decision::Allow);
         assert_eq!(bash("yolo", inside.clone()), Decision::Allow);
         assert!(asks(&bash("ask", inside)));

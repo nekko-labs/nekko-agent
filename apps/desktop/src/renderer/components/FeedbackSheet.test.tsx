@@ -2,7 +2,7 @@ import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { FEEDBACK_CONTRIBUTING_URL, FEEDBACK_ISSUES_URL } from '@nekko-agent/shared';
-import { FeedbackBody, FeedbackSheet, OtherWays } from './FeedbackSheet.js';
+import { FeedbackBody, FeedbackSheet, OtherWays, feedbackLinkSource } from './FeedbackSheet.js';
 
 // The real Modal portals into document.body, which server rendering has none of.
 vi.mock('./primitives/index.js', async (original) => ({
@@ -55,4 +55,14 @@ describe('Send feedback sheet', () => {
     expect(html()).not.toContain('data-testid="feedback-send"');
     expect(html()).not.toContain('Include app info');
   });
+
+  it('names the way in from the link the menu, the tray or another app sent', () => {
+    expect(feedbackLinkSource('nekko-agent://feedback')).toBe('link');
+    expect(feedbackLinkSource('nekko-agent://feedback?from=menu')).toBe('menu');
+    expect(feedbackLinkSource('nekko-agent://feedback?from=tray')).toBe('tray');
+    expect(feedbackLinkSource('nekko-agent://feedback?from=elsewhere')).toBe('link');
+    expect(feedbackLinkSource('nekko-agent://feedbackx')).toBeNull();
+    expect(feedbackLinkSource('nekko-agent://settings')).toBeNull();
+  });
 });
+
