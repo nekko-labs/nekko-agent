@@ -616,6 +616,10 @@ impl Table {
             handler!(|ctx, channel, args| crate::catalog::route(&ctx.catalog, channel, &args).await),
         );
         t.add(
+            crate::catalog::CHECK_CHANNELS,
+            handler!(|ctx, _channel, args| crate::catalog::route_checks(&ctx.catalog, &ctx.library, &args).await),
+        );
+        t.add(
             crate::tooling::CHANNELS,
             handler!(|ctx, channel, args| crate::tooling::route(ctx, channel, &args).await),
         );

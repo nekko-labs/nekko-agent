@@ -41,6 +41,21 @@ fn a_managed_engine_cannot_run_an_unknown_weight_format() {
 }
 
 #[test]
+fn a_row_says_whether_the_engine_meets_the_build_the_file_asks_for() {
+    use nekko_engine::load_check::engine_meets_min_build as meets;
+    // The weight format wins the verdict on the managed engine, so this is where the age is told.
+    assert_eq!(meets(&ptq1(), &engine(Source::Managed, Some("b11224"))), Some(false));
+    assert_eq!(meets(&ptq1(), &engine(Source::Managed, Some("b11556"))), Some(true));
+    assert_eq!(meets(&ptq1(), &engine(Source::Managed, Some("b12436"))), Some(true));
+    assert_eq!(meets(&hadamard(), &engine(Source::External, Some("b11224"))), Some(false));
+    // Nothing to compare: no requirement, no engine, or a version that is not a b<number> tag.
+    assert_eq!(meets(&plain(), &engine(Source::Managed, Some("b11224"))), None);
+    assert_eq!(meets(&ptq1(), &engine(Source::None, None)), None);
+    assert_eq!(meets(&ptq1(), &engine(Source::Managed, None)), None);
+    assert_eq!(meets(&ptq1(), &engine(Source::External, Some("1 (abcdef0)"))), None);
+}
+
+#[test]
 fn an_external_engine_gets_a_warning_and_the_load_goes_ahead() {
     for version in [None, Some("b11224"), Some("b12436"), Some("1 (abcdef0)")] {
         let check = load_check(&foreign_only(), &engine(Source::External, version)).unwrap();

@@ -158,6 +158,7 @@ const api: NekkoApi = {
   engineCatalog: (query, format) => inv(IpcChannels.engineCatalog, query, format),
   engineCatalogModel: (id) => inv(IpcChannels.engineCatalogModel, id),
   engineCatalogDetail: (id) => inv(IpcChannels.engineCatalogDetail, id),
+  engineCatalogChecks: (id, file) => inv(IpcChannels.engineCatalogChecks, id, file),
   engineFolders: () => inv(IpcChannels.engineFolders),
   engineFoldersSave: (folders) => inv(IpcChannels.engineFoldersSave, folders),
   engineDownloadModel: (modelId, quantLabel) => inv(IpcChannels.engineDownloadModel, modelId, quantLabel),

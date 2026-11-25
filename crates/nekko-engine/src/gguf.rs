@@ -121,7 +121,7 @@ fn file_type(n: f64) -> Option<&'static str> {
         36 => "TQ1_0",
         37 => "TQ2_0",
         38 => "MXFP4",
-        // `LLAMA_FTYPE_MOSTLY_*` in llama.h (b12436; unchanged at b12470).
+        // `LLAMA_FTYPE_MOSTLY_*` in llama.h (b12436; unchanged at b12470 and b12478).
         39 => "NVFP4",
         40 => "Q1_0",
         41 => "Q2_0",
@@ -130,16 +130,27 @@ fn file_type(n: f64) -> Option<&'static str> {
     })
 }
 
+/// Whether a repo's quantization label (`Q4_K_M`, `BF16`) names a format stock
+/// llama.cpp knows: one of the `general.file_type` names above, which include
+/// F32, F16 and BF16. Anything else (PrismML's `PTQ1_0` and `PQ2_0`, or a label
+/// that is only a file name) may be a fork's format, so it is never offered as a
+/// build the engine can run. A repo's own spelling of a standard type (`Q4_K_XL`)
+/// is left out too: a missed offer costs less than a wrong one.
+pub fn is_stock_quant(label: &str) -> bool {
+    let upper = label.trim().to_uppercase();
+    (0..64).any(|n| file_type(f64::from(n)) == Some(upper.as_str()))
+}
+
 /// llama.cpp's `GGML_TYPE_COUNT`: it refuses a file with a tensor of any type
 /// at or past it ("invalid ggml type"). 44 in `ggml/include/ggml.h` at b12436
-/// and at b12464 and b12470, the release this app pins. Recheck it, and the sizes in [`ggml_block`],
+/// and at b12464, b12470 and b12478, the release this app pins. Recheck it, and the sizes in [`ggml_block`],
 /// whenever the pinned llama.cpp release changes (`builds::release_pin`).
 const GGML_TYPE_COUNT: u32 = 44;
 
 /// The llama.cpp release [`GGML_TYPE_COUNT`] and the sizes in [`ggml_block`] were
 /// last checked against. A test ties it to `builds::release_pin`, so the automated
 /// pin-bump PR fails until someone rechecks both at the new release and updates this.
-pub const GGML_TYPES_CHECKED_AT: &str = "b12470";
+pub const GGML_TYPES_CHECKED_AT: &str = "b12478";
 
 /// From this tensor type up, a type is a fork's own range and the managed engine
 /// refuses the file; between [`GGML_TYPE_COUNT`] and here it may only be a type
@@ -194,6 +205,32 @@ pub fn read_metadata(path: &str) -> Option<GgufMetadata> {
                 Parsed::Truncated => None,
             }
         }
+    }
+}
+
+/// How much of a remote file to fetch for its header: [`FIRST_READ`] first, and
+/// up to [`MAX_HEADER_BYTES`] when [`read_metadata_prefix`] asks for more.
+pub const HEADER_FIRST_READ: usize = FIRST_READ;
+pub const HEADER_MAX_READ: usize = MAX_HEADER_BYTES;
+
+/// A header read from the first bytes of a file (fetched rather than opened).
+pub enum HeaderRead {
+    /// The header, or `None` when the bytes are not a readable GGUF.
+    Done(Option<Box<GgufMetadata>>),
+    /// The header runs past these bytes: fetch more (up to [`HEADER_MAX_READ`]).
+    NeedMore,
+}
+
+/// [`read_metadata`] over the first bytes of a file. `whole`: no more bytes will
+/// come, so a tensor table cut short leaves the layout out instead of asking.
+pub fn read_metadata_prefix(prefix: &[u8], whole: bool) -> HeaderRead {
+    if prefix.len() < 24 {
+        return HeaderRead::Done(None);
+    }
+    match parse(prefix, whole) {
+        Parsed::Done(m) => HeaderRead::Done(m),
+        Parsed::Truncated if whole => HeaderRead::Done(None),
+        Parsed::Truncated => HeaderRead::NeedMore,
     }
 }
 
@@ -331,7 +368,7 @@ fn ggml_block(kind: u32) -> Option<(f64, f64)> {
         34 => (256.0, 54.0),
         35 => (256.0, 66.0),
         39 => (32.0, 17.0), // MXFP4
-        // Types 40-43, from ggml-org/llama.cpp b12436 (unchanged at b12470): `blck_size` and `type_size` in
+        // Types 40-43, from ggml-org/llama.cpp b12436 (unchanged at b12470 and b12478): `blck_size` and `type_size` in
         // `type_traits` (ggml/src/ggml.c), with the structs in ggml/src/ggml-common.h
         // (`ggml_half` is 16 bits) and ggml/include/ggml.h (`ggml_fp8_e4m3_t` is one byte).
         40 => (64.0, 36.0),  // NVFP4: QK_NVFP4 64, block_nvfp4 = 4 scale bytes + 32 of 4-bit values

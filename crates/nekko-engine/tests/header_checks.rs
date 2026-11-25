@@ -252,6 +252,8 @@ fn a_listing_carries_the_engines_verdict_and_drops_the_fit_it_makes_moot() {
     assert_eq!(bonsai["loadCheck"]["level"], "blocked");
     assert!(bonsai["loadCheck"]["reason"].as_str().unwrap().contains("tensor type 143"));
     assert!(bonsai.get("gpuFit").is_none() && bonsai.get("gpuFitIdle").is_none());
+    // The verdict names only the weight format, so the row says on its own that the engine is also too old.
+    assert_eq!(bonsai["engineMeetsMinBuild"], false);
     let q2 = row_ending(&shown, "Q2_0.gguf");
     assert_eq!(q2["loadCheck"]["level"], "blocked");
     let why = q2["loadCheck"]["reason"].as_str().unwrap();
@@ -259,6 +261,11 @@ fn a_listing_carries_the_engines_verdict_and_drops_the_fit_it_makes_moot() {
     assert!(q2.get("gpuFit").is_none());
     let qwen = row_ending(&shown, "qwen3-8b-q4_k_m.gguf");
     assert!(qwen.get("loadCheck").is_none() && qwen.get("gpuFit").is_some());
+    assert!(qwen.get("engineMeetsMinBuild").is_none());
+
+    // The pinned engine meets it, and the row says so.
+    let current = list(&EngineInUse { source: Source::Managed, version: Some("b12436".into()) });
+    assert_eq!(row_ending(&current, "PTQ1_0.gguf")["engineMeetsMinBuild"], true);
 
     // The same files under the user's own engine of unknown version: a warning each, and the fit stays.
     let shown = list(&EngineInUse { source: Source::External, version: None });

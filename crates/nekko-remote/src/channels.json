@@ -68,6 +68,7 @@
  "engine:autoload",
  "engine:cancelDownload",
  "engine:catalog",
+ "engine:catalogChecks",
  "engine:catalogDetail",
  "engine:catalogModel",
  "engine:deleteModel",
