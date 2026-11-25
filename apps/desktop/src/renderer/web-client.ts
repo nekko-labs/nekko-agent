@@ -51,6 +51,7 @@ function makeWebClient(): NekkoApi {
   const indexCbs = new Set<(s: IndexStatus) => void>();
   const terminalCbs = new Set<(e: TerminalEvent) => void>();
   const changesCbs = new Set<(e: { sessionId: string }) => void>();
+  const gitChangedCbs = new Set<(e: { path: string }) => void>();
   const tasksCbs = new Set<(t: import('@nekko-agent/shared').AutomationTask[]) => void>();
   const trainingCbs = new Set<(r: import('@nekko-agent/shared').TrainingRun[]) => void>();
   const workflowCbs = new Set<(s: import('@nekko-agent/shared').WorkflowsSnapshot) => void>();
@@ -76,6 +77,7 @@ function makeWebClient(): NekkoApi {
     else if (channel === IpcEvents.indexProgress) indexCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.terminalEvent) terminalCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.changesUpdated) changesCbs.forEach((cb) => cb(payload));
+    else if (channel === IpcEvents.gitChanged) gitChangedCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.tasksUpdated) tasksCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.backgroundUpdated) backgroundCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.simulatorsUpdated) simulatorsCbs.forEach((cb) => cb(payload));
@@ -906,6 +908,10 @@ function makeWebClient(): NekkoApi {
     onChangesUpdated: (cb) => {
       changesCbs.add(cb);
       return () => changesCbs.delete(cb);
+    },
+    onGitChanged: (cb) => {
+      gitChangedCbs.add(cb);
+      return () => gitChangedCbs.delete(cb);
     },
     onTasksUpdated: (cb) => {
       tasksCbs.add(cb);
