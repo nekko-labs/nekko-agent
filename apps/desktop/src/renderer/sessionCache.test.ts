@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { Session } from '@nekko-agent/shared';
+import type { Session, SessionSummary } from '@nekko-agent/shared';
 import {
   MAX_BYTES,
   MAX_CHATS,
   __resetSessionCache,
+  withSummaryFields,
   cachedBytes,
   cachedSessionIds,
   getCachedSession,
@@ -75,5 +76,29 @@ describe('session cache', () => {
     putCachedSession(chat('huge', MAX_BYTES));
     expect(cachedSessionIds()).toEqual(['huge']);
     expect(cachedBytes()).toBe(transcriptBytes(chat('huge', MAX_BYTES)));
+  });
+});
+
+describe('withSummaryFields', () => {
+  const base = (): Session => ({ id: 's', title: 'Old', createdAt: 0, updatedAt: 1, messages: [{ id: 'm1', role: 'user', content: 'hi', createdAt: 0 }], notice: 'stale' } as unknown as Session);
+  const summary = (extra: Record<string, unknown> = {}) => ({ id: 's', title: 'Old', createdAt: 0, updatedAt: 1, notice: 'stale', messageCount: 1, exchangeCount: 1, transcriptTokens: 3, stalled: false, recentTurns: [], prUrls: [], imageCount: 0, ...extra }) as unknown as SessionSummary;
+
+  it('returns the same session when nothing but summary-only fields differ', () => {
+    const s = base();
+    expect(withSummaryFields(s, summary({ transcriptTokens: 99 }))).toBe(s);
+  });
+
+  it('takes a changed field and drops a cleared one, keeping the transcript object', () => {
+    const s = base();
+    const next = withSummaryFields(s, summary({ title: 'New', notice: undefined, updatedAt: 2 }));
+    expect(next).not.toBe(s);
+    expect(next!.title).toBe('New');
+    expect(next!.messages).toBe(s.messages);
+    const cleared = withSummaryFields(s, (() => { const { notice: _n, ...rest } = summary() as unknown as Record<string, unknown>; return rest as unknown as SessionSummary; })());
+    expect('notice' in cleared!).toBe(false);
+  });
+
+  it('is null when the summary counts other messages than the copy holds', () => {
+    expect(withSummaryFields(base(), summary({ messageCount: 3 }))).toBeNull();
   });
 });
