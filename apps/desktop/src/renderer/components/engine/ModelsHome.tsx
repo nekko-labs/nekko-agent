@@ -5,7 +5,7 @@ import { ModelDetail } from './ModelDetail.js';
 import { RecommendedModels, imageFitText } from './RecommendedModels.js';
 import { CheckIcon, WarningIcon } from '../../icons.js';
 import { StatusDot } from '../primitives/index.js';
-import { familyKind, groupModelFamilies, gpuGuidance, modelFamilyName, setUpPictureModels, shelveCatalog, type FamilyKind, type LibraryModel, type ModelFamily } from './modelFamilies.js';
+import { familyKind, groupModelFamilies, gpuGuidance, modelFamilyName, setUpPictureModels, shelveCatalog, smallestVariant, type FamilyKind, type LibraryModel, type ModelFamily } from './modelFamilies.js';
 import { ModelRowActions, useModelRowActions } from './ModelRowActions.js';
 import { pictureModelBlurb, pictureTimeText } from './pictureModelText.js';
 import { useStore } from '../../store.js';
@@ -80,7 +80,7 @@ export function familyLine(f: ModelFamily, mode: ModelsMode, memory: EngineMemor
     const time = pictureTimeText(setUp);
     return { text: [pictureModelBlurb(setUp), f.local.length ? null : setUpFitText(setUp), time?.text].filter(Boolean).join(' · '), tone: 'faint', title: time?.title };
   }
-  const smallest = f.local.slice().sort((a, b) => a.sizeBytes - b.sizeBytes)[0];
+  const smallest = smallestVariant(f.local);
   const params = paramsText(f.name, smallest?.parameterSize ?? f.catalog.find(m => m.parameterSize)?.parameterSize);
   if (mode === 'installed' && smallest) {
     const loaded = f.local.some(m => m.loaded);
@@ -219,7 +219,7 @@ export function ModelsHome({
     const types = installed ? [...new Set(f.local.map(localTypeLabel))] : [];
     const type = familyKind(f) === 'video' ? 'Video generation' : types.length === 1 ? types[0] : 'Mixed types';
     const facts = installed && [type, paramsLabel(f.name, f.local.find(m => m.parameterSize)?.parameterSize), sizeRangeText(f.local.map(m => m.sizeBytes).filter(n => n > 0))].filter(Boolean).join(' · ');
-    const smallest = installed ? f.local.reduce((a, b) => a.sizeBytes <= b.sizeBytes ? a : b) : undefined;
+    const smallest = installed ? smallestVariant(f.local) : undefined;
     const selectedClass = on ? 'bg-accent-soft' : 'hover:bg-(--q-wash)';
     const control = <button key={f.key} type="button" data-model-family={f.key} className={`flex min-w-0 items-center gap-2 rounded-lg px-2 py-(--q-inline) text-left ${installed ? 'w-full' : `-mx-2 w-[calc(100%+16px)] ${selectedClass}`}`} aria-pressed={on} onClick={() => { setSelectedKey(f.key); setRepoId(null); }}>
       <div className="min-w-0 flex-1">

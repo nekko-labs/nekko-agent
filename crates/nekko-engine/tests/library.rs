@@ -259,9 +259,17 @@ fn rates_gpu_fit_on_an_idle_card() {
         &Map::new(),
         Some(&fit_hw(11.9, 5.0, false)),
         None,
+        &Default::default(),
     );
     assert_eq!((rows[0]["gpuFit"].as_str(), rows[0]["gpuFitIdle"].as_str()), (Some("partial"), Some("partial")));
-    let rows = library::with_load_state(vec![small], &Default::default(), &Map::new(), Some(&fit_hw(11.9, 11.0, false)), None);
+    let rows = library::with_load_state(
+        vec![small],
+        &Default::default(),
+        &Map::new(),
+        Some(&fit_hw(11.9, 11.0, false)),
+        None,
+        &Default::default(),
+    );
     assert_eq!(rows[0]["gpuFit"], "full");
     assert!(rows[0].get("gpuFitIdle").is_none());
 }

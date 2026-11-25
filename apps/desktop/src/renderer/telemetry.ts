@@ -39,26 +39,30 @@ export function ignoredError(message: unknown): boolean {
 }
 
 /**
+ * Queue one opt-in report, only while reports are on. The engine also drops it
+ * when they are off, keeps only the event's allowed fields and scrubs every
+ * string (crates/nekkod/src/telemetry.rs).
+ */
+export function capture(event: 'screen_viewed' | 'click' | 'feedback_opened' | 'error', props: Record<string, string>): void {
+  if (useStore.getState().settings?.telemetry?.enabled !== true) return;
+  void window.nekko.telemetryCapture?.(event, props).catch(() => {});
+}
+
+/**
  * Opt-in reports from the UI: which screen is open, which controls are
- * clicked, and uncaught errors. The engine drops them unless reports are on,
- * keeps only the allowed fields and scrubs every string
- * (crates/nekkod/src/telemetry.rs).
+ * clicked, and uncaught errors.
  */
 export function startTelemetry(): void {
-  const send = (event: 'screen_viewed' | 'click' | 'error', props: Record<string, string>) => {
-    if (useStore.getState().settings?.telemetry?.enabled !== true) return;
-    void window.nekko.telemetryCapture?.(event, props).catch(() => {});
-  };
   let last = useStore.getState().view;
   useStore.subscribe((s) => {
     if (s.view === last) return;
     last = s.view;
-    send('screen_viewed', { screen: s.view });
+    capture('screen_viewed', { screen: s.view });
   });
   document.addEventListener('click', (e) => {
     const control = clickControl(e.target);
-    if (control) send('click', { screen: useStore.getState().view, control });
+    if (control) capture('click', { screen: useStore.getState().view, control });
   }, { capture: true, passive: true });
-  window.addEventListener('error', (e) => { if (!ignoredError(e.message)) send('error', errorReport(e.error ?? e.message)); });
-  window.addEventListener('unhandledrejection', (e) => send('error', errorReport(e.reason)));
+  window.addEventListener('error', (e) => { if (!ignoredError(e.message)) capture('error', errorReport(e.error ?? e.message)); });
+  window.addEventListener('unhandledrejection', (e) => capture('error', errorReport(e.reason)));
 }

@@ -73,6 +73,9 @@ const EVENTS: &[(&str, &[&str])] = &[
     ("screen_viewed", &["screen"]),
     ("click", &["screen", "control"]),
     ("feature_used", &["feature"]),
+    // The Send feedback sheet opened, and which way in (`rail`, `palette`,
+    // `about`, `menu`, `tray`, `link`). Never what the note says.
+    ("feedback_opened", &["source"]),
     ("error", &["source", "message", "stack"]),
 ];
 
@@ -437,6 +440,12 @@ mod tests {
         let e = state().queue.pop().unwrap();
         assert_eq!(e["properties"]["message"], "Error: boom");
         assert_eq!(e["properties"]["stack"], "f (b.js:1:2)");
+
+        capture("feedback_opened", &json!({ "source": "rail", "message": "my note" }));
+        let f = state().queue.pop().unwrap();
+        assert_eq!(f["event"], "feedback_opened");
+        assert_eq!(f["properties"]["source"], "rail");
+        assert!(f["properties"].get("message").is_none(), "only the way in, never the note");
 
         for _ in 0..QUEUE_MAX + 10 {
             capture("feature_used", &json!({ "feature": "x" }));
