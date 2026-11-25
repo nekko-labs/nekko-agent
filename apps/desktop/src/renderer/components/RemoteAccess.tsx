@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import QRCode from 'qrcode';
 import { CLOUD_RELAY_URL, pairingLink, relayRoute, phoneDeviceAccess, PHONE_KEY_CHANNEL, PROTECT_COMPUTER_DOCS_URL, relayHost, relayUrlProblem, relayVia, remoteStoppedBanner, type CloudStatus, type DeviceRoute, type SecurityStatus, type LocalRelayStatus, type NetworkVisibilityStatus, type PairingGrant, type PhoneActivityEntry, type RemoteDevice, type RemoteStatus } from '@nekko-agent/shared';
 import { StatusDot } from './primitives/index.js';
 import { Toggle } from './primitives/Toggle.js';
@@ -149,6 +148,7 @@ export const PAIRING_QR_SIZE = 232;
  * modules; the two-module margin keeps a white quiet zone in the dark theme.
  */
 export async function pairingQr(link: string): Promise<string> {
+  const { default: QRCode } = await import('qrcode');
   const svg = await QRCode.toString(link, { type: 'svg', errorCorrectionLevel: 'L', margin: 2, color: { dark: '#000000', light: '#ffffff' } });
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { navOrder, moveNav, sidebarViewVisible } from './nav-order.js';
 import { useStore, viewEnabled, type View } from './store.js';
@@ -35,18 +35,12 @@ import { UpdateBanner } from './components/UpdateBanner.js';
 import { AppNotices } from './components/AppNotices.js';
 import { RelayPairing } from './components/RelayPairing.js';
 import { DeepLinkListener } from './components/DeepLink.js';
-import { DesignBoardView } from './views/DesignBoardView.js';
-import { ArtifactsView } from './views/ArtifactsView.js';
 import { CustomizeExperience } from './components/CustomizeExperience.js';
-import { SkillsView } from './views/SkillsView.js';
-import { TrainingView } from './views/TrainingView.js';
-import { WorkflowsView } from './views/WorkflowsView.js';
 import { CommandCenterView } from './views/CommandCenterView.js';
-import { ModelsWorkspace } from './views/ModelsWorkspace.js';
-import { ConnectorsView } from './views/ConnectorsView.js';
-import { MemoryView } from './views/MemoryView.js';
-import { SettingsView } from './views/SettingsView.js';
-import { OnboardingView } from './views/OnboardingView.js';
+import {
+  ArtifactsView, ConnectorsView, DesignBoardView, MemoryView, ModelsWorkspace, OnboardingView,
+  SettingsView, SkillsView, TrainingView, WorkflowsView, prefetchViews,
+} from './lazyViews.js';
 import { ClaudePlanSheet } from './components/claude/ClaudeAgent.js';
 import {
   ArtifactsColorIcon,
@@ -124,6 +118,8 @@ export function App() {
   // pane is a view of this; without it, switching workspaces unmounted the only
   // listener and the run's output went nowhere until the next event arrived.
   useEffect(() => startLiveRuns(), []);
+  // The other views load after first paint, one idle slice each, so a tab switch never waits on a fetch.
+  useEffect(() => prefetchViews(), []);
   useEffect(() => {
     const { refreshComputers, refreshSessions: refreshChats } = useStore.getState();
     void refreshComputers();
@@ -359,6 +355,8 @@ export function App() {
           )}
           {/* Keyed on the wizard too: setup writes wall prefs (the Monitors panel) the open view loaded before it. */}
           <ErrorBoundary key={`${view === 'modelserver' ? 'models' : view}${onboardingOpen ? ':setup' : ''}`} label={t(`nav.${view}`)}>
+          {/* No fallback: a view that is not loaded yet shows the empty main area for a frame, never a spinner. */}
+          <Suspense fallback={null}>
           {view === 'command' && <CommandCenterView />}
           {view === 'artifacts' && <ArtifactsView />}
           {view === 'skills' && <SettingsDestination><SkillsView /></SettingsDestination>}
@@ -369,12 +367,13 @@ export function App() {
           {view === 'connectors' && <SettingsDestination><ConnectorsView /></SettingsDestination>}
           {view === 'memory' && <MemoryView />}
           {view === 'settings' && <SettingsView />}
+          </Suspense>
           </ErrorBoundary>
         </main>
 
         {/* First-run setup wizard: covers nav + main but leaves the window's
             title bar (and its OS buttons) reachable above it. */}
-        {onboardingOpen && <ErrorBoundary label="Setup"><OnboardingView /></ErrorBoundary>}
+        {onboardingOpen && <ErrorBoundary label="Setup"><Suspense fallback={null}><OnboardingView /></Suspense></ErrorBoundary>}
       </div>
 
       {/* Phone bottom tab bar: the remote-control surface. The long tail of
