@@ -22,7 +22,9 @@ use std::time::{Duration, Instant};
 use tokio_tungstenite::tungstenite::Message;
 
 /// Topics that mean "something synced changed": pull now.
-const SYNC_TOPICS: [&str; 3] = ["sync", "library", "settings"];
+const SYNC_TOPICS: [&str; 2] = ["sync", "library"];
+/// Topics that mean the account's settings or organizations changed: read the account in full too.
+const FULL_TOPICS: [&str; 2] = ["settings", "orgs"];
 /// While the account may not use the channel, look again this often.
 const RETRY: Duration = Duration::from_secs(60);
 const CONNECT_LIMIT: Duration = Duration::from_secs(15);
@@ -108,6 +110,11 @@ impl Channel {
             .map(|(dev, kind)| json!({ "dev": dev, "kind": kind }))
             .collect();
         json!({ "connected": me.is_some(), "online": peers })
+    }
+
+    /// The account channel is up (the relay has said `ready`).
+    pub fn connected(&self) -> bool {
+        lock(&self.me).is_some()
     }
 
     /// Tell the account's other devices to look at `topic`. Nothing while offline.
@@ -204,26 +211,48 @@ impl Cloud {
         Ok(outcome)
     }
 
-    fn on_relay_frame(self: &Arc<Self>, text: &str) {
+    pub(crate) fn on_relay_frame(self: &Arc<Self>, text: &str) {
         let frame = parse(text);
         if self.relay.apply(&frame) {
             self.changed();
         }
-        if let Frame::Nudge { topic, .. } = &frame
-            && SYNC_TOPICS.contains(&topic.as_str())
-            && self.ready()
-            && self.nudge_pending.begin()
-        {
-            // Every device of the account hears the same nudge: wait 0 to 3 s, and let a burst of nudges share one pass.
-            let me = self.clone();
-            tokio::spawn(async move {
-                tokio::time::sleep(pace::nudge_delay(pace::unit())).await;
-                me.nudge_pending.end();
-                if me.ready() && !lock(&me.live).syncing {
-                    let _ = me.sync_once().await;
-                }
-            });
+        // Another of this account's computers changed what it shares: the Computers list reads it again
+        // (only with the slow beat, which leaves the 15 s poll for a minute).
+        if matches!(&frame, Frame::Nudge { topic, .. } if topic == "fleet") && crate::orgs::SLOW_HEARTBEAT_ENABLED {
+            self.changed();
         }
+        match &frame {
+            // Back on the channel: whatever was nudged while it was down is waiting in Nekko Cloud.
+            Frame::Ready { .. } => self.pull_soon(false),
+            Frame::Nudge { topic, .. } if SYNC_TOPICS.contains(&topic.as_str()) => self.pull_soon(false),
+            Frame::Nudge { topic, .. } if FULL_TOPICS.contains(&topic.as_str()) => self.pull_soon(true),
+            _ => {}
+        }
+    }
+
+    /// Start a pass 0 to 3 s from now (every device of the account hears the same nudge), and let
+    /// a burst share it. `full`: the pass also reads the account and sync state.
+    pub(crate) fn pull_soon(self: &Arc<Self>, full: bool) {
+        if !self.ready() {
+            return;
+        }
+        if full {
+            lock(&self.full_read).want();
+            self.nudge_full.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+        if !self.nudge_pending.begin() {
+            return;
+        }
+        let me = self.clone();
+        tokio::spawn(async move {
+            let window = Duration::from_millis(me.nudge_window_ms.load(std::sync::atomic::Ordering::SeqCst));
+            tokio::time::sleep(pace::nudge_delay(window, pace::unit())).await;
+            me.nudge_pending.end();
+            let full = me.nudge_full.swap(false, std::sync::atomic::Ordering::SeqCst);
+            if me.ready() && !lock(&me.live).syncing {
+                let _ = if full { me.sync_once().await } else { me.sync_quick().await };
+            }
+        });
     }
 }
 
