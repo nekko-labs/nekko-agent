@@ -43,16 +43,19 @@ fn tickets(asked: Arc<AtomicUsize>) -> Access {
 async fn dials_with_a_ticket_and_renews_it_on_the_open_socket() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let asked = Arc::new(AtomicUsize::new(0));
-    let agent = spawn(format!("ws://{}/relay?role=agent&room=room&key=k", listener.local_addr().unwrap()), tickets(asked.clone()));
+    let agent = spawn(
+        format!("ws://{}/relay?role=agent&room=room&key=k", listener.local_addr().unwrap()),
+        tickets(asked.clone()),
+    );
     let (tcp, _) = tokio::time::timeout(Duration::from_secs(10), listener.accept()).await.unwrap().unwrap();
     let query = Arc::new(Mutex::new(String::new()));
     let q = query.clone();
-    let mut ws = tokio_tungstenite::accept_hdr_async(tcp, move |req: &Request, res: Response| {
+    #[allow(clippy::result_large_err)] // tungstenite requires its response type in the callback.
+    let capture_query = move |req: &Request, res: Response| {
         *q.lock().unwrap() = req.uri().query().unwrap_or_default().to_string();
         Ok(res)
-    })
-    .await
-    .unwrap();
+    };
+    let mut ws = tokio_tungstenite::accept_hdr_async(tcp, capture_query).await.unwrap();
     assert_eq!(*query.lock().unwrap(), "role=agent&room=room&key=k&access=t1");
     // Its frames, until the renewal arrives.
     let renewed = tokio::time::timeout(Duration::from_secs(5), async {
