@@ -39,6 +39,17 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## iPhone chat re-reads stop re-reading the runnable skills (#3388, 2026-11-26)
+Area: renderer
+Result: improvement (reads per re-read)
+Conditions: `swift test` on an Apple M1 Max, macOS 27.2.1, with a counting fake connection (`ReloadFanOutTests.testSkillsAreReadOnceNotOnEveryReload`): open a chat, then four re-reads (three turn ends and one explicit reload). Counts are `skills:runnable` calls, not time.
+
+| Metric | Before | After |
+|---|---|---|
+| `skills:runnable` calls for one open plus four re-reads | 5 | 1 |
+
+Why: `ChatModel.reload` read the skills list with every re-read; it now reads it on the first read and on a reconnect. This is the part of the chat-open fan-out that needed no engine change. The paged open (`session:page`, tail first) is not implemented: phones cannot call it (#3439), so the 300-message read is unchanged and unmeasured. Source: #3388.
+
 ## Plum and Indigo window glow steps instead of fading every frame (#3136, 2026-11-20)
 Area: GPU/memory
 Result: improvement expected; after number pending (measured once merged, see below)

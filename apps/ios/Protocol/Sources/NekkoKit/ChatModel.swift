@@ -169,7 +169,7 @@ public final class ChatModel {
         guard subscription == nil else { return nil }
         subscription = store.subscribe { [weak self] e in self?.onEvent(e) }
         showSavedCopy()
-        let first = Task { await reload() }
+        let first = Task { await reload(refreshSkills: true) }
         pollAgentState()
         return first
     }
@@ -218,10 +218,14 @@ public final class ChatModel {
     /// The connection came back: re-read, in case events were missed.
     public func connectionChanged(_ state: RelayState) {
         defer { lastConn = state }
-        if state == .online && lastConn != .online && subscription != nil { Task { await reload() } }
+        if state == .online && lastConn != .online && subscription != nil { Task { await reload(refreshSkills: true) } }
     }
 
-    public func reload() async {
+    /// Read the chat again. The runnable skills are read with it only when this is the
+    /// first read, the connection came back, or none has been read yet; the turn ending,
+    /// a card answered or a setting changed do not change them (#3388, audit item 10).
+    public func reload(refreshSkills: Bool = false) async {
+        let readSkills = refreshSkills || !skillsRead
         let cardChangesBefore = cardChanges
         do {
             let r = try store.remote()
@@ -229,7 +233,7 @@ public final class ChatModel {
             async let pendingRaw = orNil { try await r.call(Channels.chatPending) }
             let (s, p) = (try await raw, await pendingRaw)
             // Alongside the rest of the read, and part of it: awaiting a reload awaits these too.
-            async let skillsRead: Void = loadSkills()
+            async let skillsDone: Void = readSkills ? loadSkills() : ()
             // Between turns only: while one runs the live estimate covers it, and the
             // computer is busy with the reply (done, send and session_meta all re-read).
             async let contextRead: Void = loadContext(unless: turn.running)
@@ -280,7 +284,7 @@ public final class ChatModel {
                 }
             }
             await refreshAgentState()
-            _ = await (skillsRead, contextRead)
+            _ = await (skillsDone, contextRead)
         } catch {
             // Out of reach: the saved copy (if any) says so itself, under "Saved copy from …".
             showSavedCopy()
@@ -338,9 +342,13 @@ public final class ChatModel {
     /// The chat's own effort; nil follows the computer's setting.
     public var effort: Effort? { session?.effort.flatMap(Effort.init(rawValue:)) }
 
+    /// The skills list has been read at least once (a reload skips re-reading it).
+    private var skillsRead = false
+
     public func loadSkills() async {
         guard let r = try? store.remote(), let raw = try? await r.call(Channels.skillsRunnable) else { return }
         skills = SkillSummary.list(raw)
+        skillsRead = true
     }
 
     /// Fold one event; re-reads the saved transcript when the turn ends.

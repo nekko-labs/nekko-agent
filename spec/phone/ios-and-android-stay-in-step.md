@@ -128,3 +128,9 @@ Nothing is recorded as a true OS exclusive yet.
 | Feature | iPhone | Android | Follow-up |
 | --- | --- | --- | --- |
 | Collapsed progress notes and continuation summaries | Implemented on #2452 branch, native-unverified | Same folds (2026-11-13); the system bar hides the keyboard | None |
+
+## Performance pass (iPhone first, 2026-11-26)
+
+| Feature | iPhone | Android | Follow-up |
+| --- | --- | --- | --- |
+| Chat re-reads skip the skills read; paged chat open (`session:page`) | Skills skip implemented (#3388); paged open waits for the engine | Not started | [#3415](https://github.com/nekko-labs/nekko-agent/issues/3415); engine: [#3439](https://github.com/nekko-labs/nekko-agent/issues/3439) |
