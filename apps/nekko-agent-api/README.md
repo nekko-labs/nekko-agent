@@ -330,6 +330,21 @@ rm relay-ticket.pem
 
 Set that public key on the relay as `NEKKO_RELAY_TICKET_KEY`.
 
+**Fleet presence from the relay** (optional, `src/relay-presence.ts`). With
+`NEKKO_RELAY_PRESENCE_URL` (the relay's base URL; `https`, or `http` only for
+`localhost`, `.internal` and `.flycast`, e.g. `http://nekko-relay.internal:8080`)
+and `NEKKO_RELAY_PRESENCE_SECRET` (the same value as the relay's
+`NEKKO_RELAY_PRESENCE_SECRET`) set, the fleet lists (`GET /v1/fleet`,
+`GET /v1/orgs/:id/fleet`) also report a computer online when the relay has its
+device online. The API calls `GET /presence?acct=<hash>&acct=...` with
+`authorization: Bearer <secret>` once per list read for the accounts shown
+(answers are kept 5 s), never per heartbeat. A relay that is down, slow (1.5 s)
+or answers badly changes nothing: the memory lease alone decides. Unset (or
+only one of the two set, which logs a warning) is the behaviour without it.
+```bash
+fly secrets set NEKKO_RELAY_PRESENCE_URL='http://nekko-relay.internal:8080' NEKKO_RELAY_PRESENCE_SECRET="$(openssl rand -base64 32)"
+```
+
 ## Billing: Stripe
 
 Off until all of this is done, and hidden even then until a team account turns

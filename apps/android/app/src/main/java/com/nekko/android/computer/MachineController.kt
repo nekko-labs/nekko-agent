@@ -58,7 +58,7 @@ class MachineController(
         loop = scope.launch {
             while (true) {
                 refresh()
-                delay(30_000)
+                delay(POLL_MS)
             }
         }
     }
@@ -66,6 +66,17 @@ class MachineController(
     fun stop() {
         loop?.cancel()
         loop = null
+    }
+
+    /**
+     * The 30 s read, for as long as the caller's coroutine lives: run it under `repeatOnLifecycle(STARTED)`
+     * so it stops when the screen does, instead of [start], which keeps going in the app's scope.
+     */
+    suspend fun poll(everyMs: Long = POLL_MS): Nothing {
+        while (true) {
+            refresh()
+            delay(everyMs)
+        }
     }
 
     /** One pass: the round trip first (the cheapest call), then the rest. Failures keep the last state. */
@@ -104,5 +115,9 @@ class MachineController(
         throw e
     } catch (_: Exception) {
         null
+    }
+
+    private companion object {
+        const val POLL_MS = 30_000L
     }
 }
