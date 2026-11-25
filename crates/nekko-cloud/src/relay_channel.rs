@@ -110,6 +110,11 @@ impl Channel {
         json!({ "connected": me.is_some(), "online": peers })
     }
 
+    /// The account channel is up (the relay has said `ready`).
+    pub fn connected(&self) -> bool {
+        lock(&self.me).is_some()
+    }
+
     /// Tell the account's other devices to look at `topic`. Nothing while offline.
     pub fn nudge(&self, topic: &str) {
         if let Some(tx) = lock(&self.out).as_ref() {
@@ -207,6 +212,11 @@ impl Cloud {
     fn on_relay_frame(self: &Arc<Self>, text: &str) {
         let frame = parse(text);
         if self.relay.apply(&frame) {
+            self.changed();
+        }
+        // Another of this account's computers changed what it shares: the Computers list reads it again
+        // (only with the slow beat, which leaves the 15 s poll for a minute).
+        if matches!(&frame, Frame::Nudge { topic, .. } if topic == "fleet") && crate::orgs::SLOW_HEARTBEAT_ENABLED {
             self.changed();
         }
         if let Frame::Nudge { topic, .. } = &frame

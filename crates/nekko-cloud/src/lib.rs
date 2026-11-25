@@ -190,6 +190,8 @@ pub struct Cloud {
     tickets: pace::Tickets,
     /// A pass started by a Relay nudge is waiting out its jitter; more nudges join it.
     nudge_pending: pace::Pending,
+    /// The lease, in seconds, the API last said it granted this computer's heartbeat (0: not known).
+    lease_seconds: std::sync::atomic::AtomicU64,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -225,6 +227,7 @@ impl Cloud {
             relay: relay_channel::Channel::default(),
             tickets: pace::Tickets::default(),
             nudge_pending: pace::Pending::default(),
+            lease_seconds: std::sync::atomic::AtomicU64::new(0),
         })
     }
 
@@ -242,13 +245,15 @@ impl Cloud {
                 tokio::time::sleep(pace::jittered(every, pace::unit())).await;
             }
         });
-        // Sharing with organizations: a beat about every 30 seconds (it also picks up after sleep or a lost connection).
+        // Sharing with organizations: a beat about every 30 seconds (it also picks up after sleep or a lost
+        // connection). On the Relay channel, with an API lease that outlasts it, every 10 minutes (see
+        // `orgs::heartbeat_wait`; off in this build). A descriptor is published only when it changed.
         let me = self.clone();
         tokio::spawn(async move {
             tokio::time::sleep(pace::start_offset(HEARTBEAT, pace::unit())).await;
             loop {
                 me.share_tick().await;
-                tokio::time::sleep(pace::jittered(HEARTBEAT, pace::unit())).await;
+                tokio::time::sleep(pace::jittered(me.next_heartbeat(), pace::unit())).await;
             }
         });
     }
