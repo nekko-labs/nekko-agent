@@ -1449,7 +1449,7 @@
         "systemRamFreeBytes": 34359738368
       },
       "floor": 268435456,
-      "out": "{\"contextTokens\":16384,\"kvCacheDtype\":\"q8_0\",\"parallelSlots\":1,\"gpuLayers\":32,\"budgetFraction\":0.9}"
+      "out": "{\"contextTokens\":8192,\"kvCacheDtype\":\"f16\",\"parallelSlots\":1,\"gpuLayers\":32,\"budgetFraction\":0.9}"
     },
     {
       "model": {

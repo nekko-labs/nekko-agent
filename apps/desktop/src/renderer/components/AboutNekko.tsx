@@ -52,7 +52,7 @@ export function AboutNekko() {
         </p>
         <div className="flex flex-wrap justify-center gap-2">
           <button type="button" className="btn btn-ghost" onClick={() => { setOpen(false); setPurr(null); openWhatsNew(); }} data-testid="about-whats-new">What's new</button>
-          <button type="button" className="btn btn-outline" onClick={() => { setOpen(false); setPurr(null); openFeedback(); }}>Send feedback</button>
+          <button type="button" className="btn btn-outline" onClick={() => { setOpen(false); setPurr(null); openFeedback('about'); }}>Send feedback</button>
         </div>
         <p className="text-2xs text-ink-faint">© {new Date().getFullYear()} Nekko Labs</p>
       </div>
