@@ -9,6 +9,7 @@ import { FeedbackScreenshots, useFeedbackScreenshots } from './FeedbackScreensho
 import { StarryNekko } from './StarryNekko.js';
 import { GitHubStarSupport } from './GitHubStarSupport.js';
 import { Modal, Toggle } from './primitives/index.js';
+import { useCloudAccountEmail } from './cloud/useCloudAccountEmail.js';
 import { useStore } from '../store.js';
 import { capture } from '../telemetry.js';
 
@@ -169,11 +170,15 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
   const [kind, setKind] = useState<FeedbackKind | null>(null);
   const [summary, setSummary] = useState('');
   const [description, setDescription] = useState('');
-  // Filled in from what the person gave in setup or Settings > About you, and
-  // sent only while "Include my name and email" stays on.
-  const [saved] = useState(() => savedFeedbackContact(useStore.getState().settings));
-  const [name, setName] = useState(saved.name);
-  const [email, setEmail] = useState(saved.email);
+  const settings = useStore(s => s.settings);
+  const saved = savedFeedbackContact(settings);
+  const cloudEmail = useCloudAccountEmail();
+  const defaultEmail = saved.email || cloudEmail;
+  // An untouched field follows its source, but never replace someone’s draft.
+  const [nameDraft, setName] = useState<string>();
+  const [emailDraft, setEmail] = useState<string>();
+  const name = nameDraft ?? saved.name;
+  const email = emailDraft ?? defaultEmail;
   const [includeContact, setIncludeContact] = useState(true);
   const [includeInfo, setIncludeInfo] = useState(false);
   const [attempted, setAttempted] = useState(false);
@@ -239,7 +244,7 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
     if (discarding) {
       setDiscarding(false);
       requestAnimationFrame(() => sendButton.current?.focus());
-    } else if (!sent && (summary.trim() || description.trim() || name.trim() !== saved.name || email.trim() !== saved.email || screenshots.shots.length)) {
+    } else if (!sent && (summary.trim() || description.trim() || name.trim() !== saved.name || email.trim() !== defaultEmail || screenshots.shots.length)) {
       setDiscarding(true);
     } else {
       onClose();
@@ -381,7 +386,10 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
                     </div>
                     <p id="feedback-contact-privacy" className="mt-2 text-2xs text-ink-faint">
                       We don’t spam. These details are sent with this feedback only, so we can follow up. No mailing-list signup.
-                      {(saved.name || saved.email) && ' Filled in from Settings > About you.'}
+                      {emailDraft === undefined && !saved.email && cloudEmail
+                        ? ' Email filled in from Nekko Cloud.'
+                        : ((nameDraft === undefined && saved.name) || (emailDraft === undefined && saved.email))
+                          ? ' Filled in from Settings > Profile.' : null}
                     </p>
                     {attempted && contactProblem && <p id="feedback-contact-error" className="mt-1 text-xs text-danger" role="alert">{contactProblem}</p>}
                   </fieldset>
