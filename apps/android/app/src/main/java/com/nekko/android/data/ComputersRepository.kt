@@ -591,12 +591,7 @@ class ComputersRepository(
                     if (channel != Events.AGENT_EVENT) return@collect
                     val e = AgentEvent.from(payload) ?: return@collect
                     outbox.onEvent(e)
-                    _state.update { s ->
-                        val attention = s.attention.next(e)
-                        val activity = ActivityTracker.next(s.activity, e).toMutableMap()
-                        attention.pending.keys.forEach { activity[it] = Activity.NEEDS_YOU }
-                        s.copy(activity = activity, attention = attention)
-                    }
+                    _state.update { s -> withAgentEvent(s, e) }
                     if (e is AgentEvent.ToolResultReady || e is AgentEvent.QuestionResolved || e is AgentEvent.Done || e is AgentEvent.Error) scheduleAttention()
                     _events.emit(e)
                     // Keep the list fresh when a turn ends anywhere (another device, a task).
