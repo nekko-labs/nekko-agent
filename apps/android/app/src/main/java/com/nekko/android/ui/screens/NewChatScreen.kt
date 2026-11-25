@@ -32,6 +32,7 @@ import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.QrCode2
+import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -100,6 +101,19 @@ import com.nekko.protocol.LocalProviders
 import com.nekko.protocol.MachinePick
 import com.nekko.protocol.ModelInfo
 import com.nekko.protocol.ProviderAccounts
+import com.nekko.protocol.ConnectChecklist
+import com.nekko.protocol.LimitLine
+import com.nekko.protocol.ModelMeta
+import com.nekko.protocol.ModelSnapshots
+import com.nekko.protocol.ProviderLimits
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import com.nekko.protocol.PhoneConnectors
+import com.nekko.android.data.PhonePrefs
+import com.nekko.android.ui.chat.ConnectChecklistGroup
+import com.nekko.android.ui.chat.ConnectNote
+import com.nekko.android.ui.chat.ConnectUndoLine
+import com.nekko.android.ui.chat.PlaceConnector
 import com.nekko.protocol.PublicProvider
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.Session
@@ -130,6 +144,15 @@ fun NewChatScreen(
     onCreated: (String) -> Unit,
     /** Offline: the chat and its first message went to the outbox (*Start when online*). */
     onQueued: () -> Unit = onBack,
+    /** This phone's own chats (the device half's last choice, #2950). */
+    onThisPhone: (() -> Unit)? = null,
+    /** The checklist's rows (#2950): the computer's folders, and this phone's connectors. */
+    onFolders: () -> Unit = {},
+    onConnectors: () -> Unit = {},
+    /** This phone's git and task connectors, for the checklist's ticks. */
+    connectors: kotlinx.coroutines.flow.StateFlow<com.nekko.android.data.Connectors.State>? = null,
+    /** Whether a chat on this phone has had an exchange (the checklist's "sent before"). */
+    phoneSent: Boolean = false,
 ) {
     val c by repo.state.collectAsStateWithLifecycle()
     val p = Nekko.palette
@@ -147,8 +170,6 @@ fun NewChatScreen(
     var workspaceId by rememberSaveable { mutableStateOf(if (shared != null) repo.drafts.draft(DraftStore.NEW_CHAT).workspaceId else null) }
     /** How hard the model works (T201a); null follows the computer's own effort setting. */
     var effort by rememberSaveable { mutableStateOf<String?>(null) }
-    /** Run on was used here, so the row stays while the other computer connects and lists its models. */
-    var switched by rememberSaveable { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var modelsOpen by remember { mutableStateOf(false) }
     var modeOpen by remember { mutableStateOf(false) }
@@ -173,6 +194,35 @@ fun NewChatScreen(
         if (!introOpen && FirstPromptIntro.shouldShow(introSeen, listLoaded = online && c.summariesLoaded && c.savedListAt == null, chats = c.summaries)) introOpen = true
     }
     if (introOpen) FirstPromptIntroSheet(onDone = { introOpen = false; prefs?.set(FirstPromptIntro.SEEN, true) })
+
+    // "Nekko can do more with these" (#2950, the iPhone's #2921): a checklist until the first message,
+    // then a note while nothing is connected. Without the phone's settings (tests) it stays closed.
+    val sentRemembered = prefs?.flow(ConnectChecklistPrefs.FIRST_MESSAGE_SENT)?.collectAsStateWithLifecycle()?.value ?: true
+    val checklistClosed = prefs?.flow(ConnectChecklistPrefs.CLOSED)?.collectAsStateWithLifecycle()?.value ?: true
+    val linked = connectors?.collectAsStateWithLifecycle()?.value
+    // Until the chat list is read, neither shows, so someone who already chatted never sees it flash.
+    val listRead = c.computers.isEmpty() || (c.summariesLoaded && c.savedListAt == null)
+    val sentBefore = ConnectChecklist.sentBefore(sentRemembered || phoneSent, if (c.summariesLoaded) c.summaries.map { it.exchangeCount } else emptyList())
+    LaunchedEffect(sentBefore, sentRemembered) { if (sentBefore && !sentRemembered) prefs?.set(ConnectChecklistPrefs.FIRST_MESSAGE_SENT, true) }
+    val checklistComputer = active?.name ?: c.computers.firstOrNull()?.name
+    val checklistFolder = c.workspaces.firstOrNull()?.name
+    val checklistGit = linked?.let { st -> (st.selectedGit?.let(st::connector) ?: st.connectors.firstOrNull { it.category == PhoneConnectors.Category.GIT })?.label }
+    val checklistTasks = linked?.connectors?.firstOrNull { it.category == PhoneConnectors.Category.TASKS }?.label
+    val checklistRows = ConnectChecklist.rows(checklistComputer, checklistFolder, checklistGit, checklistTasks)
+    val shownChecklist = if (!listRead || imageChat) ConnectChecklist.Shown.Nothing
+    else ConnectChecklist.shown(checklistComputer, checklistFolder, checklistGit, checklistTasks, sentBefore, checklistClosed)
+    var undoShown by remember { mutableStateOf(false) }
+    LaunchedEffect(undoShown) { if (undoShown) { kotlinx.coroutines.delay(6_000); undoShown = false } }
+    var connectSheet by remember { mutableStateOf(false) }
+    val openItem: (ConnectChecklist.Item) -> Unit = { item ->
+        when (item) {
+            ConnectChecklist.Item.COMPUTER -> onPair()
+            ConnectChecklist.Item.FOLDER -> onFolders()
+            ConnectChecklist.Item.GIT, ConnectChecklist.Item.TASKS -> onConnectors()
+        }
+    }
+    val closeChecklist: () -> Unit = { prefs?.set(ConnectChecklistPrefs.CLOSED, true); undoShown = true }
+    if (connectSheet) com.nekko.android.ui.chat.ConnectChecklistSheet(checklistRows, openItem) { connectSheet = false }
 
     // The models are the computer's: ask every enabled provider there, in parallel.
     LaunchedEffect(online, c.providers, imageChat) {
@@ -200,8 +250,6 @@ fun NewChatScreen(
     }
     val pickedKind = c.providers.firstOrNull { it.id == pick?.providerId }?.kind
     val isLocal = LocalProviders.isLocal(pickedKind) || (autoChoseModel && pickedKind == null)
-    // A local model runs on its computer's hardware: offer the other paired computers.
-    val showRunOn = !imageChat && c.computers.size > 1 && (switched || isLocal)
     // Automatic can choose: a local model, other computers connected, and no folder (a folder decides the computer).
     val autoOffered = !imageChat && isLocal && workspaceId == null && c.computers.size > 1 && c.peers.isNotEmpty()
     val autoShown = autoOn && autoOffered
@@ -247,7 +295,6 @@ fun NewChatScreen(
         autoOn = false
         autoPick = null
         if (id != c.activeId) {
-            switched = true
             // The model, folder and effort are the old computer's; the new one's defaults are picked when its models arrive.
             pick = null
             touched = false
@@ -320,6 +367,7 @@ fun NewChatScreen(
                             autoRun++
                         }
                     },
+                    loadLimits = { id -> ProviderLimits.from(repo.remote().call(Channels.LIMITS_GET, JsonPrimitive(id))) },
                     onRetry = {
                         scope.launch {
                             try {
@@ -408,49 +456,58 @@ fun NewChatScreen(
                         mode = mode ?: c.pcSettings.effectiveMode,
                         onMode = { modeOpen = true },
                         onStart = start,
-                    )
-                }
-                error?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = p.danger, modifier = Modifier.padding(top = 8.dp)) }
-                if (showRunOn) {
-                    Spacer(Modifier.size(12.dp))
-                    NCard {
-                        Label(Icons.Outlined.Computer, stringResource(R.string.chats_run_on))
-                        Row(Modifier.horizontalScroll(rememberScrollState()).testTag("newChat.runOn"), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (autoOffered) {
-                                Chip(stringResource(R.string.chats_auto), autoShown) {
-                                    autoOn = true
-                                    autoPick = null
-                                    autoRun++
-                                }
+                        providerName = pick?.let { pk -> c.providers.firstOrNull { it.id == pk.providerId }?.let(ProviderAccounts::shortName) },
+                        device = if (autoShown) stringResource(R.string.chats_auto) else active.name,
+                        deviceIcon = if (autoShown) null else active.icon,
+                        deviceMenu = { close ->
+                            if (autoOffered) DeviceItem(stringResource(R.string.chats_auto), null, autoShown) {
+                                close()
+                                autoOn = true
+                                autoPick = null
+                                autoRun++
                             }
                             c.computers.forEach { pc ->
                                 // Every paired computer stays connected: each says whether it can take the chat now.
                                 val label = if (pc.id == c.activeId || c.peers.isEmpty()) pc.name
                                 else stringResource(R.string.chats_run_on_state, pc.name, stringResource(stateName(c.connOf(pc.id))))
-                                Chip(label, !autoShown && pc.id == c.activeId, pc.icon) { runOn(pc.id) }
+                                DeviceItem(label, pc.icon, !autoShown && pc.id == c.activeId, Modifier.testTag("newChat.runOn.${pc.id}")) { close(); runOn(pc.id) }
                             }
-                        }
-                        val name = active?.name.orEmpty()
-                        val made = autoPick
-                        val line = when {
-                            !autoShown -> stringResource(R.string.chats_run_on_note)
-                            autoFinding -> stringResource(R.string.chats_auto_finding)
-                            made == null -> stringResource(R.string.chats_auto_note)
-                            made.reason == MachinePick.Reason.FREE -> {
-                                val busyName = made.skipped.firstOrNull()?.let { id -> c.computers.firstOrNull { it.id == id }?.name }
-                                if (busyName != null) stringResource(R.string.chats_auto_free_busy, name, busyName)
-                                else stringResource(R.string.chats_auto_free, name)
+                            onThisPhone?.let { phone ->
+                                DeviceItem(stringResource(R.string.chats_this_phone), null, false, Modifier.testTag("newChat.runOn.phone"), detail = stringResource(R.string.newchat_this_phone_detail), vector = Icons.Outlined.PhoneAndroid) { close(); phone() }
                             }
-                            made.reason == MachinePick.Reason.ALL_BUSY -> stringResource(R.string.chats_auto_all_busy, name)
-                            else -> stringResource(R.string.chats_auto_none, name)
+                        },
+                        limitLine = {
+                            com.nekko.android.ui.chat.ComputerLimitLine(repo, pick?.providerId, c.activeId, online, Modifier.padding(horizontal = 4.dp)) { modelsOpen = true }
+                        },
+                    )
+                }
+                error?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = p.danger, modifier = Modifier.padding(top = 8.dp)) }
+                if (autoShown) {
+                    val name = active?.name.orEmpty()
+                    val made = autoPick
+                    val line = when {
+                        autoFinding -> stringResource(R.string.chats_auto_finding)
+                        made == null -> stringResource(R.string.chats_auto_note)
+                        made.reason == MachinePick.Reason.FREE -> {
+                            val busyName = made.skipped.firstOrNull()?.let { id -> c.computers.firstOrNull { it.id == id }?.name }
+                            if (busyName != null) stringResource(R.string.chats_auto_free_busy, name, busyName)
+                            else stringResource(R.string.chats_auto_free, name)
                         }
-                        Text(
-                            line,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = p.inkSoft,
-                            modifier = if (autoShown) Modifier.testTag("newChat.auto") else Modifier,
-                        )
+                        made.reason == MachinePick.Reason.ALL_BUSY -> stringResource(R.string.chats_auto_all_busy, name)
+                        else -> stringResource(R.string.chats_auto_none, name)
                     }
+                    Text(line, style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.padding(start = 4.dp, top = 6.dp).testTag("newChat.auto"))
+                }
+                // Under the box: the checklist over the first message, then the note (#2950).
+                when {
+                    undoShown && checklistClosed -> ConnectUndoLine { prefs?.set(ConnectChecklistPrefs.CLOSED, false); undoShown = false }
+                    shownChecklist is ConnectChecklist.Shown.Checklist -> Box(Modifier.padding(top = 12.dp)) {
+                        ConnectChecklistGroup(shownChecklist.rows, openItem, closeChecklist)
+                    }
+                    shownChecklist == ConnectChecklist.Shown.Note -> Box(Modifier.padding(top = 8.dp)) {
+                        ConnectNote(connect = { connectSheet = true }, close = closeChecklist)
+                    }
+                    else -> {}
                 }
             }
             Spacer(Modifier.size(32.dp))
@@ -527,8 +584,19 @@ internal fun ModelList(
     selected: ModelPick?,
     onPick: (ModelPick) -> Unit,
     onRetry: () -> Unit,
+    /** A provider's limits on the computer (`limits:get`), shown under its name (#2950); null asks nothing. */
+    loadLimits: (suspend (String) -> ProviderLimits?)? = null,
 ) {
     val p = Nekko.palette
+    var limits by remember { mutableStateOf<Map<String, ProviderLimits>>(emptyMap()) }
+    val providerIds = groups.map { it.provider.id }
+    LaunchedEffect(providerIds, loadLimits) {
+        val load = loadLimits ?: return@LaunchedEffect
+        limits = kotlinx.coroutines.coroutineScope {
+            providerIds.map { id -> async { id to try { load(id) } catch (e: CancellationException) { throw e } catch (_: Exception) { null } } }
+                .awaitAll().mapNotNull { (id, l) -> l?.let { id to it } }.toMap()
+        }
+    }
     if (groups.isEmpty()) {
         Text(
             stringResource(R.string.chats_no_providers),
@@ -569,14 +637,15 @@ internal fun ModelList(
             GroupTitle(stringResource(R.string.chats_starred))
             starred.forEach { (pr, m) ->
                 val k = ModelPick(pr.id, m.id)
-                ModelRow(m, detail = ProviderAccounts.shortName(pr), selected = k == selected) { onPick(k) }
+                ModelRow(m, detail = ProviderAccounts.shortName(pr), meta = modelMeta(pr, m), selected = k == selected) { onPick(k) }
             }
         }
         ModelSections.of(shown, viewing, selected, searching = query.isNotBlank()).forEach { section ->
             when (section) {
                 is ModelSection.Provider -> {
                     ProviderGroupTitle(section.group.provider)
-                    GroupModels(section.group, selected, onPick, onRetry)
+                    ProviderLimitLines(limits[section.group.provider.id], section.group.provider.id)
+                    GroupModels(section.group, selected, onPick, onRetry, searching = query.isNotBlank())
                 }
                 is ModelSection.Accounts -> {
                     GroupTitle(stringResource(R.string.chats_account_family_claude))
@@ -584,7 +653,8 @@ internal fun ModelList(
                         viewing = g.provider.id
                         ModelSections.switchTo(section, g, selected)?.let(onPick)
                     })
-                    GroupModels(section.shown, selected, onPick, onRetry)
+                    ProviderLimitLines(limits[section.shown.provider.id], section.shown.provider.id)
+                    GroupModels(section.shown, selected, onPick, onRetry, searching = query.isNotBlank())
                 }
             }
         }
@@ -596,7 +666,7 @@ internal fun ModelList(
 
 /** One provider's models, or why there are none yet. */
 @Composable
-private fun GroupModels(g: ModelGroup, selected: ModelPick?, onPick: (ModelPick) -> Unit, onRetry: () -> Unit) {
+private fun GroupModels(g: ModelGroup, selected: ModelPick?, onPick: (ModelPick) -> Unit, onRetry: () -> Unit, searching: Boolean = false) {
     val p = Nekko.palette
     val list = g.models
     when {
@@ -626,9 +696,36 @@ private fun GroupModels(g: ModelGroup, selected: ModelPick?, onPick: (ModelPick)
             )
             TextButton(onClick = onRetry) { Text(stringResource(R.string.chats_retry)) }
         }
-        else -> list.forEach { m ->
+        // A search lists every id, unfolded; otherwise dated snapshots fold under the model they pin (#2950).
+        searching -> list.forEach { m ->
             val k = ModelPick(g.provider.id, m.id)
-            ModelRow(m, detail = null, selected = k == selected) { onPick(k) }
+            ModelRow(m, detail = null, meta = modelMeta(g.provider, m), selected = k == selected) { onPick(k) }
+        }
+        else -> {
+            val byId = list.associateBy { it.id }
+            ModelSnapshots.fold(list.map { it.id }).forEach { fold ->
+                val main = byId.getValue(fold.main)
+                val k = ModelPick(g.provider.id, main.id)
+                ModelRow(main, detail = null, meta = modelMeta(g.provider, main), selected = k == selected) { onPick(k) }
+                if (fold.dated.isNotEmpty()) {
+                    // A chosen snapshot keeps its fold open so its tick shows.
+                    var open by rememberSaveable(g.provider.id, fold.main) { mutableStateOf(selected?.providerId == g.provider.id && selected.modelId in fold.dated) }
+                    val label = if (open) stringResource(R.string.model_dated_hide)
+                    else if (fold.dated.size == 1) stringResource(R.string.model_dated_one)
+                    else stringResource(R.string.model_dated_many, fold.dated.size)
+                    TextButton(
+                        onClick = { open = !open },
+                        modifier = Modifier.padding(start = 8.dp).heightIn(min = 48.dp).testTag("modelPicker.dated.${fold.main}"),
+                    ) { Text(label, style = MaterialTheme.typography.bodySmall, color = p.inkSoft) }
+                    if (open) fold.dated.forEach { id ->
+                        val m = byId.getValue(id)
+                        val dk = ModelPick(g.provider.id, id)
+                        Box(Modifier.padding(start = 16.dp)) {
+                            ModelRow(m, detail = null, meta = modelMeta(g.provider, m), selected = dk == selected) { onPick(dk) }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -747,8 +844,31 @@ private val ModelPickSaver = listSaver<ModelPick?, String>(
     restore = { if (it.size == 2) ModelPick(it[0], it[1]) else null },
 )
 
+/** Each window as the same quiet line as New chat's, under the provider's name (#2950). */
 @Composable
-private fun ModelRow(m: ModelInfo, detail: String?, selected: Boolean, onClick: () -> Unit) {
+private fun ProviderLimitLines(limits: ProviderLimits?, providerId: String) {
+    val windows = limits?.windows.orEmpty()
+    if (windows.isEmpty()) return
+    Column(Modifier.padding(start = 8.dp, bottom = 2.dp).testTag("modelPicker.limits.$providerId")) {
+        windows.forEach { com.nekko.android.ui.chat.LimitLineView(LimitLine(it)) }
+    }
+}
+
+/** What the row says on its right: a local model's parameters and size, a cloud model's context (#2950). */
+@Composable
+private fun modelMeta(provider: PublicProvider, m: ModelInfo): String? {
+    val res = LocalResources.current
+    return ModelMeta.line(
+        local = LocalProviders.isLocal(provider.kind),
+        parameters = m.parameters,
+        sizeBytes = m.sizeBytes,
+        contextLength = m.contextLength,
+        context = { res.getString(R.string.model_context, it) },
+    )
+}
+
+@Composable
+private fun ModelRow(m: ModelInfo, detail: String?, meta: String? = null, selected: Boolean, onClick: () -> Unit) {
     val p = Nekko.palette
     Row(
         Modifier
@@ -765,6 +885,7 @@ private fun ModelRow(m: ModelInfo, detail: String?, selected: Boolean, onClick: 
             Text(m.name, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.inkFaint, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         }
+        meta?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.inkFaint, maxLines = 1) }
         if (m.loaded) Pill(stringResource(R.string.chats_loaded), Tone.SUCCESS)
         if (selected) Icon(Icons.Outlined.Check, contentDescription = stringResource(R.string.chats_selected), tint = p.accent, modifier = Modifier.size(18.dp))
     }
@@ -859,6 +980,15 @@ private fun NewChatComposer(
     mode: PcSettings.ChatMode,
     onMode: () -> Unit,
     onStart: suspend (String, List<String>) -> Unit,
+    /** The chosen model's provider, after its name while the line has room. */
+    providerName: String?,
+    /** Where the chat runs: the computer, or Automatic. */
+    device: String,
+    deviceIcon: String?,
+    /** Run on's choices, in the device half's menu; each closes it with the lambda it gets. */
+    deviceMenu: @Composable (close: () -> Unit) -> Unit,
+    /** The chosen provider's limit line, under model ⟶ device. */
+    limitLine: @Composable () -> Unit,
 ) {
     val p = Nekko.palette
     val simple = LocalSimple.current
@@ -937,30 +1067,36 @@ private fun NewChatComposer(
                 if (!simple.expert && simple.shown("asks")) com.nekko.android.ui.chat.ComposerAsksIcon(mode, enabled = true, onClick = onMode)
             },
             footer = {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                    TextButton(onClick = onOpenModels, modifier = Modifier.heightIn(min = 48.dp).testTag("newChat.model")) {
-                        Icon(Icons.Outlined.Memory, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.size(6.dp))
-                        Text(modelName ?: stringResource(R.string.chats_choose_model), color = if (modelName == null) p.inkFaint else p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    if (effortLevels.isNotEmpty() && simple.shown("effort")) {
-                        var open by remember { mutableStateOf(false) }
-                        Box {
-                            TextButton(onClick = { open = true }, modifier = Modifier.heightIn(min = 48.dp).testTag("newChat.effort")) {
-                                Icon(Icons.Outlined.Speed, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.size(6.dp))
-                                Text(effortLevels.firstOrNull { it.wire == effort }?.let { effortLabel(it) } ?: stringResource(R.string.chats_computer_default), color = p.ink, maxLines = 1)
-                            }
-                            androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = p.surface) {
-                                androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(R.string.chats_computer_default)) }, onClick = { onEffort(null); open = false })
-                                effortLevels.forEach { e -> androidx.compose.material3.DropdownMenuItem(text = { Text(effortLabel(e)) }, onClick = { onEffort(e.wire); open = false }) }
-                            }
-                        }
-                    }
+                // Model ⟶ device on one line (#2950, the iPhone's #2922). When it's tight the provider goes
+                // first, then effort's word, then both names shorten in the middle.
+                var deviceOpen by remember { mutableStateOf(false) }
+                var effortOpen by remember { mutableStateOf(false) }
+                val showEffort = effortLevels.isNotEmpty() && simple.shown("effort")
+                val line: @Composable (PlaceFit, Boolean) -> Unit = { fit, live ->
+                    PlaceLine(
+                        fit = fit,
+                        live = live,
+                        modelName = modelName,
+                        providerName = providerName,
+                        onOpenModels = onOpenModels,
+                        device = device,
+                        deviceIcon = deviceIcon,
+                        deviceOpen = deviceOpen,
+                        onDeviceOpen = { deviceOpen = it },
+                        deviceMenu = deviceMenu,
+                        effort = if (showEffort) effortLevels.firstOrNull { it.wire == effort }?.let { effortLabel(it) } ?: stringResource(R.string.chats_computer_default) else null,
+                        effortOpen = effortOpen,
+                        onEffortOpen = { effortOpen = it },
+                        effortMenu = { close ->
+                            androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(R.string.chats_computer_default)) }, onClick = { onEffort(null); close() })
+                            effortLevels.forEach { e -> androidx.compose.material3.DropdownMenuItem(text = { Text(effortLabel(e)) }, onClick = { onEffort(e.wire); close() }) }
+                        },
+                    )
                 }
+                com.nekko.android.ui.chat.FirstThatFits(variants = PlaceFit.entries.map { fit -> { live -> line(fit, live) } })
             },
         )
-        Text(stringResource(R.string.chats_starts_on, computer), style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.padding(start = 4.dp, top = 4.dp))
+        limitLine()
     }
 }
 
@@ -994,4 +1130,138 @@ private fun NewChatFolderChip(workspaces: List<WorkspaceFolder>, selected: Strin
             workspaces.forEach { w -> androidx.compose.material3.DropdownMenuItem(text = { Text(w.name) }, onClick = { onPick(w.id); open = false }, modifier = Modifier.testTag("newChat.folder.${w.id}")) }
         }
     }
+}
+
+/** New chat's checklist and note, saved on this phone only (#2950, the iPhone's `firstMessageSent`, `connectChecklistClosed`). */
+object ConnectChecklistPrefs {
+    /** Someone has sent a first message here, so the checklist gives way to the note for good. */
+    val FIRST_MESSAGE_SENT = PhonePrefs.boolean("firstMessageSent", default = false)
+    /** The × hid the checklist and the note on this phone. */
+    val CLOSED = PhonePrefs.boolean("connectChecklistClosed", default = false)
+}
+
+/** How much of the model ⟶ device line fits: the provider goes first, then effort's word, then both names shorten. */
+internal enum class PlaceFit { FULL, NO_PROVIDER, GAUGE, SQUEEZED }
+
+/** Model ⟶ device, then effort, on one line (#2950). Each half opens its own picker. */
+@Composable
+private fun PlaceLine(
+    fit: PlaceFit,
+    live: Boolean,
+    modelName: String?,
+    providerName: String?,
+    onOpenModels: () -> Unit,
+    device: String,
+    deviceIcon: String?,
+    deviceOpen: Boolean,
+    onDeviceOpen: (Boolean) -> Unit,
+    deviceMenu: @Composable (close: () -> Unit) -> Unit,
+    effort: String?,
+    effortOpen: Boolean,
+    onEffortOpen: (Boolean) -> Unit,
+    effortMenu: @Composable (close: () -> Unit) -> Unit,
+) {
+    val p = Nekko.palette
+    val squeezed = fit == PlaceFit.SQUEEZED
+    val chooseModel = stringResource(R.string.chats_choose_model)
+    val modelSpoken = modelName?.let { n -> providerName?.let { "$n · $it" } ?: n } ?: chooseModel
+    val runsOn = stringResource(R.string.newchat_runs_on, device)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        TextButton(
+            onClick = onOpenModels,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp),
+            modifier = (if (squeezed) Modifier.weight(1f, fill = false) else Modifier)
+                .heightIn(min = 48.dp)
+                .semantics(mergeDescendants = true) { contentDescription = modelSpoken }
+                .then(if (live) Modifier.testTag("newChat.model") else Modifier),
+        ) {
+            Icon(Icons.Outlined.Memory, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.size(6.dp))
+            val name = androidx.compose.ui.text.buildAnnotatedString {
+                append(modelName ?: chooseModel)
+                if (fit == PlaceFit.FULL && modelName != null && providerName != null) {
+                    pushStyle(androidx.compose.ui.text.SpanStyle(color = p.inkSoft))
+                    append(" · $providerName")
+                    pop()
+                }
+            }
+            Text(name, color = if (modelName == null) p.inkFaint else p.ink, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.MiddleEllipsis)
+        }
+        PlaceConnector()
+        Box(if (squeezed) Modifier.weight(1f, fill = false) else Modifier) {
+            TextButton(
+                onClick = { onDeviceOpen(true) },
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp),
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .semantics(mergeDescendants = true) { contentDescription = runsOn }
+                    .then(if (live) Modifier.testTag("newChat.device") else Modifier),
+            ) {
+                if (computerIconRes(deviceIcon) != null) ComputerIcon(deviceIcon, tint = p.inkSoft)
+                else Icon(Icons.Outlined.Computer, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.size(6.dp))
+                Text(device, color = p.ink, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.MiddleEllipsis)
+            }
+            if (live) {
+                androidx.compose.material3.DropdownMenu(expanded = deviceOpen, onDismissRequest = { onDeviceOpen(false) }, containerColor = p.surface) {
+                    deviceMenu { onDeviceOpen(false) }
+                }
+            }
+        }
+        if (effort != null) {
+            Box {
+                val effortName = stringResource(R.string.chats_effort)
+                TextButton(
+                    onClick = { onEffortOpen(true) },
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp),
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .semantics(mergeDescendants = true) { contentDescription = effortName; stateDescription = effort }
+                        .then(if (live) Modifier.testTag("newChat.effort") else Modifier),
+                ) {
+                    Icon(Icons.Outlined.Speed, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(16.dp))
+                    // The word gives way after the provider; the gauge stays.
+                    if (fit == PlaceFit.FULL || fit == PlaceFit.NO_PROVIDER) {
+                        Spacer(Modifier.size(6.dp))
+                        Text(effort, color = p.ink, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                    }
+                }
+                if (live) {
+                    androidx.compose.material3.DropdownMenu(expanded = effortOpen, onDismissRequest = { onEffortOpen(false) }, containerColor = p.surface) {
+                        effortMenu { onEffortOpen(false) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** One of Run on's choices in the device half's menu. */
+@Composable
+private fun DeviceItem(
+    label: String,
+    icon: String?,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    detail: String? = null,
+    vector: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    onClick: () -> Unit,
+) {
+    val p = Nekko.palette
+    androidx.compose.material3.DropdownMenuItem(
+        text = {
+            Column {
+                Text(label, color = if (selected) p.accent else p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.inkSoft) }
+            }
+        },
+        leadingIcon = when {
+            computerIconRes(icon) != null -> ({ ComputerIcon(icon) })
+            vector != null -> ({ Icon(vector, contentDescription = null, modifier = Modifier.size(18.dp)) })
+            else -> null
+        },
+        trailingIcon = if (selected) ({ Icon(Icons.Outlined.Check, contentDescription = stringResource(R.string.chats_selected), tint = p.accent, modifier = Modifier.size(18.dp)) }) else null,
+        onClick = onClick,
+        modifier = modifier,
+    )
 }

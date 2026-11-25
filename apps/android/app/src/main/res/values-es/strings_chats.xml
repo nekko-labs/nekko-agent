@@ -168,8 +168,6 @@
     <string name="chats_folder">Carpeta</string>
     <string name="chats_folder_none">Ninguno</string>
     <string name="chats_start_on">Iniciar en %1$s</string>
-    <string name="chats_run_on">Ejecutar en</string>
-    <string name="chats_run_on_note">Un modelo local se ejecuta en el hardware de la propia computadora. Al elegir otra computadora se muestran sus modelos y carpetas.</string>
     <string name="chats_run_on_state">%1$s · %2$s</string>
     <string name="chats_auto">Automático</string>
     <string name="chats_auto_note">Una computadora libre</string>
@@ -274,5 +272,4 @@
     <!-- New chat as a composer (#2459). -->
     <string name="chats_photo_unreadable">No se pudo leer esa imagen.</string>
     <string name="chats_choose_model">Elige un modelo</string>
-    <string name="chats_starts_on">Empieza en %1$s</string>
 </resources>

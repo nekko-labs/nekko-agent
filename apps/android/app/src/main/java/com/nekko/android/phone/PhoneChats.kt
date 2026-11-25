@@ -29,6 +29,11 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
         val signIn: SignIn? = null,
         val signInError: String? = null,
         val signInKind: String? = null,
+        /**
+         * Each provider's request and token budget from its last answer's headers (#2950, the
+         * iPhone's #2923), for the limit line. In memory only: never saved or sent anywhere.
+         */
+        val rateLimits: Map<String, com.nekko.protocol.PhoneRateLimits> = emptyMap(),
     )
     private val mutable = MutableStateFlow(State())
     val state = mutable.asStateFlow()
@@ -241,7 +246,8 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
         operations.remove(providerId)?.toList()?.forEach { it.cancel() }
         modelLoads.remove(providerId)
         mutable.value.chats.filter { it.providerId == providerId }.forEach { stop(it.id) }
-        mutable.update { it.copy(models = it.models - providerId, errors = it.errors - providerId) }
+        // A new key or a removed provider starts with no known budget.
+        mutable.update { it.copy(models = it.models - providerId, errors = it.errors - providerId, rateLimits = it.rateLimits - providerId) }
     }
     suspend fun enabled(providerId: String, on: Boolean) = lock.withLock {
         ready()
@@ -403,7 +409,8 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
                 } ?: return@launch
                 currentCoroutineContext().ensureActive()
                 val parser = PhoneStreamParser(); var complete = false
-                http.send(request) { line ->
+                val providerId = ranOn?.first
+                http.send(request, line = { line ->
                     synchronized(gate) {
                         task.ensureActive()
                         if (!complete) parser.line(line).forEach { event -> if (!complete) when (event) {
@@ -414,7 +421,10 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
                         } }
                         !complete
                     }
-                }
+                }, headers = { answered ->
+                    val limits = com.nekko.protocol.PhoneRateLimits.from(answered, now())
+                    if (providerId != null && limits != null) synchronized(gate) { mutable.update { it.copy(rateLimits = it.rateLimits + (providerId to limits)) } }
+                })
                 synchronized(gate) {
                     task.ensureActive()
                     check(complete) { "The reply ended early. Retry to try again." }

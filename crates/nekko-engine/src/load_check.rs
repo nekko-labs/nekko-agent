@@ -123,6 +123,19 @@ pub fn load_check(model: &Value, engine: &EngineInUse) -> Option<LoadCheck> {
     }
 }
 
+/// Whether the engine in use is new enough for the llama.cpp build this file's
+/// header asks for (`minEngineBuild`): `None` when the file asks for none or the
+/// engine's build cannot be told (nothing installed, or a version that is not a
+/// `b<number>` tag). The row carries it as `engineMeetsMinBuild` because the
+/// verdict names only the weight format when both rules hit a managed engine,
+/// and the Models page offers a stock build of the same repo in place of such a
+/// file: that build is assumed to need the same minimum (same repo, same maker;
+/// PrismML's own card says its Q2_0 needs b11556), so this answers for it too.
+pub fn engine_meets_min_build(model: &Value, engine: &EngineInUse) -> Option<bool> {
+    let needs = model.get("minEngineBuild").and_then(Value::as_u64)?;
+    Some(engine.build()? >= needs)
+}
+
 /// Rule 1: a tensor type llama.cpp does not know.
 fn weight_format(model: &Value, name: &str, engine: &EngineInUse) -> Option<LoadCheck> {
     let raw = model.get("unknownWeightType").filter(|t| !t.is_null())?;

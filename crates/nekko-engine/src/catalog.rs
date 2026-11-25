@@ -4,7 +4,7 @@
 //! `packages/host/src/engine/catalog.ts`, held to it by
 //! `tests/golden/catalog.json`.
 
-use crate::BoxFuture;
+use crate::{BoxFuture, gguf};
 use regress::Regex;
 use serde_json::{Map, Value, json};
 use std::collections::HashMap;
@@ -13,6 +13,8 @@ use std::time::{Duration, Instant};
 
 pub const HF_API: &str = "https://huggingface.co/api";
 const CACHE_TTL: Duration = Duration::from_secs(10 * 60);
+/// How long a header that could not be read is not asked for again.
+const FAILED_READ_TTL: Duration = Duration::from_secs(60);
 const SIDECAR_MAX_BYTES: f64 = 64.0 * 1024.0 * 1024.0;
 
 const QUANT_ORDER: [&str; 20] = [
@@ -76,6 +78,18 @@ pub struct Reply {
 pub trait Fetch: Send + Sync {
     /// `Err` is a network failure (`fetch` throwing).
     fn get(&self, url: String, headers: Vec<(&'static str, String)>) -> BoxFuture<Result<Reply, String>>;
+    /// The status and at most `max` bytes of the body, for reading a file's header.
+    /// The read stops at `max` whatever the server sends, so a server that ignores
+    /// a `range` header never makes it a whole-file download.
+    fn get_bytes(
+        &self,
+        url: String,
+        headers: Vec<(&'static str, String)>,
+        max: usize,
+    ) -> BoxFuture<Result<(u16, Vec<u8>), String>> {
+        let _ = (url, headers, max);
+        Box::pin(async { Err("This fetcher cannot read bytes.".to_string()) })
+    }
 }
 
 /// Hugging Face over HTTPS.
@@ -95,6 +109,31 @@ impl Fetch for HttpFetch {
             Ok(Reply { status, body })
         })
     }
+
+    fn get_bytes(
+        &self,
+        url: String,
+        headers: Vec<(&'static str, String)>,
+        max: usize,
+    ) -> BoxFuture<Result<(u16, Vec<u8>), String>> {
+        let client = self.0.clone();
+        Box::pin(async move {
+            let mut req = client.get(url).timeout(Duration::from_secs(60));
+            for (k, v) in headers {
+                req = req.header(k, v);
+            }
+            let mut res = nekko_net::send("models", req).await.map_err(|e| e.to_string())?;
+            let status = res.status().as_u16();
+            let mut body = Vec::new();
+            while body.len() < max {
+                match res.chunk().await.map_err(|e| e.to_string())? {
+                    Some(chunk) => body.extend_from_slice(&chunk[..chunk.len().min(max - body.len())]),
+                    None => break,
+                }
+            }
+            Ok((status, body))
+        })
+    }
 }
 
 pub struct Catalog {
@@ -102,7 +141,14 @@ pub struct Catalog {
     token: Box<dyn Fn() -> Option<String> + Send + Sync>,
     mlx: Box<dyn Fn() -> bool + Send + Sync>,
     cache: Mutex<HashMap<String, (Instant, Value)>>,
+    /// Each repo's GGUF files and the hash Hugging Face lists for them, as the last tree read had it.
+    oids: Mutex<HashMap<String, HashMap<String, String>>>,
+    /// Where header facts are kept for good, one small file per file hash ([`Catalog::with_header_cache`]).
+    header_cache: Option<std::path::PathBuf>,
 }
+
+/// Bump when the header reader learns something new, so facts kept by an older one are read again.
+const HEADER_FACTS_VERSION: u64 = 1;
 
 /// `encodeURIComponent`.
 pub fn encode_uri_component(s: &str) -> String {
@@ -137,10 +183,11 @@ pub fn strip_front_matter(markdown: &str) -> String {
     }
 }
 
-/// `...-Q4_K_M.gguf` -> `Q4_K_M`, falling back to the bare file name.
-fn quant_label(file: &str) -> String {
+/// `...-Q4_K_M.gguf` -> `Q4_K_M`, falling back to the bare file name. `TQ1_0` and
+/// PrismML's `PTQ1_0` and `PQ2_0` are quants too.
+pub fn quant_label(file: &str) -> String {
     let base = file.rsplit('/').next().unwrap_or(file);
-    let r = regex!(r"[-_.]((?:IQ|Q)\d+[A-Z0-9_]*|BF16|F16|F32|MXFP4[A-Z0-9_]*)\.gguf$", "i");
+    let r = regex!(r"[-_.]((?:IQ|PTQ|PQ|TQ|Q)\d+[A-Z0-9_]*|BF16|F16|F32|MXFP4[A-Z0-9_]*)\.gguf$", "i");
     if let Some(g) = r.find(base).and_then(|m| m.group(1)) {
         return base[g].to_uppercase();
     }
@@ -220,6 +267,24 @@ fn natural(a: &str, b: &str) -> std::cmp::Ordering {
     a.len().cmp(&b.len())
 }
 
+/// A repo's model with each quant's `stock` filled in: whether stock llama.cpp
+/// knows its format ([`crate::gguf::is_stock_quant`]), so an app can offer a
+/// build of the same model the managed engine can run without a list of its
+/// own. Applied where the daemon answers the apps, not inside [`Catalog`], so
+/// the catalog's own output (and its goldens) stay as they were. A repo with
+/// several releases labels a build `v2.1 Q8_0`; its `quant` is the format alone.
+pub fn with_stock(mut model: Value) -> Value {
+    for q in model.get_mut("quants").and_then(Value::as_array_mut).into_iter().flatten() {
+        let mlx = q.get("format").and_then(Value::as_str) == Some("mlx");
+        let format = q.get("quant").or_else(|| q.get("label")).and_then(Value::as_str).unwrap_or_default();
+        let stock = !mlx && crate::gguf::is_stock_quant(format);
+        if let Some(o) = q.as_object_mut() {
+            o.insert("stock".into(), json!(stock));
+        }
+    }
+    model
+}
+
 fn rank(label: &str) -> usize {
     let upper = label.to_uppercase();
     QUANT_ORDER.iter().position(|q| upper.starts_with(q)).unwrap_or(QUANT_ORDER.len())
@@ -296,6 +361,8 @@ struct TreeFile {
     is_dir: bool,
     path: Option<String>,
     size: f64,
+    /// The hash of the content: the LFS oid of a large file, else the git blob id.
+    oid: Option<String>,
 }
 
 fn tree_files(tree: &Value) -> Vec<TreeFile> {
@@ -306,6 +373,7 @@ fn tree_files(tree: &Value) -> Vec<TreeFile> {
                     is_dir: f.get("type").and_then(Value::as_str) == Some("directory"),
                     path: f.get("path").and_then(Value::as_str).map(str::to_string),
                     size: f.get("size").and_then(Value::as_f64).unwrap_or(0.0),
+                    oid: f.pointer("/lfs/oid").or_else(|| f.get("oid")).and_then(Value::as_str).map(str::to_string),
                 })
                 .collect()
         })
@@ -393,7 +461,41 @@ impl Catalog {
         token: Box<dyn Fn() -> Option<String> + Send + Sync>,
         mlx: Box<dyn Fn() -> bool + Send + Sync>,
     ) -> Self {
-        Self { fetch, token, mlx, cache: Mutex::default() }
+        Self { fetch, token, mlx, cache: Mutex::default(), oids: Mutex::default(), header_cache: None }
+    }
+
+    /// Keep what a build's header says in `dir`, one file per Hugging Face file hash (the LFS
+    /// oid, a hash of the content), so a header is downloaded once ever per file content,
+    /// across restarts. Only a successful read is written down.
+    pub fn with_header_cache(mut self, dir: std::path::PathBuf) -> Self {
+        self.header_cache = Some(dir);
+        self
+    }
+
+    fn oid_of(&self, id: &str, file: &str) -> Option<String> {
+        self.oids.lock().unwrap_or_else(|e| e.into_inner()).get(id)?.get(file).cloned()
+    }
+
+    fn facts_path(&self, oid: &str) -> Option<std::path::PathBuf> {
+        // An oid is hex; anything else never becomes a file name.
+        (!oid.is_empty() && oid.bytes().all(|b| b.is_ascii_alphanumeric()))
+            .then(|| self.header_cache.as_ref().map(|d| d.join(format!("{oid}.json"))))
+            .flatten()
+    }
+
+    fn stored_facts(&self, oid: &str) -> Option<Value> {
+        let doc: Value = serde_json::from_slice(&std::fs::read(self.facts_path(oid)?).ok()?).ok()?;
+        (doc.get("version").and_then(Value::as_u64) == Some(HEADER_FACTS_VERSION)).then(|| doc.get("facts").cloned())?
+    }
+
+    fn store_facts(&self, oid: &str, facts: &Value) {
+        let Some(path) = self.facts_path(oid) else { return };
+        let doc = json!({ "version": HEADER_FACTS_VERSION, "facts": facts });
+        let _ = nekko_js::fs::atomic_write(
+            &path,
+            doc.to_string().as_bytes(),
+            nekko_js::fs::AtomicWrite { create_dir: true, ..Default::default() },
+        );
     }
 
     fn headers(&self) -> Vec<(&'static str, String)> {
@@ -402,6 +504,120 @@ impl Catalog {
             h.push(("authorization", format!("Bearer {t}")));
         }
         h
+    }
+
+    /// Bytes `from..to` of a repo file, or `None` when Hugging Face would not give
+    /// them. Asks for just that range; [`Fetch::get_bytes`] stops at its length anyway.
+    /// A server that ignores the range answers 200 from the start of the file, which
+    /// is only what was asked for when `from` is 0.
+    async fn file_range(&self, id: &str, file: &str, from: usize, to: usize) -> Option<Vec<u8>> {
+        let mut headers = self.headers();
+        headers.retain(|(k, _)| *k != "accept");
+        headers.push(("range", format!("bytes={from}-{}", to - 1)));
+        let (status, body) = self.fetch.get_bytes(hf_file_url(id, file), headers, to - from).await.ok()?;
+        (status == 206 || (status == 200 && from == 0)).then_some(body)
+    }
+
+    /// What a repo file's header says that decides whether an engine can run it
+    /// (`unknownWeightType`, `minEngineBuild`), without any request: from this
+    /// session's reads, or from the folder of facts kept for good under the file's hash.
+    pub fn known_facts(&self, id: &str, file: &str) -> Option<Value> {
+        let key = format!("facts:{id}/{file}");
+        if let Some((at, v)) = self.cache.lock().unwrap_or_else(|e| e.into_inner()).get(&key)
+            && !v.is_null()
+            && at.elapsed() < CACHE_TTL
+        {
+            return Some(v.clone());
+        }
+        let facts = self.stored_facts(&self.oid_of(id, file)?)?;
+        self.cache.lock().unwrap_or_else(|e| e.into_inner()).insert(key, (Instant::now(), facts.clone()));
+        Some(facts)
+    }
+
+    /// The same, reading the first few MB of the file when nothing is known. A header is
+    /// downloaded once ever per file content: the result is kept under the file's hash. `None`
+    /// when the header could not be read, which is remembered for a minute and not written down.
+    pub async fn file_facts(&self, id: &str, file: &str) -> Option<Value> {
+        if let Some(known) = self.known_facts(id, file) {
+            return Some(known);
+        }
+        let key = format!("facts:{id}/{file}");
+        if let Some((at, v)) = self.cache.lock().unwrap_or_else(|e| e.into_inner()).get(&key)
+            && v.is_null()
+            && at.elapsed() < FAILED_READ_TTL
+        {
+            return None;
+        }
+        let facts = self.read_file_facts(id, file).await;
+        if let (Some(f), Some(oid)) = (&facts, self.oid_of(id, file)) {
+            self.store_facts(&oid, f);
+        }
+        let remember = facts.clone().unwrap_or(Value::Null);
+        self.cache.lock().unwrap_or_else(|e| e.into_inner()).insert(key, (Instant::now(), remember));
+        facts
+    }
+
+    async fn read_file_facts(&self, id: &str, file: &str) -> Option<Value> {
+        let mut head = self.file_range(id, file, 0, gguf::HEADER_FIRST_READ).await?;
+        let whole = head.len() < gguf::HEADER_FIRST_READ;
+        let meta = match gguf::read_metadata_prefix(&head, whole) {
+            gguf::HeaderRead::Done(meta) => meta,
+            // A big vocabulary pushes the tensor table further in: read on, up to the most a header may take.
+            gguf::HeaderRead::NeedMore => {
+                let rest = self.file_range(id, file, head.len(), gguf::HEADER_MAX_READ).await?;
+                head.extend_from_slice(&rest);
+                match gguf::read_metadata_prefix(&head, true) {
+                    gguf::HeaderRead::Done(meta) => meta,
+                    gguf::HeaderRead::NeedMore => None,
+                }
+            }
+        }?;
+        let mut facts = Map::new();
+        if let Some(t) = meta.unknown_weight_type {
+            facts.insert("unknownWeightType".into(), json!(t));
+        }
+        if let Some(b) = meta.min_engine_build {
+            facts.insert("minEngineBuild".into(), json!(b));
+        }
+        Some(Value::Object(facts))
+    }
+
+    /// What the engine in use makes of each build of a repo whose header has been read,
+    /// as the library rows say it of files on disk ([`crate::load_check`]):
+    /// `{ <file>: loadCheck }` for the builds something is in the way of.
+    ///
+    /// Nothing is fetched to answer this, so opening a repo's page costs nothing: the builds
+    /// whose header is already known (read earlier this session, or kept under the file's
+    /// hash by [`Self::with_header_cache`]) are judged and the rest say nothing, so the page
+    /// keeps its size-based fit for them. `open` names the one build the person opened or is
+    /// about to download: its header is read now (the first 4 MiB, 16 at most; once ever per
+    /// file content) and it is judged too. Each build is judged on its own header, exactly as
+    /// the library judges the file after it is downloaded, so the list and the row agree; a
+    /// build is never judged by another build's header.
+    pub async fn load_checks(&self, id: &str, engine: &crate::load_check::EngineInUse, open: Option<&str>) -> Value {
+        let model = self.model(id).await;
+        let files: Vec<String> = model
+            .get("quants")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter(|q| q.get("format").and_then(Value::as_str) != Some("mlx"))
+            .filter_map(|q| Some(q.get("file")?.as_str()?.to_string()))
+            .collect();
+        if let Some(file) = open.filter(|f| files.iter().any(|x| x == f)) {
+            self.file_facts(id, file).await;
+        }
+        let mut out = Map::new();
+        for file in &files {
+            let Some(facts) = self.known_facts(id, file) else { continue };
+            let mut row = facts.as_object().cloned().unwrap_or_default();
+            let stem = file.rsplit('/').next().unwrap_or(file).trim_end_matches(".gguf").to_string();
+            row.insert("name".into(), json!(stem));
+            if let Some(check) = crate::load_check::load_check(&Value::Object(row), engine) {
+                out.insert(file.clone(), check.to_value());
+            }
+        }
+        Value::Object(out)
     }
 
     async fn get_json(&self, url: String) -> Option<Value> {
@@ -424,6 +640,9 @@ impl Catalog {
             .iter()
             .filter(|f| !f.is_dir && f.path.as_deref().is_some_and(|p| p.to_lowercase().ends_with(".gguf")))
             .collect();
+        let listed: HashMap<String, String> =
+            ggufs.iter().filter_map(|f| Some((f.path.clone()?, f.oid.clone()?))).collect();
+        self.oids.lock().unwrap_or_else(|e| e.into_inner()).insert(id.to_string(), listed);
         let mlx = if (self.mlx)() {
             mlx_quant(id, &tree_value, tags.is_some_and(|t| t.iter().any(|x| x == "mlx")))
         } else {

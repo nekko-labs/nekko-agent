@@ -14,7 +14,7 @@
 use crate::capacity::{self, FitRequest, Hardware, ModelFacts, PlanOptions};
 use crate::folders::{Candidate, companions_dir, companions_key, known_folder};
 use crate::gguf::{self, GgufMetadata};
-use crate::load_check::{EngineInUse, LoadCheck, load_check};
+use crate::load_check::{EngineInUse, LoadCheck, engine_meets_min_build, load_check};
 use crate::num;
 use nekko_tools::nodefs;
 use nekko_tools::path::native as path;
@@ -1154,7 +1154,7 @@ pub fn gpu_fit_for(model: &Value, hw: &Hardware, overhead_floor: Option<f64>) ->
             |v| nekko_js::to_number(Some(v)),
         ),
         parallel_slots: field("parallelSlots").map_or(1.0, |v| nekko_js::to_number(Some(v))),
-        kv_cache_dtype: field("kvCacheDtype").map_or_else(|| "f16".to_string(), nekko_js::display),
+        kv_cache_dtype: crate::launch::effective_kv(preset.unwrap_or(&Value::Null)),
         gpu_layer_fraction: fraction,
     };
     let plan =
@@ -1202,6 +1202,7 @@ pub fn with_load_state(
             let llama = row.get("modality").and_then(Value::as_str) != Some("image")
                 && row.get("format").and_then(Value::as_str) != Some("mlx");
             let check = llama.then(|| load_check(&row, engine)).flatten();
+            let meets_min = llama.then(|| engine_meets_min_build(&row, engine)).flatten();
             let blocked = check.as_ref().is_some_and(LoadCheck::blocked);
             let fit = hw.filter(|_| !blocked).map(|hw| gpu_fit_for(&row, hw, overhead_floor));
             let idle = hw.filter(|_| fit == Some("partial")).and_then(|hw| gpu_fit_idle_for(&row, hw, overhead_floor));
@@ -1216,6 +1217,7 @@ pub fn with_load_state(
             // would fit with the card to itself.
             assign(&mut m, "gpuFitIdle", idle.map(|f| json!(f)));
             assign(&mut m, "loadCheck", check.map(|c| c.to_value()));
+            assign(&mut m, "engineMeetsMinBuild", meets_min.map(Value::Bool));
             Value::Object(m)
         })
         .collect()

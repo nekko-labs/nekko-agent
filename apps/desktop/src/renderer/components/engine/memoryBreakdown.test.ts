@@ -25,7 +25,7 @@ describe('breakdown', () => {
     const parts = breakdown(plan(), { contextTokens: 4 * 32768, parallelSlots: 4, kvCacheDtype: 'q8_0' }, 40);
     expect(parts.map((p) => p.aspect)).toEqual(['weights', 'context', 'working']);
     expect(parts[0].driver).toBe('all 40 layers on the GPU, mapped from the file');
-    expect(parts[1].driver).toBe('4 sessions × 32k, balanced (q8_0)');
+    expect(parts[1].driver).toBe('4 sessions × 32k, standard (q8_0)');
     expect(parts[1].slices).toBe(4);
     expect(sumVram(parts)).toBe(13 * GB);
     expect(sumRam(parts)).toBe(0);
@@ -58,7 +58,9 @@ describe('breakdown', () => {
     expect(weightsLoading({})).toBe('mapped from the file');
     expect(weightsLoading({ mmap: false })).toBe('read into memory');
     expect(weightsLoading({ mlock: true })).toBe('pinned, never paged out');
-    expect(contextDriver({ contextTokens: 8192, kvOnGpu: false })).toBe('1 session of 8k, most reliable (f16), kept in RAM');
+    // No KV type named: the engine's default, q8_0 (#3325).
+    expect(contextDriver({ contextTokens: 8192, kvOnGpu: false })).toBe('1 session of 8k, standard (q8_0), kept in RAM');
+    expect(contextDriver({ contextTokens: 8192, kvCacheDtype: 'f16' })).toBe('1 session of 8k, full (f16)');
   });
 });
 

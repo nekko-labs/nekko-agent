@@ -237,11 +237,16 @@ fn fit_model(preset: Value) -> Value {
 
 #[test]
 fn rates_gpu_fit_on_an_idle_card() {
-    // 11.9 GB card, 8.7 GB free: the 64k default context spills now and on an idle card.
+    // 11.9 GB card, 8.7 GB free: the 64k default context with an f16 cache
+    // spills now and on an idle card.
     let hw = fit_hw(11.9, 8.7, false);
-    let model = fit_model(json!({}));
+    let model = fit_model(json!({ "kvCacheDtype": "f16" }));
     assert_eq!(library::gpu_fit_for(&model, &hw, None), "partial");
     assert_eq!(library::gpu_fit_idle_for(&model, &hw, None), Some("partial"));
+    // The engine's default q8_0 cache (#3325) is half the size: it still
+    // spills beside the other apps, but fits whole once they let go.
+    assert_eq!(library::gpu_fit_for(&fit_model(json!({})), &hw, None), "partial");
+    assert_eq!(library::gpu_fit_idle_for(&fit_model(json!({})), &hw, None), Some("full"));
     // A 16k context spills beside the other apps but fits once they let go.
     let small = fit_model(json!({"contextTokens": 16384}));
     let hw = fit_hw(11.9, 5.0, false);
@@ -366,6 +371,45 @@ fn names_a_model_by_its_file_when_the_header_name_is_generic() {
     assert_eq!(fixed["name"], "Ternary-Bonsai-2-27B-PTQ1_0");
     let saluki = again.iter().find(|r| r["file"].as_str().unwrap().ends_with("IQ2-mix.gguf")).unwrap();
     assert!(saluki.get("sourceRepo").is_none());
+    std::fs::remove_dir_all(dir).ok();
+}
+
+#[test]
+fn a_build_downloaded_from_the_repo_lists_under_the_same_repo_as_the_blocked_file() {
+    // The file in LM Studio's folder, and the Q2_0 the catalog download plan would land: the library must
+    // see one repo for both, which is what puts them in one family on the Models page.
+    let dir = scratch("same-repo");
+    let lm = dir.join("lmstudio");
+    let blocked = lm.join("prism-ml/Ternary-Bonsai-2-27B-gguf/Ternary-Bonsai-2-27B-PTQ1_0.gguf");
+    std::fs::create_dir_all(blocked.parent().unwrap()).unwrap();
+    std::fs::write(&blocked, named_gguf("Hf")).unwrap();
+
+    let models = dir.join("models").to_string_lossy().into_owned();
+    let model = json!({
+        "id": "prism-ml/Ternary-Bonsai-2-27B-gguf", "name": "Ternary Bonsai 2 27B", "tags": ["chat"],
+        "quants": [{ "label": "Q2_0", "file": "Ternary-Bonsai-2-27B-Q2_0.gguf", "sizeBytes": 7.63e9,
+                     "extraFiles": ["Ternary-Bonsai-2-27B-mmproj-Q8_0.gguf"] }],
+    });
+    let plan = nekko_engine::acquire::model_download_plan(
+        &model,
+        "prism-ml/Ternary-Bonsai-2-27B-gguf",
+        "Q2_0",
+        &models,
+        &|_| false,
+    );
+    let dest = PathBuf::from(plan["main"]["dest"].as_str().unwrap());
+    std::fs::create_dir_all(dest.parent().unwrap()).unwrap();
+    std::fs::write(&dest, named_gguf("Hf")).unwrap();
+
+    let folders = vec![json!({ "id": "lm", "path": lm.to_string_lossy(), "provider": "lmstudio", "enabled": true })];
+    let cfg = LibraryConfig { models_dir: models, folders, mlx_runnable: false, now: 1.0 };
+    let rows = library::list(&cfg).unwrap();
+    let repo_of = |end: &str| {
+        let row = rows.iter().find(|r| r["file"].as_str().unwrap().ends_with(end)).unwrap();
+        row["sourceRepo"].clone()
+    };
+    assert_eq!(repo_of("PTQ1_0.gguf"), json!("prism-ml/Ternary-Bonsai-2-27B-gguf"));
+    assert_eq!(repo_of("Q2_0.gguf"), json!("prism-ml/Ternary-Bonsai-2-27B-gguf"));
     std::fs::remove_dir_all(dir).ok();
 }
 

@@ -595,6 +595,7 @@ pub fn gpu_first_preset(model: &Value, hw: Option<&Hardware>, overhead_floor: f6
         parallel_slots: None,
         max_context_tokens: Some(default_context_tokens(model.get("maxContext").and_then(Value::as_f64))),
         options: PlanOptions { overhead_floor: Some(overhead_floor), siblings: Vec::new() },
+        engine_kv: true,
     });
     let verdict = result["plan"]["verdict"].as_str().unwrap_or_default();
     if verdict == "unknown" || verdict == "wont-load" {

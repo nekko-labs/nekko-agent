@@ -1,13 +1,15 @@
 import { ModelDownloadButton } from './ModelDownloadButton.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { CatalogModelDetail, CatalogQuant, EngineMemory, LocalModel } from '@nekko-agent/shared';
+import type { CatalogModelDetail, CatalogQuant, EngineMemory, LocalModel, ModelLoadCheck } from '@nekko-agent/shared';
 import { downloadFitVerdict, modelModality } from '@nekko-agent/shared';
 import { DiffusionInstallCard } from './DiffusionInstallCard.js';
+import { loadCatalogDetail } from './catalogDetails.js';
+import { downloadRefusal, openBuild } from './buildChecks.js';
 import { useStore } from '../../store.js';
 import { Badge, Group } from '../primitives/index.js';
 import { CheckIcon, ChevronIcon, ExternalIcon } from '../../icons.js';
 import { formatBytes, formatCount } from '../runtimes/verdict.js';
-import { gpuGuidance } from './modelFamilies.js';
+import { gpuGuidance, type LibraryModel } from './modelFamilies.js';
 
 /**
  * One model's own page.
@@ -55,8 +57,8 @@ export function ModelDetail({
     let live = true;
     setState('loading');
     setModel(null);
-    window.nekko
-      .engineCatalogDetail(modelId)
+    // Shared with a blocked row's offer of a build that runs (one trip per repo, not two).
+    loadCatalogDetail(modelId)
       .then((m) => {
         if (!live) return;
         setModel(m);
@@ -68,28 +70,41 @@ export function ModelDetail({
     };
   }, [modelId]);
 
-  // The one build to point at when the question is "which of these": Q4_K_M
-  // when the repo publishes it, otherwise the lightest build this machine can
-  // hold, otherwise the lightest build at all.
-  const recommended = useMemo(() => {
-    if (!model) return null;
-    // Releases come newest first, so this is the newest release's Q4_K_M.
-    const q4 = model.quants.find((q) => quantOf(q).toUpperCase().startsWith('Q4_K_M'));
-    if (q4) return q4;
-    const fitting = memory
-      ? model.quants.filter((q) => downloadFitVerdict(q.sizeBytes, memory.budgetBytes) === 'fits')
-      : model.quants;
-    return (
-      fitting
-        .filter((q) => q.sizeBytes)
-        .sort((a, b) => (a.sizeBytes ?? 0) - (b.sizeBytes ?? 0))[0] ?? null
-    );
-  }, [model, memory]);
+  // What the engine in use makes of each build, as the library rows say it of files on
+  // disk: a fork's format it cannot run, or a file that needs a newer engine. Opening the
+  // page reads no header: it shows what is already known, and until a build has been read
+  // the size-based fit stands. A build is read when it is opened (a click on its row) or
+  // when Download is pressed, once ever per file content.
+  const [checks, setChecks] = useState<Record<string, ModelLoadCheck>>({});
+  const asked = useRef(new Set<string>());
+  useEffect(() => {
+    let live = true;
+    setChecks({});
+    asked.current = new Set();
+    if (state !== 'ready') return;
+    window.nekko.engineCatalogChecks?.(modelId).then((c) => live && setChecks(c ?? {})).catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [modelId, state]);
+  const checksRef = useRef(checks);
+  checksRef.current = checks;
+  const readBuild = async (file: string) => {
+    const next = await openBuild(modelId, file, checksRef.current, asked.current);
+    checksRef.current = next;
+    setChecks(next);
+    return next[file];
+  };
+
+  const recommended = useMemo(() => (model ? recommendedBuild(model.quants, memory, checks) : null), [model, memory, checks]);
 
   const prepareDownload = async (quant: CatalogQuant) => {
     if (preparing.current) return false;
     preparing.current = true;
     try {
+      // Read this build's header first: a build the engine in use cannot run is not downloaded.
+      const refusal = downloadRefusal(await readBuild(quant.file));
+      if (refusal) { pushToast('error', refusal); return false; }
       if (!recommendRuntime && modelModality({ name: `${model?.name} ${modelId} ${model?.pipelineTag ?? ''} ${quant.file}` }) === 'image') {
         const current = await refreshImageRuntime();
         if (!current?.binPath) { setRecommendRuntime(true); return false; }
@@ -173,9 +188,10 @@ export function ModelDetail({
               {quants.map((q) => {
                 const have = installed.find((m) => isInstalledBuild(m, q, variant !== undefined));
                 const fit = memory ? downloadFitVerdict(q.sizeBytes, memory.budgetBytes) : 'unknown';
+                const check = checks[q.file];
                 const isPick = recommended?.label === q.label;
                 return (
-                  <div key={q.label} className="flex flex-wrap items-center gap-2 py-2 text-xs">
+                  <div key={q.label} className="flex flex-wrap items-center gap-2 py-2 text-xs" onClick={() => { if (!have) void readBuild(q.file); }} title={have ? undefined : 'Click to check that this build runs on your engine'}>
                     <span className="w-24 shrink-0 font-mono font-medium" title={q.file}>{quantOf(q)}</span>
                     <span className="w-20 shrink-0 tabular-nums text-ink-faint">
                       {q.sizeBytes ? formatBytes(q.sizeBytes) : 'size unknown'}
@@ -190,7 +206,17 @@ export function ModelDetail({
                         our pick
                       </span>
                     )}
-                    {fit !== 'unknown' && !have && (
+                    {check && !have && (
+                      <span
+                        className="shrink-0 rounded-full px-2 py-0.5 text-2xs"
+                        style={{ background: 'color-mix(in srgb, var(--warning) 16%, transparent)', color: 'var(--warning)' }}
+                        title={check.reason}
+                        data-build-check={check.level}
+                      >
+                        {buildCheckLabel(check, q.sizeBytes, memory)}
+                      </span>
+                    )}
+                    {!check && fit !== 'unknown' && !have && (
                       <span
                         className="shrink-0 rounded-full px-2 py-0.5 text-2xs"
                         style={{
@@ -567,4 +593,24 @@ export function isInstalledBuild(m: LocalModel, q: CatalogQuant, releases: boole
     return m.path === file || m.path.endsWith(`/${file}`) || m.path.endsWith(`\\${file}`);
   }
   return m.quantization?.toUpperCase() === q.label.toUpperCase();
+}
+
+/**
+ * The one build to point at when the question is "which of these": Q4_K_M when the
+ * repo publishes it (releases come newest first, so the newest release's), otherwise
+ * the lightest build this machine can hold, otherwise the lightest build at all. A
+ * build whose format the engine cannot run (`checks`) is never the pick; one that only
+ * needs a newer engine still is, since Update fixes that.
+ */
+export function recommendedBuild(quants: CatalogQuant[], memory: EngineMemory | undefined, checks: Record<string, ModelLoadCheck>): CatalogQuant | null {
+  const runnable = quants.filter((q) => !(checks[q.file]?.level === 'blocked' && checks[q.file]?.cause !== 'engineAge'));
+  const q4 = runnable.find((q) => quantOf(q).toUpperCase().startsWith('Q4_K_M'));
+  if (q4) return q4;
+  const fitting = memory ? runnable.filter((q) => downloadFitVerdict(q.sizeBytes, memory.budgetBytes) === 'fits') : runnable;
+  return fitting.filter((q) => q.sizeBytes).sort((a, b) => (a.sizeBytes ?? 0) - (b.sizeBytes ?? 0))[0] ?? null;
+}
+
+/** A build's chip when the engine has a word about it, in the library rows' own words. */
+export function buildCheckLabel(check: ModelLoadCheck, sizeBytes: number | undefined, memory: EngineMemory | undefined): string {
+  return check.level === 'blocked' ? gpuGuidance(sizeBytes, memory, { loadCheck: check } as LibraryModel) : 'May not run here';
 }
