@@ -50,7 +50,9 @@ enum class DenyReason(val wire: String) {
     UNKNOWN_DEVICE("unknown-device"), REVOKED("revoked"), BAD_CODE("bad-code"), INVALID("invalid"),
     KICKED("kicked"), BAD_KEY("bad-key"),
     /** The computer's owner turned off phones that speak an older protocol than it does. */
-    UPDATE_REQUIRED("update-required");
+    UPDATE_REQUIRED("update-required"),
+    /** The computer only lets this phone in through another route (its per-device route choice, #3243). */
+    ROUTE("route");
 
     companion object {
         fun parse(s: String?) = entries.firstOrNull { it.wire == s } ?: INVALID
@@ -444,8 +446,13 @@ class RelayClient(
         if (!isReady()) throw RelayException(if (state == RelayState.DENIED) deniedMessage() else "Not connected.")
     }
 
-    private fun deniedMessage() =
-        if (_status.value.denied == DenyReason.UPDATE_REQUIRED) UPDATE_MESSAGE else "This phone is no longer paired."
+    private fun deniedMessage() = deniedText(_status.value.denied)
+
+    private fun deniedText(reason: DenyReason?) = when (reason) {
+        DenyReason.UPDATE_REQUIRED -> UPDATE_MESSAGE
+        DenyReason.ROUTE -> "This computer only lets this phone in through another route."
+        else -> "This phone is no longer paired."
+    }
 
     private fun isReady() = synchronized(lock) { welcomed && conn != null }
 
@@ -767,6 +774,22 @@ class RelayClient(
     }
 
     private fun deny(reason: DenyReason) {
+        if (reason == DenyReason.ROUTE) {
+            // This route is refused, not the phone: try the next route this phone may dial.
+            var old: WsConnection? = null
+            val moved = synchronized(lock) {
+                if (stopped) return
+                val m = routes.refused(now())
+                if (m) { old = conn; conn = null; retryJob?.cancel(); retryJob = null }
+                m
+            }
+            if (moved) {
+                runCatching { old?.close(1000, "route refused") }
+                failPending("connection lost")
+                dial("route refused")
+                return
+            }
+        }
         val c: WsConnection?
         synchronized(lock) {
             endHandshakeLocked()
@@ -776,7 +799,7 @@ class RelayClient(
             stopProbesLocked()
             c = conn; conn = null
         }
-        failPending(if (reason == DenyReason.UPDATE_REQUIRED) UPDATE_MESSAGE else "This phone is no longer paired.")
+        failPending(deniedText(reason))
         runCatching { c?.close(1000, "denied") }
         setStatus(RelayStatus(RelayState.DENIED, reason.wire, reason))
     }

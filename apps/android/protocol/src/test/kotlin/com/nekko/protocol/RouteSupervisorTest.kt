@@ -148,4 +148,25 @@ class RouteSupervisorTest {
         assertNull(HealthProber.healthUrl("ws://relay.example.com:4400"))
         assertNull(HealthProber.healthUrl("WS://8.8.8.8:4400"))
     }
+
+    @Test fun `a refused route is left for good and none left says so`() {
+        val sup = s(lan, tailnet)
+        assertEquals(lan, sup.url)
+        assertTrue(sup.refused(t0))
+        assertEquals(tailnet, sup.url)
+        assertFalse(sup.refused(t0 + 1))
+    }
+
+    @Test fun `route choice keeps the kinds it names, and all when none match`() {
+        val all = listOf(tailnet, lan, hosted)
+        assertEquals(all, RouteChoice.AUTO.filter(all))
+        assertEquals(listOf(tailnet, lan), RouteChoice.DIRECT.filter(all))
+        assertEquals(listOf(hosted), RouteChoice.CLOUD.filter(all))
+        assertEquals(listOf(tailnet), RouteChoice.CLOUD.filter(listOf(tailnet)))
+        assertEquals(listOf(hosted), RouteChoice.DIRECT.filter(listOf(hosted)))
+        assertEquals(RouteChoice.AUTO, RouteChoice.parse(null))
+        assertEquals(RouteChoice.CLOUD, RouteChoice.parse("cloud"))
+        assertEquals(RouteChoice.DIRECT, RouteChoice.of(tailscale = true, cloud = false))
+        assertEquals(RouteChoice.AUTO, RouteChoice.of(tailscale = true, cloud = true))
+    }
 }
