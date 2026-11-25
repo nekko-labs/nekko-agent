@@ -475,7 +475,9 @@ export function modelModality(model: {
   hasProjector?: boolean;
   readable?: boolean;
 }): ModelModality {
-  const arch = model.architecture ?? '';
+  // An architecture is a short GGUF key; capping it, as the name is below,
+  // keeps VISION_ARCHS linear however long a header's string is.
+  const arch = (model.architecture ?? '').slice(0, 256);
   if (arch) {
     if (IMAGE_GEN_ARCHS.test(arch)) return 'image';
     if (AUDIO_ARCHS.test(arch)) return 'audio';
@@ -536,6 +538,36 @@ export function unsupportedLoadReason(model: {
   }
 }
 
+/**
+ * What the engine in use makes of a model (the engine's `load_check`): the
+ * verdict that depends on which llama.cpp this is, as the model server's load
+ * gate gives it. `blocked` is refused on every path that loads (the button,
+ * loads on start, the phone, the CLI); `warning` is let through, and llama.cpp
+ * has the last word. Apps show it and never work it out themselves.
+ */
+export interface ModelLoadCheck {
+  level: 'blocked' | 'warning';
+  /** Which rule found it: no engine update helps a weight format; one does help an engine too old for the file. */
+  cause?: 'weightFormat' | 'engineAge';
+  reason: string;
+}
+
+/** Blocked only because the engine is older than the file needs: updating the engine fixes it. */
+export function needsNewerEngine(model: { loadCheck?: ModelLoadCheck }): boolean {
+  return model.loadCheck?.level === 'blocked' && model.loadCheck.cause === 'engineAge';
+}
+
+/**
+ * Why this model cannot be loaded here, from either source: what no engine can
+ * do (`unsupportedLoadReason`) or what the engine in use cannot (a `blocked`
+ * `loadCheck`). Undefined when it can be loaded, with or without a warning.
+ */
+export function cannotLoadReason(
+  model: Parameters<typeof unsupportedLoadReason>[0] & { loadCheck?: ModelLoadCheck },
+): string | undefined {
+  return unsupportedLoadReason(model) ?? (model.loadCheck?.level === 'blocked' ? model.loadCheck.reason : undefined);
+}
+
 /** A model on disk (a GGUF file, or an MLX model folder), with whatever it told us. */
 export interface LocalModel {
   /** `<owner>/<repo>/<file>` for a downloaded model; the file name for an imported one. */
@@ -557,6 +589,19 @@ export interface LocalModel {
   readable?: boolean;
   /** A vision model's projector was found beside the weights or in the companions dir. */
   hasProjector?: boolean;
+  /**
+   * A tensor type past llama.cpp's own (a fork's format, such as PrismML's 1-bit
+   * type 143), from the header. Stock llama.cpp refuses such a file; `loadCheck`
+   * is what the engine in use makes of it.
+   */
+  unknownWeightType?: number;
+  /** The oldest llama.cpp build that reads this file correctly, from header keys it carries. */
+  minEngineBuild?: number;
+  /**
+   * What the engine in use makes of this file, when anything: filled in by the
+   * server with each listing, since it depends on the engine, not the file.
+   */
+  loadCheck?: ModelLoadCheck;
   /**
    * The last load attempt's reason for failing, kept until a load succeeds.
    * Runtime state, filled in by the server rather than stored in the index.
