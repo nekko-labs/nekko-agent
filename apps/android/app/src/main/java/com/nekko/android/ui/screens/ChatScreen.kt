@@ -15,6 +15,7 @@ import com.nekko.android.lock.AppLock
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import com.nekko.android.ui.chat.AttachUi
@@ -329,6 +330,11 @@ private fun ChatScreenContent(
     }
     val editInNewChat = stringResource(R.string.chats_edit_in_new_chat)
     val forkFromHere = stringResource(R.string.chats_fork_from_here)
+    // An armed watch's chip is re-read every 15 s while the chat is on screen, not in the background.
+    val screenLifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(vm, screenLifecycle) {
+        screenLifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) { vm.pollWatches() }
+    }
     // Fork the chat from a saved message: a prompt goes back into the new chat's box, a reply keeps
     // everything up to the next prompt. Streaming blocks aren't saved yet, so they offer Copy only.
     val forkAction: (Block) -> ForkAction? = { block ->

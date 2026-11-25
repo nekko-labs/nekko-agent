@@ -462,11 +462,66 @@ fn subscribe_request(args: &[Value]) -> Option<(Vec<Arc<str>>, bool)> {
     }
 }
 
+/// The most reply bytes one socket may have queued for its writer. A call's
+/// reply (a whole chat, with its pictures) can be tens of megabytes, and the
+/// writer is blocked for up to [`SEND_LIMIT`] on a client that stopped
+/// reading; until it gives up every call that finishes queues another. A reply
+/// that would go past this while others wait drops the socket, as a send past
+/// [`SEND_LIMIT`] does (the client reconnects and asks again). A lone reply is
+/// always queued, however large.
+const MAX_QUEUED_BYTES: usize = 64 * 1024 * 1024;
+/// Each queued reply also counts this much, so thousands of small ones are bounded too.
+const REPLY_OVERHEAD: usize = 512;
+
+/// A socket's queue of replies for its writer, bounded by [`MAX_QUEUED_BYTES`].
+#[derive(Clone)]
+struct Outbox {
+    tx: mpsc::UnboundedSender<Out>,
+    queued: Arc<std::sync::atomic::AtomicUsize>,
+    /// Told when a reply did not fit: the socket is dropped.
+    full: Arc<tokio::sync::Notify>,
+}
+
+impl Outbox {
+    fn new() -> (Self, mpsc::UnboundedReceiver<Out>) {
+        let (tx, rx) = mpsc::unbounded_channel();
+        (Self { tx, queued: Arc::default(), full: Arc::default() }, rx)
+    }
+
+    /// Queue `out`; false (and the socket is told to go) when the writer is
+    /// too far behind to take it.
+    fn send(&self, out: Out) -> bool {
+        use std::sync::atomic::Ordering::SeqCst;
+        let weight = out.weight();
+        let before = self.queued.fetch_add(weight, SeqCst);
+        if before > 0 && before + weight > MAX_QUEUED_BYTES {
+            self.queued.fetch_sub(weight, SeqCst);
+            self.full.notify_one();
+            return false;
+        }
+        self.tx.send(out).is_ok()
+    }
+
+    /// The writer took `out` off the queue.
+    fn taken(&self, out: &Out) {
+        self.queued.fetch_sub(out.weight(), std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
 enum Out {
     Reply(String),
     /// A `daemon:subscribe` request: applied by the writer, in order with the
     /// events, then answered.
     Subscribe(Value, Vec<Arc<str>>, bool),
+}
+
+impl Out {
+    fn weight(&self) -> usize {
+        match self {
+            Out::Reply(text) => text.len() + REPLY_OVERHEAD,
+            Out::Subscribe(..) => REPLY_OVERHEAD,
+        }
+    }
 }
 
 /// This computer's next event, or another computer's.
@@ -482,7 +537,8 @@ async fn next_event(
 
 async fn rpc_socket(socket: WebSocket, app: App, term_data: bool, mut subs: Subscription) {
     let (mut sink, mut stream) = socket.split();
-    let (out_tx, mut out_rx) = mpsc::unbounded_channel::<Out>();
+    let (out_tx, mut out_rx) = Outbox::new();
+    let writer_box = out_tx.clone();
     let mut events = app.ctx.hub.subscribe();
     let mut remote = app.ctx.hub.subscribe_remote();
     let hub = app.ctx.hub.clone();
@@ -494,7 +550,7 @@ async fn rpc_socket(socket: WebSocket, app: App, term_data: bool, mut subs: Subs
             tokio::select! {
                 // Replies first: a caller waiting on a result beats a busy event stream.
                 biased;
-                reply = out_rx.recv() => match reply {
+                reply = out_rx.recv() => match reply.inspect(|out| writer_box.taken(out)) {
                     Some(Out::Reply(text)) => if !send_text(&mut sink, text.into()).await { break },
                     Some(Out::Subscribe(id, ids, all)) => {
                         // Narrowing a socket that took every chat: the turns it
@@ -529,7 +585,13 @@ async fn rpc_socket(socket: WebSocket, app: App, term_data: bool, mut subs: Subs
         }
     });
 
-    while let Some(Ok(msg)) = stream.next().await {
+    let full = out_tx.full.clone();
+    loop {
+        let msg = tokio::select! {
+            msg = stream.next() => match msg { Some(Ok(msg)) => msg, _ => break },
+            // Replies piled up behind a client that is not reading: drop it, it reconnects.
+            _ = full.notified() => break,
+        };
         let text = match msg {
             Message::Text(t) => t,
             Message::Close(_) => break,
@@ -546,18 +608,18 @@ async fn rpc_socket(socket: WebSocket, app: App, term_data: bool, mut subs: Subs
             _ => Vec::new(),
         };
         if channel == PING {
-            let _ = out_tx.send(Out::Reply(json!({ "id": id, "result": true }).to_string()));
+            out_tx.send(Out::Reply(json!({ "id": id, "result": true }).to_string()));
             continue;
         }
         if channel == SUBSCRIBE {
             match subscribe_request(&args) {
                 Some((ids, all)) => {
-                    let _ = out_tx.send(Out::Subscribe(id, ids, all));
+                    out_tx.send(Out::Subscribe(id, ids, all));
                 }
                 None => {
                     let error =
                         json!({ "id": id, "error": "daemon:subscribe takes a list of chat ids, or null for all" });
-                    let _ = out_tx.send(Out::Reply(error.to_string()));
+                    out_tx.send(Out::Reply(error.to_string()));
                 }
             }
             continue;
@@ -571,7 +633,7 @@ async fn rpc_socket(socket: WebSocket, app: App, term_data: bool, mut subs: Subs
                 Ok(result) => json!({ "id": id, "result": result }),
                 Err(error) => json!({ "id": id, "error": error }),
             };
-            let _ = tx.send(Out::Reply(reply.to_string()));
+            tx.send(Out::Reply(reply.to_string()));
         });
     }
     drop(out_tx);
@@ -674,6 +736,28 @@ async fn term_socket(socket: WebSocket, app: App, id: String) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn a_socket_whose_writer_stopped_taking_replies_is_dropped_past_the_byte_bound() {
+        let (outbox, mut rx) = Outbox::new();
+        let reply = |n: usize| Out::Reply("x".repeat(n));
+        // A lone reply is queued however large; the writer taking it frees its bytes.
+        assert!(outbox.send(reply(MAX_QUEUED_BYTES * 2)));
+        outbox.taken(&rx.recv().await.unwrap());
+        // Replies queue up to the bound, then the next one is refused and the socket told to go.
+        assert!(outbox.send(reply(MAX_QUEUED_BYTES / 2)));
+        assert!(outbox.send(reply(MAX_QUEUED_BYTES / 4)));
+        assert!(!outbox.send(reply(MAX_QUEUED_BYTES / 2)));
+        tokio::time::timeout(std::time::Duration::from_secs(1), outbox.full.notified()).await.unwrap();
+        // What was queued is still delivered in order; once the writer catches up, replies fit again.
+        for _ in 0..2 {
+            outbox.taken(&rx.recv().await.unwrap());
+        }
+        assert!(outbox.send(reply(10)));
+        // Small replies count too, so thousands of them cannot grow without end.
+        let sent = (0..MAX_QUEUED_BYTES / REPLY_OVERHEAD + 8).filter(|_| outbox.send(reply(0))).count();
+        assert!(sent <= MAX_QUEUED_BYTES / REPLY_OVERHEAD, "{sent}");
+    }
 
     #[test]
     fn token_comparison_is_exact() {

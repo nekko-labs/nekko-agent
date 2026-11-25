@@ -1,5 +1,5 @@
 import { useDownloadAction } from './useDownloadAction.js';
-import { DownloadProgress } from './DownloadProgress.js';
+import { EngineUpdateStatus } from './EngineUpdateStatus.js';
 import { useEffect, useState } from 'react';
 import type { EngineInstall, EngineInstallPreview } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
@@ -52,8 +52,8 @@ export function DiffusionInstallCard({ install, onChanged }: { install?: EngineI
         <button className="btn btn-outline py-1 text-xs" disabled={checking || busy || download.active} onClick={() => void check()}>{checking ? 'Checking…' : 'Check version and size'}</button>
         {preview && <button className="btn btn-primary py-1 text-xs" disabled={busy || download.active} onClick={() => void act(false)}>{download.active ? 'Downloading…' : busy ? 'Starting…' : 'Install image generation runtime'}</button>}
       </div>
-      {download.active && <DownloadProgress group={download.group} />}
       {error && <p role="alert" className="mt-2 text-xs text-ink-soft">{error}</p>}
     </>}
+    <EngineUpdateStatus download={download} onChanged={onChanged} />
   </div>;
 }

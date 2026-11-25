@@ -599,6 +599,8 @@ export interface LocalModel {
   format?: 'gguf' | 'mlx';
   /** For an MLX model: whether this machine can run it (Apple Silicon). */
   mlxRunnable?: boolean;
+  /** Cache payload per token for a supported dense MLX config, not total runtime memory. */
+  mlxKvBytesPerToken?: number;
   sizeBytes: number;
   quantization?: string;
   parameterSize?: string;

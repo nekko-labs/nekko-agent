@@ -351,12 +351,16 @@ class ChatViewModel(
                 .distinctUntilChanged()
                 .collect { (watch, agent, _) -> if (watch || agent) refreshAgentState() }
         }
-        // While a watch is armed, its chip is re-read every 15 s (the desktop's cadence).
-        viewModelScope.launch {
-            while (true) {
-                delay(15_000)
-                if (_watches.value.any { it.status == AgentWatch.Status.ACTIVE }) refreshAgentState()
-            }
+    }
+
+    /**
+     * While a watch is armed, its chip is re-read every 15 s (the desktop's cadence). Run it under
+     * `repeatOnLifecycle(STARTED)` so it stops while the chat is not on screen.
+     */
+    suspend fun pollWatches(everyMs: Long = 15_000): Nothing {
+        while (true) {
+            delay(everyMs)
+            if (_watches.value.any { it.status == AgentWatch.Status.ACTIVE }) refreshAgentState()
         }
     }
 

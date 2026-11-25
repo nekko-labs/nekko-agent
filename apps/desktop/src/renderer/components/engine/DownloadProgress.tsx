@@ -2,7 +2,7 @@ import './downloadProgress.css';
 import type { DownloadGroup } from './downloadGroups.js';
 
 /** Native progress is indeterminate until the host knows every file's size. */
-export function DownloadProgress({ group }: { group?: DownloadGroup }) {
+export function DownloadProgress({ group }: { group?: Pick<DownloadGroup, 'jobs' | 'receivedBytes' | 'totalBytes'> }) {
   const percent = group?.totalBytes && Number.isFinite(group.receivedBytes)
     ? Math.max(0, Math.min(100, Math.round(group.receivedBytes / group.totalBytes * 100))) : undefined;
   const label = group?.jobs.some(j => j.state === 'verifying') && !group.jobs.some(j => j.state === 'downloading' || j.state === 'queued')

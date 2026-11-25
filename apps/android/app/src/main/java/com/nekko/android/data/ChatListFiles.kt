@@ -1,6 +1,8 @@
 package com.nekko.android.data
 
 import android.content.Context
+import com.nekko.protocol.BackgroundIO
+import com.nekko.protocol.CoalescedWriter
 import com.nekko.protocol.SavedChatList
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -10,6 +12,8 @@ interface ChatListCache {
     fun load(computerId: String): SavedChatList?
     fun save(computerId: String, list: SavedChatList)
     fun remove(computerId: String)
+    /** Hand any write still waiting to the background queue now (the app is going to the background). */
+    fun flush() {}
 }
 
 /**
@@ -17,13 +21,32 @@ interface ChatListCache {
  * in Auto Backup or device-to-device transfer, private to the app and encrypted
  * by the system's file-based encryption.
  */
-class ChatListFiles(context: Context) : ChatListCache {
+class ChatListFiles(context: Context, private val io: BackgroundIO? = null) : ChatListCache {
     private val dir = File(context.noBackupFilesDir, "chat-lists")
 
-    override fun load(computerId: String): SavedChatList? =
-        runCatching { SavedChatList.from(Json.parseToJsonElement(file(computerId).readText())) }.getOrNull()
+    /** The newest list per computer waits here a moment, so a burst of refreshes is one write on the background queue (#3413). */
+    private val writer = CoalescedWriter<SavedChatList>(io) { id, list -> write(id, list) }
 
-    override fun save(computerId: String, list: SavedChatList) {
+    override fun load(computerId: String): SavedChatList? =
+        writer.pending(computerId)
+            ?: runCatching { SavedChatList.from(Json.parseToJsonElement(file(computerId).readText())) }.getOrNull()
+
+    override fun save(computerId: String, list: SavedChatList) = writer.submit(computerId, list)
+
+    override fun flush() = writer.flushNow()
+
+    override fun remove(computerId: String) {
+        writer.cancel(computerId)
+        inOrder { file(computerId).delete() }
+    }
+
+    /** The setting was turned off, or the last computer forgotten: nothing stays behind. */
+    fun removeAll() {
+        writer.cancelAll()
+        inOrder { dir.deleteRecursively() }
+    }
+
+    private fun write(computerId: String, list: SavedChatList) {
         runCatching {
             dir.mkdirs()
             val tmp = File(dir, "${name(computerId)}.tmp")
@@ -32,14 +55,8 @@ class ChatListFiles(context: Context) : ChatListCache {
         }
     }
 
-    override fun remove(computerId: String) {
-        file(computerId).delete()
-    }
-
-    /** The setting was turned off, or the last computer forgotten: nothing stays behind. */
-    fun removeAll() {
-        dir.deleteRecursively()
-    }
+    /** After the writes asked for before it, so a removal never overtakes one. */
+    private fun inOrder(work: () -> Unit) = if (io == null) work() else io.run(work)
 
     private fun file(computerId: String) = File(dir, "${name(computerId)}.json")
 
