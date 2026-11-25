@@ -76,7 +76,7 @@ For loopback testing, generate design tokens with the website build, then start 
   account sign-in alone is insufficient. `GET` lists this account's encrypted
   descriptors and 90-second presence leases; `PUT /self` publishes only the
   caller's computer with `{keyId, revision, descriptor}`; `POST /self/heartbeat`
-  renews its lease; `DELETE /self` withdraws it. Publishing/heartbeats need
+  renews its lease (held in memory, `src/presence.ts`; the database's last-seen is written when the computer comes online and hourly); `DELETE /self` withdraws it. Publishing/heartbeats need
   Pro/Enterprise; reads and withdrawal remain available after downgrade. Descriptors
   are capped at 16 KiB, with at most 100 retained advertisements per account.
   Sign-out, expiry, revocation and key rotation invalidate discovery. Desktop
