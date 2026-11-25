@@ -127,9 +127,10 @@ object ReplyTopics {
      * Each block's voice, by its place in its turn: text with more of the turn
      * after it is a note or a message for the reader; the turn's last text is
      * the reply once the turn is over. [running] says the newest turn is live,
-     * so its last text has no voice yet.
+     * so its last text has no voice yet. [midTurn] says a note's voice, so a caller can keep the
+     * answer for text it has seen (the topic scan is a regex pass over each message).
      */
-    fun voices(blocks: List<Block>, running: Boolean = false): List<Voice?> {
+    fun voices(blocks: List<Block>, running: Boolean = false, midTurn: (String) -> Voice = ::midTurnVoice): List<Voice?> {
         val out = MutableList<Voice?>(blocks.size) { null }
         val users = blocks.indices.filter { blocks[it] is Block.User }
         for ((a, b) in (listOf(-1) + users + blocks.size).zipWithNext()) {
@@ -138,7 +139,7 @@ object ReplyTopics {
                 val block = blocks[i] as? Block.Assistant ?: continue
                 if (block.text.isBlank()) continue
                 out[i] = when {
-                    i < b - 1 -> midTurnVoice(block.text)
+                    i < b - 1 -> midTurn(block.text)
                     block.streaming || !worked || (running && b == blocks.size) -> null
                     else -> Voice.REPLY
                 }
