@@ -51,6 +51,13 @@ export function bytes(value: unknown, min: number, max = min): Buffer | null {
 export const isPositiveInt = (v: unknown, max = Number.MAX_SAFE_INTEGER): v is number =>
   typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= max;
 
+/**
+ * base64url of a stored blob without copying it first. pg hands back a Buffer; PGlite (the tests)
+ * a plain Uint8Array, which is viewed, not copied, as one.
+ */
+export const b64url = (b: Uint8Array): string =>
+  (Buffer.isBuffer(b) ? b : Buffer.from(b.buffer, b.byteOffset, b.byteLength)).toString("base64url");
+
 interface ObjectRow {
   collection: string;
   object_id: string;
@@ -65,7 +72,7 @@ const wire = (r: ObjectRow) => ({
   objectId: r.object_id,
   revision: Number(r.revision),
   keyId: r.key_id,
-  blob: Buffer.from(r.blob).toString("base64url"),
+  blob: b64url(r.blob),
   seq: Number(r.seq),
 });
 
@@ -119,6 +126,14 @@ export async function currentKeyId(db: Db, userId: string): Promise<number | nul
   const { rows } = await db.query<{ k: number | null }>("select max(key_id) as k from sync_keyrings where user_id = $1", [userId]);
   return rows[0]?.k ?? null;
 }
+
+/**
+ * What a transactional route answers, decided inside the transaction and sent after it
+ * commits (or rolled back): a client never gets a 2xx for work that then fails to commit.
+ */
+export interface Answer { code: number; body?: unknown }
+export const answer = (code: number, body?: unknown): Answer => ({ code, body });
+export const sendAnswer = (reply: FastifyReply, a: Answer) => (a.body === undefined ? reply.code(a.code).send() : reply.code(a.code).send(a.body));
 
 export function registerSync(app: FastifyInstance, db: Db): void {
   /** Callers a route's preParsing hook already vouched for, so its handler does not look them up again. */
@@ -185,7 +200,7 @@ export function registerSync(app: FastifyInstance, db: Db): void {
       if (caller.deviceId) {
         const { rows } = await tx.query<{ public_key: Buffer }>("select public_key from sync_devices where id = $1", [caller.deviceId]);
         if (!rows[0] || !Buffer.from(rows[0].public_key).equals(publicKey)) {
-          return reply.code(409).send({ error: "token-has-device", deviceId: caller.deviceId });
+          return answer(409, { error: "token-has-device", deviceId: caller.deviceId });
         }
       }
       const { rows } = await tx.query<{ id: string; revoked_at: Date | null }>(
@@ -195,10 +210,10 @@ export function registerSync(app: FastifyInstance, db: Db): void {
         [caller.userId, publicKey, label, joinTag],
       );
       // A revoked key stays revoked: a device comes back only with a new key.
-      if (rows[0].revoked_at) return reply.code(403).send({ error: "device-revoked" });
+      if (rows[0].revoked_at) return answer(403, { error: "device-revoked" });
       await tx.query("update api_tokens set device_id = $1 where id = $2", [rows[0].id, caller.tokenId]);
-      return reply.code(caller.deviceId ? 200 : 201).send({ deviceId: rows[0].id });
-    });
+      return answer(caller.deviceId ? 200 : 201, { deviceId: rows[0].id });
+    }).then((a) => sendAnswer(reply, a));
   });
 
   // Revoking a device revokes its tokens and drops its wraps. The devices
@@ -222,15 +237,15 @@ export function registerSync(app: FastifyInstance, db: Db): void {
         "update sync_devices set revoked_at = coalesce(revoked_at, now()) where id = $1 and user_id = $2 returning id",
         [id, caller.userId],
       );
-      if (!rows.length) return reply.code(404).send({ error: "not-found" });
+      if (!rows.length) return answer(404, { error: "not-found" });
       await tx.query("update api_tokens set revoked_at = coalesce(revoked_at, now()) where device_id = $1", [id]);
       await tx.query("delete from sync_key_wraps where device_id = $1", [id]);
       // A revoked device key cannot enroll again; its advertisement no longer
       // needs a revision guard, and must not consume fleet capacity forever.
       await tx.query("delete from fleet_computers where device_id = $1 and user_id = $2", [id, caller.userId]);
       await tx.query("delete from org_fleet_computers where device_id = $1 and user_id = $2", [id, caller.userId]);
-      return reply.code(204).send();
-    });
+      return answer(204);
+    }).then((a) => sendAnswer(reply, a));
   });
 
   // A new key epoch: the keyring wrapped to the recovery key and to devices.
@@ -254,13 +269,13 @@ export function registerSync(app: FastifyInstance, db: Db): void {
     return db.transaction(async (tx) => {
       await tx.query("select pg_advisory_xact_lock(hashtext($1))", [`sync:${caller.userId}`]);
       const current = (await currentKeyId(tx, caller.userId)) ?? 0;
-      if (keyId !== current + 1) return reply.code(409).send({ error: "key-epoch", currentKeyId: current || null });
+      if (keyId !== current + 1) return answer(409, { error: "key-epoch", currentKeyId: current || null });
       // The first epoch comes from a registered device that wraps it to itself;
       // every later one only from a device that holds the current one.
       const allowed = current === 0
         ? !!caller.deviceId && parsed.some((w) => w.deviceId === caller.deviceId)
         : await keyed(tx, caller, current);
-      if (!allowed) return reply.code(403).send({ error: "needs-synced-device" });
+      if (!allowed) return answer(403, { error: "needs-synced-device" });
       await tx.query("insert into sync_keyrings (user_id, key_id, recovery_wrap, proof_hash) values ($1, $2, $3, $4)", [
         caller.userId,
         keyId,
@@ -273,11 +288,11 @@ export function registerSync(app: FastifyInstance, db: Db): void {
         const ok = (await insertWrap(tx, caller.userId, keyId, w.deviceId, w.wrap)) === "ok";
         if (!ok) throw Object.assign(new Error("unknown device"), { statusCode: 400 });
       }
-      return reply.code(201).send({ keyId });
+      return answer(201, { keyId });
     }).catch((e: { statusCode?: number; message: string }) => {
-      if (e.statusCode === 400) return reply.code(400).send({ error: "unknown-device" });
+      if (e.statusCode === 400) return answer(400, { error: "unknown-device" });
       throw e;
-    });
+    }).then((a) => sendAnswer(reply, a));
   });
 
   // A device that holds the current epoch adds a wrap for one it approved,
@@ -298,16 +313,16 @@ export function registerSync(app: FastifyInstance, db: Db): void {
     return db.transaction(async (tx) => {
       await tx.query("select pg_advisory_xact_lock(hashtext($1))", [`sync:${caller.userId}`]);
       const current = await currentKeyId(tx, caller.userId);
-      if (current === null || keyId > current) return reply.code(404).send({ error: "not-found" });
-      if (keyId !== current) return reply.code(409).send({ error: "key-epoch", currentKeyId: current });
+      if (current === null || keyId > current) return answer(404, { error: "not-found" });
+      if (keyId !== current) return answer(409, { error: "key-epoch", currentKeyId: current });
       const proven = !!proof && (await proofMatches(tx, caller.userId, keyId, proof));
-      if (!proven && !(await keyed(tx, caller, keyId))) return reply.code(403).send({ error: "needs-synced-device" });
+      if (!proven && !(await keyed(tx, caller, keyId))) return answer(403, { error: "needs-synced-device" });
       const result = await insertWrap(tx, caller.userId, keyId, deviceId, wrap);
-      if (result === "unknown-device") return reply.code(400).send({ error: "unknown-device" });
-      if (result === "exists") return reply.code(409).send({ error: "wrap-exists" });
+      if (result === "unknown-device") return answer(400, { error: "unknown-device" });
+      if (result === "exists") return answer(409, { error: "wrap-exists" });
       if (proven) await markProven(tx, caller, keyId);
-      return reply.code(204).send();
-    });
+      return answer(204);
+    }).then((a) => sendAnswer(reply, a));
   });
 
   // A token shows it holds the current epoch's keyring (after joining,
@@ -321,12 +336,12 @@ export function registerSync(app: FastifyInstance, db: Db): void {
     return db.transaction(async (tx) => {
       await tx.query("select pg_advisory_xact_lock(hashtext($1))", [`sync:${caller.userId}`]);
       const current = await currentKeyId(tx, caller.userId);
-      if (current === null || keyId > current) return reply.code(404).send({ error: "not-found" });
-      if (keyId !== current) return reply.code(409).send({ error: "key-epoch", currentKeyId: current });
-      if (!(await proofMatches(tx, caller.userId, keyId, proof))) return reply.code(403).send({ error: "bad-proof" });
+      if (current === null || keyId > current) return answer(404, { error: "not-found" });
+      if (keyId !== current) return answer(409, { error: "key-epoch", currentKeyId: current });
+      if (!(await proofMatches(tx, caller.userId, keyId, proof))) return answer(403, { error: "bad-proof" });
       await markProven(tx, caller, keyId);
-      return reply.code(204).send();
-    });
+      return answer(204);
+    }).then((a) => sendAnswer(reply, a));
   });
 
   app.get("/v1/sync/keyrings/:keyId", async (req, reply) => {
@@ -343,8 +358,8 @@ export function registerSync(app: FastifyInstance, db: Db): void {
     if (!rows.length) return reply.code(404).send({ error: "not-found" });
     return {
       keyId,
-      recoveryWrap: Buffer.from(rows[0].recovery_wrap).toString("base64url"),
-      wrap: rows[0].wrap ? Buffer.from(rows[0].wrap).toString("base64url") : null,
+      recoveryWrap: b64url(rows[0].recovery_wrap),
+      wrap: rows[0].wrap ? b64url(rows[0].wrap) : null,
     };
   });
 
@@ -383,43 +398,7 @@ export function registerSync(app: FastifyInstance, db: Db): void {
       if (keyId === null || !(await keyed(tx, caller, keyId))) {
         throw Object.assign(new Error("needs-synced-device"), { statusCode: 403 });
       }
-      const results: Record<string, unknown>[] = [];
-      let delta = 0;
-      for (const o of parsed) {
-        if (o.keyId !== keyId) {
-          results.push({ objectId: o.objectId, status: "stale-key", currentKeyId: keyId });
-          continue;
-        }
-        const { rows } = await tx.query<{ revision: string; size: number; key_id: number }>(
-          "select revision, octet_length(blob) as size, key_id from sync_objects where user_id = $1 and collection = $2 and object_id = $3",
-          [caller.userId, o.collection, o.objectId],
-        );
-        const have = rows[0] ? Number(rows[0].revision) : 0;
-        if (o.revision !== have + 1) {
-          results.push({ objectId: o.objectId, status: "conflict", revision: have });
-          continue;
-        }
-        // A Library file's replaced revision is kept for HISTORY_DAYS (and still counts toward storage).
-        const kept = o.collection === LIBRARY_COLLECTION && !!rows[0];
-        if (kept) {
-          await tx.query(
-            `insert into sync_object_history (user_id, collection, object_id, revision, key_id, blob)
-             select user_id, collection, object_id, revision, key_id, blob from sync_objects
-              where user_id = $1 and collection = $2 and object_id = $3
-             on conflict do nothing`,
-            [caller.userId, o.collection, o.objectId],
-          );
-        }
-        await tx.query(
-          `insert into sync_objects (user_id, collection, object_id, revision, key_id, blob) values ($1, $2, $3, $4, $5, $6)
-           on conflict (user_id, collection, object_id) do update set
-             revision = excluded.revision, key_id = excluded.key_id, blob = excluded.blob,
-             seq = nextval('sync_change_seq'), updated_at = now()`,
-          [caller.userId, o.collection, o.objectId, o.revision, o.keyId, o.blob],
-        );
-        delta += o.blob.length - (kept ? 0 : rows[0]?.size ?? 0);
-        results.push({ objectId: o.objectId, status: "ok", revision: o.revision });
-      }
+      const { results, delta } = await writeObjects(tx, caller.userId, keyId, parsed);
       const { rows: usage } = await tx.query<{ bytes: string }>(
         `insert into sync_usage (user_id, bytes) values ($1, greatest($2::bigint, 0))
          on conflict (user_id) do update set bytes = greatest(sync_usage.bytes + $2::bigint, 0)
@@ -527,7 +506,7 @@ export function registerSync(app: FastifyInstance, db: Db): void {
     );
     ensureClient(req);
     if (!rows[0]) return reply.code(404).send({ error: "not-found" });
-    return { collection, objectId, revision: rev, keyId: rows[0].key_id, blob: Buffer.from(rows[0].blob).toString("base64url") };
+    return { collection, objectId, revision: rev, keyId: rows[0].key_id, blob: b64url(rows[0].blob) };
   });
 
   // Delete everything synced: objects, keyrings, wraps and devices. The
@@ -555,6 +534,151 @@ export function registerSync(app: FastifyInstance, db: Db): void {
     });
     return reply.code(204).send();
   });
+}
+
+interface PushObject { collection: string; objectId: string; revision: number; keyId: number; blob: Buffer }
+/** Blobs up to this size are written many to a statement; bigger ones one by one (an array parameter of blobs is sent as hex text, twice their size). */
+const BATCH_BLOB_BYTES = 256 * 1024;
+/** Most bytes of blobs one batched statement carries. */
+const BATCH_STATEMENT_BYTES = 1024 * 1024;
+
+const objectKey = (collection: string, objectId: string) => `${collection}\u0000${objectId}`;
+
+/**
+ * Apply a push's objects under the epoch's lock: each one's revision must be exactly one past
+ * what is stored. One select reads the stored revisions and sizes of all of them, the replaced
+ * Library revisions go to history in one insert, and the writes go many to a statement
+ * (`unnest`), so 200 objects cost a handful of round trips instead of up to 600. Results keep
+ * the request's order, and sequence numbers follow it. A push naming the same object twice
+ * takes the one-at-a-time path, where the second sees the first.
+ */
+async function writeObjects(tx: Db, userId: string, keyId: number, parsed: PushObject[]): Promise<{ results: Record<string, unknown>[]; delta: number }> {
+  const results: Record<string, unknown>[] = new Array(parsed.length);
+  const live: number[] = [];
+  parsed.forEach((o, i) => {
+    if (o.keyId !== keyId) results[i] = { objectId: o.objectId, status: "stale-key", currentKeyId: keyId };
+    else live.push(i);
+  });
+  if (!live.length) return { results, delta: 0 };
+  const keys = new Set(live.map((i) => objectKey(parsed[i].collection, parsed[i].objectId)));
+  const sequential = keys.size !== live.length;
+
+  // What is stored for these objects.
+  const stored = new Map<string, { revision: number; size: number }>();
+  const readStored = async (list: PushObject[]) => {
+    const { rows } = await tx.query<{ collection: string; object_id: string; revision: string; size: number }>(
+      `select o.collection, o.object_id, o.revision, octet_length(o.blob) as size
+         from sync_objects o join unnest($2::text[], $3::text[]) as c(collection, object_id)
+           on o.collection = c.collection and o.object_id = c.object_id
+        where o.user_id = $1`,
+      [userId, list.map((o) => o.collection), list.map((o) => o.objectId)],
+    );
+    for (const r of rows) stored.set(objectKey(r.collection, r.object_id), { revision: Number(r.revision), size: Number(r.size) });
+  };
+  let delta = 0;
+
+  if (sequential) {
+    for (const i of live) {
+      const o = parsed[i];
+      stored.clear();
+      await readStored([o]);
+      delta += await writeOne(tx, userId, o, stored.get(objectKey(o.collection, o.objectId)), results, i);
+    }
+    return { results, delta };
+  }
+
+  await readStored(live.map((i) => parsed[i]));
+  const ok: number[] = [];
+  for (const i of live) {
+    const o = parsed[i];
+    const have = stored.get(objectKey(o.collection, o.objectId));
+    if (o.revision !== (have?.revision ?? 0) + 1) {
+      results[i] = { objectId: o.objectId, status: "conflict", revision: have?.revision ?? 0 };
+      continue;
+    }
+    ok.push(i);
+    // A Library file's replaced revision is kept for HISTORY_DAYS (and still counts toward storage).
+    const kept = o.collection === LIBRARY_COLLECTION && !!have;
+    delta += o.blob.length - (kept ? 0 : have?.size ?? 0);
+    results[i] = { objectId: o.objectId, status: "ok", revision: o.revision };
+  }
+
+  // Replaced Library revisions, kept as history.
+  const history = ok.map((i) => parsed[i]).filter((o) => o.collection === LIBRARY_COLLECTION && stored.has(objectKey(o.collection, o.objectId)));
+  if (history.length) {
+    await tx.query(
+      `insert into sync_object_history (user_id, collection, object_id, revision, key_id, blob)
+       select o.user_id, o.collection, o.object_id, o.revision, o.key_id, o.blob
+         from sync_objects o join unnest($2::text[], $3::text[]) as c(collection, object_id)
+           on o.collection = c.collection and o.object_id = c.object_id
+        where o.user_id = $1
+       on conflict do nothing`,
+      [userId, history.map((o) => o.collection), history.map((o) => o.objectId)],
+    );
+  }
+
+  // The writes: small blobs together (in request order, so sequence numbers follow it), big ones alone.
+  let batch: PushObject[] = [];
+  let batchBytes = 0;
+  const flush = async () => {
+    if (!batch.length) return;
+    await tx.query(
+      `insert into sync_objects (user_id, collection, object_id, revision, key_id, blob)
+       select $1, c.collection, c.object_id, c.revision, c.key_id, c.blob
+         from unnest($2::text[], $3::text[], $4::bigint[], $5::int[], $6::bytea[]) with ordinality as c(collection, object_id, revision, key_id, blob, ord)
+        order by c.ord
+       on conflict (user_id, collection, object_id) do update set
+         revision = excluded.revision, key_id = excluded.key_id, blob = excluded.blob,
+         seq = nextval('sync_change_seq'), updated_at = now()`,
+      [userId, batch.map((o) => o.collection), batch.map((o) => o.objectId), batch.map((o) => o.revision), batch.map((o) => o.keyId), batch.map((o) => o.blob)],
+    );
+    batch = [];
+    batchBytes = 0;
+  };
+  for (const i of ok) {
+    const o = parsed[i];
+    if (o.blob.length > BATCH_BLOB_BYTES) {
+      await flush();
+      await upsertOne(tx, userId, o);
+      continue;
+    }
+    if (batchBytes + o.blob.length > BATCH_STATEMENT_BYTES) await flush();
+    batch.push(o);
+    batchBytes += o.blob.length;
+  }
+  await flush();
+  return { results, delta };
+}
+
+async function upsertOne(tx: Db, userId: string, o: PushObject): Promise<void> {
+  await tx.query(
+    `insert into sync_objects (user_id, collection, object_id, revision, key_id, blob) values ($1, $2, $3, $4, $5, $6)
+     on conflict (user_id, collection, object_id) do update set
+       revision = excluded.revision, key_id = excluded.key_id, blob = excluded.blob,
+       seq = nextval('sync_change_seq'), updated_at = now()`,
+    [userId, o.collection, o.objectId, o.revision, o.keyId, o.blob],
+  );
+}
+
+/** One object, for a push that names the same object more than once. Returns its change in stored bytes. */
+async function writeOne(tx: Db, userId: string, o: PushObject, have: { revision: number; size: number } | undefined, results: Record<string, unknown>[], at: number): Promise<number> {
+  if (o.revision !== (have?.revision ?? 0) + 1) {
+    results[at] = { objectId: o.objectId, status: "conflict", revision: have?.revision ?? 0 };
+    return 0;
+  }
+  const kept = o.collection === LIBRARY_COLLECTION && !!have;
+  if (kept) {
+    await tx.query(
+      `insert into sync_object_history (user_id, collection, object_id, revision, key_id, blob)
+       select user_id, collection, object_id, revision, key_id, blob from sync_objects
+        where user_id = $1 and collection = $2 and object_id = $3
+       on conflict do nothing`,
+      [userId, o.collection, o.objectId],
+    );
+  }
+  await upsertOne(tx, userId, o);
+  results[at] = { objectId: o.objectId, status: "ok", revision: o.revision };
+  return o.blob.length - (kept ? 0 : have?.size ?? 0);
 }
 
 /** Bytes the account's shared files and their kept versions hold; they count toward the same storage. */
