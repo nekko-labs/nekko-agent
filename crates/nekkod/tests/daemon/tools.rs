@@ -967,7 +967,10 @@ async fn classifies_commands_and_lists_tools_without_the_host() {
     let _ = std::fs::remove_dir_all(&data);
     std::fs::create_dir_all(&data).unwrap();
     let d = start_with(&data);
-    let (status, decision) = post(d.port, "guardrails:classify", json!(["rm -rf /"]), Some(TOKEN)).await;
+    // The endpoint classifies for the host's shell: cmd on Windows, where `rm`
+    // is not a delete, so its drive wipe is `rmdir /s` of a drive root.
+    let wipe = if cfg!(windows) { r"rmdir /s /q C:\" } else { "rm -rf /" };
+    let (status, decision) = post(d.port, "guardrails:classify", json!([wipe]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{decision}");
     assert_eq!(decision["action"], "deny", "{decision}");
     let matches = decision["matches"].as_array().unwrap();
