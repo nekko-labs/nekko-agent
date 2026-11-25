@@ -49,6 +49,14 @@ export interface HypergateInfo {
   agent?: string;
 }
 
+/** The Connectors page's Hypergate check: on this computer, and up? */
+export interface HypergateCheck {
+  /** A `hypergate` CLI was found, or a daemon answered. */
+  installed: boolean;
+  /** The running daemon, or null when nothing answered. */
+  info: HypergateInfo | null;
+}
+
 /** Live connection status for an MCP server. */
 export interface McpServerStatus {
   id: string;

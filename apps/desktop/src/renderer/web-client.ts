@@ -856,6 +856,8 @@ function makeWebClient(): NekkoApi {
     getMcpStatus: () => call(IpcChannels.mcpStatus),
     detectHypergate: (port) => call(IpcChannels.mcpHypergate, port),
     connectHypergate: (port) => call(IpcChannels.mcpHypergateConnect, port),
+    checkHypergate: (port) => call(IpcChannels.mcpHypergateCheck, port),
+    startHypergate: (port) => call(IpcChannels.mcpHypergateStart, port),
     registerPushToken: (token, platform) => registerPush(token, platform),
     checkForUpdates: async () => {
       const info = (await call(IpcChannels.appInfo)) as AppInfo;
