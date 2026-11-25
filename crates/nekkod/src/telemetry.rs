@@ -18,7 +18,9 @@
 //!   which could echo a prompt.
 //!
 //! Never chat text, prompts, file contents, folder names, model output or
-//! account names. PostHog is told not to look up the IP's location and not to
+//! account names. The one account-derived fact: an engine signed in to Nekko
+//! Cloud with a Nekko team account marks its events `internal: true`, so the
+//! team's own use can be filtered out ([`mark_internal`]). PostHog is told not to look up the IP's location and not to
 //! build a person profile. Everything goes through Settings > Connections as
 //! `telemetry`, so All connections off stops it and its log shows every send.
 
@@ -71,6 +73,9 @@ const EVENTS: &[(&str, &[&str])] = &[
     ("screen_viewed", &["screen"]),
     ("click", &["screen", "control"]),
     ("feature_used", &["feature"]),
+    // The Send feedback sheet opened, and which way in (`rail`, `palette`,
+    // `about`, `menu`, `tray`, `link`). Never what the note says.
+    ("feedback_opened", &["source"]),
     ("error", &["source", "message", "stack"]),
 ];
 
@@ -83,6 +88,9 @@ struct State {
     install_id: String,
     facts: Map<String, Value>,
     queue: Vec<Value>,
+    /// Signed in to Nekko Cloud with a team account (decision 0092): every
+    /// event sent carries `internal: true`.
+    internal: bool,
 }
 
 fn cell() -> &'static Mutex<State> {
@@ -232,6 +240,22 @@ pub fn hardware(profile: &Value) -> Value {
     })
 }
 
+/// Whether this engine is signed in to Nekko Cloud with a team account.
+pub fn set_internal(on: bool) {
+    state().internal = on;
+}
+
+/// Mark each event as the Nekko team's own use (`internal: true`), so the
+/// PostHog project's internal-user filter leaves it out. Nobody else's
+/// reports carry the property.
+fn mark_internal(batch: &mut [Value]) {
+    for ev in batch {
+        if let Some(p) = ev["properties"].as_object_mut() {
+            p.insert("internal".into(), json!(true));
+        }
+    }
+}
+
 /// Send what is queued. Kept for the next try when the send fails.
 async fn flush() {
     let key = key();
@@ -240,7 +264,11 @@ async fn flush() {
         if !s.enabled || key.is_empty() || s.queue.is_empty() {
             return;
         }
-        std::mem::take(&mut s.queue)
+        let mut batch = std::mem::take(&mut s.queue);
+        if s.internal {
+            mark_internal(&mut batch);
+        }
+        batch
     };
     let client = reqwest::Client::builder().timeout(Duration::from_secs(20)).build().unwrap_or_default();
     let rb = client.post(format!("{}/batch/", host())).json(&json!({ "api_key": key, "batch": batch }));
@@ -299,7 +327,10 @@ pub fn start(ctx: Ctx) {
                     if changed.is_err() { break }
                     configure(&changes.borrow_and_update());
                 }
-                _ = tick.tick() => flush().await,
+                _ = tick.tick() => {
+                    set_internal(ctx.cloud.is_staff());
+                    flush().await
+                }
             }
         }
     });
@@ -410,11 +441,26 @@ mod tests {
         assert_eq!(e["properties"]["message"], "Error: boom");
         assert_eq!(e["properties"]["stack"], "f (b.js:1:2)");
 
+        capture("feedback_opened", &json!({ "source": "rail", "message": "my note" }));
+        let f = state().queue.pop().unwrap();
+        assert_eq!(f["event"], "feedback_opened");
+        assert_eq!(f["properties"]["source"], "rail");
+        assert!(f["properties"].get("message").is_none(), "only the way in, never the note");
+
         for _ in 0..QUEUE_MAX + 10 {
             capture("feature_used", &json!({ "feature": "x" }));
         }
         assert_eq!(state().queue.len(), QUEUE_MAX);
         configure(&json!({ "telemetry": { "enabled": false, "installId": "i-1" } }));
         assert!(state().queue.is_empty(), "turning it off forgets what was queued");
+    }
+
+    #[test]
+    fn team_events_are_marked_internal_and_nobody_elses_are() {
+        let ev = |props: Value| json!({ "event": "click", "distinct_id": "i-1", "properties": props });
+        let mut batch = vec![ev(json!({ "screen": "chat" })), ev(json!({}))];
+        mark_internal(&mut batch);
+        assert!(batch.iter().all(|e| e["properties"]["internal"] == true));
+        assert_eq!(batch[0]["properties"]["screen"], "chat");
     }
 }

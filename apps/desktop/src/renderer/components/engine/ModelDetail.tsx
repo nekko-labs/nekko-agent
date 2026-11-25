@@ -4,7 +4,7 @@ import type { CatalogModelDetail, CatalogQuant, EngineMemory, LocalModel } from 
 import { downloadFitVerdict, modelModality } from '@nekko-agent/shared';
 import { DiffusionInstallCard } from './DiffusionInstallCard.js';
 import { useStore } from '../../store.js';
-import { Badge } from '../primitives/index.js';
+import { Badge, Group } from '../primitives/index.js';
 import { CheckIcon, ChevronIcon, ExternalIcon } from '../../icons.js';
 import { formatBytes, formatCount } from '../runtimes/verdict.js';
 import { gpuGuidance } from './modelFamilies.js';
@@ -73,7 +73,8 @@ export function ModelDetail({
   // hold, otherwise the lightest build at all.
   const recommended = useMemo(() => {
     if (!model) return null;
-    const q4 = model.quants.find((q) => q.label.toUpperCase().startsWith('Q4_K_M'));
+    // Releases come newest first, so this is the newest release's Q4_K_M.
+    const q4 = model.quants.find((q) => quantOf(q).toUpperCase().startsWith('Q4_K_M'));
     if (q4) return q4;
     const fitting = memory
       ? model.quants.filter((q) => downloadFitVerdict(q.sizeBytes, memory.budgetBytes) === 'fits')
@@ -161,14 +162,21 @@ export function ModelDetail({
               little worse; higher numbers keep more of the model and cost disk and RAM. <strong>Q4_K_M</strong> is the
               usual choice{recommended ? ', marked below' : ''}.
             </p>
-            <div className="card mt-2 divide-y" style={{ borderColor: 'var(--line)' }}>
-              {model.quants.map((q) => {
-                const have = installed.find((m) => m.quantization?.toUpperCase() === q.label.toUpperCase());
+            {releasesOf(model.quants).map(({ variant, quants }) => (
+            <Group
+              key={variant ?? ''}
+              as="div"
+              className="mt-2"
+              title={variant === undefined ? undefined : variant || 'Original'}
+              meta={variant === undefined ? undefined : `${quants.length} build${quants.length === 1 ? '' : 's'}`}
+            >
+              {quants.map((q) => {
+                const have = installed.find((m) => isInstalledBuild(m, q, variant !== undefined));
                 const fit = memory ? downloadFitVerdict(q.sizeBytes, memory.budgetBytes) : 'unknown';
                 const isPick = recommended?.label === q.label;
                 return (
-                  <div key={q.label} className="flex flex-wrap items-center gap-2 px-4 py-2 text-xs">
-                    <span className="w-24 shrink-0 font-mono font-medium">{q.label}</span>
+                  <div key={q.label} className="flex flex-wrap items-center gap-2 py-2 text-xs">
+                    <span className="w-24 shrink-0 font-mono font-medium" title={q.file}>{quantOf(q)}</span>
                     <span className="w-20 shrink-0 tabular-nums text-ink-faint">
                       {q.sizeBytes ? formatBytes(q.sizeBytes) : 'size unknown'}
                     </span>
@@ -213,7 +221,8 @@ export function ModelDetail({
                   </div>
                 );
               })}
-            </div>
+            </Group>
+            ))}
           </section>
 
           <section className="mt-5">
@@ -526,4 +535,36 @@ function ago(ms: number): string {
   const months = Math.round(days / 30);
   if (months < 18) return `${months}mo ago`;
   return `${Math.round(days / 365)}y ago`;
+}
+
+/** The quantization alone (`Q8_0`), without the release a label may carry. */
+function quantOf(q: CatalogQuant): string {
+  return q.quant ?? q.label;
+}
+
+/**
+ * A repo's builds by release, in catalog order (newest release first). A repo
+ * with one release is one unnamed group (`variant` undefined); the release
+ * without a marker in its file names is `''`.
+ */
+export function releasesOf(quants: CatalogQuant[]): { variant?: string; quants: CatalogQuant[] }[] {
+  if (!quants.some((q) => q.variant)) return [{ quants }];
+  const groups = new Map<string, CatalogQuant[]>();
+  for (const q of quants) {
+    const key = q.variant ?? '';
+    groups.set(key, [...(groups.get(key) ?? []), q]);
+  }
+  return [...groups].map(([variant, qs]) => ({ variant, quants: qs }));
+}
+
+/**
+ * Whether a library model is this build. In a repo of several releases the
+ * builds share quantizations, so they are told apart by file name.
+ */
+export function isInstalledBuild(m: LocalModel, q: CatalogQuant, releases: boolean): boolean {
+  if (releases) {
+    const file = q.file.split('/').pop() ?? q.file;
+    return m.path === file || m.path.endsWith(`/${file}`) || m.path.endsWith(`\\${file}`);
+  }
+  return m.quantization?.toUpperCase() === q.label.toUpperCase();
 }

@@ -192,7 +192,7 @@
      "gpuLayerFraction": 1
     }
    ],
-   "out": "{\"deviceName\":\"RTX 5090\",\"deviceTotalBytes\":34190917632,\"deviceFreeBytes\":32093765632,\"totalLayers\":28,\"verdict\":\"spills\",\"weightsBytes\":2000000000,\"kvCacheBytes\":45097156608,\"overheadBytes\":385875968,\"requiredBytes\":47483032576,\"spillBytes\":15389266944,\"reasons\":[{\"code\":\"kv-cache-dominates\",\"bytes\":45097156608,\"sharePct\":95},{\"code\":\"partial-offload\",\"bytes\":15389266944,\"sharePct\":32.4}],\"suggestions\":[{\"label\":\"Drop context to 64k to fit\",\"savesBytes\":22548578304,\"apply\":{\"contextTokens\":65536}},{\"label\":\"Cut parallel slots to 1 to save 21.0 GB\",\"savesBytes\":22548578304,\"apply\":{\"parallelSlots\":1}}],\"gpuLayers\":0}",
+   "out": "{\"deviceName\":\"RTX 5090\",\"deviceTotalBytes\":34190917632,\"deviceFreeBytes\":32093765632,\"totalLayers\":28,\"verdict\":\"wont-load\",\"weightsBytes\":2000000000,\"kvCacheBytes\":47915728896,\"overheadBytes\":385875968,\"requiredBytes\":50301604864,\"spillBytes\":18207839232,\"reasons\":[{\"code\":\"kv-cache-dominates\",\"bytes\":47915728896,\"sharePct\":95.3},{\"code\":\"exceeds-total-memory\",\"bytes\":50301604864}],\"suggestions\":[{\"label\":\"Drop context to 64k to fit\",\"savesBytes\":23957864448,\"apply\":{\"contextTokens\":65536}},{\"label\":\"Cut parallel slots to 1 to save 22.3 GB\",\"savesBytes\":23957864448,\"apply\":{\"parallelSlots\":1}}],\"gpuLayers\":0}",
    "requests": [
     "GET http://127.0.0.1:11434/api/ps ",
     "GET http://127.0.0.1:11434/api/tags ",
@@ -223,7 +223,7 @@
     0.5,
     2
    ],
-   "out": "{\"request\":{\"contextTokens\":32768,\"parallelSlots\":2,\"kvCacheDtype\":\"q8_0\",\"gpuLayerFraction\":1},\"plan\":{\"deviceName\":\"RTX 5090\",\"deviceTotalBytes\":34190917632,\"deviceFreeBytes\":16046882816,\"totalLayers\":36,\"verdict\":\"fits\",\"weightsBytes\":6000000000,\"kvCacheBytes\":4831838208,\"overheadBytes\":419430400,\"requiredBytes\":11251268608,\"spillBytes\":0,\"reasons\":[{\"code\":\"kv-cache-dominates\",\"bytes\":4831838208,\"sharePct\":42.9}],\"suggestions\":[],\"gpuLayers\":36},\"headline\":\"32k of context, entirely on the GPU.\",\"tradeoff\":\"About 10.5 GB of VRAM, leaving 19.4 GB for everything else.\",\"compromises\":[\"Used a smaller KV cache element (q8_0) to keep this much context.\"]}",
+   "out": "{\"request\":{\"contextTokens\":32768,\"parallelSlots\":2,\"kvCacheDtype\":\"q8_0\",\"gpuLayerFraction\":1},\"plan\":{\"deviceName\":\"RTX 5090\",\"deviceTotalBytes\":34190917632,\"deviceFreeBytes\":16046882816,\"totalLayers\":36,\"verdict\":\"fits\",\"weightsBytes\":6000000000,\"kvCacheBytes\":5133828096,\"overheadBytes\":419430400,\"requiredBytes\":11553258496,\"spillBytes\":0,\"reasons\":[{\"code\":\"kv-cache-dominates\",\"bytes\":5133828096,\"sharePct\":44.4}],\"suggestions\":[],\"gpuLayers\":36},\"headline\":\"32k of context, entirely on the GPU.\",\"tradeoff\":\"About 10.8 GB of VRAM, leaving 19.1 GB for everything else.\",\"compromises\":[\"Used a smaller KV cache element (q8_0) to keep this much context.\"]}",
    "requests": [
     "GET http://127.0.0.1:11434/api/ps ",
     "GET http://127.0.0.1:11434/api/tags ",

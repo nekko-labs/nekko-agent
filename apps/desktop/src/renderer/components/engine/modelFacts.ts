@@ -1,4 +1,4 @@
-import { modelModality, unsupportedLoadReason, type LocalModel, type ModelModality } from '@nekko-agent/shared';
+import { cannotLoadReason, modelModality, needsNewerEngine, type LocalModel, type ModelModality } from '@nekko-agent/shared';
 import { formatBytes, formatTokens } from '../runtimes/verdict.js';
 
 /**
@@ -39,17 +39,28 @@ export function localTypeLabel(model: LocalModel): string {
 /** What is wrong with a model on disk, worst first, or null when nothing is. */
 export type ModelProblem = { text: string; tone: 'danger' | 'warning'; detail: string };
 
-export function modelProblem(m: Pick<LocalModel, 'lastLoadError' | 'modality' | 'hasProjector' | 'readable' | 'format' | 'mlxRunnable' | 'name'> & { loaded?: boolean }): ModelProblem | null {
+export function modelProblem(m: Pick<LocalModel, 'lastLoadError' | 'modality' | 'hasProjector' | 'readable' | 'format' | 'mlxRunnable' | 'name' | 'loadCheck'> & { loaded?: boolean }): ModelProblem | null {
   if (m.lastLoadError && !m.loaded) return { text: 'Last load failed', tone: 'danger', detail: m.lastLoadError };
-  const unsupported = m.modality === 'image' ? undefined : unsupportedLoadReason(m as LocalModel);
-  if (unsupported) return { text: "Can't run here", tone: 'warning', detail: unsupported };
+  const unsupported = m.modality === 'image' ? undefined : cannotLoadReason(m as LocalModel);
+  // An engine too old for the file is fixed by a newer engine, so it says that rather than "Can't run here".
+  if (unsupported) return { text: unsupported === m.loadCheck?.reason && needsNewerEngine(m) ? 'Needs a newer engine' : "Can't run here", tone: 'warning', detail: unsupported };
+  // The engine in use may still try it, and llama.cpp's own error shows if it cannot.
+  if (m.loadCheck?.level === 'warning') return { text: 'May not run here', tone: 'warning', detail: m.loadCheck.reason };
   if (m.modality === 'vision' && !m.hasProjector) return { text: 'No projector', tone: 'warning', detail: 'Its projector (mmproj-*.gguf) is missing: it answers text but cannot see images.' };
   return null;
 }
 
 /** The worst problem among a family's files, so the list row can wear it instead of a check. */
 export function familyProblem(local: Array<Parameters<typeof modelProblem>[0]>): ModelProblem | null {
-  const all = local.map(modelProblem).filter((p): p is ModelProblem => !!p);
+  // A file that cannot run only speaks for the family when none of its other files can either:
+  // a family with one build the engine refuses and one it runs is not "Can't run here". With none
+  // that run, one an engine update would fix speaks first.
+  const refusal = (m: (typeof local)[number]) => (m.modality === 'image' ? undefined : cannotLoadReason(m as LocalModel));
+  const blocked = (m: (typeof local)[number]) => !!refusal(m);
+  const fixable = (m: (typeof local)[number]) => refusal(m) === m.loadCheck?.reason && needsNewerEngine(m);
+  const runnable = local.filter((m) => !blocked(m));
+  const speaking = runnable.length ? runnable : local.some(fixable) ? local.filter(fixable) : local;
+  const all = speaking.map(modelProblem).filter((p): p is ModelProblem => !!p);
   return all.find((p) => p.tone === 'danger') ?? all[0] ?? null;
 }
 

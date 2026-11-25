@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentEvent } from '@nekko-agent/shared';
-import { UNCONFIRMED_RUN_MAX_MS, __resetLiveRuns, applyEvent, getLiveRun, onRunOrphaned, reconcileRunning, takeFinishedRun } from './liveRuns.js';
+import { UNCONFIRMED_RUN_MAX_MS, __resetLiveRuns, applyEvent, engineLost, getLiveRun, onRunOrphaned, reconcileRunning, takeFinishedRun } from './liveRuns.js';
 import { localAgentStarts, reportAgentWorking } from './workingAgents.js';
 
 vi.stubGlobal('requestAnimationFrame', () => 0);
@@ -50,5 +50,13 @@ describe('reconcileRunning', () => {
     expect(reconcileRunning([], 2_000)).toEqual([]);
     expect(reconcileRunning([], 1_000 + UNCONFIRMED_RUN_MAX_MS - 1)).toEqual([]);
     expect(reconcileRunning([], 1_000 + UNCONFIRMED_RUN_MAX_MS)).toEqual(['b']);
+  });
+});
+
+describe('engineLost', () => {
+  it('recognises the engine socket failing a call mid-flight, and nothing else', () => {
+    expect(engineLost('chat:send: the engine restarted before it answered')).toBe(true);
+    expect(engineLost('chat:send: the engine stopped responding before it answered')).toBe(true);
+    expect(engineLost('A reply is already being prepared or running in this chat.')).toBe(false);
   });
 });

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('./store.js', () => ({ useStore: { getState: () => ({}), subscribe: () => () => {} } }));
 
 import { readFileSync } from 'node:fs';
-import { errorReport, clickControl } from './telemetry.js';
+import { errorReport, clickControl, ignoredError } from './telemetry.js';
 // @ts-expect-error: a plain .mjs build script, no type declarations.
 import { collectClickLabels, listPath } from '../../scripts/click-labels.mjs';
 
@@ -33,5 +33,19 @@ describe('UI error reports', () => {
   it('name a thrown non-error plainly', () => {
     expect(errorReport('Script error.')).toEqual({ source: 'renderer', message: 'Error: Script error.', stack: '' });
     expect(errorReport(undefined, 'main').message).toBe('Error: ');
+  });
+});
+
+describe('browser notices that are not faults', () => {
+  it('skip the ResizeObserver loop notice, in either wording', () => {
+    expect(ignoredError('ResizeObserver loop completed with undelivered notifications.')).toBe(true);
+    expect(ignoredError('ResizeObserver loop limit exceeded')).toBe(true);
+    expect(ignoredError('Error: ResizeObserver loop completed with undelivered notifications.')).toBe(true);
+  });
+
+  it('report everything else', () => {
+    expect(ignoredError('TypeError: x is undefined')).toBe(false);
+    expect(ignoredError('ReferenceError: ResizeObserver is not defined')).toBe(false);
+    expect(ignoredError(undefined)).toBe(false);
   });
 });

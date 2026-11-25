@@ -207,6 +207,15 @@ export function reconcileRunning(running: readonly string[], askedAt: number): s
   return ended;
 }
 
+/**
+ * A call failed because the engine went away mid-call (the engine socket's
+ * wording, preload/engine-socket.ts). A turn it was running is ended by
+ * `reconcileRunning` once the engine is back, not by the caller.
+ */
+export function engineLost(message: string): boolean {
+  return /the engine (?:restarted|stopped responding) before it answered/.test(message);
+}
+
 /** Hear a run `reconcileRunning` ended because the engine no longer has it. */
 export function onRunOrphaned(fn: (sessionId: string) => void): () => void {
   orphanListeners.add(fn);
