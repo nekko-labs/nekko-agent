@@ -39,6 +39,39 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Perf harness: report-only probes and their first baselines (#3382, 2026-11-26)
+Area: perf harness
+Result: measurement addition (baselines, not a performance change); nothing gates
+Conditions: probes added in #3382 (issue #3374), branched from `main` at `1749c1ecc`, before the renderer and daemon optimizations they are meant to measure (markdown streaming memo, session list identity, hidden timers). Local: Apple M1 Max (10 cores, 64 GB), macOS 27.2.1, Node v26.8.1, Chrome for Testing 156.0.8078.4 headless, `--no-gpu`, release `nekkod`, the production `build:web` renderer, branch head `7bf5b20f`. Three full runs of `node scripts/perf/run.mjs --only extras --no-gpu` back to back. Every browser headless with a new empty profile, every run on a scratch data dir and a scripted model, never the user's app or `~/.nekko-agent`. CI: the `perf` job of #3382 (GitHub Actions run 45711834653), ubuntu-latest, 4 vCPU Intel Xeon 6975P-C, 15 GB, Chrome 157.0.8103.78, `--no-gpu`, one run (a merge of the PR onto the then-current `main`, which already held #3375, #3380 and #3381; none touch the renderer, and the renderer JS total moved 5 KiB from it).
+
+Each cell is local run 1 / 2 / 3, then the one CI run.
+
+| Probe | Local (M1 Max) | CI runner |
+|---|---|---|
+| Frame work per frame, 16 KB mixed-markdown reply at 300 tokens/s, p50 | 3.139 / 3.393 / 3.162 ms | 3.85 ms |
+| same, p95 | 4.555 / 4.885 / 4.670 ms | 6.83 ms |
+| same, p95 of the last third of the frames | 4.710 / 5.111 / 4.868 ms | 7.25 ms |
+| Frame work in chat A (28 KB reply streaming) while chat B finishes a turn each second, p50 | 3.340 / 3.534 / 3.560 ms | 4.98 ms |
+| same, p95 | 9.722 / 12.141 / 9.823 ms | 19.51 ms |
+| same, worst frame | 29.892 / 21.769 / 33.861 ms | 45.42 ms |
+| Cold profile, first contentful paint, median of 5 loads | 212 / 192 / 192 ms | 224 ms |
+| Cold profile, main view interactive, median of 5 loads | 338.0 / 329.8 / 317.2 ms | 372.7 ms |
+| Cold profile, main view interactive, slowest of 5 | 356.2 / 348.5 / 365.6 ms | 387.2 ms |
+| Renderer production build, JavaScript total (117 chunks) | 18494 KiB raw, 4228 KiB gzip | 18499 KiB raw, 4234 KiB gzip |
+| JavaScript loaded by the time the main view is interactive (5 files) | 6464 KiB raw | 6469 KiB raw |
+| Idle CPU, window hidden, no agent: renderer processes | 0.687 / 0.099 / 0.490 % of a core | 0.00 % |
+| same: whole Chromium tree | 1.472 / 1.183 / 1.861 % | 3.79 % |
+| Idle CPU, window hidden, one agent streaming: renderer processes | 2.345 / 1.771 / 1.380 % | 1.60 % |
+| same: whole Chromium tree | 3.615 / 3.049 / 2.464 % | 2.30 % |
+| same: GPU / browser process | 0.195 / 0.197 / 0.296 % and 0.488 / 0.393 / 0.197 % | 0.00 % and 0.10 % |
+| same: Local Web UI server with `nekkod` (stands in for the desktop main process) | 4.103 / 4.131 / 2.859 % | 3.19 % |
+
+Largest chunks, raw bytes (the same on both machines to within the 5 KiB): `index` 5,477,763; `elk` 2,619,707; `es` 1,316,096; `chunk-NGNAAXSQ` 1,070,766; `store` 878,198; `cytoscape.esm` 869,880; `ghostty-web` 670,054; `katex` 499,252; `xterm` 411,836. Of these only `index`, `store` and `icons` load by startup; the full listing is in `perf-report.json` (`reportOnly.startup.build.chunks`) and the top 15 in the job summary.
+
+What each measures. Frame work is the gate's own measure (main-thread busy time per `AnimationFrame` span in a vsync-paced browser) over the whole streaming window; the 16 KB reply is traced from about 2.5 KB to the end (about 11.4 s, 680 frames), so the last third carries the largest replies. The gate's 28 KB reply for chat A in the concurrent probe is the one the gate streams; chat B's `done` events (9 turns in 8 s) are what refresh the session list. "Interactive" is the first frame, and a user-blocking task after it, with the rail and a board window on screen, from navigation start, on loopback (a real disk or network adds to it). Idle CPU is read per process from `ps` (macOS) or `/proc` (Linux) over a 10 s window, counting only processes alive at both ends, with the page reporting `visibilityState` "hidden" (a second tab in front) and the agent still streaming at the end of the window.
+
+Read before comparing. These are baselines of the code before the optimizations, on one machine each; the local idle figures move about 2x between runs, and the CI row is a single run, so a difference smaller than that spread is not a result. The first local idle attempt (before the read was changed to per-process) used the page's `TaskDuration` and `SystemInfo` CPU time, which disagreed with `ps` by up to 90x on some runs, so those figures are discarded and not quoted. The probes cannot see the desktop's Electron main process, only the Local Web UI server that runs the same engine. Source: #3382, [CI run](https://github.com/nekko-labs/nekko-agent/actions/runs/45711834653). Run one probe with `node scripts/perf/run.mjs --only <long-stream|concurrent|startup|idle> --no-gpu`.
+
 ## Plum and Indigo window glow steps instead of fading every frame (#3136, 2026-11-20)
 Area: GPU/memory
 Result: improvement expected; after number pending (measured once merged, see below)
