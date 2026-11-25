@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useSyncExternalStore } from 'react';
-import { parsePrUrl, truncateWords, type AgentWatchView, type ToolCall, type ToolResult } from '@nekko-agent/shared';
+import { parsePrUrl, truncateWords, type AgentEvent, type AgentWatchView, type ToolCall, type ToolResult } from '@nekko-agent/shared';
 import { compactSentence } from './subagentActivity.js';
 
 /**
@@ -192,6 +192,30 @@ interface Entry { views: AgentWatchView[] | null; listeners: Set<() => void>; st
 const entries = new Map<string, Entry>();
 const POLL_MS = 15_000;
 
+/**
+ * Which agent events can change a chat's watches: an `agent_watch` tool result
+ * (armed or cancelled), a turn's end (the host arms its own PR watches, and a
+ * firing watch ends one). Every other tool result cannot, so it
+ * no longer triggers a read. Each listener keeps its own call-name memory, as
+ * a result carries only its call's id.
+ */
+export function watchEventFilter(): (event: AgentEvent) => boolean {
+  const names = new Map<string, string>();
+  return (event) => {
+    if (event.type === 'tool_call') {
+      names.set(event.call.id, event.call.name);
+      if (names.size > 64) names.delete(names.keys().next().value!);
+      return false;
+    }
+    if (event.type === 'tool_result') {
+      const name = names.get(event.result.toolCallId);
+      names.delete(event.result.toolCallId);
+      return name === 'agent_watch';
+    }
+    return event.type === 'done' || event.type === 'error';
+  };
+}
+
 function entryFor(sessionId: string): Entry {
   let e = entries.get(sessionId);
   if (!e) { e = { views: null, listeners: new Set() }; entries.set(sessionId, e); }
@@ -215,12 +239,16 @@ function start(sessionId: string, e: Entry): void {
   const api = typeof window !== 'undefined' ? window.nekko : undefined;
   if (!api) return;
   refreshAgentWatches(sessionId);
-  const timer = setInterval(() => refreshAgentWatches(sessionId), POLL_MS);
-  // A watch is armed, cancelled or delivered at a tool result or a turn's end.
+  // The slow fallback poll skips while the window is hidden, and the list is read at once when it is shown again.
+  const timer = setInterval(() => { if (!document.hidden) refreshAgentWatches(sessionId); }, POLL_MS);
+  const shown = () => { if (!document.hidden) refreshAgentWatches(sessionId); };
+  document.addEventListener('visibilitychange', shown);
+  // A watch is armed, cancelled or delivered by an `agent_watch` result or at a turn's end.
+  const changes = watchEventFilter();
   const off = api.onAgentEvent?.((event) => {
-    if (event.sessionId === sessionId && ['tool_result', 'done', 'error', 'message'].includes(event.type)) refreshAgentWatches(sessionId);
+    if (event.sessionId === sessionId && changes(event)) refreshAgentWatches(sessionId);
   });
-  e.stop = () => { clearInterval(timer); off?.(); };
+  e.stop = () => { clearInterval(timer); document.removeEventListener('visibilitychange', shown); off?.(); };
 }
 
 function subscribe(sessionId: string, fn: () => void): () => void {
