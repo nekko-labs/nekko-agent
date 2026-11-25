@@ -1,6 +1,6 @@
 import { generateKeyPairSync, sign, type KeyObject } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import type { AddressInfo } from 'node:net';
+import { connect as tcp, type AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildRelay, MAX_SIGNAL_BYTES } from './server.js';
 import { checkTicket, parseTicketKey, type Ticket } from './ticket.js';
@@ -212,5 +212,131 @@ describe('the account channel', () => {
     apps.push(app as any);
     expect((await app.inject({ method: 'GET', url: '/account' })).statusCode).toBe(404);
     expect((await app.inject({ method: 'GET', url: '/healthz' })).json()).toEqual({ ok: true, rooms: 0 });
+  });
+});
+
+/** A socket that completed the WebSocket handshake and then went silent: it never answers a ping, so it is half-open. */
+function halfOpen(url: string, path: string): Promise<{ send(frame: object): void; closed: Promise<void> }> {
+  const { port } = new URL(url);
+  return new Promise((resolve) => {
+    const raw = tcp(Number(port), '127.0.0.1');
+    let shaken = false;
+    const closed = new Promise<void>((done) => raw.on('close', () => done()));
+    raw.on('error', () => {});
+    raw.on('data', (d) => {
+      // Read and drop everything, pings included; only the 101 matters.
+      if (!shaken && d.toString().startsWith('HTTP/1.1 101')) {
+        shaken = true;
+        // One masked text frame (mask key 0), for the account channel's auth.
+        resolve({
+          closed,
+          send: (frame) => {
+            const body = Buffer.from(JSON.stringify(frame));
+            raw.write(Buffer.concat([Buffer.from([0x81, 0x80 | 126, body.length >> 8, body.length & 255, 0, 0, 0, 0]), body]));
+          },
+        });
+      }
+    });
+    raw.write(`GET ${path} HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n`);
+  });
+}
+
+describe('liveness', () => {
+  const fast = { pingMs: 50, deadlineMs: 200 };
+  const startFast = async () => {
+    const built = buildRelay({ ticketKey: publicKey, liveness: fast });
+    await built.app.listen({ port: 0, host: '127.0.0.1' });
+    apps.push(built.app as any);
+    return { url: `ws://127.0.0.1:${(built.app.server.address() as AddressInfo).port}`, ...built };
+  };
+
+  it('drops a half-open account socket and tells the others the device is offline', async () => {
+    const { url, accounts } = await startFast();
+    const mac = await open(`${url}/account`);
+    mac.send({ type: 'auth', access: ticket({ scope: 'account', room: undefined, dev: 'mac' }), kind: 'computer' });
+    await mac.next();
+    const ghost = await halfOpen(url, '/account');
+    ghost.send({ type: 'auth', access: ticket({ scope: 'account', room: undefined, dev: 'ghost' }), kind: 'phone' });
+    expect(await mac.next()).toEqual({ type: 'presence', dev: 'ghost', kind: 'phone', online: true });
+    // The live socket answers pings and stays; the silent one is terminated.
+    expect(await mac.next()).toEqual({ type: 'presence', dev: 'ghost', kind: 'phone', online: false });
+    await ghost.closed;
+    expect([...accounts.get('acct-1')!.values()].map((m) => m.dev)).toEqual(['mac']);
+  }, 5_000);
+
+  it('drops a half-open room socket and tells the room the agent is offline', async () => {
+    const { url, rooms } = await startFast();
+    const q = new URLSearchParams({ room: ROOM, role: 'client', key: 'k' });
+    await agent(url, ticket({}));
+    const phone = await open(`${url}/relay?${q}`);
+    expect(await phone.next()).toEqual({ type: 'agent-online' });
+    // A second agent, in another room, that completes the handshake and then never answers.
+    const ghostRoom = 'ffffffffffffffff';
+    const silent = await halfOpen(url, `/relay?${new URLSearchParams({ room: ghostRoom, role: 'agent', key: 'k', access: ticket({ room: ghostRoom, acct: 'acct-9', dev: 'g' }) })}`);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(rooms.get(ghostRoom)?.agent).toBeTruthy();
+    await silent.closed;
+    await new Promise((r) => setTimeout(r, 30));
+    expect(rooms.get(ghostRoom)?.agent ?? null).toBeNull();
+    // The answering agent is still there.
+    expect(rooms.get(ROOM)?.agent).toBeTruthy();
+  }, 5_000);
+});
+
+describe('GET /presence', () => {
+  const SECRET = 'presence-secret';
+  const startWith = async (presenceSecret?: string) => {
+    const built = buildRelay({ ticketKey: publicKey, presenceSecret });
+    await built.app.listen({ port: 0, host: '127.0.0.1' });
+    apps.push(built.app as any);
+    return { url: `ws://127.0.0.1:${(built.app.server.address() as AddressInfo).port}`, ...built };
+  };
+  const join = async (url: string, p: Partial<Ticket>, kind: 'computer' | 'phone') => {
+    const s = await open(`${url}/account`);
+    s.send({ type: 'auth', access: ticket({ scope: 'account', room: undefined, ...p }), kind });
+    await s.next();
+    return s;
+  };
+  const get = (app: { inject: Function }, qs: string, auth?: string) =>
+    app.inject({ method: 'GET', url: `/presence?${qs}`, headers: auth ? { authorization: auth } : {} });
+
+  it('lists the online devices of the asked accounts, and nothing else', async () => {
+    const { url, app } = await startWith(SECRET);
+    await join(url, { dev: 'mac' }, 'computer');
+    await join(url, { dev: 'phone' }, 'phone');
+    await join(url, { dev: 'mac' }, 'computer');
+    await join(url, { acct: 'acct-2', dev: 'x' }, 'computer');
+    const res = await get(app, 'acct=acct-1&acct=acct-2&acct=acct-3', `Bearer ${SECRET}`);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ online: { 'acct-1': ['mac', 'phone'], 'acct-2': ['x'] } });
+    // Not asked for, not told.
+    expect((await get(app, 'acct=acct-2', `Bearer ${SECRET}`)).json()).toEqual({ online: { 'acct-2': ['x'] } });
+    expect((await get(app, '', `Bearer ${SECRET}`)).json()).toEqual({ online: {} });
+  });
+
+  it('goes offline with the last socket', async () => {
+    const { url, app } = await startWith(SECRET);
+    await join(url, { dev: 'mac' }, 'computer');
+    sockets[0].close();
+    await new Promise((r) => setTimeout(r, 100));
+    expect((await get(app, 'acct=acct-1', `Bearer ${SECRET}`)).json()).toEqual({ online: {} });
+  });
+
+  it('refuses a wrong or missing secret, and too many accounts', async () => {
+    const { app } = await startWith(SECRET);
+    expect((await get(app, 'acct=a', 'Bearer nope')).statusCode).toBe(401);
+    expect((await get(app, 'acct=a', SECRET)).statusCode).toBe(401);
+    expect((await get(app, 'acct=a')).statusCode).toBe(401);
+    const many = Array.from({ length: 101 }, (_, i) => `acct=a${i}`).join('&');
+    expect((await get(app, many, `Bearer ${SECRET}`)).statusCode).toBe(400);
+    const ok = Array.from({ length: 100 }, (_, i) => `acct=a${i}`).join('&');
+    expect((await get(app, ok, `Bearer ${SECRET}`)).statusCode).toBe(200);
+  });
+
+  it('is not there (404) when no secret is configured', async () => {
+    const { app } = await startWith(undefined);
+    expect((await get(app, 'acct=acct-1', 'Bearer anything')).statusCode).toBe(404);
+    const empty = buildRelay({ ticketKey: publicKey, presenceSecret: '' });
+    expect((await get(empty.app, 'acct=acct-1', 'Bearer ')).statusCode).toBe(404);
   });
 });
