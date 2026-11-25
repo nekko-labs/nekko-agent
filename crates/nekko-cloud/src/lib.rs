@@ -32,6 +32,7 @@ mod http;
 pub mod library;
 mod org_records;
 mod orgs;
+mod pace;
 pub mod records;
 pub mod relay_channel;
 pub mod state;
@@ -189,8 +190,15 @@ pub struct Cloud {
     share: tokio::sync::Mutex<()>,
     /// The Nekko Cloud Relay account channel: presence and sync nudges (decision 0116).
     relay: relay_channel::Channel,
+<<<<<<< HEAD
     /// When `refresh` last finished; held while `cloud:refresh` runs so concurrent callers share it.
     refreshed: tokio::sync::Mutex<coalesce::Refreshed>,
+=======
+    /// Relay tickets kept until they are due for renewal (`renewAfterSeconds`).
+    tickets: pace::Tickets,
+    /// A pass started by a Relay nudge is waiting out its jitter; more nudges join it.
+    nudge_pending: pace::Pending,
+>>>>>>> origin/main
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -224,29 +232,36 @@ impl Cloud {
             host: Mutex::new(None),
             share: tokio::sync::Mutex::new(()),
             relay: relay_channel::Channel::default(),
+<<<<<<< HEAD
             refreshed: tokio::sync::Mutex::new(coalesce::Refreshed::default()),
+=======
+            tickets: pace::Tickets::default(),
+            nudge_pending: pace::Pending::default(),
+>>>>>>> origin/main
         })
     }
 
-    /// Sync in the background every `every` while it is on.
+    /// Sync in the background about every `every` while it is on. Each computer starts at a random
+    /// point in the first quarter of the interval and each wait varies by 20% either way, so
+    /// computers that started or stalled together don't call Nekko Cloud together.
     pub fn start(self: &Arc<Self>, every: Duration) {
         let me = self.clone();
         tokio::spawn(async move {
+            tokio::time::sleep(pace::start_offset(every, pace::unit())).await;
             loop {
                 if me.ready() {
                     let _ = me.sync_once().await;
                 }
-                tokio::time::sleep(every).await;
+                tokio::time::sleep(pace::jittered(every, pace::unit())).await;
             }
         });
-        // Sharing with organizations: a beat every 30 seconds (it also picks up after sleep or a lost connection).
+        // Sharing with organizations: a beat about every 30 seconds (it also picks up after sleep or a lost connection).
         let me = self.clone();
         tokio::spawn(async move {
-            let mut beat = tokio::time::interval(HEARTBEAT);
-            beat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            tokio::time::sleep(pace::start_offset(HEARTBEAT, pace::unit())).await;
             loop {
-                beat.tick().await;
                 me.share_tick().await;
+                tokio::time::sleep(pace::jittered(HEARTBEAT, pace::unit())).await;
             }
         });
     }
@@ -378,6 +393,10 @@ impl Cloud {
     /// to keep it before asking for the next. Errors are what the owner reads.
     pub async fn relay_ticket(&self, scope: &str, room: Option<&str>) -> Result<(String, Duration), String> {
         let token = self.token().map_err(|_| "Sign in to Nekko Cloud to use Nekko Cloud Relay.".to_string())?;
+        // Kept until it is due for renewal: a redial, or a second user of the same room, doesn't ask again.
+        if let Some(held) = self.tickets.get(&token, scope, room, Instant::now()) {
+            return Ok(held);
+        }
         let mut body = json!({ "scope": scope });
         if let Some(room) = room {
             body["room"] = json!(room);
@@ -389,8 +408,9 @@ impl Cloud {
                     .filter(|t| t.starts_with("nkr1."))
                     .ok_or("Nekko Cloud sent no relay ticket.")?;
                 // At least a minute, so a short answer can't make the agent ask in a loop.
-                let renew = v["renewAfterSeconds"].as_u64().unwrap_or(3 * 3600).max(60);
-                Ok((ticket.to_string(), Duration::from_secs(renew)))
+                let renew = Duration::from_secs(v["renewAfterSeconds"].as_u64().unwrap_or(3 * 3600).max(60));
+                self.tickets.put(&token, scope, room, ticket, renew, Instant::now());
+                Ok((ticket.to_string(), renew))
             }
             Err(err) => Err(match (err.status, err.code.as_str()) {
                 (402, _) => "Nekko Cloud Relay is part of Nekko Cloud Pro. Upgrade, or use Tailscale for free.".into(),
