@@ -60,3 +60,14 @@ test('Chromium processes are classified from their command line', () => {
   assert.equal(chromiumKind('/x/Chrome --type=gpu-process'), 'gpu-process');
   assert.equal(chromiumKind('/x/Chrome --headless=new --remote-debugging-port=9397'), 'browser');
 });
+
+test('CPU deltas count only processes alive at both ends, by kind', async () => {
+  const { cpuDelta } = await import('./lib/cpu.mjs');
+  const r = '/x/Chrome --type=renderer';
+  const before = [{ pid: 1, command: '/x/Chrome --headless', secs: 10 }, { pid: 2, command: r, secs: 5 }, { pid: 3, command: r, secs: 50 }];
+  const after = [{ pid: 1, command: '/x/Chrome --headless', secs: 10.5 }, { pid: 2, command: r, secs: 5.25 }, { pid: 9, command: r, secs: 99 }];
+  const d = cpuDelta(before, after);
+  assert.equal(d.browser, 0.5);
+  assert.equal(d.renderer, 0.25);
+  assert.equal(d.total, 0.75);
+});

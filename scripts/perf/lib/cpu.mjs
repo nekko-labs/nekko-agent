@@ -66,15 +66,27 @@ export function cpuSecondsOfTree(pid) {
   return all ? all.reduce((n, p) => n + p.secs, 0) : null;
 }
 
-/** A Chromium tree's CPU seconds by kind of process, and in total, or null when unavailable. */
-export function chromiumCpu(pid) {
-  const all = cpuOfProcesses(pid);
-  if (!all) return null;
+/** The kinds Chromium's processes are reported under. */
+export function kindOf(command) {
+  const k = chromiumKind(command);
+  return k === 'renderer' ? 'renderer' : k === 'gpu-process' ? 'gpu' : k === 'browser' ? 'browser' : 'other';
+}
+
+/**
+ * CPU seconds used between two `cpuOfProcesses` samples, by kind and in total.
+ * Only processes in both samples count: Chromium starts and ends helper
+ * processes (a new tab's renderer, a utility), and a total taken over whoever
+ * happens to be alive each time would swing by their whole lifetime's CPU.
+ */
+export function cpuDelta(before, after) {
+  const was = new Map(before.map((p) => [p.pid, p]));
   const by = { total: 0, renderer: 0, gpu: 0, browser: 0, other: 0 };
-  for (const p of all) {
-    const k = chromiumKind(p.command);
-    by.total += p.secs;
-    by[k === 'renderer' ? 'renderer' : k === 'gpu-process' ? 'gpu' : k === 'browser' ? 'browser' : 'other'] += p.secs;
+  for (const p of after) {
+    const b = was.get(p.pid);
+    if (!b) continue;
+    const d = Math.max(0, p.secs - b.secs);
+    by.total += d;
+    by[kindOf(p.command)] += d;
   }
   return by;
 }
