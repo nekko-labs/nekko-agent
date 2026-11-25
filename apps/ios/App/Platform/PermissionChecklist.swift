@@ -86,6 +86,13 @@ final class PermissionChecklist {
     }
 
     func refresh() async {
+        refreshLocal()
+        await refreshNotifications()
+    }
+
+    /// The notification center can take a minute or more to answer on a cold simulator, so
+    /// nothing else waits for it: every status below is read first and at once (#2454).
+    func refreshNotifications() async {
         let settings = await UNUserNotificationCenter.current().notificationSettings()
         switch settings.authorizationStatus {
         case .authorized, .ephemeral: access[.notifications] = .allowed
@@ -94,6 +101,9 @@ final class PermissionChecklist {
         case .notDetermined: access[.notifications] = .unknown
         @unknown default: access[.notifications] = .unknown
         }
+    }
+
+    func refreshLocal() {
         access[.camera] = Self.capture(AVCaptureDevice.authorizationStatus(for: .video))
         if AVCaptureDevice.default(for: .video) == nil { access[.camera] = .unavailable }
         // Read the capture authorization on every foreground transition.
@@ -144,7 +154,9 @@ final class PermissionChecklist {
         defer { busy = nil }
         switch item {
         case .notifications:
-            _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound])
+            if (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound])) == true {
+                access[.notifications] = .allowed
+            }
         case .network:
             nearby.start()
             // No timeout is interpreted as permission granted or denied.
@@ -174,7 +186,9 @@ final class PermissionChecklist {
             }
         case .liveActivities: break
         }
-        await refresh()
+        refreshLocal()
+        // A grant answers for itself; otherwise ask the notification center, without waiting on it.
+        if item != .notifications || status(.notifications) != .allowed { Task { await refreshNotifications() } }
     }
 
     func stop() {
