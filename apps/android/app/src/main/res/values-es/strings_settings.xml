@@ -381,13 +381,16 @@
     <string name="settings_card_counts">Solo cifras</string>
     <string name="settings_card_counts_detail">Cuántos chats están en curso, nada más</string>
     <string name="settings_card_minimal">Mínimo</string>
-    <string name="settings_card_minimal_detail">Qué hace el chat que te necesita, con Detener y Denegar. Sin texto del chat</string>
+    <string name="settings_card_minimal_detail">Totales de chats trabajando, esperando y terminados. Sin texto de los chats</string>
     <string name="settings_card_standard">Estándar</string>
-    <string name="settings_card_standard_detail">Añade el nombre del chat, su paso actual y Permitir</string>
+    <string name="settings_card_standard_detail">Los mismos totales que Mínimo; la tarjeta no muestra nombres ni pasos de los chats</string>
     <string name="settings_card_detailed">Detallado</string>
-    <string name="settings_card_detailed_detail">Añade la primera línea de la última respuesta</string>
-    <string name="settings_card_footer_private">Ningún texto de los chats sale de tu computadora hacia la pantalla de bloqueo.</string>
-    <string name="settings_card_footer_text">Los nombres y pasos de los chats se ven con el teléfono desbloqueado; un teléfono bloqueado que oculta el contenido sensible muestra los textos de Mínimo. Permitir te pide desbloquear primero.</string>
+    <string name="settings_card_detailed_detail">Los mismos totales que Mínimo; la tarjeta tampoco muestra respuestas</string>
+    <string name="settings_card_footer_none">Sin tarjeta. La notificación de conexión solo dice cuántos chats se están ejecutando y en qué ordenador.</string>
+    <string name="settings_card_footer_minimal">Solo totales. En la pantalla de bloqueo no aparece texto de los chats. Hablar con Nekko te pide desbloquear primero.</string>
+    <string name="settings_card_footer_standard">En Android esta tarjeta es la misma que Mínimo: no muestra nombres ni pasos de los chats.</string>
+    <string name="settings_card_footer_detailed">En Android esta tarjeta es la misma que Mínimo: no muestra nombres, pasos ni respuestas de los chats.</string>
+    <string name="settings_card_preview">Vista previa de la tarjeta de la pantalla de bloqueo</string>
     <string name="settings_warn_yolo">Avisar antes de YOLO</string>
     <string name="settings_warn_yolo_detail">Explicar lo que YOLO deja pasar antes de que un chat o el modo predeterminado de una computadora cambie a él</string>
     <!-- Customize (#2426), the iPhone's page. -->

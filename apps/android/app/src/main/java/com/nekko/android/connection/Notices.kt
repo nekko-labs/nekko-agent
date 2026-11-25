@@ -274,8 +274,7 @@ class Notices(private val context: Context) {
             .setSubText(status.line)
             .setContentText(freshness + StatusDashboard.summary(card))
             .setStyle(NotificationCompat.BigTextStyle().bigText(
-                listOf(freshness + StatusDashboard.summary(card), StatusDashboard.detail(card), context.getString(R.string.dashboard_voice_fallback))
-                    .filter { it.isNotBlank() }.joinToString("\n")))
+                StatusDashboard.lines(card, context.getString(R.string.dashboard_voice_fallback), freshness).joinToString("\n")))
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setContentIntent(openDashboard())
             .addAction(NotificationCompat.Action.Builder(R.drawable.ic_launcher_foreground,
