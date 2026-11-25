@@ -64,7 +64,10 @@ function DocMarkdown({ text, basePath }: { text: string; basePath?: string }) {
 function ChatMarkdown({ text, basePath, topics, askTail, runnable }: { text: string; basePath?: string; topics?: boolean; askTail?: boolean; runnable?: boolean }) {
   const sessionId = React.useContext(MarkdownSession);
   const sandbox = React.useContext(MarkdownSandbox);
-  const ctx = React.useMemo<Ctx>(() => ({ doc: false, basePath, topics, sessionId, sandbox, evidence: topics ? verificationPairs(text, basePath) : [] }), [basePath, topics, text, sessionId, sandbox]);
+  // Memoized by value, not by `text`: a new ctx object on every streamed delta would defeat the
+  // memo on every finished TextSegment. `evidence` only changes when a pair itself changes.
+  const evidence = useStableEvidence(topics ? verificationPairs(text, basePath) : NO_EVIDENCE);
+  const ctx = React.useMemo<Ctx>(() => ({ doc: false, basePath, topics, sessionId, sandbox, evidence }), [basePath, topics, sessionId, sandbox, evidence]);
   const segments = markdownSegments(text);
   // A closing question gets the header the model did not write.
   const question = askTail && endsOnUnlabelledQuestion(text) ? segments.filter((s) => s.kind === 'text').at(-1) : undefined;
@@ -74,7 +77,7 @@ function ChatMarkdown({ text, basePath, topics, askTail, runnable }: { text: str
     <div className="space-y-1 text-sm leading-[1.6]">
       {segments.map((s) =>
         s.kind === 'code'
-          ? <MemoCodeBlock key={s.key} lang={s.lang} code={s.code} runnable={runnable && s !== open} />
+          ? <MemoCodeBlock key={s.key} lang={s.lang} code={s.code} runnable={runnable && s !== open} streaming={s === open} />
           : (
             <React.Fragment key={s.key}>
               {s === question && <TopicHeader topic="question" label="Question" />}
@@ -84,6 +87,19 @@ function ChatMarkdown({ text, basePath, topics, askTail, runnable }: { text: str
       )}
     </div>
   );
+}
+
+const NO_EVIDENCE: EvidencePair[] = [];
+
+/** Keeps the previous array while the pairs are equal by value, so an unchanged result is the same object. */
+function useStableEvidence(next: EvidencePair[]): EvidencePair[] {
+  const prev = React.useRef(next);
+  const same = prev.current.length === next.length && prev.current.every((p, i) => {
+    const n = next[i];
+    return p.surface === n.surface && JSON.stringify(p.before) === JSON.stringify(n.before) && JSON.stringify(p.after) === JSON.stringify(n.after);
+  });
+  if (!same) prev.current = next;
+  return prev.current;
 }
 
 const TOPIC_ICONS: Record<Topic, (p: { className?: string }) => React.ReactElement> = {
@@ -204,7 +220,7 @@ export interface Ctx {
  * (`runnable` and a `ChatCodeRun` target), a shell block also offers Run,
  * and shows the chat's terminal under it once run (#2595).
  */
-function CodeBlock({ lang, code, runnable = false }: { lang: string; code: string; runnable?: boolean }) {
+function CodeBlock({ lang, code, runnable = false, streaming = false }: { lang: string; code: string; runnable?: boolean; streaming?: boolean }) {
   const [copied, setCopied] = useState(false);
   const target = React.useContext(ChatCodeRun);
   const sandbox = React.useContext(MarkdownSandbox);
@@ -217,7 +233,8 @@ function CodeBlock({ lang, code, runnable = false }: { lang: string; code: strin
       setTimeout(() => setCopied(false), 1200);
     });
   };
-  if (lang.toLowerCase() === 'mermaid') return <MermaidDiagram code={code} />;
+  // A diagram still being written is shown as code: re-rendering it on every delta is wasted work and flickers.
+  if (lang.toLowerCase() === 'mermaid' && !streaming) return <MermaidDiagram code={code} />;
   const copyButton = (
     <button type="button" onClick={copy} title="Copy code" className="quiet-tab code-action items-center!">
       {copied ? <CheckIcon className="h-3.5 w-3.5" /> : <CopyIcon className="h-3.5 w-3.5" />}
