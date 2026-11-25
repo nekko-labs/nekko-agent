@@ -255,9 +255,10 @@ struct PermissionChecklistView: View {
             } else {
                 request = Task {
                     await permissions.request(item)
-                    await app.permissionChecklistChanged()
                     // Advance only on a real grant; a denial stays open with its Settings fix.
+                    // Before the push registration below, which waits on the notification center.
                     if permissions.status(item).checked { withAnimation(motion) { focus = next(after: item) } }
+                    await app.permissionChecklistChanged()
                 }
             }
         } label: {

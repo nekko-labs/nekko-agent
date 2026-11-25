@@ -1019,7 +1019,9 @@ final class LiveRelayTests: XCTestCase {
         let allowed = NSPredicate(format: "value == %@", "Allowed")
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         var tapped = false
-        let deadline = Date().addingTimeInterval(busyWait)
+        // The notification center on a freshly booted simulator answered the first request only
+        // after two to three minutes (the prompt is absent until then), so wait for it, not a beat.
+        let deadline = Date().addingTimeInterval(240)
         while Date() < deadline {
             if row.exists, allowed.evaluate(with: row) { return }
             if !tapped, action.exists, action.isHittable {
