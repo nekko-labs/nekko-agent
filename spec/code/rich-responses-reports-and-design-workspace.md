@@ -123,3 +123,5 @@ The Rust daemon prompt (`crates/nekko-context/src/prompt.rs`) carries the same a
 ## Seamless diagram canvases
 
 Implemented: inline Mermaid and file-viewer diagrams use a chat-surface-colored dotted canvas without an outer border, with a subtle theme shadow. The sandboxed document has the same theme-matched dotted background; the SVG itself is transparent rather than white. Diagram nodes, text, connectors and expanded view follow the active app theme, including theme changes while a chat is open. Copy, source fallback, Expand, zoom/pan and Escape remain available. No network access, scripts, or app bridge are added to SVG frames. Focused tests cover transparent, scriptless documents; matching isolated desktop and narrow renderer evidence covers the visual change. Native phone Mermaid remains separately planned.
+
+Implemented (2026-11-26): a Mermaid fence still being written in a streaming reply is shown as a plain code block, and the diagram is drawn once the fence closes, so a reply does not re-run Mermaid and flicker on every streamed token. A finished reply, and a fence already closed above a block still streaming, draw as diagrams as before.
