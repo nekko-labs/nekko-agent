@@ -330,6 +330,12 @@ export interface CatalogQuant {
   /** The quantization alone (`Q8_0`), set when `variant` is. */
   quant?: string;
   /**
+   * Stock llama.cpp knows this quantization (the engine's own list), so the
+   * managed engine can run it. Only on what the daemon's catalog answers give an
+   * app (`engine:catalogModel`, `engine:catalogDetail`); absent elsewhere.
+   */
+  stock?: boolean;
+  /**
    * `mlx`: the whole repo is one model folder (an MLX checkpoint), and
    * `file` plus `extraFiles` are every file it needs. Absent means GGUF.
    */
@@ -616,6 +622,12 @@ export interface LocalModel {
    * server with each listing, since it depends on the engine, not the file.
    */
   loadCheck?: ModelLoadCheck;
+  /**
+   * Whether the engine in use is new enough for `minEngineBuild`, when both are
+   * known. `loadCheck` names only the weight format when that also blocks a
+   * managed engine, so this is how the row learns the engine is too old as well.
+   */
+  engineMeetsMinBuild?: boolean;
   /**
    * The last load attempt's reason for failing, kept until a load succeeds.
    * Runtime state, filled in by the server rather than stored in the index.

@@ -35,16 +35,35 @@ app.whenReady().then(async () => {
   const text = () => run("document.querySelector('[data-models-section=library]').innerText.replace(/\\s+/g,' ')");
   try {
     await win.loadFile(path.join(out, 'index.html'));
-    for (const scenario of baseline ? ['before'] : ['managed', 'external']) {
+    // The offer scenarios run on both revisions: the same data, with and without part C's line.
+    for (const scenario of baseline ? ['before', 'offerOld', 'offerCurrent'] : ['managed', 'external', 'offerOld', 'offerCurrent']) {
       await run(`fixture.mount('${scenario}')`);
       await wait("!!document.querySelector('[data-model-family=ternarybonsai227b]')");
       // The family list says what the Bonsai family can do; then its rows say why.
       await capture(`${scenario}-families-dark`, 'dark');
       await run("document.querySelector('[data-model-family=ternarybonsai227b]').click()");
       await wait("!!document.querySelector('[data-library-row=ptq1]')");
+      if (!baseline && scenario.startsWith('offer')) await wait("!!document.querySelector('[data-runnable-alternative]')");
+      if (!scenario.startsWith('offer')) report.checks.push({ scenario, offerShown: !!(await run("document.querySelector('[data-runnable-alternative]')")) });
       await capture(`${scenario}-rows-dark`, 'dark');
       await capture(`${scenario}-rows-light`, 'light');
       report.checks.push({ scenario, text: await text() });
+      if (!baseline && scenario === 'offerOld') {
+        // The Variants list: opening the page read nothing (size-based fit), then opening two builds reads just those.
+        const variants = "[...document.querySelectorAll('h2')].find(h => h.textContent.trim() === 'Variants')";
+        const scrollToVariants = async () => { await run(`(() => { const h = ${variants}; h.scrollIntoView({ block: 'start' }); })()`); await sleep(450); };
+        await scrollToVariants();
+        const shot = async name => { const img = await win.capturePage(undefined, { stayHidden: true }); const file = path.join(out, `${name}.png`); fs.writeFileSync(file, img.toPNG()); report.captures.push({ file, size: img.getSize() }); };
+        report.checks.push({ variants: 'unread', badges: await run("[...document.querySelectorAll('[data-build-check]')].length") });
+        await shot('variants-unread-light');
+        for (const label of ['PTQ1_0', 'Q2_0']) {
+          await run(`[...document.querySelectorAll('h2')].find(h => h.textContent.trim() === 'Variants').parentElement.querySelectorAll('.divide-y > div').forEach(r => { if (r.querySelector('span.font-mono')?.textContent === '${label}') r.click(); })`);
+          await sleep(500);
+        }
+        await scrollToVariants();
+        report.checks.push({ variants: 'read', badges: await run("[...document.querySelectorAll('[data-build-check]')].map(b => b.textContent)") });
+        await shot('variants-read-light');
+      }
     }
   } catch (e) { report.errors.push(String(e.stack || e)); }
   fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2));
