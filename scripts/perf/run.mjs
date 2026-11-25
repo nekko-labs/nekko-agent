@@ -22,8 +22,10 @@
  * --report-only  write the report but exit 0 even when a budget is missed
  * --invalidation include streaming style/layout invalidation events (diagnostic overhead)
  * --dump-trace   also write the streaming trace (large) to the output directory
- * --only <part>  run just 'latency' (keypress, switching), 'frames' (streaming) or
- *                'memory' (GPU tile memory and leaks, see measureMemory)
+ * --only <part>  run just 'latency' (keypress, switching), 'frames' (streaming),
+ *                'memory' (GPU tile memory and leaks, see measureMemory), or one of the
+ *                report-only probes: 'long-stream', 'concurrent', 'startup', 'idle'
+ *                ('extras' runs all four). They are measured and printed, never gating.
  * --profile      write a CPU profile and a main-thread trace of each measured phase
  *                and print where the time went
  * --timeline     only the main-thread traces of --profile (no CPU profiler overhead)
@@ -55,12 +57,14 @@ import os from 'node:os';
 import { connectCdp } from './lib/cdp.mjs';
 import { reportProvenance } from './lib/provenance.mjs';
 import { killTree, launchBrowser } from './lib/browser.mjs';
-import { startMockProvider, STREAM_TRIGGER } from './lib/mock-provider.mjs';
+import { startMockProvider, STREAM_TRIGGER, LONG_TRIGGER, LONG_REPLY_CHARS } from './lib/mock-provider.mjs';
 import { seedDataDir, chatTitle, lastMarker } from './lib/seed.mjs';
 import { FRAME_PUMP, INSTALL, frameWake, locate } from './lib/probes.mjs';
 import { summarize } from './lib/stats.mjs';
 import { frameWorkFromTrace } from './lib/trace.mjs';
-import { BUDGETS, MEMORY_BUDGETS } from './budgets.mjs';
+import { BUDGETS, MEMORY_BUDGETS, REPORT_ONLY_PROBES } from './budgets.mjs';
+import { cpuDelta, cpuOfProcesses } from './lib/cpu.mjs';
+import { markLoaded, rendererBuildSizes } from './lib/chunks.mjs';
 import { startProfile, startTimeline, stopProfile } from './lib/profile.mjs';
 import { selectWallView } from '../../apps/desktop/scripts/wall-view-navigation.cjs';
 
@@ -313,7 +317,7 @@ async function openApp({ appUrl, cdpPort, vsync, pump = false, gpu = flag('no-gp
   };
 
   /** Send the long-reply prompt from the focused chat's composer. */
-  const startStream = async (mock) => {
+  const startStream = async (mock, trigger = STREAM_TRIGGER) => {
     const before = mock.state.streamsStarted;
     // A chat opened a moment ago is still laying out (its transcript settles
     // at the newest screenful and the composer moves down with it), so the
@@ -322,7 +326,7 @@ async function openApp({ appUrl, cdpPort, vsync, pump = false, gpu = flag('no-gp
     // was lands on whatever replaced it, and the text went nowhere (the
     // "never started streaming" failure of `--only frames`).
     const SEL = 'textarea, .composer [contenteditable]';
-    const prompt = `${STREAM_TRIGGER} write the long report`;
+    const prompt = `${trigger} write the long report`;
     let typed = false;
     for (let attempt = 0; attempt < 5 && !typed; attempt++) {
       let at = null;
@@ -738,6 +742,231 @@ async function tileMemory(cdp) {
   return Object.entries(sizes).filter(([n]) => /^cc\/tile_memory\/[^/]+$/.test(n)).reduce((sum, [, v]) => sum + v, 0);
 }
 
+// ------------------------------------------------------------ report-only probes
+// Measured and printed, never judged: see REPORT_ONLY_PROBES in budgets.mjs.
+
+/** The Local Web UI server process, so the idle probe can read its CPU. */
+let SERVER_PID = null;
+
+/** Run a report-only probe; a failure is recorded in the report, never thrown. */
+async function runProbe(name, fn) {
+  try {
+    return await fn();
+  } catch (e) {
+    log(`report-only probe ${name} failed: ${e.message}`);
+    return { error: String(e.message).slice(0, 400) };
+  }
+}
+
+/** Trace the page's main thread until `done()` (or `maxMs`), and return the frame work. */
+async function traceFrames(app, { maxMs, done = () => false, during = null }) {
+  const events = [];
+  const offData = app.cdp.on('Tracing.dataCollected', (p) => { for (const e of p.value) events.push(e); });
+  const traced = new Promise((r) => { const off = app.cdp.on('Tracing.tracingComplete', () => { off(); r(); }); });
+  await app.cdp.send('Tracing.start', {
+    transferMode: 'ReportEvents',
+    traceConfig: { recordMode: 'recordContinuously', includedCategories: ['toplevel', 'devtools.timeline', 'disabled-by-default-devtools.timeline.frame', '__metadata'] },
+  });
+  const t0 = Date.now();
+  const side = during ? during(() => Date.now() - t0 >= maxMs || done()) : Promise.resolve();
+  while (Date.now() - t0 < maxMs && !done()) await sleep(100);
+  const seconds = (Date.now() - t0) / 1000;
+  await side;
+  await app.cdp.send('Tracing.end');
+  await traced;
+  offData();
+  const f = frameWorkFromTrace(events);
+  const third = Math.floor(f.work.length / 3);
+  return { ...f, seconds, lastThird: f.work.slice(f.work.length - third) };
+}
+
+/** The newest reply's rendered text length in the chat that is on screen. */
+const shownReplyChars = (cdp) => cdp.evaluate(`(() => {
+  const panel = [...document.querySelectorAll('.panel')].find((p) => p.querySelector('textarea, .composer [contenteditable]')?.checkVisibility());
+  const all = panel ? panel.querySelectorAll('.msg-ai') : [];
+  return all.length ? all[all.length - 1].textContent.length : 0;
+})()`);
+
+/**
+ * Probe 1: frame work while a long reply streams. The reply is LONG_REPLY_CHARS
+ * (16 KB) of mixed markdown, streamed at the same 300 tokens/s as the gate, and
+ * the trace runs from the steady state (a couple of seconds in, about 2.5 KB)
+ * until the reply ends, so the last third of the frames are the ones that carry
+ * the most markdown. A parse that is redone from the top on every update grows
+ * with the reply; the gate's 6 s trace of a 28 KB reply never reaches that part.
+ */
+async function measureLongStream({ appUrl, mock, api, ids }) {
+  const app = await openApp({ appUrl, cdpPort: CFG.cdpPort + 3, vsync: true });
+  await app.openChat(0, '');
+  const finished = mock.state.streamsFinished;
+  await app.startStream(mock, LONG_TRIGGER);
+  const t = await traceFrames(app, { maxMs: 30000, done: () => mock.state.streamsFinished > finished });
+  const finishedInTrace = mock.state.streamsFinished > finished;
+  await sleep(300);
+  const replyChars = await shownReplyChars(app.cdp);
+  await api('chat:abort', ids[0]);
+  await app.close();
+  return { browser: app.browser.version, replySourceChars: LONG_REPLY_CHARS, replyChars, seconds: t.seconds, finishedInTrace, frames: t.frames, work: t.work, lastThird: t.lastThird, busyFraction: t.busyFraction, source: t.source };
+}
+
+/**
+ * Probe 2: frame work in chat A while chat B finishes. A streams the gate's long
+ * reply (28 KB, 23 s) on screen; chat B (another seeded chat, parked on the board) is sent a short
+ * prompt once a second, and each `done` makes the app refresh its session list.
+ */
+async function measureConcurrent({ appUrl, mock, api, ids }) {
+  const app = await openApp({ appUrl, cdpPort: CFG.cdpPort + 4, vsync: true });
+  await app.openChat(0, '');
+  // The 28 KB reply (23 s), not the 16 KB one (13 s): A must still be streaming when the window ends.
+  await app.startStream(mock);
+  let completions = 0;
+  const during = async (over) => {
+    for (let k = 0; !over(); k++) {
+      await api('chat:send', { sessionId: ids[1], providerId: 'mock', modelId: 'mock-1', text: `quick question ${k}` }).then((r) => r.ok && completions++).catch(() => {});
+      for (let w = 0; w < 9 && !over(); w++) await sleep(100);
+    }
+  };
+  const maxMs = QUICK ? 5000 : 8000;
+  // A fixed window. (The mock's finished-stream counter is not A's alone: a stream a
+  // follow-up request started earlier can finish inside the window.) A is still
+  // streaming at the end if its reply is still growing on screen.
+  const t = await traceFrames(app, { maxMs, during });
+  const a = await shownReplyChars(app.cdp);
+  await sleep(500);
+  const aStillStreaming = (await shownReplyChars(app.cdp)) > a;
+  await api('chat:abort', ids[0]);
+  await app.close();
+  return { browser: app.browser.version, seconds: t.seconds, bCompletions: completions, aStillStreaming, frames: t.frames, work: t.work, busyFraction: t.busyFraction, source: t.source };
+}
+
+/**
+ * Probe 3: startup. Each sample is a new browser with a new, empty profile
+ * (nothing cached, no service worker) loading the Local Web UI's production
+ * renderer. Times are from navigation start. "Interactive" is the first frame,
+ * and a task after it, with the app shell (the rail) and a board window both on
+ * screen. The build's JavaScript is totalled from the files electron-vite wrote.
+ */
+async function measureStartup({ appUrl }) {
+  const wall = wallState(WALL_IDS);
+  const saved = await fetch(new URL('api/settings:update', appUrl), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ args: [{ commandWall: wall }] }) });
+  if (!saved.ok) throw new Error(`could not save the board to settings: ${saved.status}`);
+  const WATCH = String.raw`(() => {
+    const S = (window.__startup = { longTaskMs: 0 });
+    try { new PerformanceObserver((l) => { for (const e of l.getEntries()) if (e.name === 'first-paint') S.fp ??= e.startTime; else if (e.name === 'first-contentful-paint') S.fcp ??= e.startTime; }).observe({ type: 'paint', buffered: true }); } catch {}
+    try { new PerformanceObserver((l) => { for (const e of l.getEntries()) if (S.interactive == null) S.longTaskMs += e.duration; }).observe({ type: 'longtask', buffered: true }); } catch {}
+    const loop = () => requestAnimationFrame(() => {
+      const shell = !!document.querySelector('nav button[aria-label="Agents"]');
+      if (shell) S.shell ??= performance.now();
+      if (shell && document.querySelector('.panel')) {
+        S.view ??= performance.now();
+        scheduler.postTask(() => { S.interactive = performance.now(); }, { priority: 'user-blocking' });
+        return;
+      }
+      loop();
+    });
+    loop();
+  })()`;
+  const n = QUICK ? 3 : 5;
+  const runs = [];
+  let loaded = [];
+  for (let i = 0; i < n; i++) {
+    const browser = await launchBrowser({ port: CFG.cdpPort + 5, ...CFG.viewport, vsync: true, gpu: flag('no-gpu') ? false : true });
+    const cdp = await connectCdp(browser.wsUrl);
+    try {
+      await cdp.send('Page.enable');
+      await cdp.send('Runtime.enable');
+      await cdp.send('Emulation.setDeviceMetricsOverride', { ...CFG.viewport, deviceScaleFactor: 1, mobile: false });
+      await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: `try { localStorage.setItem('nekko.commandWall', ${JSON.stringify(JSON.stringify(wall))}); } catch {}` });
+      await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: WATCH });
+      await cdp.send('Page.navigate', { url: appUrl });
+      let s = null;
+      for (let k = 0; k < 600 && !s?.interactive; k++) { await sleep(100); s = await cdp.evaluate('window.__startup ?? null').catch(() => null); }
+      await sleep(1000);
+      const page = await cdp.evaluate(`(() => {
+        const nav = performance.getEntriesByType('navigation')[0];
+        const js = performance.getEntriesByType('resource').filter((r) => /\\.m?js(\\?|$)/.test(r.name));
+        return { startup: window.__startup, nav: nav ? { responseEnd: nav.responseEnd, domContentLoaded: nav.domContentLoadedEventEnd, load: nav.loadEventEnd } : null,
+          js: js.map((r) => ({ name: r.name, decoded: r.decodedBodySize, encoded: r.encodedBodySize })) };
+      })()`);
+      if (!page.startup?.interactive) throw new Error(`the main view never became interactive (saw ${JSON.stringify(page.startup)})`);
+      runs.push(page);
+      loaded = page.js;
+    } finally {
+      try { cdp.close(); } catch { /* gone */ }
+      await browser.close();
+    }
+  }
+  const col = (f) => runs.map(f).filter((v) => typeof v === 'number');
+  const build = rendererBuildSizes(join(APP_ROOT, 'apps/desktop/out/renderer'));
+  return {
+    runs: n,
+    fp: summarize(col((r) => r.startup.fp)),
+    fcp: summarize(col((r) => r.startup.fcp)),
+    shell: summarize(col((r) => r.startup.shell)),
+    interactive: summarize(col((r) => r.startup.interactive)),
+    longTaskMs: summarize(col((r) => r.startup.longTaskMs)),
+    domContentLoaded: summarize(col((r) => r.nav?.domContentLoaded)),
+    loadedJsBytes: loaded.reduce((a, r) => a + (r.decoded || 0), 0),
+    loadedJsFiles: loaded.length,
+    build: build && { ...build, chunks: markLoaded(build.chunks, loaded.map((r) => r.name)) },
+    perRun: runs.map((r) => ({ fcp: r.startup.fcp, interactive: r.startup.interactive })),
+  };
+}
+
+/**
+ * Probe 4: idle CPU. One chat is working (a scripted agent streaming its long
+ * reply) and the window is hidden: a second tab is opened in front of it, and
+ * the page must report visibilityState "hidden" or the result says so. CPU is
+ * read as process CPU time before and after a window, as a share of one core:
+ * the Chromium process tree in total and its renderer, GPU and browser
+ * processes (ps on macOS, /proc on Linux, per process, counting only processes
+ * alive at both ends of the window), and the Local Web UI
+ * server with its children (nekkod), which stands in for the desktop's main
+ * process. Measured twice: hidden with no agent, then hidden with one running.
+ */
+async function measureIdle({ appUrl, mock, api, ids }) {
+  const app = await openApp({ appUrl, cdpPort: CFG.cdpPort + 6, vsync: true });
+  const port = new URL(app.browser.wsUrl).port;
+  const bcdp = await connectCdp((await (await fetch(`http://127.0.0.1:${port}/json/version`)).json()).webSocketDebuggerUrl);
+  try {
+    await app.openChat(0, '');
+    await app.cdp.send('Performance.enable');
+    await bcdp.send('Target.createTarget', { url: 'about:blank' });
+    let visibility = 'visible';
+    for (let k = 0; k < 50 && visibility !== 'hidden'; k++) { await sleep(100); visibility = await app.cdp.evaluate('document.visibilityState'); }
+    const seconds = QUICK ? 6 : 10;
+    const read = async () => {
+      const m = (await app.cdp.send('Performance.getMetrics')).metrics;
+      return { at: performance.now() / 1000, main: m.find((x) => x.name === 'TaskDuration')?.value ?? 0, chrome: cpuOfProcesses(app.browser.proc.pid), server: SERVER_PID ? cpuOfProcesses(SERVER_PID) : null };
+    };
+    const window_ = async () => {
+      const a = await read();
+      await sleep(seconds * 1000);
+      const b = await read();
+      const dt = b.at - a.at;
+      const c = a.chrome && b.chrome ? cpuDelta(a.chrome, b.chrome) : null;
+      const sv = a.server && b.server ? cpuDelta(a.server, b.server) : null;
+      const pct = (x) => (x == null ? null : (x / dt) * 100);
+      return { seconds: dt, rendererPct: pct(c?.renderer), gpuPct: pct(c?.gpu), browserPct: pct(c?.browser), chromePct: pct(c?.total), serverPct: pct(sv?.total), pageTaskDurationPct: ((b.main - a.main) / dt) * 100 };
+    };
+    await sleep(2000);
+    const noAgent = await window_();
+    const before = mock.state.streamsStarted;
+    const finished = mock.state.streamsFinished;
+    api('chat:send', { sessionId: ids[0], providerId: 'mock', modelId: 'mock-1', text: `${STREAM_TRIGGER} write the long report` }).catch(() => {});
+    for (let k = 0; k < 200 && mock.state.streamsStarted === before; k++) await sleep(100);
+    if (mock.state.streamsStarted === before) throw new Error('the scripted agent never started');
+    await sleep(3000);
+    const agent = await window_();
+    const stillStreaming = mock.state.streamsFinished === finished;
+    await api('chat:abort', ids[0]);
+    return { browser: app.browser.version, visibility, noAgent, agent, agentStillStreaming: stillStreaming };
+  } finally {
+    try { bcdp.close(); } catch { /* gone */ }
+    await app.close();
+  }
+}
+
 /**
  * Put a seeded chat back as it was: the streaming phases append a prompt and
  * a reply to it, and the next attempt expects its seeded newest message.
@@ -793,6 +1022,7 @@ async function main() {
   server.stdout.on('data', (d) => (serverLog += d));
   server.stderr.on('data', (d) => (serverLog += d));
   cleanups.push(() => killTree(server));
+  SERVER_PID = server.pid;
   const appUrl = `http://127.0.0.1:${CFG.appPort}/`;
   const api = (channel, ...args) =>
     fetch(`${appUrl}api/${channel}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ args }) });
@@ -848,6 +1078,23 @@ async function main() {
     const value = b.measure(memory);
     return { ...b, value, pass: value <= b.budget };
   });
+  // Report-only probes: measured after the gated phases, never judged.
+  const wants = (name) => !only || only === 'extras' || only === name;
+  const probes = {};
+  if (wants('long-stream')) { probes.long = await runProbe('long-stream', () => measureLongStream({ appUrl, mock, api, ids })); await resetChat(api, ids[0], CFG.chats[0]); }
+  if (wants('concurrent')) {
+    probes.concurrent = await runProbe('concurrent', () => measureConcurrent({ appUrl, mock, api, ids }));
+    for (const i of [0, 1]) await resetChat(api, ids[i], CFG.chats[i]);
+  }
+  if (wants('startup')) probes.startup = await runProbe('startup', () => measureStartup({ appUrl }));
+  if (wants('idle')) { probes.idle = await runProbe('idle', () => measureIdle({ appUrl, mock, api, ids })); await resetChat(api, ids[0], CFG.chats[0]); }
+  const probeRows = REPORT_ONLY_PROBES.map(({ measure, ...r }) => {
+    const m = probes[r.probe];
+    if (!m) return { ...r, skipped: `not run (--only ${only})` };
+    if (m.error) return { ...r, error: m.error };
+    const value = measure(m);
+    return value == null ? { ...r, skipped: 'not available on this machine' } : { ...r, value };
+  });
   const browserVersion = latency?.browser ?? frames?.browser ?? memory?.browser ?? '';
   const results = tries[tries.length - 1];
 
@@ -867,6 +1114,18 @@ async function main() {
     budgets: rows,
     memory,
     memoryBudgets: memoryRows.map(({ measure, ...r }) => r),
+    // Report-only: nothing here is judged, and nothing here can fail the run.
+    reportOnly: {
+      rows: probeRows,
+      idle: probes.idle ?? null,
+      startup: probes.startup ? { ...probes.startup, build: probes.startup.build ? { ...probes.startup.build } : null } : null,
+      longStream: probes.long ? { ...probes.long, work: undefined, lastThird: undefined } : null,
+      concurrent: probes.concurrent ? { ...probes.concurrent, work: undefined } : null,
+      samples: {
+        long_stream_frame_work: (probes.long?.work ?? []).map((v) => Math.round(v * 100) / 100),
+        concurrent_frame_work: (probes.concurrent?.work ?? []).map((v) => Math.round(v * 100) / 100),
+      },
+    },
     frameWake: latency ? { ...latency.wake, pump: !flag('no-frame-pump') } : null,
     slowSwitches: latency?.slow ?? [],
     eventTiming: {
@@ -911,6 +1170,7 @@ function markdown(report) {
       ? [`- Latency browser frame wake (a frame asked for 2 ms after an empty one): p50 ${report.frameWake.p50} ms, p95 ${report.frameWake.p95} ms${report.frameWake.pump ? '' : ' (--no-frame-pump: latency figures include the 60 Hz idle wake)'}`]
       : []),
     '',
+    ...reportOnlyMarkdown(report),
     '## Memory contract',
     '',
     '| Check | Budget | Measured | Result |',
@@ -928,6 +1188,35 @@ function markdown(report) {
       ]
       : []),
   ].join('\n');
+}
+
+function reportOnlyMarkdown(report) {
+  const r = report.reportOnly;
+  if (!r || r.rows.every((x) => x.skipped)) return [];
+  const fmt = (x) => (x.error ? `error: ${x.error}` : x.skipped ? `skipped (${x.skipped})` : `${Number(x.value).toFixed(x.digits ?? 1)} ${x.unit}`);
+  const out = [
+    '## Report-only probes (not gating)',
+    '',
+    'Measured and printed for before/after comparison. No budget applies, and none of these can fail the run.',
+    '',
+    '| Probe | Measured |',
+    '| --- | --- |',
+    ...r.rows.filter((x) => !String(x.skipped ?? '').startsWith('not run')).map((x) => `| ${x.label} | ${fmt(x)} |`),
+    '',
+  ];
+  const ok = (x) => x && !x.error;
+  if (ok(r.longStream)) out.push(`- Long reply: ${r.longStream.replySourceChars} source characters, ${r.longStream.replyChars} rendered, ${r.longStream.frames} frames in ${r.longStream.seconds.toFixed(1)} s, main thread ${Math.round(r.longStream.busyFraction * 100)}% busy${r.longStream.finishedInTrace ? '' : '; WARNING: the reply had not finished when the trace ended'}`);
+  if (ok(r.concurrent)) out.push(`- Chat B finishing: ${r.concurrent.bCompletions} turns of chat B finished during ${r.concurrent.seconds.toFixed(1)} s, ${r.concurrent.frames} frames of chat A${r.concurrent.aStillStreaming ? '' : '; WARNING: chat A finished before the trace ended'}`);
+  if (ok(r.idle)) out.push(`- Idle: window visibilityState "${r.idle.visibility ?? '-'}"${r.idle.visibility === 'hidden' ? '' : ' (WARNING: not hidden)'}; agent still streaming at the end: ${r.idle.agentStillStreaming ?? '-'}; windows of ${r.idle.agent?.seconds?.toFixed(1) ?? '-'} s; percent of one core. Server = the Local Web UI process and its children (nekkod), standing in for the desktop's main process.`);
+  const st = r.startup;
+  if (ok(st) && st.build) {
+    out.push(`- Startup: ${st.runs} cold-profile loads; FCP p50 ${st.fcp.p50} ms, interactive p50 ${st.interactive.p50} ms (runs: ${st.perRun.map((x) => `${Math.round(x.fcp)}/${Math.round(x.interactive)}`).join(', ')} ms FCP/interactive); long-task time before interactive p50 ${st.longTaskMs.p50} ms.`);
+    out.push(`- Renderer build (apps/desktop/out/renderer): ${st.build.count} JS chunks, ${(st.build.totalBytes / 1024).toFixed(0)} KiB raw, ${(st.build.totalGzipBytes / 1024).toFixed(0)} KiB gzip; CSS ${(st.build.cssBytes / 1024).toFixed(0)} KiB; ${st.loadedJsFiles} JS files (${(st.loadedJsBytes / 1024).toFixed(0)} KiB) loaded by startup.`);
+    out.push('', '| Chunk | Bytes | Gzip bytes | Loaded at startup |', '| --- | --- | --- | --- |',
+      ...st.build.chunks.slice(0, 15).map((c) => `| ${c.file} | ${c.bytes} | ${c.gzipBytes} | ${c.loadedAtStartup ? 'yes' : 'no'} |`),
+      ...(st.build.chunks.length > 15 ? [`| ... ${st.build.chunks.length - 15} smaller chunks, all in perf-report.json | | | |`] : []), '');
+  }
+  return out.concat('');
 }
 
 main()

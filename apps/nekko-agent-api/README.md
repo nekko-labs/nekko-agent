@@ -76,7 +76,7 @@ For loopback testing, generate design tokens with the website build, then start 
   account sign-in alone is insufficient. `GET` lists this account's encrypted
   descriptors and 90-second presence leases; `PUT /self` publishes only the
   caller's computer with `{keyId, revision, descriptor}`; `POST /self/heartbeat`
-  renews its lease; `DELETE /self` withdraws it. Publishing/heartbeats need
+  renews its lease (held in memory, `src/presence.ts`; the database's last-seen is written when the computer comes online and hourly); `DELETE /self` withdraws it. Publishing/heartbeats need
   Pro/Enterprise; reads and withdrawal remain available after downgrade. Descriptors
   are capped at 16 KiB, with at most 100 retained advertisements per account.
   Sign-out, expiry, revocation and key rotation invalidate discovery. Desktop
@@ -482,6 +482,14 @@ Every start logs both numbers, for example
 the heap limit is over 75% of the machine (the cap was lost, say a Dockerfile
 that runs `node` directly), it also logs a warning and sends the error alert.
 After a deploy or a `fly scale`, check that line in `fly logs`.
+
+**Load probe** (`npm run probe:load`, `src/dev/load-probe.ts`): the real server on
+in-memory Postgres, with concurrent pushes through a small budget, a big pull
+that the client abandons and retries, and a request declaring a huge
+`Content-Length`; it exits 1 when one fails. `node --expose-gc
+dist/dev/load-probe.js --measure` prints peak RSS for one pull page and push
+latency at 50 and 200 objects (PGlite has no network round trip, so latencies
+understate Neon's).
 
 ## Cost
 

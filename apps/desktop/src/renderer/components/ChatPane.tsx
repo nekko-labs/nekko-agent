@@ -32,7 +32,7 @@ import { createPortal } from 'react-dom';
 import { DictationButton } from './DictationButton.js';
 import { voiceComposer } from '../voiceActions.js';
 import { decideApproval, type ApprovalScope } from './agent-console/approval-decision.js';
-import type { AgentEvent, ChatMessage, AskAnswer, AskRequest, SecretRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
+import type { AgentEvent, ChatMessage, SessionSummary, AskAnswer, AskRequest, SecretRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
 import { CHAT_MODE_LABEL, chatCodeModeSavings, privacyMode, CLAUDE_CODE_PROVIDER_KIND, canOfferSubagent, subagentModelChoice, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, claudePlanUsageNotice, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress, usageLimitResetAt } from '@nekko-agent/shared';
 import type { AutoProviderPick, BootedSimulator, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
@@ -131,6 +131,17 @@ import { ShieldCheckIcon } from '../icons.js';
 import { PanelIcon, DownloadIcon, PlusIcon, SearchIcon, CloseIcon, BoltIcon, IncognitoIcon, ThoughtIcon, ListIcon, TerminalIcon, WorktreeIcon, CheckIcon, TrashIcon, UndoIcon } from '../icons.js';
 import { GfSendIcon, GfStopIcon } from '../gentleface-icons.js';
 import { SimulatorStatus, useSimulatorAutoOpen } from './Simulators.js';
+
+/** The provider::model keys of past chats, newest first, each once. */
+export function recentModelKeys(sessions: SessionSummary[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const s of sessions.filter((c) => c.modelId && c.providerId).sort((a, b) => b.updatedAt - a.updatedAt)) {
+    const key = `${s.providerId}::${s.modelId}`;
+    if (!seen.has(key)) { seen.add(key); out.push(key); }
+  }
+  return out;
+}
 
 const NO_PRS: PrInfo[] = []; // stable empty ref so the store selector doesn't churn
 // The first-chat intro brings Remotion with it, so it loads only when it shows.
@@ -859,11 +870,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // signed-out subscription, a local server with nothing loaded). Kept so the
   // chip can name what went missing instead of quietly reading "Choose a model".
   const [unavailableModel, setUnavailableModel] = useState<string | null>(null);
-  const recentModels = useStore((s) => s.sessions)
-    .filter((s) => s.modelId && s.providerId)
-    .sort((a, b) => b.updatedAt - a.updatedAt)
-    .map((s) => `${s.providerId}::${s.modelId}`)
-    .filter((key, i, all) => all.indexOf(key) === i);
+  const sessionList = useStore((s) => s.sessions);
+  const recentModels = useMemo(() => recentModelKeys(sessionList), [sessionList]);
   // Live telemetry for the subtext under the chat: output tokens, elapsed
   // seconds, and a summary of the last completed reply.
   const [turnOut, setTurnOut] = useState(0);

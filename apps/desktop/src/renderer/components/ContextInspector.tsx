@@ -4,6 +4,7 @@ import { getSessionWorkspaceIds, estimateTokens } from '@nekko-agent/shared';
 import { FolderIcon, FileIcon, PlusIcon, TrashIcon, ExternalIcon, ChevronIcon, StarIcon } from '../icons.js';
 import { toggleDefaultFolder } from '../defaultFolders.js';
 import { useStore } from '../store.js';
+import { useShallow } from 'zustand/react/shallow';
 import { afterPaint } from '../afterPaint.js';
 import { SpecPanel } from './SpecPanel.js';
 import { ResourceDock } from './ResourceMonitor.js';
@@ -76,7 +77,7 @@ const HostContextInspector = memo(function HostContextInspector({ sessionId: sho
   const [sessionId, setSessionId] = useState(shown);
   useEffect(() => (shown === sessionId ? undefined : afterPaint(() => setSessionId(shown))), [shown, sessionId]);
   const settings = useStore((s) => s.settings);
-  const sessions = useStore((s) => s.sessions);
+  const session = useStore((s) => s.sessions.find((c) => c.id === sessionId)) ?? null;
   const refreshSettings = useStore((s) => s.refreshSettings);
   const refreshSessions = useStore((s) => s.refreshSessions);
 
@@ -92,7 +93,6 @@ const HostContextInspector = memo(function HostContextInspector({ sessionId: sho
   // The area the divider splits (Folders + Context), excluding the pinned dock.
   const splitRef = useRef<HTMLDivElement>(null);
 
-  const session = sessions.find((s) => s.id === sessionId) ?? null;
   const defaultFolderIds = settings?.defaultWorkspaceIds ?? [];
   const workspaces = (settings?.workspaces ?? []).map((w) => ({ ...w, path: session?.gitIsolation === false ? w.path : session?.gitWorktrees?.[w.id]?.path ?? w.path }));
   const attached = session?.attachedPaths ?? [];
