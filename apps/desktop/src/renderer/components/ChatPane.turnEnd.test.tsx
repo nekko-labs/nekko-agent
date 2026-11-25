@@ -45,6 +45,7 @@ async function mountPane(stored: { current: Session }, summaries: () => SessionS
     onRunOrphaned: () => () => {},
     nextAgentWatchAt: async () => { calls.nextAgentWatchAt++; return null; },
     listAgentWatches: async () => [],
+    getGitStatus: async () => ({ repo: false }),
   } as Record<string, unknown>, { get: (t, k: string) => (k in t ? t[k] : (k.startsWith('on') ? () => () => {} : async () => null)) });
   (window as unknown as { nekko: unknown }).nekko = bridge;
   useStore.setState({ providers: [{ id: 'p', name: 'Local', kind: 'openai-compatible', baseUrl: 'http://127.0.0.1:1', enabled: true }] as never, models: [{ id: 'm', name: 'm', providerId: 'p' }] as never, sessions: summaries() });
