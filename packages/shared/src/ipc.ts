@@ -572,6 +572,8 @@ export const IpcEvents = {
   /** A terminal's remote viewers changed (`TerminalViewersEvent`). */
   terminalViewers: 'terminal:viewers',
   changesUpdated: 'changes:updated',
+  /** A git change the daemon made (stage, commit, push, switch, PR create) invalidated its cached status of `{ path }`. */
+  gitChanged: 'git:changed',
   tasksUpdated: 'tasks:updated',
   /** `BackgroundState` changed: a background turn started, ended, paused or resumed. */
   backgroundUpdated: 'background:updated',
@@ -1578,6 +1580,8 @@ export interface NekkoApi {
   ): Promise<import('./terminal.js').TerminalStream | null>;
   /** Fires when a session's tracked file changes shift (after an agent edit/accept). */
   onChangesUpdated(cb: (e: { sessionId: string }) => void): () => void;
+  /** The daemon changed a folder's git state (see `IpcEvents.gitChanged`): re-read what shows it. */
+  onGitChanged(cb: (e: { path: string }) => void): () => void;
   /** Fires when the automation-task list changes (created/updated/fired/deleted). */
   onTasksUpdated(cb: (tasks: AutomationTask[]) => void): () => void;
   onBackgroundUpdated(cb: (state: import('./background.js').BackgroundState) => void): () => void;
