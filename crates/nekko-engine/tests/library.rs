@@ -375,6 +375,47 @@ fn names_a_model_by_its_file_when_the_header_name_is_generic() {
 }
 
 #[test]
+fn lists_supported_mlx_cache_geometry_without_guessing() {
+    let dir = scratch("mlx-cache-geometry");
+    let model = dir.join("Hermes-MLX");
+    std::fs::create_dir_all(&model).unwrap();
+    std::fs::write(model.join("model.safetensors"), [0; 32]).unwrap();
+    let write = |v: &Value| std::fs::write(model.join("config.json"), v.to_string()).unwrap();
+    let cfg =
+        LibraryConfig { models_dir: dir.to_string_lossy().into_owned(), folders: vec![], mlx_runnable: true, now: 1.0 };
+    let mut config = json!({
+        "model_type": "llama", "torch_dtype": "bfloat16", "num_hidden_layers": 80,
+        "num_attention_heads": 64, "num_key_value_heads": 8, "head_dim": 128,
+        "hidden_size": 8192, "max_position_embeddings": 131072,
+    });
+    write(&config);
+    let row = library::list(&cfg).unwrap().remove(0);
+    assert_eq!(row["mlxKvBytesPerToken"], 327680);
+    assert_eq!(row["maxContext"], 131072);
+    assert_eq!(row["sizeBytes"].as_f64(), Some(32.0));
+
+    // A previously indexed directory uses its current config, and an exact
+    // hidden-size division is MLX Llama's fallback when head_dim is omitted.
+    config.as_object_mut().unwrap().remove("head_dim");
+    write(&config);
+    assert_eq!(library::list(&cfg).unwrap()[0]["mlxKvBytesPerToken"], 327680);
+    for (key, value) in [
+        ("num_key_value_heads", Value::Null),
+        ("torch_dtype", Value::Null),
+        ("hidden_size", json!(8193)),
+        ("sliding_window", json!(4096)),
+        ("layer_types", json!(["linear_attention", "full_attention"])),
+        ("model_type", json!("qwen3_5")),
+    ] {
+        let mut unsupported = config.clone();
+        unsupported[key] = value;
+        write(&unsupported);
+        assert!(library::list(&cfg).unwrap()[0].get("mlxKvBytesPerToken").is_none(), "{key}");
+    }
+    std::fs::remove_dir_all(dir).ok();
+}
+
+#[test]
 fn a_build_downloaded_from_the_repo_lists_under_the_same_repo_as_the_blocked_file() {
     // The file in LM Studio's folder, and the Q2_0 the catalog download plan would land: the library must
     // see one repo for both, which is what puts them in one family on the Models page.
