@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { authenticate, type Caller, SYNC_PLANS } from "./auth.js";
 import type { Db } from "./db.js";
-import { Presence } from "./presence.js";
+import { LEASE_MS, Presence } from "./presence.js";
 import { b64url, bytes, currentKeyId, keyed } from "./sync.js";
 
 /** Discovery only. Clients must authenticate the descriptor and the peer; a
@@ -21,17 +21,21 @@ interface ComputerRow {
 
 export function registerFleet(app: FastifyInstance, db: Db): void {
   const presence = app.presence;
-  // Online comes from the lease kept in memory (presence.ts); seen_at is the stored last-seen.
-  const wire = (r: ComputerRow) => {
+  // Online comes from the lease kept in memory (presence.ts), or the relay when it is configured
+  // (relay-presence.ts); seen_at is the stored last-seen.
+  type Online = (userId: string, deviceId: string) => boolean;
+  const wire = (r: ComputerRow, userId: string, atRelay: Online) => {
     const live = presence.state(Presence.key(null, r.device_id), r.seen_at);
+    const viaRelay = !live.online && atRelay(userId, r.device_id);
+    const now = presence.clock();
     return {
       deviceId: r.device_id,
       keyId: r.key_id,
       revision: Number(r.revision),
       descriptor: b64url(r.descriptor),
-      seenAt: live.seenAt,
-      expiresAt: live.expiresAt,
-      online: live.online,
+      seenAt: viaRelay ? new Date(now) : live.seenAt,
+      expiresAt: viaRelay ? new Date(now + LEASE_MS) : live.expiresAt,
+      online: live.online || viaRelay,
     };
   };
 
@@ -83,7 +87,9 @@ export function registerFleet(app: FastifyInstance, db: Db): void {
         order by f.device_id limit ${MAX_FLEET_COMPUTERS}`,
       [caller.userId, epoch],
     );
-    return { keyId: epoch, computers: rows.map(wire) };
+    // One question to the relay per read, for this account's computers; a relay that does not answer counts as nothing.
+    const atRelay = rows.length && app.relayPresence ? await app.relayPresence.lookup([caller.userId]) : () => false;
+    return { keyId: epoch, computers: rows.map((r) => wire(r, caller.userId, atRelay)) };
   }));
 
   // Identity comes only from the authenticated token: no body/path device id.
