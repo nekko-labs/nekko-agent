@@ -180,6 +180,27 @@ extension RelayClientTests {
         c.close()
     }
 
+    func testARouteDenialMovesToTheNextRouteInsteadOfStopping() async {
+        let relay = FakeRelay(key: key, known: ["dev-1"])
+        relay.routeDenied = ["192.168.1.20:4400"]
+        let (c, r) = twoRoutes(relay)
+        c.connect()
+        let s = await r.await(.online)
+        XCTAssertEqual(s?.route, Self.tailnetRoute)
+        XCTAssertFalse(r.lock.sync { r.statuses.contains { $0.state == .denied } })
+        c.close()
+    }
+
+    func testARouteDenialOnEveryRouteIsTheEnd() async {
+        let relay = FakeRelay(key: key, known: ["dev-1"])
+        relay.routeDenied = ["192.168.1.20:4400", "studio.tail1234.ts.net:4400"]
+        let (c, r) = twoRoutes(relay)
+        c.connect()
+        let s = await r.await(.denied)
+        XCTAssertEqual(s?.denied, .route)
+        c.close()
+    }
+
     func testARefusingLanFallsBackAtOnce() async {
         let relay = FakeRelay(key: key, known: ["dev-1"])
         relay.unreachable["192.168.1.20:4400"] = false

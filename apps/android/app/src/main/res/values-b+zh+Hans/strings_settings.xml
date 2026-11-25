@@ -381,13 +381,16 @@
     <string name="settings_card_counts">仅显示数量</string>
     <string name="settings_card_counts_detail">正在运行的聊天数量，仅此而已</string>
     <string name="settings_card_minimal">简洁</string>
-    <string name="settings_card_minimal_detail">需要你的聊天正在做什么，附带停止和拒绝。不显示聊天文字</string>
+    <string name="settings_card_minimal_detail">正在工作、等待中和已完成的聊天总数。不含聊天文字</string>
     <string name="settings_card_standard">标准</string>
-    <string name="settings_card_standard_detail">另外显示聊天名称、当前步骤和允许</string>
+    <string name="settings_card_standard_detail">与“简洁”相同的总数；卡片不显示聊天名称或步骤</string>
     <string name="settings_card_detailed">详细</string>
-    <string name="settings_card_detailed_detail">另外显示最新回复的第一行</string>
-    <string name="settings_card_footer_private">不会为锁定屏幕从电脑发送任何聊天文字。</string>
-    <string name="settings_card_footer_text">手机解锁时显示聊天名称和步骤；锁定且隐藏敏感内容的手机只显示“简洁”文字。允许前需要先解锁。</string>
+    <string name="settings_card_detailed_detail">与“简洁”相同的总数；卡片也不显示回复</string>
+    <string name="settings_card_footer_none">没有卡片。连接通知只显示正在运行的聊天数量以及所在的电脑。</string>
+    <string name="settings_card_footer_minimal">只显示总数。锁屏上不显示任何聊天文字。与 Nekko 对话前需要先解锁。</string>
+    <string name="settings_card_footer_standard">在 Android 上，此卡片与“简洁”相同：不显示聊天名称或步骤。</string>
+    <string name="settings_card_footer_detailed">在 Android 上，此卡片与“简洁”相同：不显示聊天名称、步骤或回复。</string>
+    <string name="settings_card_preview">锁屏卡片预览</string>
     <string name="settings_warn_yolo">开启 YOLO 前提醒</string>
     <string name="settings_warn_yolo_detail">在聊天或电脑的默认模式切换到 YOLO 之前，说明 YOLO 会放行什么</string>
     <!-- Customize (#2426), the iPhone's page. -->

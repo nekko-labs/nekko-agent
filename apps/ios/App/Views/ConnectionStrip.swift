@@ -4,7 +4,7 @@ import SwiftUI
 
 /// One slim row of every paired computer and its connection: a dot and a name,
 /// one word when something is wrong, and (tapped) one line with the fix under it.
-/// Tailscale leads the row when it is what keeps computers away. Replaces the
+/// A computer only Tailscale reaches says "Tailscale off" itself. Replaces the
 /// connection, fleet and protocol banners (design: reports/ios-connection-strip-design.html).
 struct ConnectionStrip: View {
     /// Only the items with something to say (Files, Monitors); the chat list shows every computer.
@@ -55,14 +55,10 @@ struct ConnectionStrip: View {
 
     @ViewBuilder private func item(_ n: ConnectionNote, selected: Bool) -> some View {
         let label = HStack(spacing: 6) {
-            if n.isTailscale {
-                Image(systemName: "network.slash").font(.caption).foregroundStyle(palette.warning)
-            } else {
-                dot(n.tone)
-                Text(n.name ?? "").foregroundStyle(selected ? palette.ink : palette.inkSoft)
-            }
+            dot(n.tone)
+            Text(n.name ?? "").foregroundStyle(selected ? palette.ink : palette.inkSoft)
             if let w = n.word {
-                Text(w).fontWeight(n.isTailscale ? .medium : .regular).foregroundStyle(color(n.wordTone))
+                Text(w).foregroundStyle(color(n.wordTone))
             }
             if n.opens {
                 Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold)).foregroundStyle(palette.inkFaint)
@@ -79,7 +75,7 @@ struct ConnectionStrip: View {
         if n.opens {
             Button { open = selected ? nil : n.id } label: { label }
                 .buttonStyle(.plain)
-                .accessibilityLabel([n.name ?? "Tailscale", n.word].compactMap { $0 }.joined(separator: ", "))
+                .accessibilityLabel([n.name, n.word].compactMap { $0 }.joined(separator: ", "))
                 .accessibilityHint(selected ? "Hides the fix." : "Shows how to fix it.")
                 .accessibilityIdentifier("strip.\(n.id)")
         } else {

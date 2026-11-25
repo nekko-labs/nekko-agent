@@ -71,6 +71,30 @@ final class RouteStoreTests: XCTestCase {
         XCTAssertEqual(again.active?.alts, ["ws://10.0.0.5:4400"])
     }
 
+    func testTheChoiceLimitsTheRoutesTheClientDialsAndReconnectsAtOnce() async throws {
+        let cloud = "wss://nekko-agent-relay.fly.dev"
+        let s = makeStore()
+        s.load()
+        let id = try await s.pair(PairingLink(relayUrl: tailnet, room: room, key: key, hostKey: testHostKey, alts: [lan, cloud]))
+        let before = connections.count
+        s.setRouteChoice(id, .cloud)
+        await settle()
+        XCTAssertGreaterThan(connections.count, before, "a new link is dialed")
+        XCTAssertEqual(connections.last?.config.relayUrl, cloud)
+        XCTAssertEqual(connections.last?.config.alternates, [])
+        XCTAssertEqual(s.active?.routeChoice, .cloud)
+
+        s.setRouteChoice(id, .direct)
+        await settle()
+        XCTAssertEqual(Set(connections.last?.config.routes ?? []), [tailnet, lan])
+
+        // Saved with the computer and read back.
+        let again = makeStore()
+        again.load()
+        XCTAssertEqual(again.active?.routeChoice, .direct)
+        XCTAssertEqual(again.active?.routes, [lan, tailnet])
+    }
+
     func testReadsPairingsSavedBeforeRoutes() throws {
         secure.set(ComputersStore.indexKey, #"[{"id":"old","name":"Mac","relayUrl":"wss://r.example","pairedAt":1}]"#)
         let s = makeStore()
