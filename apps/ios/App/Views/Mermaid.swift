@@ -1,3 +1,4 @@
+import NekkoKit
 import NekkoProtocol
 import SwiftUI
 import UIKit
@@ -297,6 +298,7 @@ final class MermaidRenderer {
     /// `diskBytes`. Runs off the main actor.
     private func pruneDisk() {
         let folder = Self.folder
+        let (maxBytes, maxAge) = (Self.diskBytes, Self.diskDays * 86_400)
         Task.detached(priority: .utility) {
             let keys: [URLResourceKey] = [.fileSizeKey, .contentModificationDateKey]
             guard let urls = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: keys) else { return }
@@ -304,7 +306,7 @@ final class MermaidRenderer {
                 guard let v = try? url.resourceValues(forKeys: Set(keys)) else { return nil }
                 return CachePruner.File(name: url.lastPathComponent, bytes: v.fileSize ?? 0, modified: v.contentModificationDate ?? .distantPast)
             }
-            for name in CachePruner.plan(files, maxBytes: Self.diskBytes, maxAge: Self.diskDays * 86_400, now: Date()) {
+            for name in CachePruner.plan(files, maxBytes: maxBytes, maxAge: maxAge, now: Date()) {
                 try? FileManager.default.removeItem(at: folder.appendingPathComponent(name))
             }
         }
