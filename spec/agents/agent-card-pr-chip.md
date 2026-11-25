@@ -35,6 +35,6 @@ Use the worktree bootstrap in [the typecheck runbook](../../docs/runbooks/worktr
 
 ## Boundaries
 
-No new data schema, permissions or endpoints: visible cards use the existing cached PR reader, with bounded reads across all mounted cards rather than a one-shot eight-card slice. Attribution does not scan user prose or unrelated PRs. Terminal cards and native phone presentation are unchanged.
+No new data schema or permissions: visible cards use the existing cached PR reader, with bounded reads across all mounted cards rather than a one-shot eight-card slice (since 2026-11-26 as one batched read, `pr:sessionListMany`, below). Attribution does not scan user prose or unrelated PRs. Terminal cards and native phone presentation are unchanged.
 
 - **How the PR list is read** (2026-11-26): `pr:sessionList` takes a chat's PR URLs (its own and its sub-agents') from the daemon's kept session summaries, never from a parse of the transcript, so a poll on a long chat costs a lookup. `pr:sessionListMany(ids, force?)` answers for up to 64 chats in one call (`{ [chatId]: PrInfo[] }`); the board's prefetch asks for its visible cards together and the cards' 20 s poll is one shared timer for every card on screen. Another computer's chats are still asked of that computer, one call each. Phones do not get the batch channel.
