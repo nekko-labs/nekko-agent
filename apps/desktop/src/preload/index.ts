@@ -332,6 +332,7 @@ const api: NekkoApi = {
   acceptAllChanges: (sessionId) => inv(IpcChannels.changeAcceptAll, sessionId),
 
   listSessionPrs: (sessionId, force) => inv(IpcChannels.prSessionList, sessionId, force),
+  listSessionPrsMany: (sessionIds, force) => inv(IpcChannels.prSessionListMany, sessionIds, force),
   getPrDiff: (url) => inv(IpcChannels.prDiff, url),
   prAction: (url, action) => inv(IpcChannels.prAction, url, action),
   continuePrStack: (sessionId, url) => inv(IpcChannels.prContinueStack, sessionId, url),
