@@ -76,7 +76,7 @@ export interface LiveRun {
   retrying?: { attempt: number; maxAttempts: number; delayMs: number; reason: string; at: number };
 }
 
-import { foldSubagentActivity, startSubagentActivity, stopSubagentActivity, resetSubagentActivity, resetSubagentActivityFor, seedSubagentWaits } from './subagentActivity.js';
+import { foldSubagentActivity, startSubagentActivity, stopSubagentActivity, resetSubagentActivity, resetSubagentActivityFor, seedSubagentWaits, subagentActivitySignature } from './subagentActivity.js';
 
 const runs = new Map<string, LiveRun>();
 /**
@@ -106,7 +106,7 @@ export function clampLive(s: string): string {
 }
 /** Per-session subscriber sets, so a pane only wakes for its own chat. */
 const listeners = new Map<string, Set<() => void>>();
-/** Subscribers that want to know about *any* change (the sub-agent rail). */
+/** Subscribers that want to know when the set of runs or a sub-agent's status changes (the sub-agent rail). */
 const globalListeners = new Set<() => void>();
 
 /**
@@ -115,6 +115,13 @@ const globalListeners = new Set<() => void>();
  * each repaint and the map below caches the current object per session.
  */
 let version = 0;
+/** What `version` last counted: the running chats and every sub-agent's status and waits. */
+let structure = '';
+
+/** The running chats plus every sub-agent's status and waits, as one string. */
+function structureSignature(): string {
+  return `${[...runs.keys()].sort().join(',')}#${subagentActivitySignature()}`;
+}
 
 function emptyRun(sessionId: string, now: number): LiveRun {
   return {
@@ -243,8 +250,15 @@ function markDirty(sessionId: string): void {
     frame = null;
     const wake = [...dirty];
     dirty.clear();
-    version++;
     for (const id of wake) for (const fn of listeners.get(id) ?? []) fn();
+    // The global version moves only when a run starts or ends or a sub-agent's
+    // status or wait changes. Streamed tokens do not: they have their own
+    // per-chat subscription, and waking every rail on every frame of every chat
+    // re-rendered them all at frame rate.
+    const next = structureSignature();
+    if (next === structure) return;
+    structure = next;
+    version++;
     for (const fn of globalListeners) fn();
   });
 }
@@ -506,11 +520,12 @@ export function useLiveRun(sessionId: string, paused = false): LiveRun | undefin
     (fn: () => void) => (paused ? () => {} : subscribeTo(sessionId, fn)),
     [sessionId, paused],
   );
-  return useSyncExternalStore(subscribe, () => runs.get(sessionId));
+  return useSyncExternalStore(subscribe, () => runs.get(sessionId), () => runs.get(sessionId));
 }
 
 /**
- * Subscribe to the set of running sessions, as a version counter.
+ * Subscribe to the set of running sessions, as a version counter. It moves
+ * when a run starts or ends or a sub-agent's status changes, not per token.
  *
  * The sub-agent rail needs to repaint when any of several children moves, and
  * the children change as they are spawned; watching the counter is simpler than
@@ -542,6 +557,7 @@ export function describeRun(sessionId: string): string {
 
 /** Reset everything. Tests only. */
 export function __resetLiveRuns(): void {
+  structure = '';
   resetSubagentActivity();
   runs.clear();
   finished.clear();

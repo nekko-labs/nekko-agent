@@ -2,11 +2,12 @@ import { SubagentRoute } from './SubagentRoute.js';
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ChatMessage, IssueInfo, PlanStep, PrInfo, Session, SessionSummary } from '@nekko-agent/shared';
 import { lastReplyInterrupted, parsePrUrl, planProgress } from '@nekko-agent/shared';
-import { getLiveRun, runningSessionIds, useLiveRunsVersion } from '../liveRuns.js';
+import { getLiveRun, runningSessionIds, useLiveRun, useLiveRunsVersion } from '../liveRuns.js';
 import { planStepLinks, type PlanStepLinks, type ProjectLink } from '../planStepLinks.js';
 import { sheetPlan } from '../claudeAgentPlan.js';
 import { useShown } from '../simpleMode.js';
 import { useStore } from '../store.js';
+import { stableSelector } from '../selectStable.js';
 import { CheckIcon, CloseIcon, RocketIcon, TagIcon, WarningIcon } from '../icons.js';
 import { GfIcon } from '../gentleface-icons.js';
 import type { ChatArtifact } from '../chatArtifacts.js';
@@ -227,6 +228,8 @@ function SubagentCards({ children, running, onOpen }: { children: SessionSummary
 }
 
 /** The composer's plan: flat title rows with inline chips and per-row overflow. */
+const childrenOf = stableSelector((s: { sessions?: SessionSummary[] }, id) => (s.sessions ?? []).filter((c) => c.parentSessionId === id));
+
 export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpenChild, initiallyOpen = true }: {
   sessionId: string;
   session: Session | null;
@@ -243,10 +246,11 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
   const [collapsed, setCollapsed] = useState(initiallyOpen === false);
   // These chips are pull requests, so the condition holds wherever they would draw.
   const prsShown = useShown('pr-status', { pr: true });
-  const sessions = useStore((s) => s.sessions);
+  const childSessions = useStore((s) => childrenOf(s, sessionId));
   const providers = useStore((s) => s.providers);
-  const liveVersion = useLiveRunsVersion();
-  const live = getLiveRun(sessionId);
+  // Sub-agent state moves the global version; this chat's own streamed tools and text come from its own subscription.
+  useLiveRunsVersion();
+  const live = useLiveRun(sessionId);
   // Mid-turn, the saved `messages` don't yet show tool calls from the in-flight
   // reply. Fold the live tools in as a synthetic trailing assistant message so a
   // Claude Agent chat's TodoWrite plan updates while the agent is still writing
@@ -272,13 +276,10 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
       createdAt: live.startedAt + i,
     }));
     return { ...session, messages: [...(session.messages ?? []), synth, ...synthResults] };
-    // liveVersion is the subscription signal, so changes to `live.tools`
-    // reach the memo even when the array reference stays stable between ticks.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, liveVersion]);
+    // `live` is replaced on every repaint of this chat's run, so the memo follows its tools.
+  }, [session, live]);
   const messages = planSession?.messages;
   const plan = useMemo(() => sheetPlan(planSession, providers) ?? [], [planSession, providers]);
-  const childSessions = useMemo(() => (sessions ?? []).filter((s) => s.parentSessionId === sessionId), [sessions, sessionId]);
   // Keep the published order and each report on its own step. Related results
   // still share that step's disclosure, without a synthetic phase wrapper.
   const links = useMemo(() => planStepLinks(messages ?? [], plan, basePath, childSessions),

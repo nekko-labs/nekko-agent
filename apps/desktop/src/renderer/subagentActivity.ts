@@ -123,7 +123,30 @@ export function foldSubagentActivity(event: AgentEvent, now = Date.now()): void 
 export function stopSubagentActivity(id: string): void {
   if (activities.has(id)) activities.set(id, { status: 'stopped', detail: 'The run was stopped.' });
 }
-export function resetSubagentActivity(): void { activities.clear(); delegations.clear(); waits.clear(); }
+export function resetSubagentActivity(): void { activities.clear(); delegations.clear(); waits.clear(); textSeen.clear(); }
+/** A streamed reply's tail is shown by the rail, but refreshed at most this often. */
+export const ACTIVITY_TEXT_REFRESH_MS = 500;
+const textSeen = new Map<string, { text: string; at: number }>();
+
+/**
+ * What `childActivity` and `waitingOn` would answer for every chat, as one
+ * string: it changes when a status, a detail line or a wait does. A detail that
+ * is the tail of a streaming reply changes with every token, so it counts at
+ * most every ACTIVITY_TEXT_REFRESH_MS, which keeps a rail current without
+ * waking it at frame rate.
+ */
+export function subagentActivitySignature(now = Date.now()): string {
+  let out = '';
+  for (const [id, a] of activities) {
+    if (a.text === undefined) { textSeen.delete(id); out += `${id}:${a.status}:${a.detail}|`; continue; }
+    const seen = textSeen.get(id);
+    if (!seen || (seen.text !== a.text && now - seen.at >= ACTIVITY_TEXT_REFRESH_MS)) textSeen.set(id, { text: a.text, at: now });
+    out += `${id}:${a.status}:t${textSeen.get(id)!.at}|`;
+  }
+  for (const id of waits.keys()) out += `${id}:wait:${waitingOn(id)}|`;
+  return out;
+}
+
 /** Forget one chat's own activity (its delegations stay): a replay folds it again. */
 export function resetSubagentActivityFor(id: string): void { activities.delete(id); waits.delete(id); }
 
