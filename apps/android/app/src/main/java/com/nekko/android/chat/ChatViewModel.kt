@@ -55,6 +55,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.android.awaitFrame
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import com.nekko.protocol.Activity
@@ -241,9 +242,12 @@ class ChatViewModel(
         dictation?.cancel()
     }
 
+    // One projector for the chat's life: the saved transcript is parsed once per read, a streamed token patches the live tail.
+    private val projector = ChatProjector()
+
     val ui: StateFlow<ChatUi> = combine(controller.state, repo.state.map(this::env).distinctUntilChanged()) { s, e ->
-        ChatController.project(s, e)
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, ChatController.project(controller.state.value, env(repo.state.value)))
+        ChatController.project(s, e, projector)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, ChatController.project(controller.state.value, env(repo.state.value), projector))
 
     init {
         // Instant paint (OF-6): the saved copy at once, replaced in place when the computer answers.
@@ -253,7 +257,9 @@ class ChatViewModel(
             repo.state.map { it.conn }.distinctUntilChanged().collect { if (it == RelayState.ONLINE) controller.reload() }
         }
         viewModelScope.launch {
-            repo.events.collect { e -> if (controller.onEvent(e)) launch { controller.reload() } }
+            // Streamed words reach the transcript once per frame, not once per token (DeltaCoalescer).
+            val coalescer = DeltaCoalescer(this, sessionId, { awaitFrame() }) { e -> if (controller.onEvent(e)) launch { controller.reload() } }
+            repo.events.collect(coalescer::accept)
         }
     }
 
@@ -345,12 +351,16 @@ class ChatViewModel(
                 .distinctUntilChanged()
                 .collect { (watch, agent, _) -> if (watch || agent) refreshAgentState() }
         }
-        // While a watch is armed, its chip is re-read every 15 s (the desktop's cadence).
-        viewModelScope.launch {
-            while (true) {
-                delay(15_000)
-                if (_watches.value.any { it.status == AgentWatch.Status.ACTIVE }) refreshAgentState()
-            }
+    }
+
+    /**
+     * While a watch is armed, its chip is re-read every 15 s (the desktop's cadence). Run it under
+     * `repeatOnLifecycle(STARTED)` so it stops while the chat is not on screen.
+     */
+    suspend fun pollWatches(everyMs: Long = 15_000): Nothing {
+        while (true) {
+            delay(everyMs)
+            if (_watches.value.any { it.status == AgentWatch.Status.ACTIVE }) refreshAgentState()
         }
     }
 

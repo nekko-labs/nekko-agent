@@ -67,6 +67,7 @@
     "electron-updater": "^6.8.10",
     "electron-vite": "^6.0.0",
     "jimp": "^1.6.1",
+    "jsdom": "^31.0.1",
     "jsqr": "^1.4.0",
     "postcss": "^8.5.29",
     "react": "^19.3.0",

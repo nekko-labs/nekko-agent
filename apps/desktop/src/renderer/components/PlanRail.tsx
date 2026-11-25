@@ -4,11 +4,12 @@ import { MonitorArtifacts } from './MonitorArtifacts.js';
 import { MonitorProject } from './MonitorProject.js';
 import { SimulatorSection } from './Simulators.js';
 import React, { useEffect, useMemo, useRef } from 'react';
-import type { QueuedPrompt, Session } from '@nekko-agent/shared';
+import type { QueuedPrompt, Session, SessionSummary } from '@nekko-agent/shared';
 import { DEFAULT_ORCHESTRATION, agentMonitorRelevant, getStrategy, queueItemPayload } from '@nekko-agent/shared';
 import { useLiveRunsVersion, getLiveRun, runningSessionIds } from '../liveRuns.js';
 import { childActivity, activitySentence } from '../subagentActivity.js';
 import { useStore } from '../store.js';
+import { stableSelector } from '../selectStable.js';
 import { useShown } from '../simpleMode.js';
 import { ChatIcon, ControlPanelIcon, MinimizeIcon, RobotIcon } from '../icons.js';
 
@@ -50,25 +51,27 @@ export function AgentMonitorButton({ sessionId, subAgents, backgroundTasks, plan
   );
 }
 
+const childrenOf = stableSelector((s: { sessions: SessionSummary[] }, id) => s.sessions.filter((c) => c.parentSessionId === id));
+
 export function PlanRail({ sessionId, session, onMinimize }: {
   sessionId: string;
   session: Session | null;
   /** Closes the panel; the header's Agent Monitor button then reopens it. */
   onMinimize?: () => void;
 }) {
-  const sessions = useStore((s) => s.sessions);
+  // Only this chat's children: the list keeps each unchanged summary's identity, so an unrelated chat finishing does not re-render the rail.
+  const children = useStore((s) => childrenOf(s, sessionId));
   const openChatPane = useStore((s) => s.openChatPane);
   const orchestration = useStore((s) => s.settings?.orchestration);
   const spawnAllowed = getStrategy((orchestration ?? DEFAULT_ORCHESTRATION).strategy).allowsSpawn;
-  const children = useMemo(() => sessions.filter((s) => s.parentSessionId === sessionId), [sessions, sessionId]);
   const activityVersion = useLiveRunsVersion();
   const discovered = useRef(new Set<string>());
   useEffect(() => {
-    const unknown = runningSessionIds().filter(id => id !== sessionId && !sessions.some(s => s.id === id) && !discovered.current.has(id));
+    const unknown = runningSessionIds().filter(id => id !== sessionId && !useStore.getState().sessions.some(s => s.id === id) && !discovered.current.has(id));
     if (!unknown.length) return;
     unknown.forEach(id => discovered.current.add(id));
     void useStore.getState().refreshSessions();
-  }, [activityVersion, sessions, sessionId]);
+  }, [activityVersion, children, sessionId]);
   // Keep completed delegates available here until the user chooses to open
   // them; spawning alone never opens another window.
   const activeChildren = children;
