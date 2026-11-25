@@ -3174,7 +3174,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         </div>
         )}
 
-        {approval && surface !== 'composer' && <ApprovalBar approval={approval} onDecide={approve} computerName={computer?.name} />}
+        {/* Beside a composer the bar sits in its column, under the floating plan; without one it keeps its own row. */}
+        {approval && surface !== 'composer' && (readOnly || surface === 'transcript') && <ApprovalBar approval={approval} onDecide={approve} computerName={computer?.name} />}
 
         {readOnly ? (
           surface === 'transcript' ? null : <ArchivedChatBar sessionId={sessionId} contentWidth={contentWidth} archivedAt={session?.archivedAt ?? null} />
@@ -3183,6 +3184,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           {cleanStart && <CleanStartGreeting sessionId={sessionId} createdAt={session?.createdAt} kind={imageMode ? 'photo' : 'agent'} title={imageMode && photoSetupShown ? 'Let’s get photo mode set up.' : undefined} />}
           {firstPromptIntro && <Suspense fallback={null}><FirstPromptIntro onClose={closeFirstPromptIntro} /></Suspense>}
           <div className={`composer-column mx-auto ${commandCenter ? 'w-[min(98%,calc(100%-8px))]' : cleanStart ? 'w-[min(90%,calc(100%-8px))]' : 'w-full'}`} style={cleanStart ? undefined : commandCenter ? { width: 'min(98%, calc(100% - 8px))' } : undefined}>
+            {approval && surface !== 'composer' && <ApprovalBar docked approval={approval} onDecide={approve} computerName={computer?.name} />}
             {!cleanStart && !question && (
               <PlanSheet key={sessionId + '-plan'} sessionId={sessionId} session={session} streaming={streaming} prs={prs} basePath={artifactBasePath} onOpenChild={commandCenter ? (id) => useStore.getState().focusChatOnWall(id, { keepLayout: true }) : undefined} />
             )}

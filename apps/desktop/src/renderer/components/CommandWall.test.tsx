@@ -384,7 +384,19 @@ describe('focus full-height chat', () => {
   // host (a promise or an agent event), which a server render never applies.
   it('suppresses approvals on composer-only surfaces (source pin)', () => {
     const source = readFileSync(new URL('./ChatPane.tsx', import.meta.url), 'utf8');
-    expect(source).toMatch(/approval && surface !== 'composer' && <ApprovalBar\b/);
+    expect(source).toMatch(/approval && surface !== 'composer' && <ApprovalBar docked\b/);
+    expect(source).toMatch(/approval && surface !== 'composer' && \(readOnly \|\| surface === 'transcript'\) && <ApprovalBar\b/);
+  });
+  // Source pin: the plan floats above the top of the composer column, so an
+  // approval placed outside that column ended up under the plan (covered).
+  it('docks the approval in the composer column, before the floating plan (source pin)', () => {
+    const source = readFileSync(new URL('./ChatPane.tsx', import.meta.url), 'utf8');
+    const column = source.indexOf('<div className={`composer-column');
+    const docked = source.indexOf('<ApprovalBar docked');
+    const plan = source.indexOf('<PlanSheet', column);
+    expect(column).toBeGreaterThan(0);
+    expect(docked).toBeGreaterThan(column);
+    expect(docked).toBeLessThan(plan);
   });
 });
 
