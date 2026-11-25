@@ -240,6 +240,14 @@ impl FitRequest {
     }
 }
 
+/// The KV cache the built-in engine (llama.cpp) uses unless a load says
+/// otherwise. Measured on Qwen3-8B at 26k of context (llama.cpp b12470,
+/// Metal, #3325): half the memory of f16, decode 26% faster, prefill 8%
+/// slower, and greedy output token-for-token identical to f16 over 400 tokens.
+/// Ollama, LM Studio and vLLM set their cache server-wide, so their planning
+/// keeps f16; MLX ignores it (`ModelFacts::kv_f16_only`).
+pub const ENGINE_KV_CACHE_DTYPE: &str = "q8_0";
+
 /// `kvBytesPerElement`; `NaN` for a type it does not know (`undefined` in JS).
 /// llama.cpp's block types carry an f16 scale per 32 values: q8_0 stores 34
 /// bytes and q4_0 18 bytes a block, which is what `llama-server` allocates
@@ -695,6 +703,9 @@ pub struct AutoFitInput<'a> {
     pub parallel_slots: Option<f64>,
     pub max_context_tokens: Option<f64>,
     pub options: PlanOptions,
+    /// Plan with [`ENGINE_KV_CACHE_DTYPE`] from the start (the built-in
+    /// engine), instead of f16 with q8_0 as a compromise (other runtimes).
+    pub engine_kv: bool,
 }
 
 /// `autoFit`: settings solved from one budget slider.
@@ -727,7 +738,13 @@ pub fn auto_fit(input: &AutoFitInput) -> Value {
     let mut compromises: Vec<String> = Vec::new();
     let mut best: Option<(FitRequest, FitPlan)> = None;
     'outer: for &ctx in &stops {
-        let dtypes: &[&str] = if facts.kv_f16_only { &["f16"] } else { &["f16", "q8_0"] };
+        let dtypes: &[&str] = if facts.kv_f16_only {
+            &["f16"]
+        } else if input.engine_kv {
+            &[ENGINE_KV_CACHE_DTYPE]
+        } else {
+            &["f16", "q8_0"]
+        };
         for &dtype in dtypes {
             let req = request(ctx, dtype);
             let plan = compute_fit(facts, &req, &budget_hw, &input.options);
@@ -747,7 +764,7 @@ pub fn auto_fit(input: &AutoFitInput) -> Value {
         }
     }
     if let Some((req, _)) = &best {
-        if req.kv_cache_dtype != "f16" {
+        if req.kv_cache_dtype != "f16" && !input.engine_kv {
             compromises.push("Used a smaller KV cache element (q8_0) to keep this much context.".into());
         }
         if !stops.is_empty() && req.context_tokens < stops[0] {
@@ -761,7 +778,8 @@ pub fn auto_fit(input: &AutoFitInput) -> Value {
     let (req, plan) = match best {
         Some(b) => b,
         None => {
-            let mut req = request(stops.last().copied().unwrap_or(2048.0), "q8_0");
+            let fallback = if facts.kv_f16_only { "f16" } else { "q8_0" };
+            let mut req = request(stops.last().copied().unwrap_or(2048.0), fallback);
             let plan = compute_fit(facts, &req, &budget_hw, &input.options);
             if let (Some(g), Some(t)) = (plan.gpu_layers, plan.total_layers.filter(|t| truthy(Some(*t)))) {
                 req.gpu_layer_fraction = if t > 0.0 { g / t } else { 0.0 };

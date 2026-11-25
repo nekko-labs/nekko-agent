@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DEFAULT_FIT_REQUEST } from '@nekko-agent/shared';
+import { DEFAULT_FIT_REQUEST, ENGINE_KV_CACHE_DTYPE } from '@nekko-agent/shared';
 import type {
   EngineStatus,
   FitPlan,
@@ -222,7 +222,7 @@ function DockRow({
     active: expanded,
     maxCtx,
     gpuLayers: params.gpuLayers,
-    kvCacheDtype: params.kvCacheDtype ?? 'f16',
+    kvCacheDtype: params.kvCacheDtype ?? ENGINE_KV_CACHE_DTYPE,
     parallelSlots: params.parallelSlots ?? 1,
   });
   // Red only when we know: an undetermined limit is not a warning.
@@ -341,7 +341,7 @@ function DockRow({
           <Field label="KV cache">
             <select
               className="input w-full py-1 text-2xs"
-              value={params.kvCacheDtype ?? 'f16'}
+              value={params.kvCacheDtype ?? ENGINE_KV_CACHE_DTYPE}
               onChange={(e) => patch({ kvCacheDtype: e.target.value as KvCacheDtype })}
             >
               <option value="f16">f16 (full)</option>
@@ -571,7 +571,7 @@ function sameSettings(a: LoadParams, b: LoadParams, layers?: number): boolean {
   return (
     (a.gpuLayers ?? full) === (b.gpuLayers ?? full) &&
     (a.contextTokens ?? 8192) === (b.contextTokens ?? 8192) &&
-    (a.kvCacheDtype ?? 'f16') === (b.kvCacheDtype ?? 'f16') &&
+    (a.kvCacheDtype ?? ENGINE_KV_CACHE_DTYPE) === (b.kvCacheDtype ?? ENGINE_KV_CACHE_DTYPE) &&
     (a.ttlSeconds === 0) === (b.ttlSeconds === 0)
   );
 }

@@ -754,3 +754,55 @@ async fn an_external_engine_is_never_refused_whatever_version_it_reports() {
     }
     assert_eq!(spawned(&fake), 2);
 }
+
+fn queue_failure(fake: &Fake, id: &str, line: &str) {
+    fake.spawns.lock().unwrap().insert(id.into(), json!([{ "message": "exited with code 1", "log": [line] }]));
+}
+
+fn spawn_args(fake: &Fake) -> Vec<Vec<String>> {
+    fake.calls
+        .lock()
+        .unwrap()
+        .iter()
+        .filter_map(|c| c["spawn"]["args"].as_array())
+        .map(|a| a.iter().map(|x| x.as_str().unwrap_or_default().to_string()).collect())
+        .collect()
+}
+
+/// #3325: a load that names no KV type runs with q8_0; when that cache will
+/// not start (here the f8 abort llama.cpp b12470 hits on Metal), the engine
+/// tries once more with f16 and says so, rather than leaving the model
+/// unloadable.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_quantized_cache_that_will_not_start_falls_back_to_f16() {
+    let (fake, server) = residency_rig("kv-fallback", json!([sized("m", 2.0)]), json!({}), None);
+    queue_failure(
+        &fake,
+        "m",
+        "ggml-backend.cpp:1358: pre-allocated tensor (cache_k_l0 (view)) in a buffer (MTL0) that cannot run the operation (SET_ROWS)",
+    );
+    let r = server.load("m", json!({})).await;
+    assert_eq!(r["ok"], true, "{r}");
+    assert_eq!(r["kvFallback"], "f16", "{r}");
+    assert!(r["message"].as_str().unwrap().contains("full-precision (f16) KV cache"), "{r}");
+    let args = spawn_args(&fake);
+    assert_eq!(args.len(), 2, "{args:?}");
+    assert!(args[0].windows(2).any(|w| w == ["--cache-type-k", "q8_0"]), "first try, the default: {:?}", args[0]);
+    assert!(!args[1].iter().any(|a| a == "--cache-type-k"), "the retry runs f16: {:?}", args[1]);
+}
+
+/// Out of memory, or a load that already asked for f16: no second try, since
+/// the f16 cache is the bigger one and would fail the same way.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_failure_the_cache_does_not_cause_is_not_retried() {
+    let (fake, server) = residency_rig("kv-no-fallback", json!([sized("m", 2.0)]), json!({}), None);
+    queue_failure(&fake, "m", "llama_kv_cache: failed to allocate KV cache buffer of 2448 MiB");
+    let r = server.load("m", json!({})).await;
+    assert_eq!(r["ok"], false, "{r}");
+    assert!(r["message"].as_str().unwrap().starts_with("Not enough memory"), "{r}");
+    assert_eq!(spawn_args(&fake).len(), 1);
+    queue_failure(&fake, "m", "something unexplained went wrong");
+    let r = server.load("m", json!({ "kvCacheDtype": "f16" })).await;
+    assert_eq!(r["ok"], false, "{r}");
+    assert_eq!(spawn_args(&fake).len(), 2, "one more spawn, no retry");
+}

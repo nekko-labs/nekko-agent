@@ -286,6 +286,7 @@ fn dump_fixture() {
             parallel_slots: None,
             max_context_tokens: None,
             options: PlanOptions::default(),
+            engine_kv: true,
         });
         let speed = rec(&facts, &hw, 0.0, Goal::Speed, None);
         let context = rec(&facts, &hw, 0.0, Goal::Context, None);

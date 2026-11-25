@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { GpuFit, LoadParams, LocalModel, PlacementPlan, Recommendation, SplitPreset } from '@nekko-agent/shared';
+import { ENGINE_KV_CACHE_DTYPE } from '@nekko-agent/shared';
 import { Toggle } from '../primitives/index.js';
 import { formatBytes, formatTokens } from '../runtimes/verdict.js';
 import { useStore } from '../../store.js';
@@ -397,10 +398,10 @@ export function EngineLoadDrawer({
               recommended={matches.precision}
               value={precisionOf(params)}
               max={PRECISIONS.length - 1}
-              readout={`${PRECISIONS[precisionOf(params)].label} (${params.kvCacheDtype ?? 'f16'})`}
-              ends={['Most reliable', '', 'Faster, smaller']}
+              readout={`${PRECISIONS[precisionOf(params)].label} (${params.kvCacheDtype ?? ENGINE_KV_CACHE_DTYPE})`}
+              ends={['Full', '', 'Smallest']}
               onChange={(i) => patch({ kvCacheDtype: PRECISIONS[i].dtype })}
-              hint={`How exactly the model stores what it has read so far. Lower precision fits more context and runs a little faster, with a small risk of losing track of details in very long work.${precisionOf(params) === 2 ? ' Fastest is best kept for chat; for long coding work, Balanced is the safer pick.' : ''}`}
+              hint={`How exactly the model stores what it has read so far. Standard takes half the memory of Full, replies a little faster and gave the same answers in our tests.${precisionOf(params) === 2 ? ' Compact fits the most context, but long replies can drift from Full: best kept for chat.' : ''}`}
             />
             <Slider
               id="engine-keep"

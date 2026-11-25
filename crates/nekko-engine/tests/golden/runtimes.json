@@ -723,7 +723,7 @@
     "nogeo",
     1
    ],
-   "out": "{\"request\":{\"contextTokens\":131072,\"parallelSlots\":1,\"kvCacheDtype\":\"f16\",\"gpuLayerFraction\":1},\"plan\":{\"deviceName\":\"RTX 5090\",\"deviceTotalBytes\":34190917632,\"deviceFreeBytes\":32093765632,\"verdict\":\"unknown\",\"weightsBytes\":1000000,\"kvCacheBytes\":0,\"overheadBytes\":420994944,\"requiredBytes\":421994944,\"spillBytes\":0,\"reasons\":[{\"code\":\"missing-metadata\",\"detail\":\"layer count, KV head count, head dimension\"}],\"suggestions\":[]},\"headline\":\"We cannot tell what this model needs.\",\"tradeoff\":\"This file does not publish its layer geometry, so any figure here would be invented. Load it and we'll measure what it actually takes.\",\"compromises\":[]}",
+   "out": "{\"request\":{\"contextTokens\":131072,\"parallelSlots\":1,\"kvCacheDtype\":\"q8_0\",\"gpuLayerFraction\":1},\"plan\":{\"deviceName\":\"RTX 5090\",\"deviceTotalBytes\":34190917632,\"deviceFreeBytes\":32093765632,\"verdict\":\"unknown\",\"weightsBytes\":1000000,\"kvCacheBytes\":0,\"overheadBytes\":420994944,\"requiredBytes\":421994944,\"spillBytes\":0,\"reasons\":[{\"code\":\"missing-metadata\",\"detail\":\"layer count, KV head count, head dimension\"}],\"suggestions\":[]},\"headline\":\"We cannot tell what this model needs.\",\"tradeoff\":\"This file does not publish its layer geometry, so any figure here would be invented. Load it and we'll measure what it actually takes.\",\"compromises\":[]}",
    "requests": [],
    "runs": [],
    "calls": [

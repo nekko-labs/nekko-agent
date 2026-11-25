@@ -13,7 +13,9 @@
 //!
 //! Like the rest of the planner it is pure: facts in, placement out.
 
-use crate::capacity::{FitRequest, Hardware, ModelFacts, estimate_overhead_bytes, jmax, kv_cache_bytes};
+use crate::capacity::{
+    ENGINE_KV_CACHE_DTYPE, FitRequest, Hardware, ModelFacts, estimate_overhead_bytes, jmax, kv_cache_bytes,
+};
 use crate::{js_round, num};
 use serde_json::{Map, Value, json};
 
@@ -74,7 +76,7 @@ impl Request {
             run_on: RunOn::Gpu,
             context_per_session: 8192.0,
             sessions: 1.0,
-            kv_cache_dtype: "f16".into(),
+            kv_cache_dtype: ENGINE_KV_CACHE_DTYPE.into(),
             gpu_layers: layers,
             cpu_moe_layers: 0.0,
             cpu_ffn_layers: 0.0,
@@ -98,7 +100,7 @@ impl Request {
             },
             context_per_session: n("contextTokens", d.context_per_session).max(256.0),
             sessions: n("sessions", 1.0).clamp(1.0, 64.0).floor(),
-            kv_cache_dtype: v.get("kvCacheDtype").and_then(Value::as_str).unwrap_or("f16").to_string(),
+            kv_cache_dtype: v.get("kvCacheDtype").and_then(Value::as_str).unwrap_or(ENGINE_KV_CACHE_DTYPE).to_string(),
             gpu_layers: n("gpuLayers", layers).clamp(0.0, layers.max(0.0)),
             cpu_moe_layers: n("cpuMoeLayers", 0.0).clamp(0.0, layers.max(0.0)),
             cpu_ffn_layers: n("cpuFfnLayers", 0.0).clamp(0.0, layers.max(0.0)),
@@ -422,9 +424,20 @@ fn lightest(
     (1..layers as u32).rev().find_map(|g| try_at(Request { gpu_layers: g as f64, ..hybrid.clone() }))
 }
 
-/// How much of the model the GPU holds: more is faster.
-fn gpu_share(p: &Plan) -> f64 {
-    p.vram.weights
+/// The name and the reason the load drawer shows for a KV cache type; the
+/// names match the drawer's precision slider (`loadSettings.ts` PRECISIONS).
+pub fn precision_label(dtype: &str) -> (&'static str, &'static str) {
+    match dtype {
+        "f16" => ("Full", "Stores the conversation exactly, in twice the memory of Standard."),
+        "q4_0" => (
+            "Compact",
+            "Stores the conversation in a quarter of the memory. Long replies can drift from Full, so it is best kept for chat.",
+        ),
+        _ => (
+            "Standard",
+            "Stores the conversation in half the memory of Full, and replies a little faster. The answers match Full in our tests.",
+        ),
+    }
 }
 
 /// Solve for a goal. `Fill` keeps `base`'s context, precision and sessions.
@@ -439,27 +452,19 @@ pub fn solve(facts: &ModelFacts, hw: &Hardware, resident: f64, goal: Goal, base:
     for allow_disk in [false, true] {
         let found = match goal {
             Goal::Fill => lightest(facts, hw, resident, base, allow_disk),
-            Goal::Context => stops.iter().find_map(|&ctx| {
-                ["f16", "q8_0"].iter().find_map(|d| lightest(facts, hw, resident, &at(ctx, d), allow_disk))
-            }),
+            Goal::Context => {
+                stops.iter().find_map(|&ctx| lightest(facts, hw, resident, &at(ctx, ENGINE_KV_CACHE_DTYPE), allow_disk))
+            }
             Goal::Speed => {
                 // GPU only at the most context it allows is as fast as it gets.
                 let gpu_only = stops.iter().find_map(|&ctx| {
-                    ["f16", "q8_0"].iter().find_map(|d| {
-                        lightest(facts, hw, resident, &at(ctx, d), allow_disk).filter(|(r, _)| r.run_on == RunOn::Gpu)
-                    })
+                    lightest(facts, hw, resident, &at(ctx, ENGINE_KV_CACHE_DTYPE), allow_disk)
+                        .filter(|(r, _)| r.run_on == RunOn::Gpu)
                 });
                 gpu_only.or_else(|| {
                     // Otherwise the split that keeps most on the GPU at a useful
-                    // context (the smaller cache wins when it keeps more), then
-                    // grow the context while that split still fits.
-                    let split = ["f16", "q8_0"]
-                        .iter()
-                        .filter_map(|d| lightest(facts, hw, resident, &at(floor, d), allow_disk))
-                        .fold(None::<(Request, Plan)>, |best, x| match best {
-                            Some(b) if gpu_share(&b.1) >= gpu_share(&x.1) => Some(b),
-                            _ => Some(x),
-                        })?;
+                    // context, then grow the context while that split still fits.
+                    let split = lightest(facts, hw, resident, &at(floor, ENGINE_KV_CACHE_DTYPE), allow_disk)?;
                     stops.iter().filter(|c| **c >= floor).find_map(|&ctx| {
                         let r = Request { context_per_session: ctx, ..split.0.clone() };
                         let p = place(facts, &r, hw, resident);
@@ -600,15 +605,8 @@ pub fn recommend(facts: &ModelFacts, hw: &Hardware, resident_vram: f64, goal: Go
             "One at a time keeps the most memory for context on this machine."
         },
     );
-    add(
-        "Memory precision",
-        if req.kv_cache_dtype == "f16" { "Most reliable".into() } else { "Balanced".into() },
-        if req.kv_cache_dtype == "f16" {
-            "There is room to store the conversation exactly."
-        } else {
-            "Stores the conversation more compactly so the context fits. The difference is rarely noticeable."
-        },
-    );
+    let (precision, why_precision) = precision_label(&req.kv_cache_dtype);
+    add("Memory precision", precision.into(), why_precision);
     add(
         "Keep in memory",
         "Keep loaded".into(),

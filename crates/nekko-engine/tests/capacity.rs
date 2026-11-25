@@ -57,6 +57,7 @@ fn plans_and_auto_fits_match() {
             parallel_slots: c["parallelSlots"].as_f64(),
             max_context_tokens: c["maxContextTokens"].as_f64(),
             options: PlanOptions { overhead_floor: Some(300.0 * 1024.0 * 1024.0), siblings: models.clone() },
+            engine_kv: false,
         });
         assert_eq!(
             nekko_js::stringify(&result),

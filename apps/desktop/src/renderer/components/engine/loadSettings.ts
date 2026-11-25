@@ -8,6 +8,7 @@ import type {
   Recommendation,
   SplitPreset,
 } from '@nekko-agent/shared';
+import { ENGINE_KV_CACHE_DTYPE } from '@nekko-agent/shared';
 
 /**
  * The load drawer's state is one `LoadParams`, the shape the engine launches
@@ -20,9 +21,9 @@ export type RunOn = 'gpu' | 'hybrid' | 'cpu';
 
 export const SESSION_STOPS = [1, 2, 3, 4, 6, 8];
 export const PRECISIONS: Array<{ dtype: KvCacheDtype; label: string }> = [
-  { dtype: 'f16', label: 'Most reliable' },
-  { dtype: 'q8_0', label: 'Balanced' },
-  { dtype: 'q4_0', label: 'Fastest' },
+  { dtype: 'f16', label: 'Full' },
+  { dtype: 'q8_0', label: 'Standard' },
+  { dtype: 'q4_0', label: 'Compact' },
 ];
 export const KEEP_LABELS = ['Load when needed', 'Keep loaded', 'Pin in memory'];
 const CONTEXT_STOPS = [4096, 8192, 16384, 32768, 65536, 131072, 262144];
@@ -68,7 +69,7 @@ export function keepParams(level: number): Partial<LoadParams> {
 }
 
 export function precisionOf(p: LoadParams): number {
-  return Math.max(0, PRECISIONS.findIndex((x) => x.dtype === (p.kvCacheDtype ?? 'f16')));
+  return Math.max(0, PRECISIONS.findIndex((x) => x.dtype === (p.kvCacheDtype ?? ENGINE_KV_CACHE_DTYPE)));
 }
 
 /** The planner's question for these parameters. */
@@ -79,7 +80,7 @@ export function toPlacementRequest(p: LoadParams, model: Pick<LocalModel, 'layer
     runOn,
     contextTokens: contextPerSession(p),
     sessions: sessionsOf(p),
-    kvCacheDtype: p.kvCacheDtype ?? 'f16',
+    kvCacheDtype: p.kvCacheDtype ?? ENGINE_KV_CACHE_DTYPE,
     gpuLayers: runOn === 'cpu' ? 0 : (p.gpuLayers ?? layers),
     cpuMoeLayers: p.cpuMoeLayers ?? 0,
     cpuFfnLayers: p.cpuFfnLayers ?? 0,
@@ -176,7 +177,7 @@ export function matchesRecommendation(p: LoadParams, rec: Recommendation['reques
     runOn: runOnOf(p, layers) === rec.runOn,
     context: contextPerSession(p) === rec.contextTokens,
     sessions: sessionsOf(p) === rec.sessions,
-    precision: (p.kvCacheDtype ?? 'f16') === rec.kvCacheDtype,
+    precision: (p.kvCacheDtype ?? ENGINE_KV_CACHE_DTYPE) === rec.kvCacheDtype,
   };
 }
 

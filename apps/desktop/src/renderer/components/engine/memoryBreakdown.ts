@@ -1,4 +1,5 @@
 import type { GpuStats, LoadParams, PlacementPlan, SystemStats } from '@nekko-agent/shared';
+import { ENGINE_KV_CACHE_DTYPE } from '@nekko-agent/shared';
 import { formatTokens } from '../runtimes/verdict.js';
 import { PRECISIONS, contextPerSession, runOnOf, sessionsOf } from './loadSettings.js';
 
@@ -55,7 +56,7 @@ export function weightsPlace(plan: PlacementPlan, params: LoadParams, layers?: n
 export function contextDriver(params: LoadParams): string {
   const n = sessionsOf(params);
   const per = formatTokens(contextPerSession(params));
-  const dtype = params.kvCacheDtype ?? 'f16';
+  const dtype = params.kvCacheDtype ?? ENGINE_KV_CACHE_DTYPE;
   const precision = PRECISIONS.find((p) => p.dtype === dtype)?.label.toLowerCase() ?? dtype;
   const where = params.kvOnGpu === false ? ', kept in RAM' : '';
   return `${n === 1 ? `1 session of ${per}` : `${n} sessions × ${per}`}, ${precision} (${dtype})${where}`;
