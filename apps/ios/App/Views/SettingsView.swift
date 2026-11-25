@@ -361,6 +361,9 @@ struct SettingsView: View {
                         .foregroundStyle(palette.inkSoft)
                     Button("Watch how voice works") { voiceIntro.replay() }
                         .font(.footnote)
+                        // The footnote text alone is a 16 pt hit area; Apple's audit wants 44.
+                        .frame(minHeight: 44, alignment: .leading)
+                        .contentShape(Rectangle())
                         .accessibilityIdentifier("settings.voiceIntro")
                 }
             }
