@@ -215,7 +215,9 @@ In new and ongoing chats, prompt-writing **Suggestions** appear on the far right
 
 When you ask the agent to change a project or repository that is not in the chat's environment, it asks before guessing: it can search this computer for it (and then offer **Use this folder** for what it found), let you **choose the folder**, or **add it from GitHub or GitLab** right in the question. Whatever you add joins the environment and the agent carries on there. Model selection and reasoning effort stay in their dedicated composer controls, not in the **Mode** panel. Saved modes remain compatible with their existing model and effort preferences.
 
-Local chats can read and write `~/.nekko-agent` without adding it as a project folder. This is the app data directory and may contain sensitive local state; normal write approvals still apply. This does not grant the rest of your home folder, change the project directory, or expose the host folder to Sandbox containers.
+**Shared Nekko folder.** Chats running on this computer, including their subagents, can read and write `~/.nekko` without adding it as a project folder. Nekko Agent keeps its data in `~/.nekko/nekko-agent` by default. Normal approvals and read-only rules still apply; this does not grant the rest of your home folder, change the chat's working directory, or expose the host folder to Sandbox containers. The shared folder may contain sensitive local data.
+
+When upgrading from `~/.nekko-agent` or an older data folder, close other Nekko instances and choose the profile to move in the desktop prompt. Profiles are not merged by the move; the source checkout, borrowed model folders, and files belonging to other Nekko products stay where they are. `NEKKO_DATA_DIR` continues to override the app data location.
 
 ### Quickly filter the model picker
 

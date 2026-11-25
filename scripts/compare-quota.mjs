@@ -50,6 +50,6 @@ export function compareQuota(replies, snapshots) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const dir = process.argv[2] ?? process.env.NEKKO_DATA_DIR ?? join(homedir(), '.nekko-agent');
+  const dir = process.argv[2] ?? process.env.NEKKO_DATA_DIR ?? join(homedir(), '.nekko', 'nekko-agent');
   console.log(JSON.stringify(compareQuota(readRows(join(dir, 'replies.jsonl')), readRows(join(dir, 'quota-history.jsonl'))), null, 2));
 }

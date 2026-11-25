@@ -1452,6 +1452,9 @@ impl Turns {
             "workMode": loaded.get("workMode").cloned().unwrap_or(Value::Null),
             "promptProfile": facts.pointer("/promptProfile/profile").cloned().unwrap_or(Value::Null),
         }));
+        if !sandbox && crate::cli_install::shared_nekko_grant().is_some() {
+            system.push_str("\n\nLocal Nekko data: the shared ~/.nekko folder is available without attaching it as a project. App data defaults to ~/.nekko/nekko-agent. Normal approvals and read-only grants still apply. Never publish credentials or private chats.");
+        }
 
         let role_guard = role.as_ref().map(|role| (role.worker, role.projected_children.clone()));
         let dynamic_role = role.map(|role| {
@@ -1878,6 +1881,14 @@ impl Turns {
         let Some((cwd, rest)) = paths.split_first() else {
             return fail("A Claude subscription chat needs a workspace folder to run in.", &history);
         };
+        // Claude turns are host-only (checked before dispatch). Give Claude
+        // and its subagents the extra directory, not a new cwd or bridge root.
+        let mut add_dirs = rest.to_vec();
+        if let Some(root) = crate::cli_install::shared_nekko_grant()
+            && !paths.contains(&root)
+        {
+            add_dirs.push(root);
+        }
         // The provider's Claude Code account. Its sessions live in its own
         // folder, so one saved under another account (the chat switched) is
         // not resumed: the next launch starts a new Claude Code session.
@@ -1888,7 +1899,7 @@ impl Turns {
         };
         let wanted = Wanted {
             cwd: cwd.clone(),
-            add_dirs: rest.to_vec(),
+            add_dirs,
             // A chat saved on a family alias runs on that family's newest model.
             model: str_at(opts, "modelId")
                 .filter(|m| !js::trim(m).is_empty())
@@ -2334,7 +2345,7 @@ fn claude_attachments(session: &Value, cc_session: &str) -> (Option<String>, Vec
 /// `nekko_context::DESIGN_RULES`, and the project's own instructions win.
 fn claude_design_note() -> String {
     format!(
-        "Nekko design note: {} {} Where the project's own instructions differ, follow them.",
+        "Nekko design note: {} {}\n\nLocal Nekko data: when present, ~/.nekko is available without attaching it as a project; normal approvals still apply. Agent data defaults to ~/.nekko/nekko-agent. Never publish credentials or private chats. Where the project's own instructions differ, follow them.",
         nekko_context::DESIGN_RULES[0],
         nekko_context::DESIGN_RULES[1]
     )
@@ -3040,7 +3051,8 @@ fn native_context(
         }
     });
     let mut ctx = ToolContext::new(approver);
-    ctx.app_data_root = nekko_js::home_dir().map(|home| home.join(".nekko-agent").to_string_lossy().into_owned());
+    ctx.app_data_root = Some(turns.data_dir.to_string_lossy().into_owned());
+    ctx.shared_data_root = crate::cli_install::shared_nekko_grant().map(|root| root.to_string_lossy().into_owned());
     let parse = |key: &str| settings.get(key).filter(|v| !v.is_null()).cloned();
     if let Some(v) = parse("sandboxMode") {
         ctx.sandbox_mode = serde_json::from_value(v).ok()?;
@@ -4657,7 +4669,12 @@ mod tests {
         }
         assert!(text.contains("nekko-designs/") && text.contains("never in reports/"));
         assert!(text.contains("checkout-design-v2.html"));
-        assert!(text.ends_with("Where the project's own instructions differ, follow them."));
+        let (_, local_data) = text.rsplit_once("\n\n").unwrap();
+        assert!(local_data.starts_with("Local Nekko data:"));
+        assert!(local_data.contains("Agent data defaults to ~/.nekko/nekko-agent."));
+        assert!(local_data.contains("normal approvals still apply."));
+        assert!(local_data.contains("Never publish credentials or private chats."));
+        assert!(local_data.ends_with("Where the project's own instructions differ, follow them."));
         assert_eq!(user["content"], "Mock up the checkout", "the saved message is not edited");
         // With the naming note, the design note comes first and each is added once.
         let both = claude_turn_content(&user, true, true, None);
