@@ -699,7 +699,7 @@ export interface NekkoApi {
   librarySync(files: import('./cloud.js').LibrarySyncFile[]): Promise<import('./cloud.js').CloudStatus>;
   /** Organizations you belong to and invites waiting for you. */
   orgList(): Promise<import('./cloud.js').OrgList>;
-  /** Create an organization (needs an unlocked account on Pro or Team); this device creates its key. */
+  /** Create an organization (needs an unlocked account on Pro or Enterprise); this device creates its key. */
   orgCreate(name: string): Promise<import('./cloud.js').Org>;
   orgGet(orgId: string): Promise<import('./cloud.js').OrgDetail>;
   orgInvite(orgId: string, email: string, role?: 'admin' | 'member'): Promise<unknown>;

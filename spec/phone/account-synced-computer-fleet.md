@@ -23,7 +23,7 @@ The account is unlocked once per device using the existing recovery key or trust
 | Route | Contract |
 | --- | --- |
 | `GET /v1/fleet` | Current-epoch proof and a live device wrap required. Returns only this account's current-epoch advertisements from unrevoked devices and live, proven publisher tokens. `Cache-Control: no-store`. |
-| `PUT /v1/fleet/self` | Pro/Team and current-epoch proof required. `{keyId, revision, descriptor}` only. Device and account identity derive from the caller, not input. Sealed v1 envelope, canonical unpadded base64url, 305–16,384 bytes. Revision starts at 1 and must increase by exactly 1. |
+| `PUT /v1/fleet/self` | Pro/Enterprise and current-epoch proof required. `{keyId, revision, descriptor}` only. Device and account identity derive from the caller, not input. Sealed v1 envelope, canonical unpadded base64url, 305–16,384 bytes. Revision starts at 1 and must increase by exactly 1. |
 | `POST /v1/fleet/self/heartbeat` | Same authorization as publish; only the publishing token can renew a non-withdrawn current-epoch advertisement. A fresh sign-in or key rotation requires republishing. |
 | `DELETE /v1/fleet/self` | Live device-bound sign-in required; no paid plan or key unlock needed to withdraw oneself. Hides the advertisement and advances its revision, invalidating queued old publishes. Idempotent while withdrawn. |
 

@@ -48,7 +48,7 @@ export function PlanRow({ plan }: { plan: string }) {
         ) : (
           <>
             <div className="font-medium text-ink">Nekko Cloud Pro{pro && <span className="ml-2 font-normal text-ink-soft" data-testid="billing-price">{price(pro)}</span>}</div>
-            <div className="mt-(--q-tight) text-xs text-ink-faint">Synced chats, Nekko Cloud machines and organizations. For a team, email hello@nekkoagent.com.</div>
+            <div className="mt-(--q-tight) text-xs text-ink-faint">Synced chats, Nekko Cloud machines and organizations. For Enterprise, email hello@nekkoagent.com.</div>
           </>
         )}
         {error && <p role="alert" className="mt-(--q-tight) text-xs text-danger-text">{error}</p>}
@@ -115,7 +115,7 @@ export function TeamSwitches() {
 }
 
 export function planLabel(plan?: string) {
-  return plan === 'team' ? 'Nekko Cloud Team' : plan === 'pro' ? 'Nekko Cloud Pro' : 'Free plan';
+  return plan === 'team' ? 'Nekko Cloud Enterprise' : plan === 'pro' ? 'Nekko Cloud Pro' : 'Free plan';
 }
 
 export function price(p: BillingPlan) {

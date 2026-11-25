@@ -14,7 +14,7 @@ import { HISTORY_DAYS, SYNC_QUOTA, bytes, isPositiveInt, shareBytes } from "./sy
  * Anyone with the id gets the sealed bytes (`GET /v1/s/:id`). Only the owner
  * lists, deletes, restores and goes back to a version. Changing the file
  * needs the owner, or an edit link's token (the service keeps its SHA-256).
- * Writing needs Pro or Team and the `library-cloud` switch; reading,
+ * Writing needs Pro or Enterprise and the `library-cloud` switch; reading,
  * deleting and restoring a deleted share never depend on either.
  */
 

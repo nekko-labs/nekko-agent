@@ -96,7 +96,7 @@ await retryAuth();
 setInterval(retryAuth, 60 * 60 * 1000).unref();
 // Organizations are limited to these accounts while they are proven (comma-separated emails); unset allows everyone.
 const orgsAllowedEmails = (process.env.NEKKO_ORGS_ALLOWED_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
-// Plans and billing (issue #2724); Team is "talk to us" until seats exist. Even when configured, nothing shows until a team account switches billing on.
+// Plans and billing (issue #2724); Enterprise (plan `team`) is "talk to us" until seats exist. Even when configured, nothing shows until a team account switches billing on.
 const stripeKey = process.env.STRIPE_SECRET_KEY;
 const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 const stripe = stripeKey && stripeWebhookSecret

@@ -67,7 +67,7 @@ describe('Organization section gating', () => {
   it('says what to do when sync was never turned on, and when the plan lacks it', () => {
     expect(html(props({ gate: 'needs-setup', detail: null }))).toContain('Turn on sync first');
     const plan = html(props({ gate: 'needs-plan', detail: null }));
-    expect(plan).toContain('Pro and Team');
+    expect(plan).toContain('Pro and Enterprise');
     // Nothing to buy until plans and billing are switched on (#2724).
     expect(plan).not.toContain('See plans');
     expect(html(props({ gate: 'needs-plan', detail: null, onSeePlans: noop }))).toContain('See plans');
@@ -258,7 +258,7 @@ describe('Loading and errors', () => {
 
   it('turns engine errors into plain text', () => {
     expect(orgErrorText(new Error('unknown channel: fleet:list'))).toMatch(/not available in this version/);
-    expect(orgErrorText(new Error('plan-required'))).toMatch(/Pro or Team/);
+    expect(orgErrorText(new Error('plan-required'))).toMatch(/Pro or Enterprise/);
     expect(orgErrorText(new Error('orgs-not-available'))).toMatch(/not available for your account/);
     expect(orgErrorText(new Error('Could not reach Nekko Cloud'))).toBe('Could not reach Nekko Cloud');
   });

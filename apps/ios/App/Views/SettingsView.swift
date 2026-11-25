@@ -142,7 +142,7 @@ struct ProfileRow: View {
 
     private var detail: String {
         guard let account = cloud.account, cloud.signedIn else { return String(localized: "Keep your chats on every device, end-to-end encrypted.") }
-        let plan = account.plan == "team" ? String(localized: "Team") : account.plan == "pro" ? String(localized: "Pro") : String(localized: "Free")
+        let plan = account.plan == "team" ? String(localized: "Enterprise") : account.plan == "pro" ? String(localized: "Pro") : String(localized: "Free")
         let sync: String
         switch cloud.phase {
         case .idle: sync = String(localized: "Up to date")
