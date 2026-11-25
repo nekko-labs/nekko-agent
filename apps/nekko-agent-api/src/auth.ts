@@ -71,22 +71,40 @@ export async function issueToken(db: Db, userId: string, label: string | null = 
   return token;
 }
 
-/** The caller behind `Authorization: Bearer nk_…`, or null. */
+/**
+ * The caller behind `Authorization: Bearer nk_…`, or null.
+ *
+ * A read on the hot path. `last_used_at` and the sliding `expires_at` are
+ * written only when `last_used_at` is older than the current hour, so a busy
+ * token costs one write an hour instead of one per request. Nothing else reads
+ * `last_used_at` (it is the hour the token was last seen, kept for the
+ * account's own records), and the expiry moves by under an hour from what it
+ * was, against a 180-day idle limit.
+ */
 export async function authenticate(db: Db, req: FastifyRequest): Promise<Caller | null> {
   const header = req.headers.authorization;
   const token = header?.startsWith("Bearer ") ? header.slice(7).trim() : "";
   if (!TOKEN.test(token)) return null;
-  const { rows } = await db.query<{ id: string; user_id: string; plan: Plan; device_id: string | null; email: string; email_verified: boolean }>(
-    `update api_tokens t set last_used_at = date_trunc('hour', now()),
-            expires_at = now() + make_interval(days => ${TOKEN_IDLE_DAYS})
-       from users u
-      where t.token_hash = $1 and t.revoked_at is null and u.id = t.user_id
-        and (t.expires_at is null or t.expires_at > now())
-      returning t.id, t.user_id, u.plan, t.device_id, u.email, u.email_verified`,
-    [hash(token)],
+  const digest = hash(token);
+  const { rows } = await db.query<{ id: string; user_id: string; plan: Plan; device_id: string | null; email: string; email_verified: boolean; stale: boolean }>(
+    `select t.id, t.user_id, u.plan, t.device_id, u.email, u.email_verified,
+            (t.last_used_at is null or t.last_used_at < date_trunc('hour', now())) as stale
+       from api_tokens t join users u on u.id = t.user_id
+      where t.token_hash = $1 and t.revoked_at is null
+        and (t.expires_at is null or t.expires_at > now())`,
+    [digest],
   );
   const row = rows[0];
+  if (!row) return null;
   // The account gate: the email comes from the same lookup, so no extra query. An account whose email was never proven is outside it.
-  if (row && !accountAllowed(req.server.accountGate, row.email, row.email_verified)) return null;
-  return row ? { userId: row.user_id, plan: row.plan, tokenId: row.id, deviceId: row.device_id } : null;
+  if (!accountAllowed(req.server.accountGate, row.email, row.email_verified)) return null;
+  if (row.stale) {
+    // Re-checked in the update, so two requests in the same hour boundary write once.
+    await db.query(
+      `update api_tokens set last_used_at = date_trunc('hour', now()), expires_at = now() + make_interval(days => ${TOKEN_IDLE_DAYS})
+        where id = $1 and (last_used_at is null or last_used_at < date_trunc('hour', now()))`,
+      [row.id],
+    );
+  }
+  return { userId: row.user_id, plan: row.plan, tokenId: row.id, deviceId: row.device_id };
 }
