@@ -39,6 +39,28 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Chat listings keep the file list and stop writing running chats (2026-11-26)
+Area: engine daemon
+Result: improvement (warm listing, one chat's summary, a listing while a chat runs)
+Conditions: Apple M1 Max (10 cores), macOS 27.2, release `nekko-store` test build; the machine was busy with other builds (load average 128 to 144 while measuring), so absolute numbers are noisy and only the before/after ratio within one run is meaningful. Synthetic chats (two messages, one 100 KB text reply each) in a temp data dir, never the real one; `crates/nekko-store/tests/summaries_timing.rs` (ignored by default), "before" is the same test on main 1749c1ecc with `summaries()` plus a find where the new test calls `summary(id)`. Warm = median of 15 calls in one process after the first. "Running" = a chat held with a new transcript before every call, as a turn's checkpoint does.
+
+| Metric | Before | After |
+|---|---|---|
+| 500 chats, cold `summaries()` | 887.5 ms | 498.1 ms |
+| 500 chats, warm `summaries()`, nothing running | 3.49 ms | 1.66 ms |
+| 500 chats, warm `summaries()`, one running chat | 4.28 ms | 1.89 ms |
+| 500 chats, one chat's summary (`pr:sessionList` lookup) | 5.077 ms per call (`summaries()` plus find, 100 calls) | 0.132 ms per call (`summary(id)`, 100 calls) |
+| 2,000 chats, cold `summaries()` | 3442.2 ms | 956.2 ms |
+| 2,000 chats, warm `summaries()`, nothing running | 45.49 ms | 7.74 ms |
+| 2,000 chats, warm `summaries()`, one running chat | 39.64 ms | 8.42 ms |
+| 2,000 chats, one chat's summary | 50.908 ms per call | 0.553 ms per call |
+
+An earlier run of the same test with 1 MB replies, under heavier load, gave the same direction (2,000 chats, running chat: 83.37 ms before, 18.20 ms after; one chat's summary 91.300 ms before, 1.622 ms after).
+
+Why: `summaries()` no longer calls `flush_all()` (a running chat's summary is made from its memory, with the user's on-disk fields, and cached per hold), keeps the chat file list in memory (only chats this store wrote are read again, plus a full look every 30 s for outside changes) instead of one `stat` per chat per call, and `summary(id)` checks one file and rolls up the sub-agents' PRs from the kept list. Source: this PR.
+
+Unmeasured: the real daemon under several running agents (event rate, disk writes saved by the 2 s save debounce now holding), a real chat folder with 1,000+ chats of mixed sizes, Windows.
+
 ## Plum and Indigo window glow steps instead of fading every frame (#3136, 2026-11-20)
 Area: GPU/memory
 Result: improvement expected; after number pending (measured once merged, see below)
