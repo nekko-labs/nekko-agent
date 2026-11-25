@@ -66,3 +66,14 @@ Decision: [0042](../../docs/decisions/0042-claude-code-sub-agents-are-child-chat
 - **The reply after a report.** nekkod saves where each turn's own messages start (`activeRun.afterMessageId`: its prompt, or for a wake-up the last message of the turn before it) and says `session_meta` when a wake-up starts. The chat stops the saved transcript there while the reply streams, so the reply streams under the turn before it and lands as a normal reply, with its time and turn details.
 
 **Not yet.** The Local Web UI gets all three (it runs the desktop renderer); the phones still show neither the sub-agent list nor the lifted status.
+
+### A message sent while a wake-up turn waits
+
+`[implemented 2026-11-25; unit-tested (unsavedPrompt) and the renderer suite passes; not yet watched in a live chat]`
+
+**What was wrong.** A wake-up turn that waits on a sub-agent sends the chat no reply events, so the message box took the chat for idle. A message sent then started a turn of its own, which waits for the chat's Claude Code until the wake-up ends (possibly many minutes) and saves its prompt only when it starts. The next re-read of the chat dropped the message box's copy of it, and it was not in the queue either: the message showed nowhere, though it still ran later.
+
+**Now:**
+
+- **It queues.** Before sending, the message box asks the engine whether the chat has a turn running, heard from or not. If it has, the message joins the queue above the message box, as it does while a reply streams, and runs after the wake-up turn. If the engine does not answer, it sends as before.
+- **A sent message stays on screen.** Until its turn saves it, a message sent from the chat stays last in the transcript, even through re-reads and a running turn's boundary. It goes once the saved copy is there (the same text, sent no earlier) or the send ends.
