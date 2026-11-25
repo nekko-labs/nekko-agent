@@ -15,7 +15,8 @@ On desktop, the Local Web UI and Docker, start by choosing **Good** or **Needs i
 - **Summary**: one line, up to 120 characters.
 - **Description**: what happened, or what you'd like. The summary and description share a limit of 4,000 characters, and the count under the description shows how much you've used.
 - **Include app info**: for Needs improvement only.
-- **Name and email** (optional): leave either blank to stay anonymous. We don’t spam: these details accompany this note only, for feedback follow-up, and never sign you up for a mailing list. They share the 4,000-character total.
+- **Name and email** (optional): if you gave them in setup or **Settings > About you**, they are already filled in; change or clear either one for this note. Leave both blank to stay anonymous. We don’t spam: these details accompany this note only, for feedback follow-up, and never sign you up for a mailing list. They share the 4,000-character total.
+- **Include my name and email**: a switch beside **Send**, on by default, that appears whenever a name or email is filled in. Switch it off to send this note without them; they stay in the form but are left out of the note and the character count.
 
 Press **Send**, or Ctrl+Enter (⌘+Enter on a Mac). If you close the sheet with something written, it asks before throwing it away. If sending fails, what you wrote stays there so you can try again.
 
@@ -27,7 +28,7 @@ The note goes straight to Nekko Labs through Nekko Cloud. You don't need an acco
 
 **Include app info** is off by default. Switch it on to add the app, version, OS and its version, and CPU type, so we can reproduce what you saw. The sheet shows those values before you send.
 
-Your name and email are included only if you enter them yourself. The note never automatically carries an account or device id, the device's name or model, your language, IP address, chats or files. Nekko Cloud doesn't log the request, and it stores the note with only the day it arrived.
+Your name and email are included only when they are in the form and **Include my name and email** is on. The note never automatically carries an account or device id, the device's name or model, your language, IP address, chats or files. Nekko Cloud doesn't log the request, and it stores the note with only the day it arrived.
 
 The sheet doesn't take screenshots for now. Describe what you saw in words, or open a GitHub issue, where you can attach images. Without an email we cannot reply privately. You can leave an optional email on desktop or open a GitHub issue to follow along publicly.
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { OVERLOAD_RESERVE_MB_DEFAULT, type EngineMemory, type EngineSettings, type LoadingModel, type LocalModel, type ResidentModel } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
 import { formatBytes, formatTokens, placementLabel, placementTitle } from '../runtimes/verdict.js';
@@ -7,6 +7,7 @@ import { ImageGeneration } from './ImageGeneration.js';
 import { StatusDot } from '../primitives/index.js';
 import { GfBeachIcon } from '../../gentleface-icons.js';
 import { vramFill } from './loadingVram.js';
+import { LiveMemory } from './LiveMemory.js';
 
 /**
  * The models actually in memory right now.
@@ -18,8 +19,8 @@ import { vramFill } from './loadingVram.js';
  * answer to "what is running" rather than "what do I have".
  *
  * Since the Models page rework it leads the local section as plain rows under
- * "Running now", above the library, with one meter for how much of the
- * machine's model memory they hold together.
+ * "Running now", above the library. Above the rows, a live bar per memory pool
+ * shows what each loaded model holds, part by part (`LiveMemory`).
  */
 
 /** Countdown text is live for a minute-scale value; five seconds is enough. */
@@ -74,8 +75,8 @@ export function ResidentModels({
     return () => clearInterval(t);
   }, [loadingRows.length]);
 
-  const byId = new Map(models.map((m) => [m.id, m]));
-  const totalBytes = resident.reduce((n, r) => n + (r.vramBytes ?? r.sizeBytes ?? 0), 0);
+  const byId = useMemo(() => new Map(models.map((m) => [m.id, m])), [models]);
+  const reserveBytes = settings.overloadGuard === false ? null : (settings.overloadReserveMB ?? OVERLOAD_RESERVE_MB_DEFAULT) * 1024 ** 2;
 
   const unload = async (id: string) => {
     setBusy(id);
@@ -107,8 +108,7 @@ export function ResidentModels({
           <p className="text-xs text-ink-faint">
             {[
               resident.length > 0
-                ? `${resident.length} of ${Math.max(1, settings.maxLoaded)} slot${Math.max(1, settings.maxLoaded) === 1 ? '' : 's'}` +
-                  (totalBytes > 0 ? ` · ${formatBytes(totalBytes)}${memory?.budgetBytes ? ` of ${formatBytes(memory.budgetBytes)}` : ''}` : '')
+                ? `${resident.length} of ${Math.max(1, settings.maxLoaded)} slot${Math.max(1, settings.maxLoaded) === 1 ? '' : 's'}`
                 : null,
               loadingRows.length ? `${loadingRows.length} loading` : null,
             ]
@@ -118,11 +118,17 @@ export function ResidentModels({
         )}
       </div>
 
-      {totalBytes > 0 && memory?.budgetBytes ? (
-        <span className="mt-(--q-heading) block h-2 overflow-hidden rounded-full bg-surface-2" role="meter" aria-label="Model memory in use" aria-valuemin={0} aria-valuemax={memory.budgetBytes} aria-valuenow={totalBytes}>
-          <span className="block h-full rounded-full bg-accent transition-[width] duration-(--dur-slow) ease-(--ease-out)" style={{ width: `${Math.min(100, (totalBytes / memory.budgetBytes) * 100)}%` }} />
-        </span>
-      ) : null}
+      {/* What the machine holds right now, model by model, read live. */}
+      {(resident.length > 0 || loadingRows.length > 0) && (
+        <LiveMemory
+          providerId={providerId}
+          resident={resident}
+          loading={loadingRows}
+          models={byId}
+          memory={memory}
+          reserveBytes={reserveBytes}
+        />
+      )}
       {resident.length === 0 && loadingRows.length === 0 ? (
         <div className="mt-(--q-heading) flex items-center gap-3 py-(--q-inline)" data-icon-hover data-loaded-empty>
           <GfBeachIcon className="h-6 w-6 shrink-0 text-ink-soft" />
@@ -143,7 +149,7 @@ export function ResidentModels({
               load={l}
               name={byId.get(l.id)?.name ?? l.id}
               elapsedMs={now - l.startedAt}
-              reserveBytes={settings.overloadGuard === false ? null : (settings.overloadReserveMB ?? OVERLOAD_RESERVE_MB_DEFAULT) * 1024 ** 2}
+              reserveBytes={reserveBytes}
               unified={memory?.kind === 'unified'}
             />
           ))}
@@ -164,7 +170,9 @@ export function ResidentModels({
               >
               <div className="-mx-2 flex min-h-(--q-row) flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-2 py-(--q-inline) transition-colors duration-(--dur-fast) hover:bg-(--q-wash)" data-quiet-row>
                 <StatusDot tone="success" />
-                <div className="min-w-0 flex-1">
+                {/* A basis, so on a narrow window the actions wrap under the
+                    text instead of squeezing it to one word per line. */}
+                <div className="min-w-0 flex-1 basis-56">
                   <p className="flex min-w-0 items-baseline gap-2">
                     <span className="truncate text-sm font-medium">{model?.name ?? r.id}</span>
                     {model?.quantization && <span className="shrink-0 text-xs text-ink-faint">{model.quantization}</span>}

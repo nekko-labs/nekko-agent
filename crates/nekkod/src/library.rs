@@ -11,6 +11,7 @@
 
 use nekko_engine::capacity::{Device, Hardware};
 use nekko_engine::library::{self as lib, LibraryConfig};
+use nekko_engine::load_check::EngineInUse;
 use nekko_settings::SettingsStore;
 use nekko_tools::path::native as path;
 use serde_json::{Map, Value, json};
@@ -168,13 +169,18 @@ impl Library {
         let _ = self.installs.set(installs);
     }
 
+    /// The third value is the llama.cpp install report (`binPath`, `source`, `version`),
+    /// when the daemon can read one.
     pub async fn host_state(&self) -> (HashSet<String>, Map<String, Value>, Option<Value>) {
+        let install = match self.installs.get() {
+            Some(installs) => Some(installs.detect("llama").await),
+            None => None,
+        };
         // The daemon's own model server, when it runs one.
-        if let (Some(server), Some(installs)) = (self.engine.server.get(), self.installs.get()) {
-            let version = installs.detect("llama").await.get("version").cloned();
-            return (server.loaded_ids().into_iter().collect(), server.load_errors(), version);
+        if let (Some(server), Some(_)) = (self.engine.server.get(), &install) {
+            return (server.loaded_ids().into_iter().collect(), server.load_errors(), install);
         }
-        (self.engine.supervisor.list().into_iter().map(|c| c.model_id).collect(), Map::new(), None)
+        (self.engine.supervisor.list().into_iter().map(|c| c.model_id).collect(), Map::new(), install)
     }
 
     /// `overheadFloorFor('llamacpp', version)` from `runtime-calibration.json`.
@@ -189,10 +195,12 @@ impl Library {
     /// `engine:models`: rows with load state, the last failure and the GPU fit.
     pub async fn models(self: &Arc<Self>) -> Result<Value, String> {
         let rows = self.list().await?;
-        let (loaded, errors, version) = self.host_state().await;
+        let (loaded, errors, install) = self.host_state().await;
         let hw = self.hardware().await;
-        let floor = self.overhead_floor(version.as_ref());
-        Ok(Value::Array(lib::with_load_state(rows, &loaded, &errors, Some(&hw), Some(floor))))
+        let floor = self.overhead_floor(install.as_ref().and_then(|i| i.get("version")));
+        // The engine a load would use, so each row carries the verdict the load gate gives it.
+        let engine = install.as_ref().map(EngineInUse::from_install).unwrap_or_default();
+        Ok(Value::Array(lib::with_load_state(rows, &loaded, &errors, Some(&hw), Some(floor), &engine)))
     }
 
     /// The machine's memory pools in the planner's shape (`hardware()`).

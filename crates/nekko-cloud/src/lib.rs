@@ -402,6 +402,11 @@ impl Cloud {
         lock(&self.state).account.clone()
     }
 
+    /// Signed in with a Nekko team account (decision 0092).
+    pub fn is_staff(&self) -> bool {
+        self.account().is_some_and(|a| a.staff)
+    }
+
     fn account_id(&self) -> Result<String, String> {
         self.account().map(|a| a.id).ok_or_else(|| "Sign in to Nekko Cloud first.".to_string())
     }

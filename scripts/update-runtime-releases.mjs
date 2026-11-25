@@ -65,7 +65,7 @@ function run() {
   git('add', file, ...alsoNamingIt);
   git('-c', 'user.name=runtime-update-bot', '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com', 'commit', '-m', `Update ${repo} to ${release.tag_name}`);
   git('push', ...(existing ? [] : ['--force']), 'origin', branch);
-  if (!existing) gh('pr', 'create', '--repo', repoName, '--head', branch, '--base', 'main', '--title', `Update ${repo} to ${release.tag_name}`, '--body', `## Summary\nUpdate the recommended runtime to upstream ${release.tag_name}. Release assets exist for the supported baseline platforms and the release is at least seven days old.\n\n## Test plan\nRuntime matching tests, typecheck and build run through CI.\n\nNo visual change.`);
+  if (!existing) gh('pr', 'create', '--repo', repoName, '--head', branch, '--base', 'main', '--title', `Update ${repo} to ${release.tag_name}`, '--body', `## Summary\nUpdate the recommended runtime to upstream ${release.tag_name}. Release assets exist for the supported baseline platforms and the release is at least seven days old.\n\n## Test plan\nRuntime matching tests, typecheck and build run through CI.\n\nNo visual change.${runtime === 'llama' ? '\n\nThe engine test the_ggml_type_table_was_checked_against_the_pinned_release fails until GGML_TYPE_COUNT and the block sizes in crates/nekko-engine/src/gguf.rs are rechecked against ggml.h at this release and GGML_TYPES_CHECKED_AT is updated.' : ''}`);
   if (existing) gh('pr', 'edit', String(existing.number), '--repo', repoName, '--title', `Update ${repo} to ${release.tag_name}`);
 }
 

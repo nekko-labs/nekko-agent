@@ -41,6 +41,7 @@ fn flash_next() -> ModelFacts {
             experts: Some(512.0),
             experts_used: Some(10.0),
         }),
+        kv_f16_only: false,
     }
 }
 
@@ -61,6 +62,7 @@ fn dense_14b() -> ModelFacts {
             experts: None,
             experts_used: None,
         }),
+        kv_f16_only: false,
     }
 }
 
@@ -159,7 +161,10 @@ fn a_dense_model_that_fits_runs_gpu_only_with_two_sessions() {
 
 #[test]
 fn a_dense_model_too_big_for_the_card_moves_feed_forward_first() {
-    let out = recommend(&dense_14b(), &machine(8.0, 7.5, 32.0, 24.5), 0.0);
+    // 8.25 GB, not 8: with q8_0 counted at its real 1.0625 bytes an element
+    // (#3325) the q8_0 split no longer fits an 8 GB card at 32k, and this case
+    // is about the order of what moves, not where that edge sits.
+    let out = recommend(&dense_14b(), &machine(8.25, 7.75, 32.0, 24.5), 0.0);
     assert_eq!(out["request"]["runOn"], "hybrid", "{out}");
     assert!(n(&out, &["request", "cpuFfnLayers"]) > 0.0, "{out}");
     assert_eq!(n(&out, &["request", "gpuLayers"]), 40.0, "every layer stays on the GPU: {out}");
