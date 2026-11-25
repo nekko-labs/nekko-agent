@@ -1,3 +1,4 @@
+import { useSharedTick, useVisibleInterval } from '../visibleInterval.js';
 import React, { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { CLOUD_RELAY_URL, pairingLink, relayRoute, phoneDeviceAccess, PHONE_KEY_CHANNEL, PROTECT_COMPUTER_DOCS_URL, relayHost, relayUrlProblem, relayVia, remoteStoppedBanner, type CloudStatus, type DeviceRoute, type SecurityStatus, type LocalRelayStatus, type NetworkVisibilityStatus, type PairingGrant, type PhoneActivityEntry, type RemoteDevice, type RemoteStatus } from '@nekko-agent/shared';
@@ -190,35 +191,18 @@ export function RemoteAccess() {
   };
 
   // This computer's relay status, for the Tailscale option and the connection label.
-  useEffect(() => {
-    let live = true;
-    const load = () => void window.nekko.localRelayStatus?.().then((r) => live && setLocalRelay(r)).catch(() => {});
-    load();
-    const t = setInterval(load, 5000);
-    return () => {
-      live = false;
-      clearInterval(t);
-    };
-  }, []);
+  useVisibleInterval((live) => { void window.nekko.localRelayStatus?.().then((r) => live() && setLocalRelay(r)).catch(() => {}); }, 5000, { immediate: true });
 
   useEffect(() => {
     void refresh();
   }, []);
 
   // Live view while enabled: connected devices + pairing-code countdown.
-  useEffect(() => {
-    if (!status.enabled) return;
-    const t = setInterval(() => {
-      setNow(Date.now());
-      void refresh();
-    }, 5000);
-    return () => clearInterval(t);
-  }, [status.enabled]);
-  useEffect(() => {
-    if (!grant) return;
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, [grant]);
+  useVisibleInterval(() => {
+    setNow(Date.now());
+    void refresh();
+  }, status.enabled ? 5000 : null);
+  useSharedTick(() => setNow(Date.now()), 1000, !!grant);
 
   const liveGrant = grant && grant.expiresAt > now ? grant : null;
 
@@ -763,17 +747,8 @@ export function LocalRelayCard({
   };
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    let live = true;
-    const load = () => void window.nekko.localRelayStatus?.().then((s) => live && setRelay(s)).catch(() => {});
-    load();
-    // Tailscale coming up, or the relay starting on its own, shows without a click.
-    const t = setInterval(load, 5000);
-    return () => {
-      live = false;
-      clearInterval(t);
-    };
-  }, []);
+  // Tailscale coming up, or the relay starting on its own, shows without a click.
+  useVisibleInterval((live) => { void window.nekko.localRelayStatus?.().then((s) => live() && setRelay(s)).catch(() => {}); }, 5000, { immediate: true });
 
   if (!relay || relay.available === false) return null;
 
@@ -944,17 +919,8 @@ export function NetworkVisibilitySwitch() {
   const [vis, setVis] = useState<NetworkVisibilityStatus | null>(null);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    let live = true;
-    const load = () => void window.nekko.networkVisibilityStatus?.().then((s) => live && setVis(s)).catch(() => {});
-    load();
-    // Joining a network, or a new address, shows without a click.
-    const t = setInterval(load, 5000);
-    return () => {
-      live = false;
-      clearInterval(t);
-    };
-  }, []);
+  // Joining a network, or a new address, shows without a click.
+  useVisibleInterval((live) => { void window.nekko.networkVisibilityStatus?.().then((s) => live() && setVis(s)).catch(() => {}); }, 5000, { immediate: true });
 
   if (!vis || vis.available === false) return null;
   const set = async (on: boolean) => {
@@ -1037,13 +1003,8 @@ export function PhoneAccess({ devices, onChanged }: { devices: RemoteDevice[]; o
 
   const loadActivity = (id: string) =>
     void window.nekko.getRemoteActivity(id).then((list) => setActivity((a) => ({ ...a, [id]: list }))).catch(() => {});
-  useEffect(() => {
-    if (!openId) return;
-    loadActivity(openId);
-    // New changes from a connected phone show without a click.
-    const t = setInterval(() => loadActivity(openId), 5000);
-    return () => clearInterval(t);
-  }, [openId]);
+  // New changes from a connected phone show without a click.
+  useVisibleInterval(() => { if (openId) loadActivity(openId); }, openId ? 5000 : null, { immediate: true, deps: [openId] });
 
   const set = async (id: string, patch: { read?: boolean; change?: boolean }) => {
     setBusy(id);

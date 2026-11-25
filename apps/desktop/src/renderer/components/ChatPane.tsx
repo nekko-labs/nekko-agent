@@ -45,6 +45,8 @@ import { anchorLiveRun, beginResumedRun, clearLiveRun, engineLost, getLiveRun, o
 import { getCachedSession, holdTranscript, loadSession, putCachedSession } from '../sessionCache.js';
 import { retryUntilAnswered } from '../retryUntilAnswered.js';
 import { usePaneVisible } from '../paneVisibility.js';
+import { useVisibleInterval } from '../visibleInterval.js';
+import { watchEventFilter } from '../agentWatches.js';
 import { reportAgentWorking } from '../workingAgents.js';
 import { useAgentEventClaim } from '../agentSubscription.js';
 import { ComposerFocus } from './ComposerFocus.js';
@@ -131,6 +133,9 @@ import { ShieldCheckIcon } from '../icons.js';
 import { PanelIcon, DownloadIcon, PlusIcon, SearchIcon, CloseIcon, BoltIcon, IncognitoIcon, ThoughtIcon, ListIcon, TerminalIcon, WorktreeIcon, CheckIcon, TrashIcon, UndoIcon } from '../icons.js';
 import { GfSendIcon, GfStopIcon } from '../gentleface-icons.js';
 import { SimulatorStatus, useSimulatorAutoOpen } from './Simulators.js';
+
+/** The wake time is read on watch events; this slow poll only covers a watch the host arms by itself. */
+const WATCH_FALLBACK_POLL_MS = 60_000;
 
 const NO_PRS: PrInfo[] = []; // stable empty ref so the store selector doesn't churn
 // The first-chat intro brings Remotion with it, so it loads only when it shows.
@@ -568,25 +573,26 @@ const LiveReplyStatus = memo(function LiveReplyStatus({
   const [elapsed, setElapsed] = useState(0);
   const [nextWakeAt, setNextWakeAt] = useState<number | null>(null);
   const [now, setNow] = useState(Date.now);
+  // The next wake time changes only when a watch is armed, cancelled or fires, so it is read on the
+  // events that can do that (an `agent_watch` result, a turn's end) and, as a slow fallback for a
+  // watch the host arms on its own (a PR watch), once a minute while the pane is visible.
+  const refreshWake = useRef<(live: () => boolean) => void>(() => {});
+  refreshWake.current = (live) => { void window.nekko.nextAgentWatchAt(sessionId).then((wake) => {
+    if (live()) { setNextWakeAt(wake); setNow(Date.now()); }
+  }).catch(() => { if (live()) setNextWakeAt(null); }); };
+  useVisibleInterval((live) => refreshWake.current(live), WATCH_FALLBACK_POLL_MS, { immediate: true, deps: [sessionId] });
   useEffect(() => {
     let live = true;
-    const refresh = () => { void window.nekko.nextAgentWatchAt(sessionId).then((wake) => {
-      if (live) { setNextWakeAt(wake); setNow(Date.now()); }
-    }).catch(() => { if (live) setNextWakeAt(null); }); };
-    refresh();
-    const interval = setInterval(refresh, 15_000);
+    const changes = watchEventFilter();
     const off = window.nekko.onAgentEvent((e) => {
-      if (e.sessionId === sessionId && (e.type === 'tool_result' || e.type === 'done' || e.type === 'error')) refresh();
+      if (e.sessionId === sessionId && changes(e)) refreshWake.current(() => live);
     });
-    return () => { live = false; clearInterval(interval); off(); };
+    return () => { live = false; off(); };
   }, [sessionId]);
   useEffect(() => {
-    if (!status.streaming) return;
-    const tick = () => { if (startedAt) setElapsed(Math.round((Date.now() - startedAt) / 1000)); };
-    tick();
-    const t = setInterval(tick, 500);
-    return () => clearInterval(t);
+    if (status.streaming && startedAt) setElapsed(Math.round((Date.now() - startedAt) / 1000));
   }, [status.streaming, startedAt]);
+  useVisibleInterval(() => { if (startedAt) setElapsed(Math.round((Date.now() - startedAt) / 1000)); }, status.streaming ? 500 : null);
   const liveRate = status.streaming ? liveTokenRate(run) : null;
   // Agrees with the turn status line: "Starting" or "Writing reply" for half an hour reads as hung or busy
   // when Claude Code is only waiting on its own background work.
@@ -1137,6 +1143,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   latestCtxRef.current = ctx;
   const latestSessionRef = useRef(session);
   latestSessionRef.current = session;
+  const publishCtx = useRef<(() => void) | null>(null);
   useEffect(() => {
     if (!publishesContext) return;
     const publish = () => {
@@ -1156,10 +1163,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       useStore.getState().setSessionCtxEstimate(sessionId, base + live);
     };
     publish();
-    if (!streaming) return;
-    const t = setInterval(publish, 4_000);
-    return () => clearInterval(t);
+    publishCtx.current = publish;
   }, [publishesContext, streaming, sessionId, ctx, marks, reportedCtx]);
+  // While streaming, the estimate is republished every 4 s, only while the pane is on screen.
+  useVisibleInterval(() => publishCtx.current?.(), publishesContext && streaming ? 4_000 : null);
   useEffect(() => {
     if (!publishesContext) return;
     return () => useStore.getState().setSessionCtxEstimate(sessionId, null);
@@ -2984,7 +2991,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     <ChatCodeRun.Provider value={codeRun}>
     <ChatImages.Provider value={chatImages}>
     {/* Portaled popups (the Mode panel and its lists) bubble here through React but are not part of the chat. */}
-    <div ref={paneRef} onContextMenu={(e) => { if (surface === 'composer' || e.defaultPrevented || !e.currentTarget.contains(e.target as Node) || (e.target as HTMLElement).closest('a, img, textarea, [contenteditable], [data-agent-logs]')) return; e.preventDefault(); const picked = window.getSelection(); setChatMenu({ x: e.clientX, y: e.clientY, selection: picked && e.currentTarget.contains(picked.anchorNode) ? picked.toString() : '' }); }} data-session-id={sessionId} data-chat-surface={surface} data-clean-start={cleanStart || undefined} data-chat-expanding={expanding || undefined} onAnimationEnd={expanding ? (e) => { if (e.animationName === 'composer-expand-in') setExpanding(false); } : undefined} className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
+    <div ref={paneRef} onContextMenu={(e) => { if (surface === 'composer' || e.defaultPrevented || !e.currentTarget.contains(e.target as Node) || (e.target as HTMLElement).closest('a, img, textarea, [contenteditable], [data-agent-logs]')) return; e.preventDefault(); const picked = window.getSelection(); setChatMenu({ x: e.clientX, y: e.clientY, selection: picked && e.currentTarget.contains(picked.anchorNode) ? picked.toString() : '' }); }} data-session-id={sessionId} data-pane-hidden={paneShown ? undefined : ''} data-chat-surface={surface} data-clean-start={cleanStart || undefined} data-chat-expanding={expanding || undefined} onAnimationEnd={expanding ? (e) => { if (e.animationName === 'composer-expand-in') setExpanding(false); } : undefined} className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
       {contextChangeNotice && <ContextChangeNotice tokens={ctx ? ctxUsed : undefined} onClose={closeContextNotice} />}
       {chatMenu && <ContextMenu x={chatMenu.x} y={chatMenu.y} onClose={() => setChatMenu(null)}>
         {chatMenu.selection && <ContextAction onClick={() => { void navigator.clipboard.writeText(chatMenu.selection).catch(() => useStore.getState().pushToast('error', "Couldn't copy text.")); setChatMenu(null); }}><CopyIcon className="mr-2 inline h-3.5 w-3.5" />Copy</ContextAction>}

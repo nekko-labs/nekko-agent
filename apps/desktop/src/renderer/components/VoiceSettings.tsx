@@ -1,3 +1,4 @@
+import { useVisibleInterval } from '../visibleInterval.js';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import type { VoiceStatus, VoiceSettings as Preferences } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
@@ -27,11 +28,9 @@ export function VoiceSettings({ compact = false, showHeading = true }: { compact
     capture.current = null;
   };
   useEffect(() => {
-    let live = true;
-    const refresh = () => window.nekko.voiceStatus().then(s => { if (live) setStatus(s); }).catch(e => { if (live) setError(e.message); });
-    void refresh(); const timer = setInterval(refresh, 1000);
-    return () => { live = false; clearInterval(timer); stopTest(); };
+    return stopTest;
   }, []);
+  useVisibleInterval((live) => { window.nekko.voiceStatus().then(s => { if (live()) setStatus(s); }).catch(e => { if (live()) setError(e.message); }); }, 1000, { immediate: true });
   useEffect(() => { if (voice.enabled === false) { stopTest(); setLevel(null); } }, [voice.enabled]);
   const update = async (patch: Preferences) => {
     if (patch.enabled === false) { stopTest(); setLevel(null); }
