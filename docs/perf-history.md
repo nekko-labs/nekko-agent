@@ -39,6 +39,19 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Streaming a long reply re-parses only the block being written (2026-11-26)
+Area: renderer
+Result: improvement
+Conditions: Apple M1 Max, macOS 27.2, Node v26.8.1, vitest 5.0.5 with jsdom, React `act` renders (no layout or paint), `ChatMarkdown` with `topics` on. A synthetic 15,197-character reply (headings, a bold/code/link paragraph with a `#123` chip, a two-item list and a code fence, repeated) fed as 379 cumulative 40-character deltas, old and new `Markdown.tsx` in the same process, run alternately 5 times. The machine was shared with other agents, so absolute numbers vary between rounds (before ran 3.88 to 18.93 ms); the ratio is the finding. An earlier 3-round run of the same script gave before 3.88-4.50 and after 0.72-2.46 ms/delta (one after round was a 2.46 outlier).
+
+| Metric (5 rounds) | Before | After |
+|---|---|---|
+| Mean per delta | 10.29, 9.93, 10.49, 9.79, 18.93 ms | 2.00, 2.37, 1.92, 2.14, 1.24 ms |
+| Second-half mean per delta | 14.15, 14.88, 14.95, 14.21, 25.72 ms | 2.38, 3.32, 2.80, 3.52, 1.85 ms |
+| p95 per delta | 32.93, 34.35, 38.98, 36.95, 87.59 ms | 9.52, 11.03, 8.86, 10.41, 4.65 ms |
+
+Why: `ChatMarkdown` rebuilt its render context from `text` on every delta, so no finished `TextSegment` ever held its `React.memo`; the context now depends only on stable inputs and the verification evidence is kept by value. A unit test counts renders of a finished block across deltas (3 before, 1 after). Not measured: real-browser frame time and the Electron harness; the new long-reply probes in `scripts/perf` had not landed.
+
 ## Plum and Indigo window glow steps instead of fading every frame (#3136, 2026-11-20)
 Area: GPU/memory
 Result: improvement expected; after number pending (measured once merged, see below)
