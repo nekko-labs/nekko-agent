@@ -51,6 +51,8 @@ const RECENT_CHATS = 5;
  * as two lines: where the result lives, then the text it was found in, with
  * the matched words marked. Synonyms count ("prefs" finds Settings).
  */
+const NO_SESSIONS: SessionSummary[] = [];
+
 export function CommandPalette() {
   const { paletteOpen, setPaletteOpen, setView, newChat, newTerminal, toggleContextPanel, settings } = useStore(
     useShallow((s) => ({
@@ -63,7 +65,8 @@ export function CommandPalette() {
       settings: s.settings,
     })),
   );
-  const sessions = useStore((s) => s.sessions);
+  // The palette reads every chat only while it is open.
+  const sessions = useStore((s) => (s.paletteOpen ? s.sessions : NO_SESSIONS));
   const providers = useStore((s) => s.providers);
   const hypergate = useStore((s) => s.hypergate);
   const hypergateConnected = useStore((s) => (s.settings?.mcpServers ?? []).some((m) => m.id === 'hypergate'));

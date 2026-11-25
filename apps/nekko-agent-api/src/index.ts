@@ -37,14 +37,17 @@ const failed = (job: string) => (e: unknown) => {
 // Migrations run on every start; they are idempotent and take an advisory lock.
 const applied = await migrate(db);
 if (applied.length) console.log(`migrations applied: ${applied.join(", ")}`);
-await expireDonations(db);
+// Everything after migrate is background work: the service listens first, so a restart is
+// not held up by purge jobs (a restart has a short health-check grace). Their first runs go
+// one after the other at the end of startup, not all at once on the small connection pool.
+const startupJobs: (() => Promise<unknown>)[] = [() => expireDonations(db).catch(failed("expiring donations"))];
 setInterval(() => expireDonations(db).catch(failed("expiring donations")), 24 * 60 * 60 * 1000).unref();
 
 // Library history (#2750): replaced revisions, old share versions and deleted shares go after 30 days.
 const purgeLibrary = () => purgeLibraryHistory(db)
   .then((n) => { if (n.revisions || n.versions || n.shares) console.log(`library history purged: ${n.revisions} revisions, ${n.versions} share versions, ${n.shares} shares`); })
   .catch(failed("purging library history"));
-await purgeLibrary();
+startupJobs.push(purgeLibrary);
 setInterval(purgeLibrary, 6 * 60 * 60 * 1000).unref();
 
 // Signup retention (privacy policy): unconfirmed after 30 days and
@@ -53,14 +56,14 @@ setInterval(purgeLibrary, 6 * 60 * 60 * 1000).unref();
 const purge = () => purgeSignups(db)
   .then((n) => { if (n.unconfirmed || n.unsubscribed) console.log(`signups purged: ${n.unconfirmed} unconfirmed, ${n.unsubscribed} unsubscribed`); })
   .catch(failed("purging signups"));
-await purge();
+startupJobs.push(purge);
 setInterval(purge, 6 * 60 * 60 * 1000).unref();
 
 // Send feedback screenshots are deleted 90 days after their note arrived.
 const purgeScreenshots = () => purgeFeedbackScreenshots(db)
   .then((n) => { if (n) console.log(`feedback screenshots purged: ${n}`); })
   .catch(failed("purging feedback screenshots"));
-await purgeScreenshots();
+startupJobs.push(purgeScreenshots);
 setInterval(purgeScreenshots, 6 * 60 * 60 * 1000).unref();
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
@@ -93,7 +96,7 @@ const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const deleteAuthUser = supabaseUrl && serviceRoleKey ? supabaseAdminDeleter(supabaseUrl, serviceRoleKey) : undefined;
 if (!deleteAuthUser) console.warn("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set: deleted accounts' Supabase users wait in pending_auth_deletions.");
 const retryAuth = () => retryAuthDeletions(db, deleteAuthUser).catch(failed("Supabase user deletion retry"));
-await retryAuth();
+startupJobs.push(retryAuth);
 setInterval(retryAuth, 60 * 60 * 1000).unref();
 // Organizations are limited to these accounts while they are proven (comma-separated emails); unset allows everyone.
 const orgsAllowedEmails = (process.env.NEKKO_ORGS_ALLOWED_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
@@ -128,6 +131,9 @@ if (memory.warning) {
 }
 const app = buildServer({ db, memoryGate, relay, accountsAllowedDomains, accountsAllowedEmails, stripe, staffEmails, privacyReviewers: parseList(process.env.NEKKO_PRIVACY_REVIEWER_SUBJECTS), fleetEnabled: process.env.NEKKO_FLEET_ENABLED === "1", orgsEnabled: process.env.NEKKO_ORGS_ENABLED === "1", orgsAllowedEmails, allowedOrigins, logger: true, signIn, machines, mailer, publicUrl: process.env.PUBLIC_URL || undefined, deleteAuthUser, alert });
 await app.listen({ host: "0.0.0.0", port: Number(process.env.PORT ?? 4320) });
+void (async () => {
+  for (const job of startupJobs) await job();
+})();
 
 for (const signal of ["SIGTERM", "SIGINT"] as const) {
   process.once(signal, async () => {

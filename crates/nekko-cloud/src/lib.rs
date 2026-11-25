@@ -31,6 +31,7 @@ mod http;
 pub mod library;
 mod org_records;
 mod orgs;
+mod pace;
 pub mod records;
 pub mod relay_channel;
 pub mod state;
@@ -49,7 +50,7 @@ use state::{Account, LibrarySynced, State, Synced};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use vault::Vault;
 use zeroize::Zeroize;
 
@@ -185,6 +186,16 @@ pub struct Cloud {
     share: tokio::sync::Mutex<()>,
     /// The Nekko Cloud Relay account channel: presence and sync nudges (decision 0116).
     relay: relay_channel::Channel,
+    /// Relay tickets kept until they are due for renewal (`renewAfterSeconds`).
+    tickets: pace::Tickets,
+    /// A pass started by a Relay nudge is waiting out its jitter; more nudges join it.
+    nudge_pending: pace::Pending,
+    /// A nudge in that burst said settings or organizations changed: the pass reads the account in full.
+    nudge_full: std::sync::atomic::AtomicBool,
+    /// The longest a nudge's pass is held, in milliseconds (a field so tests need not wait).
+    nudge_window_ms: std::sync::atomic::AtomicU64,
+    /// When the account and sync state were last read in full.
+    full_read: Mutex<pace::FullRead>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -218,28 +229,57 @@ impl Cloud {
             host: Mutex::new(None),
             share: tokio::sync::Mutex::new(()),
             relay: relay_channel::Channel::default(),
+            tickets: pace::Tickets::default(),
+            nudge_pending: pace::Pending::default(),
+            nudge_full: Default::default(),
+            nudge_window_ms: std::sync::atomic::AtomicU64::new(pace::NUDGE_WINDOW.as_millis() as u64),
+            full_read: Mutex::default(),
         })
     }
 
-    /// Sync in the background every `every` while it is on.
+    /// Sync in the background while it is on. Without the Relay account channel the pass runs about
+    /// every `every`; with it up, changes arrive as nudges and the timer is a 5 minute safety poll.
+    /// A timer pass only pulls (one call); the account and sync state are read in full on start, on
+    /// a settings or organizations nudge, on a user action, when a pull meets a newer key epoch, and
+    /// every 10 minutes. Each computer starts at a random point in the first quarter of the
+    /// interval and each wait varies by 20% either way, so computers that started or stalled
+    /// together don't call Nekko Cloud together. The loop also looks at the clock every 30 s: a
+    /// jump means the computer woke from sleep, and it pulls at once.
     pub fn start(self: &Arc<Self>, every: Duration) {
         let me = self.clone();
         tokio::spawn(async move {
+            tokio::time::sleep(pace::start_offset(every, pace::unit())).await;
+            let mut watch = pace::WakeWatch::new(std::time::SystemTime::now());
             loop {
                 if me.ready() {
-                    let _ = me.sync_once().await;
+                    let _ = me.sync_quick().await;
                 }
-                tokio::time::sleep(every).await;
+                let spread = pace::unit();
+                let mut waited = Duration::ZERO;
+                loop {
+                    // The target follows the channel: it may come up or go down while waiting.
+                    let target = pace::jittered(pace::poll_interval(me.relay.connected(), every), spread);
+                    if waited >= target {
+                        break;
+                    }
+                    let step = (target - waited).min(pace::WAKE_TICK);
+                    tokio::time::sleep(step).await;
+                    waited += step;
+                    if watch.woke(std::time::SystemTime::now()) {
+                        // Several computers may wake together (a shared power event): don't call in step.
+                        tokio::time::sleep(pace::nudge_delay(pace::NUDGE_WINDOW, pace::unit())).await;
+                        break;
+                    }
+                }
             }
         });
-        // Sharing with organizations: a beat every 30 seconds (it also picks up after sleep or a lost connection).
+        // Sharing with organizations: a beat about every 30 seconds (it also picks up after sleep or a lost connection).
         let me = self.clone();
         tokio::spawn(async move {
-            let mut beat = tokio::time::interval(HEARTBEAT);
-            beat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            tokio::time::sleep(pace::start_offset(HEARTBEAT, pace::unit())).await;
             loop {
-                beat.tick().await;
                 me.share_tick().await;
+                tokio::time::sleep(pace::jittered(HEARTBEAT, pace::unit())).await;
             }
         });
     }
@@ -371,6 +411,10 @@ impl Cloud {
     /// to keep it before asking for the next. Errors are what the owner reads.
     pub async fn relay_ticket(&self, scope: &str, room: Option<&str>) -> Result<(String, Duration), String> {
         let token = self.token().map_err(|_| "Sign in to Nekko Cloud to use Nekko Cloud Relay.".to_string())?;
+        // Kept until it is due for renewal: a redial, or a second user of the same room, doesn't ask again.
+        if let Some(held) = self.tickets.get(&token, scope, room, Instant::now()) {
+            return Ok(held);
+        }
         let mut body = json!({ "scope": scope });
         if let Some(room) = room {
             body["room"] = json!(room);
@@ -382,8 +426,9 @@ impl Cloud {
                     .filter(|t| t.starts_with("nkr1."))
                     .ok_or("Nekko Cloud sent no relay ticket.")?;
                 // At least a minute, so a short answer can't make the agent ask in a loop.
-                let renew = v["renewAfterSeconds"].as_u64().unwrap_or(3 * 3600).max(60);
-                Ok((ticket.to_string(), Duration::from_secs(renew)))
+                let renew = Duration::from_secs(v["renewAfterSeconds"].as_u64().unwrap_or(3 * 3600).max(60));
+                self.tickets.put(&token, scope, room, ticket, renew, Instant::now());
+                Ok((ticket.to_string(), renew))
             }
             Err(err) => Err(match (err.status, err.code.as_str()) {
                 (402, _) => "Nekko Cloud Relay is part of Nekko Cloud Pro. Upgrade, or use Tailscale for free.".into(),
@@ -634,6 +679,7 @@ impl Cloud {
         self.edit(|s| s.account = Some(account))?;
         let remote = self.api.get(&token, "/v1/sync/state").await.map_err(e)?;
         lock(&self.live).remote = Some(remote);
+        lock(&self.full_read).done(&token, Instant::now());
         Ok(())
     }
 
@@ -1414,8 +1460,22 @@ impl Cloud {
         self.changed();
     }
 
-    /// One pull and push, repeated (up to three times) while pushes conflict.
+    /// One pass, from a user action: the account and sync state are read in full first, then one
+    /// pull and push, repeated (up to three times) while pushes conflict.
     pub async fn sync_once(self: &Arc<Self>) -> Result<(), String> {
+        self.sync_with(false).await
+    }
+
+    /// A pass from a timer, a nudge, the channel coming up or a wake from sleep: it only pulls (and
+    /// pushes what changed here), without reading the account and sync state again, unless a full
+    /// read is due (on start, asked for by a settings or organizations nudge, or 10 minutes old).
+    pub async fn sync_quick(self: &Arc<Self>) -> Result<(), String> {
+        let token = self.token()?;
+        let due = lock(&self.full_read).due(&token, Instant::now()) || lock(&self.live).remote.is_none();
+        self.sync_with(!due).await
+    }
+
+    async fn sync_with(self: &Arc<Self>, pull_only: bool) -> Result<(), String> {
         let _one = self.run.lock().await;
         let token = self.token()?;
         {
@@ -1425,7 +1485,7 @@ impl Cloud {
             live.pulled = 0;
         }
         self.changed();
-        let result = self.pass(&token).await;
+        let result = self.pass(&token, pull_only).await;
         {
             let mut live = lock(&self.live);
             live.syncing = false;
@@ -1446,8 +1506,10 @@ impl Cloud {
         result
     }
 
-    async fn pass(self: &Arc<Self>, token: &str) -> Result<(), String> {
-        self.refresh().await?;
+    async fn pass(self: &Arc<Self>, token: &str, pull_only: bool) -> Result<(), String> {
+        if !pull_only {
+            self.refresh().await?;
+        }
         let held = lock(&self.state).key_id;
         let remote_key = self.remote_key();
         if held.is_some() && remote_key.is_none() {
@@ -2406,6 +2468,9 @@ fn picture_work(
         .collect();
     (sends.into_iter().map(|l| split(l)).collect(), removes)
 }
+
+#[cfg(test)]
+mod idle_tests;
 
 #[cfg(test)]
 mod push_batch_tests {
