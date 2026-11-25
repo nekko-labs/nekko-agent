@@ -128,3 +128,9 @@ Nothing is recorded as a true OS exclusive yet.
 | Feature | iPhone | Android | Follow-up |
 | --- | --- | --- | --- |
 | Collapsed progress notes and continuation summaries | Implemented on #2452 branch, native-unverified | Same folds (2026-11-13); the system bar hides the keyboard | None |
+
+## Performance pass (iPhone first, 2026-11-26)
+
+| Feature | iPhone | Android | Follow-up |
+| --- | --- | --- | --- |
+| Streamed text is folded in once per display frame (#3387) | Implemented, unit-tested in NekkoKit | Not implemented: one state update per token | https://github.com/nekko-labs/nekko-agent/issues/3432 |
