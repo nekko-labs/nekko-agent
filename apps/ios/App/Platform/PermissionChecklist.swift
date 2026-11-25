@@ -86,14 +86,14 @@ final class PermissionChecklist {
     }
 
     func refresh() async {
-        let settings = await UNUserNotificationCenter.current().notificationSettings()
-        switch settings.authorizationStatus {
-        case .authorized, .ephemeral: access[.notifications] = .allowed
-        case .provisional: access[.notifications] = .quiet
-        case .denied: access[.notifications] = .denied
-        case .notDetermined: access[.notifications] = .unknown
-        @unknown default: access[.notifications] = .unknown
-        }
+        refreshLocal()
+        await refreshNotifications()
+    }
+
+    /// Every status with a synchronous getter. Read before the notification query, which can
+    /// take a minute or more on a loaded simulator: the rows that appear before the first
+    /// refresh finishes (#2454) fill in everything but notifications at once.
+    private func refreshLocal() {
         access[.camera] = Self.capture(AVCaptureDevice.authorizationStatus(for: .video))
         if AVCaptureDevice.default(for: .video) == nil { access[.camera] = .unavailable }
         // Read the capture authorization on every foreground transition.
@@ -120,6 +120,17 @@ final class PermissionChecklist {
             access[.authentication] = .unavailable
         } else if access[.authentication] != .allowed {
             access[.authentication] = .available
+        }
+    }
+
+    private func refreshNotifications() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        switch settings.authorizationStatus {
+        case .authorized, .ephemeral: access[.notifications] = .allowed
+        case .provisional: access[.notifications] = .quiet
+        case .denied: access[.notifications] = .denied
+        case .notDetermined: access[.notifications] = .unknown
+        @unknown default: access[.notifications] = .unknown
         }
     }
 
@@ -174,7 +185,10 @@ final class PermissionChecklist {
             }
         case .liveActivities: break
         }
-        await refresh()
+        // Only a notification request changes what the slow notification query answers; any
+        // other grant shows, and the next row opens, without waiting on it.
+        refreshLocal()
+        if item == .notifications { await refreshNotifications() }
     }
 
     func stop() {
