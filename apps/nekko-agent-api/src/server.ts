@@ -19,6 +19,7 @@ import { registerOrgs } from "./orgs.js";
 import { registerRelay, type RelayOptions } from "./relay.js";
 import { registerShares } from "./shares.js";
 import { Presence, registerPresence } from "./presence.js";
+import type { RelayPresence } from "./relay-presence.js";
 import { registerSync } from "./sync.js";
 import { BusyError, budgetForMachine, MemoryGate, registerMemoryGate } from "./memory-gate.js";
 
@@ -77,6 +78,8 @@ export interface ServerOptions {
   memoryGate?: MemoryGate | false;
   /** Fleet presence kept in memory (presence.ts); tests pass one with a clock they control. */
   presence?: Presence;
+  /** Online computers according to the relay (NEKKO_RELAY_PRESENCE_URL); without it the memory lease alone decides. */
+  relayPresence?: RelayPresence | null;
   /** Request logging, redacted (see LOG_SERIALIZERS); an object adds pino options such as a stream (tests). */
   logger?: boolean | { stream: { write(line: string): void } };
 }
@@ -135,6 +138,7 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
   });
 
   registerPresence(app, opts.presence);
+  app.decorate("relayPresence", opts.relayPresence ?? null);
 
   // Big bodies and pages wait their turn for memory (src/memory-gate.ts).
   if (opts.memoryGate !== false) registerMemoryGate(app, opts.memoryGate ?? new MemoryGate({ budgetBytes: budgetForMachine() }));
