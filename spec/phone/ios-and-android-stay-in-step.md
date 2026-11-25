@@ -128,3 +128,9 @@ Nothing is recorded as a true OS exclusive yet.
 | Feature | iPhone | Android | Follow-up |
 | --- | --- | --- | --- |
 | Collapsed progress notes and continuation summaries | Implemented on #2452 branch, native-unverified | Same folds (2026-11-13); the system bar hides the keyboard | None |
+
+## Performance pass (iPhone first, 2026-11-26)
+
+| Feature | iPhone | Android | Follow-up |
+| --- | --- | --- | --- |
+| Relay reconnect backoff has 0 to 50% random jitter (#3385) | Implemented, unit-tested in NekkoProtocol | Not implemented: fixed 1, 2, 4 ... 30 s | https://github.com/nekko-labs/nekko-agent/issues/3392 |
