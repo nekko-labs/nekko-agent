@@ -34,8 +34,9 @@ struct ConnectionView: View {
                     LabeledContent("Tailscale on this iPhone", value: tailnet ? "Connected" : "Off")
                     // Reach the Tailscale switch straight from here when it's off,
                     // so there's always a one-tap way back to the tailnet even
-                    // when the state is .idle or .denied (TS-4).
-                    if !tailnet {
+                    // when the state is .idle or .denied (TS-4). Not when Nekko
+                    // Cloud Relay reaches the computer without it (decision 0116).
+                    if !tailnet && !c.reachableOffTailnet {
                         Button { app.openTailscale() } label: {
                             Label("Open Tailscale to reconnect", systemImage: "network")
                         }
@@ -63,7 +64,7 @@ struct ConnectionView: View {
                 if !advice.isEmpty {
                     Section {
                         ForEach(advice, id: \.self) { Label($0, systemImage: "lightbulb").foregroundStyle(palette.ink) }
-                        if TailscaleApp.shouldOffer(route: RelayRoute.of(dialing), tailscaleOn: tailnet, state: store.conn) {
+                        if !c.reachableOffTailnet, TailscaleApp.shouldOffer(route: RelayRoute.of(dialing), tailscaleOn: tailnet, state: store.conn) {
                             Button { app.openTailscale() } label: { Label("Open Tailscale", systemImage: "network") }
                                 .accessibilityIdentifier("open-tailscale")
                                 .accessibilityHint("Opens the Tailscale app, or the App Store if it isn’t installed.")

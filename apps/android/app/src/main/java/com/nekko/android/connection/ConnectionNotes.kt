@@ -100,12 +100,23 @@ data class ConnectionFacts(
     val waiting: Int = 0,
     /** The relay address can never work from a phone (localhost, public ws://). */
     val addressProblem: RelayHint.Problem? = null,
-)
+    /**
+     * The phone also has a route to this computer that doesn't need Tailscale (Nekko Cloud Relay or
+     * another internet relay, decision 0116), so Tailscale being off is not what keeps it away.
+     */
+    val offTailnet: Boolean = false,
+) {
+    /** Only Tailscale reaches this computer: when Tailscale is off, it is the thing to fix. */
+    val tailnetOnly: Boolean get() = route == RelayRoute.TAILSCALE && !offTailnet
+}
 
 object ConnectionNotes {
-    /** The row's items: Tailscale first when it is what keeps computers away, then every computer in order. */
+    /**
+     * The row's items: Tailscale first when it is what keeps computers away, then every computer in order.
+     * A computer the phone can also reach through Nekko Cloud Relay is never blamed on Tailscale.
+     */
     fun make(computers: List<ConnectionFacts>, tailscaleOn: Boolean, time: (Long) -> String = { "" }): List<ConnectionNote> {
-        val blocked = computers.filter { !it.disabled && shouldOfferTailscale(it.route, tailscaleOn, it.state) }
+        val blocked = computers.filter { !it.disabled && !it.offTailnet && shouldOfferTailscale(it.route, tailscaleOn, it.state) }
         val out = mutableListOf<ConnectionNote>()
         if (blocked.isNotEmpty()) {
             out += ConnectionNote(
@@ -191,7 +202,7 @@ object ConnectionNotes {
                 )
                 // Still dialing for the first time: nothing to say until it fails.
                 c.detail == null -> quiet(c, ConnectionNote.Tone.WAITING)
-                c.route == RelayRoute.TAILSCALE -> problem(
+                c.tailnetOnly -> problem(
                     ConnectionNote.Tone.WARNING, msg(R.string.conn_word_no_answer), msg(R.string.conn_no_answer_tailnet_line, name),
                     msg(R.string.conn_no_answer_tailnet_fix), listOf(ConnectionNote.Action.RETRY, ConnectionNote.Action.OPEN_TAILSCALE),
                 )
@@ -219,6 +230,12 @@ object ConnectionNotes {
         }
     }
 
+    /**
+     * One of a computer's routes needs no tailnet: Nekko Cloud Relay or another internet relay (decision 0116).
+     * A LAN address doesn't count: it is no use away from home, where Tailscale would be the fix.
+     */
+    fun reachableOffTailnet(routes: List<String>): Boolean = routes.any { RelayRoute.of(it) == RelayRoute.INTERNET }
+
     /** Every paired computer's connection, in the app's order, for the row. [waiting] is the active computer's outbox. */
     fun facts(s: ComputersState, waiting: Int, debug: Boolean): List<ConnectionFacts> = s.computers.map { c ->
         val active = c.id == s.activeId
@@ -242,6 +259,7 @@ object ConnectionNotes {
             exit = exit?.first, exitAt = exit?.second,
             waiting = if (active) waiting else 0,
             addressProblem = RelayHint.problem(url, debug),
+            offTailnet = reachableOffTailnet(listOf(c.relayUrl) + c.alts),
         )
     }
 }
