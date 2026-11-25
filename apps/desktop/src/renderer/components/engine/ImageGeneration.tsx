@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { LocalModel, ImageCompanionStatus } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
 import { PhotoPackageStatus } from './PhotoPackageStatus.js';
+import { LoadMemoryMeter } from './LoadMemoryMeter.js';
 
 /**
  * An image model's setup in Model Server: its companion files and memory
@@ -28,6 +29,7 @@ export function ImageGeneration({ model, onChanged }: { model: LocalModel; onCha
       <h3 className="text-sm font-semibold">{model.name}</h3>
       <button className="btn btn-primary ml-auto py-1 text-xs" onClick={() => void openChat()}>Open Photo</button>
     </div>
+    <LoadMemoryMeter model={model} />
     <PhotoPackageStatus key={model.id} modelId={model.id} onChanged={onChanged} onDefaults={setDefaults} />
     <details><summary className="cursor-pointer text-xs text-ink-soft">Advanced: custom files and memory</summary>
       <p className="mt-2 text-xs text-ink-faint">Use absolute paths on the machine running Nekko. These override the downloaded companions above. Files beside the model named like clip_l.safetensors or vae-*.safetensors are detected automatically.</p>

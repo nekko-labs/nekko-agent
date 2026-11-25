@@ -600,8 +600,43 @@ pub struct MlxInfo {
     pub architecture: Option<String>,
     pub quantization: Option<String>,
     pub max_context: Option<Value>,
+    pub kv_bytes_per_token: Option<u64>,
     pub vision: bool,
     pub size: f64,
+}
+
+/// The payload of one cached token in a dense Llama MLX model. The stock
+/// mlx_lm server uses unquantized keys/values in the model's activation dtype.
+/// Other layouts (including hybrid attention and vision) aren't modeled here.
+fn mlx_kv_bytes_per_token(config: &Value) -> Option<u64> {
+    if config.get("model_type")?.as_str()? != "llama"
+        || ["vision_config", "text_config", "layer_types", "sliding_window", "use_sliding_window", "kv_quantization"]
+            .iter()
+            .any(|key| config.get(key).is_some_and(|v| !v.is_null() && v != &json!(false)))
+    {
+        return None;
+    }
+    let dtype = config.get("dtype").filter(|v| !v.is_null()).or_else(|| config.get("torch_dtype"))?;
+    if !matches!(dtype.as_str()?, "float16" | "bfloat16") {
+        return None;
+    }
+    let n = |key| config.get(key)?.as_u64().filter(|n| *n > 0);
+    let heads = n("num_attention_heads")?;
+    let kv_heads = n("num_key_value_heads")?;
+    if !heads.is_multiple_of(kv_heads) {
+        return None;
+    }
+    let dim = if config.get("head_dim").is_some_and(|v| !v.is_null()) {
+        n("head_dim")?
+    } else {
+        let hidden = n("hidden_size")?;
+        if !hidden.is_multiple_of(heads) {
+            return None;
+        }
+        hidden / heads
+    };
+    // Two tensors, two bytes per element. Don't let corrupt metadata overflow.
+    4u64.checked_mul(n("num_hidden_layers")?)?.checked_mul(kv_heads)?.checked_mul(dim)
 }
 
 /// Whether a directory is an MLX model, and what it is (`readMlxModel`): a
@@ -650,6 +685,7 @@ pub fn read_mlx_model(dir: &str) -> Option<MlxInfo> {
             None
         },
         max_context: max.filter(Value::is_number),
+        kv_bytes_per_token: mlx_kv_bytes_per_token(&config),
         vision: nekko_js::truthy(field(&config, "vision_config").as_ref()),
         size,
     })
@@ -856,6 +892,8 @@ pub fn list(cfg: &LibraryConfig) -> Result<Vec<Value>, String> {
             row.insert("modality".into(), json!(if info.vision { "vision" } else { "chat" }));
             row.insert("hasProjector".into(), json!(info.vision));
             row.insert("mlxRunnable".into(), json!(cfg.mlx_runnable));
+            // Live metadata: existing index rows get this without a rescan/migration.
+            put(&mut row, "mlxKvBytesPerToken", info.kv_bytes_per_token.map(|bytes| json!(bytes)));
             out.push(row);
         }
     }
