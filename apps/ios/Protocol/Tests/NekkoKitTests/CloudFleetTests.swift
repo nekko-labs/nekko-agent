@@ -19,7 +19,7 @@ final class CloudFleetTests: XCTestCase {
             secrets.set("cloud.state", String(decoding: try! JSONEncoder().encode(state), as: UTF8.self))
         }
         return CloudSync(api: URL(string: "https://api.test")!, http: http, secrets: secrets, files: nil,
-                         deviceLabel: "iPhone", key: { SyncCrypto.SoftwareKey() })
+                         deviceLabel: "iPhone", retryWaits: [.milliseconds(1), .milliseconds(1)], key: { SyncCrypto.SoftwareKey() })
     }
 
     func testGateRequiresEnabledSignedInAndConnected() {
@@ -179,6 +179,8 @@ final class CloudFleetTests: XCTestCase {
     actor DelayedFailureHTTP: CloudHTTP {
         let failure: FleetFailure
         private var delayedPath: String?
+        /// The delayed path keeps failing on every try, so the client's retries of a 503 end in the same failure.
+        private var failingPath: String?
         private var continuation: CheckedContinuation<Void, Never>?
         private(set) var waiting = false
 
@@ -190,13 +192,14 @@ final class CloudFleetTests: XCTestCase {
         }
 
         func send(_ method: String, _ url: URL, headers: [String: String], body: Data?) async throws -> (Int, Data) {
+            if url.path == failingPath, failure == .unavailable { return (503, Data("{\"error\":\"unavailable\"}".utf8)) }
             if url.path == delayedPath {
                 delayedPath = nil
                 waiting = true
                 await withCheckedContinuation { continuation = $0 }
                 switch failure {
                 case .transport: throw URLError(.notConnectedToInternet)
-                case .unavailable: return (503, Data("{\"error\":\"unavailable\"}".utf8))
+                case .unavailable: failingPath = url.path; return (503, Data("{\"error\":\"unavailable\"}".utf8))
                 }
             }
             if url.path == "/v1/auth/me" {
