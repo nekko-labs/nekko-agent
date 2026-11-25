@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { authenticate, type Caller, type Plan, SYNC_PLANS } from "./auth.js";
 import type { Db } from "./db.js";
 import { featuresFor, type Features } from "./features.js";
+import { bodyWeight, holdMemory } from "./memory-gate.js";
 import { HISTORY_DAYS, SYNC_QUOTA, bytes, isPositiveInt, shareBytes } from "./sync.js";
 
 /**
@@ -61,6 +62,14 @@ export function registerShares(app: FastifyInstance, db: Db, f: Features): void 
     return true;
   }
 
+  type ShareHead = Omit<ShareRow, "blob">;
+  /** A share's row without its blob, for the checks that run before its body is read. */
+  async function loadHead(id: string): Promise<ShareHead | null> {
+    if (!SHARE_ID.test(id)) return null;
+    const { rows } = await db.query<ShareHead>("select id, user_id, revision, edit_hash, created_at, updated_at, deleted_at from library_shares where id = $1", [id]);
+    return rows[0] ?? null;
+  }
+
   async function load(id: string): Promise<ShareRow | null> {
     if (!SHARE_ID.test(id)) return null;
     const { rows } = await db.query<ShareRow>("select * from library_shares where id = $1", [id]);
@@ -68,7 +77,7 @@ export function registerShares(app: FastifyInstance, db: Db, f: Features): void 
   }
 
   /** The owner, or anyone holding the share's edit token. Null after replying. */
-  async function editor(req: FastifyRequest, reply: FastifyReply, share: ShareRow): Promise<{ ownerPlan: Plan } | null> {
+  async function editor(req: FastifyRequest, reply: FastifyReply, share: ShareHead): Promise<{ ownerPlan: Plan } | null> {
     const token = req.headers[EDIT_HEADER];
     if (typeof token === "string" && EDIT_TOKEN.test(token) && share.edit_hash && timingSafeEqual(sha256(token), Buffer.from(share.edit_hash))) {
       const { rows } = await db.query<{ plan: Plan }>("select plan from users where id = $1", [share.user_id]);
@@ -106,10 +115,30 @@ export function registerShares(app: FastifyInstance, db: Db, f: Features): void 
 
   const body = (req: FastifyRequest) => (req.body ?? {}) as Record<string, unknown>;
   const sealed = (v: unknown) => bytes(v, MIN_SHARE_BYTES, MAX_SHARE_BYTES);
-  const limit = { bodyLimit: Math.ceil(MAX_SHARE_BYTES * 4 / 3) + 4096 };
-
-  app.post("/v1/shares", limit, async (req, reply) => {
+  const bodyLimit = Math.ceil(MAX_SHARE_BYTES * 4 / 3) + 4096;
+  // Who the preParsing hooks below already checked, so the handlers do not check again.
+  const vouched = new WeakMap<FastifyRequest, Caller | { ownerPlan: Plan }>();
+  // A share's body waits for memory only once the caller is known (the rate limit already ran).
+  const createGate = async (req: FastifyRequest, reply: FastifyReply) => {
     const caller = await owner(req, reply);
+    if (!caller) return reply;
+    vouched.set(req, caller);
+    const weight = bodyWeight(req);
+    if (weight) await holdMemory(app, req, weight);
+  };
+  const replaceGate = async (req: FastifyRequest, reply: FastifyReply) => {
+    const share = await loadHead((req.params as { id: string }).id);
+    if (!share) return reply.code(404).send({ error: "not-found" });
+    const who = await editor(req, reply, share);
+    if (!who) return reply;
+    vouched.set(req, who);
+    const weight = bodyWeight(req);
+    if (weight) await holdMemory(app, req, weight);
+  };
+  const limit = { bodyLimit, config: { gateAfterAuth: true } };
+
+  app.post("/v1/shares", { ...limit, preParsing: createGate }, async (req, reply) => {
+    const caller = (vouched.get(req) as Caller | undefined) ?? await owner(req, reply);
     if (!caller || !(await mayWrite(reply, caller.userId, caller.plan))) return;
     const blob = sealed(body(req).blob);
     const raw = body(req).editHash;
@@ -145,10 +174,10 @@ export function registerShares(app: FastifyInstance, db: Db, f: Features): void 
     return { id: share.id, revision: share.revision, blob: Buffer.from(share.blob).toString("base64url") };
   });
 
-  app.put("/v1/shares/:id", limit, async (req, reply) => {
+  app.put("/v1/shares/:id", { ...limit, preParsing: replaceGate }, async (req, reply) => {
     const share = await load((req.params as { id: string }).id);
     if (!share) return reply.code(404).send({ error: "not-found" });
-    const who = await editor(req, reply, share);
+    const who = (vouched.get(req) as { ownerPlan: Plan } | undefined) ?? await editor(req, reply, share);
     if (!who || !(await mayWrite(reply, share.user_id, who.ownerPlan))) return;
     const blob = sealed(body(req).blob);
     const expected = body(req).revision;

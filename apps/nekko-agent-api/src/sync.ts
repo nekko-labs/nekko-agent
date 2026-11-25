@@ -2,7 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { authenticate, type Caller, type Plan, SYNC_PLANS } from "./auth.js";
 import type { Db } from "./db.js";
-import { holdMemory, pageWeight } from "./memory-gate.js";
+import { bodyWeight, ensureClient, holdMemory, pageWeight } from "./memory-gate.js";
 
 /**
  * End-to-end encrypted sync (docs/SYNC-ENCRYPTION.md). The server stores
@@ -121,8 +121,12 @@ export async function currentKeyId(db: Db, userId: string): Promise<number | nul
 }
 
 export function registerSync(app: FastifyInstance, db: Db): void {
+  /** Callers a route's preParsing hook already vouched for, so its handler does not look them up again. */
+  const vouched = new WeakMap<FastifyRequest, Caller>();
   /** Authenticates, and for writes checks the plan. Replies itself on failure. */
   async function guard(req: FastifyRequest, reply: FastifyReply, write: boolean): Promise<Caller | null> {
+    const known = vouched.get(req);
+    if (known) return known;
     const caller = await authenticate(db, req);
     if (!caller) {
       reply.code(401).send({ error: "unauthenticated" });
@@ -348,7 +352,16 @@ export function registerSync(app: FastifyInstance, db: Db): void {
   // what the server has (1 for a new one); otherwise that object is a
   // conflict and the device pulls, merges and retries. Writes go under the
   // current key epoch only, so a rotation takes effect at once.
-  app.post("/v1/sync/push", { bodyLimit: PUSH_BODY_BYTES }, async (req, reply) => {
+  // The body waits for memory only after the caller is known (the rate limit already ran):
+  // before its body is read, an anonymous request costs nothing but its headers.
+  const pushGate = async (req: FastifyRequest, reply: FastifyReply) => {
+    const caller = await guard(req, reply, true);
+    if (!caller) return reply;
+    vouched.set(req, caller);
+    const weight = bodyWeight(req);
+    if (weight) await holdMemory(app, req, weight);
+  };
+  app.post("/v1/sync/push", { bodyLimit: PUSH_BODY_BYTES, config: { gateAfterAuth: true }, preParsing: pushGate }, async (req, reply) => {
     const caller = await guard(req, reply, true);
     if (!caller) return;
     const objects = (req.body as Record<string, unknown> | undefined)?.objects;
@@ -442,6 +455,7 @@ export function registerSync(app: FastifyInstance, db: Db): void {
       "select collection, object_id, revision, key_id, blob, seq from sync_objects where user_id = $1 and collection = $2 and object_id = $3",
       [caller.userId, collection, objectId],
     );
+    ensureClient(req);
     if (!rows.length) return reply.code(404).send({ error: "not-found" });
     return wire(rows[0]);
   });
@@ -474,6 +488,8 @@ export function registerSync(app: FastifyInstance, db: Db): void {
         where user_id = $1 and seq > $2 and seq <= $3 order by seq`,
       [caller.userId, since, sizes[take - 1].seq],
     );
+    // A client that gave up (and will retry) is not owed a page: stop before the base64 and JSON copies.
+    ensureClient(req);
     const page = rows.map(wire);
     return { objects: page, next: page.length ? page[page.length - 1].seq : since, more };
   });
@@ -509,6 +525,7 @@ export function registerSync(app: FastifyInstance, db: Db): void {
       "select key_id, blob from sync_object_history where user_id = $1 and collection = $2 and object_id = $3 and revision = $4",
       [caller.userId, collection, objectId, rev],
     );
+    ensureClient(req);
     if (!rows[0]) return reply.code(404).send({ error: "not-found" });
     return { collection, objectId, revision: rev, keyId: rows[0].key_id, blob: Buffer.from(rows[0].blob).toString("base64url") };
   });
