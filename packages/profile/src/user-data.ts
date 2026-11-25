@@ -1,6 +1,6 @@
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, statfsSync, chmodSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { brandEnv, CLI_LINK_FILE, modelModality } from '@nekko-agent/shared';
 import { writeJsonAtomic } from './secure-file.js';
 
@@ -93,17 +93,13 @@ function assertProfileStopped(root: string): void {
   if (link.enabled) assertPidStopped(link.pid);
 }
 
-function browserMoves(source: string, target: string, resume: boolean, skipSource?: string): Move[] {
+function browserMoves(source: string, target: string, skipSource?: string): Move[] {
   const src = entryAt(source), dest = entryAt(target);
   if (!src?.isDirectory() || (dest && !dest.isDirectory())) throw new Error('Migration requires real desktop profile folders.');
-  if (!resume && dest && readdirSync(target).some(n => !BROWSER_STARTUP_FILES.has(n) && n !== 'Local State')) {
-    throw new Error('The new desktop profile already contains browser data. Close the app and resolve the profile conflict before migrating.');
-  }
   return readdirSync(source, { withFileTypes: true }).flatMap(entry => {
     const from = join(source, entry.name), to = join(target, entry.name);
     if (from === skipSource || BROWSER_STARTUP_FILES.has(entry.name) || (entry.name === 'Local State' && entryAt(to))) return [];
     if (entry.isSymbolicLink()) throw new Error('Migration refuses symbolic links in the desktop profile.');
-    if (entryAt(to)) throw new Error(`Migration conflict: desktop/${entry.name}. Nothing was overwritten.`);
     return [{ from, to }];
   });
 }
@@ -157,8 +153,8 @@ export function migrateUserData(source: string, destination: string, desktopProf
     ownMoves.push({ from: src, to: dest });
   }
   const browser = [
-    ...(splitBrowser ? browserMoves(browserFromData, profileTarget, Boolean(prior)) : []),
-    ...(desktopProfile ? browserMoves(desktopProfile, profileTarget, Boolean(prior), from) : []),
+    ...(splitBrowser ? browserMoves(browserFromData, profileTarget) : []),
+    ...(desktopProfile ? browserMoves(desktopProfile, profileTarget, from) : []),
   ];
   if (new Set(browser.map(move => move.to)).size !== browser.length) throw new Error('The old desktop profiles contain conflicting browser data.');
   const saveJournal = (phase: string) => writeJsonAtomic(journalPath, { from, to, phase, desktopProfile, moves });
@@ -168,7 +164,15 @@ export function migrateUserData(source: string, destination: string, desktopProf
   if (!scopeEntry) writeJsonAtomic(scopePath, scope);
   for (const move of ownMoves) renameSync(move.from, move.to);
   if (browser.length) mkdirSync(profileTarget, { recursive: true, mode: 0o700 });
-  for (const move of browser) renameSync(move.from, move.to);
+  // The destination has no settings yet, so browser files already there were
+  // written by a launch that had nothing to show (the app creates them before
+  // this move is confirmed). The old profile's win; the fresh ones are set
+  // aside under backups/, never deleted.
+  const aside = join(to, 'backups', `desktop-before-move-${new Date().toISOString().replace(/[:.]/g, '-')}`);
+  for (const move of browser) {
+    if (entryAt(move.to)) { mkdirSync(aside, { recursive: true, mode: 0o700 }); renameSync(move.to, join(aside, basename(move.to))); }
+    renameSync(move.from, move.to);
+  }
   saveJournal('references');
   const profilePaths = nestedLegacy
     ? [...LEGACY_PROFILE_ENTRIES].map(name => ({ from: join(from, name), to: join(to, name) }))

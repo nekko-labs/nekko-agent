@@ -635,9 +635,6 @@ const isPrimary = claimSingleInstance();
 if (!isPrimary) app.quit();
 
 app.whenReady().then(async () => {
-  registerArtifactPreview((sender) => applicationWindows.has(sender.id));
-  const isPreviewServedUrl = registerHtmlPreview((sender) => applicationWindows.has(sender.id));
-  registerLibraryThumbnails((sender) => applicationWindows.has(sender.id), isPreviewServedUrl);
   if (!isPrimary) return;
   // No File/Edit/View/Window bar: it cost a whole strip of chrome above the UI
   // to duplicate shortcuts the app already owns. macOS keeps its menu — there
@@ -676,6 +673,10 @@ app.whenReady().then(async () => {
     },
     tell: (title, detail, error) => { dialog.showMessageBoxSync({ type: error ? 'warning' : 'info', title: 'Nekko Agent', message: title, detail, buttons: ['OK'] }); },
   });
+  // After the move above: these write into the browser profile (library-thumbs), which must not exist before an older profile moves in.
+  registerArtifactPreview((sender) => applicationWindows.has(sender.id));
+  const isPreviewServedUrl = registerHtmlPreview((sender) => applicationWindows.has(sender.id));
+  registerLibraryThumbnails((sender) => applicationWindows.has(sender.id), isPreviewServedUrl);
   // Main's console, teed to `<dataDir>/logs/app.log` (appLog.ts); nekkod serves it as `logs:read('app')`.
   startAppLog(dataDir);
   // The engine runs in its own processes (see engine-process.ts); the window

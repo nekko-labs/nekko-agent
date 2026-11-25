@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -66,17 +66,26 @@ describe('shared Nekko directory', () => {
     expect(existsSync(target)).toBe(false);
   });
 
-  it('does not move any source data when the new browser profile already has data', () => {
+  it('sets aside browser data a first launch wrote into the new profile and moves the old profile in', () => {
     const { source, target } = fixture();
     for (const root of [source, target]) {
-      mkdirSync(join(root, 'desktop'), { recursive: true });
+      mkdirSync(join(root, 'desktop', 'library-thumbs'), { recursive: true });
       writeFileSync(join(root, 'desktop', 'Preferences'), root);
+      writeFileSync(join(root, 'desktop', 'library-thumbs', 'a.webp'), root);
     }
+    mkdirSync(join(target, 'desktop', 'Cache'));
+    mkdirSync(join(source, 'backups'));
     writeFileSync(join(source, 'settings.json'), '{}');
-    expect(() => migrateUserData(source, target)).toThrow('already contains browser data');
-    expect(existsSync(join(source, 'settings.json'))).toBe(true);
-    expect(existsSync(join(target, 'migration.json'))).toBe(false);
-    expect(readFileSync(join(target, 'desktop', 'Preferences'), 'utf8')).toBe(target);
+    migrateUserData(source, target);
+    expect(existsSync(join(target, 'settings.json'))).toBe(true);
+    expect(readFileSync(join(target, 'desktop', 'Preferences'), 'utf8')).toBe(source);
+    expect(readFileSync(join(target, 'desktop', 'library-thumbs', 'a.webp'), 'utf8')).toBe(source);
+    expect(existsSync(join(target, 'desktop', 'Cache'))).toBe(true);
+    const [aside] = readdirSync(join(target, 'backups'));
+    expect(aside).toMatch(/^desktop-before-move-/);
+    expect(readFileSync(join(target, 'backups', aside, 'Preferences'), 'utf8')).toBe(target);
+    expect(readFileSync(join(target, 'backups', aside, 'library-thumbs', 'a.webp'), 'utf8')).toBe(target);
+    expect(existsSync(join(source, 'desktop', 'Preferences'))).toBe(false);
   });
 
   it('keeps the original credential scope and browser data on a second move', () => {
