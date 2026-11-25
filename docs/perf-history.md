@@ -39,6 +39,17 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Android: a streamed token patches the last block instead of rebuilding a 300-message chat (#3410, 2026-11-26)
+Area: renderer (Android app, main thread)
+Result: improvement (JVM unit-level timing of the per-token projection; no device or emulator frame stats)
+Conditions: Apple M1 Max, macOS 27.2, JDK 17 (Gradle toolchain), JVM unit test `StreamingProjectionBench` (not a phone, no Compose drawing). A 300-message chat (75 turns of prompt, reply with a tool call, tool result, reply; about 1 KB of prose per reply and 2 KB of tool output), then 3000 streamed `Text` tokens into a new turn. Each token runs `Transcript.apply`, `ChatController.project` and what `ChatScreen` derives per new `ChatUi` (list keys, `transcriptRows`, `ReplyTopics.voices`). Thread CPU time (`ThreadMXBean`) per token, median of 5 passes after 2 warm-up passes; 3 separate Gradle runs per side. The Mac was shared with other agents (load average 40 to 99), so wall-clock passes in the first two before runs scattered from 0.8 to 4.7 ms per token and were discarded for CPU time.
+
+| Metric (CPU ms per token, median of 5 passes, 3 runs) | Before | After |
+|---|---|---|
+| Steps shown (`showSteps = true`) | 0.803, 0.966, 0.947 | 0.118, 0.135, 0.139 |
+| Steps folded (`showSteps = false`) | 0.767, 0.903, 0.812 | 0.087, 0.098, 0.098 |
+
+Why: the saved transcript (`Transcript.fromMessages`), `QuestionReplies.project` and `TurnDetails.footers` were redone over every saved message on each token; they are now parsed once per `Session` instance (`ChatProjector`) and a token that only grew the live reply swaps the last block of the previous result. The screen keeps keys, row objects (so Compose can skip rows it already drew) and reply voices (a regex scan per message) for the earlier blocks. What remains per token is `transcriptRows`, which still walks every block. Streamed words are also applied once per frame (`DeltaCoalescer`), which the unit test cannot time. Source: #3410.
 ## Streaming a long reply re-parses only the block being written (2026-11-26)
 Area: renderer
 Result: improvement
@@ -1799,3 +1810,4 @@ Conditions: Linux AMD EPYC9V74 (4 threads), Chrome156.0.8078.4, Node22.23.4, one
 Separate profiled base/head cold p95:39.6/36.3ms, not gate-equivalent. Sampled `setCurrentTime` self-time fell175.837→0ms (113.407ms mount,62.430ms deletion across33 base switches). In-click style-recalculation total fell156.822→0ms; click duration median18.459→12.457ms. Whole-profile style/layout/paint still present; do not sum overlapping trace totals or infer a per-frame gain from cumulative CPU samples.
 
 Why: pause fresh SVGs without redundant zero-time seeks; cancel timers/listeners without seeking discarded SVGs; replace motion SVG by icon identity. Playback/reset and synchronous first-frame requirements unchanged. Both recovered head p95s meet33ms but first pair is slower; prior log-only head33.7ms misses. #1998 stays open; no budget reduction or increase in this PR. Main's separate48ms gate is not acceptance of this repair. Terminal skipped; Linux streaming/memory not requested. Source: [run42251252142](https://github.com/nekko-labs/nekko-agent/actions/runs/42251252142), artifact13521343207 ZIP SHA256 `0910a63aad23d1dfd6945c6cb37e224cb733147a64851de8e0bbfeb7f45add46`, [detailed provenance/limitations](../reports/cold-chat-paint-investigation.md). Diagnostic branch must never merge.
+- Android streaming (2026-11-26, #3410): not measured on a phone or emulator: dropped frames and P90/P99 frame time while streaming into a 300-message chat, the recomposition count of the visible rows, the effect of the per-frame word join on frames, and battery over a long run. A Macrobenchmark `FrameTimingMetric` run streaming `android/scripts/fake-model.mjs` output into a 300-message chat, before and after on the same emulator or device, would settle it.
