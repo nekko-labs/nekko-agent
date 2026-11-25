@@ -1,3 +1,4 @@
+import { useVisibleInterval } from '../visibleInterval.js';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   NO_IMAGE_ERROR,
@@ -176,16 +177,12 @@ function LiveLog({ runnerId, vm }: { runnerId: string; vm: string }) {
   const [log, setLog] = useState<{ text: string } | { error: string } | null>(null);
   const pre = useRef<HTMLPreElement | null>(null);
   const atEnd = useRef(true);
-  useEffect(() => {
-    let alive = true;
-    const load = () => window.nekko.runnerLiveLog(runnerId, vm).then(
-      (text) => { if (alive) setLog({ text }); },
-      (e) => { if (alive) setLog({ error: e instanceof Error ? e.message : String(e) }); },
+  useVisibleInterval((live) => {
+    void window.nekko.runnerLiveLog(runnerId, vm).then(
+      (text) => { if (live()) setLog({ text }); },
+      (e) => { if (live()) setLog({ error: e instanceof Error ? e.message : String(e) }); },
     );
-    void load();
-    const timer = setInterval(() => void load(), LIVE_LOG_EVERY_MS);
-    return () => { alive = false; clearInterval(timer); };
-  }, [runnerId, vm]);
+  }, LIVE_LOG_EVERY_MS, { immediate: true, deps: [runnerId, vm] });
   useEffect(() => {
     if (pre.current && atEnd.current) pre.current.scrollTop = pre.current.scrollHeight;
   }, [log]);

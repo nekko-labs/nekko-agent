@@ -1,4 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
+import { usePaneVisible } from './paneVisibility.js';
+import { subscribeTick } from './visibleInterval.js';
 import type { LimitsProblem, ProviderConfig, SubscriptionLimits } from '@nekko-agent/shared';
 import { limitsKeyFor } from '@nekko-agent/shared';
 import { useStore } from './store.js';
@@ -103,10 +105,12 @@ export function useProviderLimitsPortfolio(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, keysId]);
 
+  // One shared 1 s ticker for every chip that shows a limit, stopped while the window or this pane is hidden.
+  const paneVisible = usePaneVisible();
   useEffect(() => {
-    if (!enabled || keys.length === 0) return;
+    if (!enabled || !paneVisible || keys.length === 0) return;
     let live = true;
-    const timer = setInterval(() => {
+    const off = subscribeTick(1000, () => {
       const now = Date.now();
       setClock(now);
       for (const key of new Set(keys)) {
@@ -123,11 +127,11 @@ export function useProviderLimitsPortfolio(
           });
         }).catch(() => {});
       }
-    }, 1000);
-    return () => { live = false; clearInterval(timer); };
+    });
+    return () => { live = false; off(); };
     // Stable key sets prevent restarting the clock on streamed tokens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, keysId, activeId]);
+  }, [enabled, paneVisible, keysId, activeId]);
 
   const refresh = useCallback(async () => {
     const entries = await Promise.all([...new Set(keys)].map(async key => [key, await readLimits(key, true)] as const));
