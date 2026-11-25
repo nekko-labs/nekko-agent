@@ -13,18 +13,17 @@
 //! the `cloud-relay` switch shows it to them. Without it nothing here runs,
 //! and sync keeps its once-a-minute pass.
 
-use crate::{Cloud, lock};
+use crate::{Cloud, lock, pace};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio_tungstenite::tungstenite::Message;
 
 /// Topics that mean "something synced changed": pull now.
 const SYNC_TOPICS: [&str; 3] = ["sync", "library", "settings"];
-/// Between sessions; after a ticket or plan problem, longer.
-const REDIAL: Duration = Duration::from_secs(5);
+/// While the account may not use the channel, look again this often.
 const RETRY: Duration = Duration::from_secs(60);
 const CONNECT_LIMIT: Duration = Duration::from_secs(15);
 
@@ -48,7 +47,9 @@ pub fn parse(text: &str) -> Frame {
                 .and_then(Value::as_array)
                 .map(|a| {
                     a.iter()
-                        .filter_map(|d| Some((d.get("dev")?.as_str()?.to_string(), d.get("kind")?.as_str()?.to_string())))
+                        .filter_map(|d| {
+                            Some((d.get("dev")?.as_str()?.to_string(), d.get("kind")?.as_str()?.to_string()))
+                        })
                         .collect()
                 })
                 .unwrap_or_default(),
@@ -124,27 +125,33 @@ impl Cloud {
             && self.account().is_some_and(|a| a.cloud_relay && (a.plan == "pro" || a.plan == "team" || a.staff))
     }
 
-    /// Hold the account channel open on `relay_url` while the account may use it.
+    /// Hold the account channel open on `relay_url` while the account may use it. After a session
+    /// that ends or fails to open, wait 5 s, then 10 s, 20 s... up to 5 min (each with 20% jitter),
+    /// starting again from 5 s once a session has held for a minute, so a down Relay isn't dialled in
+    /// step by every device of every account.
     pub fn start_relay_channel(self: &Arc<Self>, relay_url: String) {
         let me = self.clone();
         tokio::spawn(async move {
+            let mut failures = 0u32;
             loop {
                 if !me.relay_included() {
-                    tokio::time::sleep(RETRY).await;
+                    failures = 0;
+                    tokio::time::sleep(pace::jittered(RETRY, pace::unit())).await;
                     continue;
                 }
-                let wait = match me.relay_session(&relay_url).await {
-                    Ok(()) => REDIAL,
-                    Err(_) => RETRY,
-                };
+                let began = Instant::now();
+                let held = matches!(me.relay_session(&relay_url).await, Ok(true));
                 me.relay.clear();
                 me.changed();
-                tokio::time::sleep(wait).await;
+                failures = if held && began.elapsed() >= pace::STABLE_SESSION { 0 } else { failures.saturating_add(1) };
+                tokio::time::sleep(pace::redial_wait(failures.saturating_sub(1), pace::unit())).await;
             }
         });
     }
 
-    async fn relay_session(self: &Arc<Self>, relay_url: &str) -> Result<(), String> {
+    /// One session on the channel. `Ok(true)` when the relay accepted this device (it sent `ready`),
+    /// `Ok(false)` when it closed the socket without: the ticket is then dropped so the redial asks for a new one.
+    async fn relay_session(self: &Arc<Self>, relay_url: &str) -> Result<bool, String> {
         let (ticket, renew) = self.relay_ticket("account", None).await?;
         let url = format!("{}/account", relay_url.trim_end_matches('/'));
         let (ws, _) = tokio::time::timeout(CONNECT_LIMIT, tokio_tungstenite::connect_async(url.as_str()))
@@ -158,16 +165,20 @@ impl Cloud {
         *lock(&self.relay.out) = Some(tx);
         let renew_at = tokio::time::sleep(renew);
         tokio::pin!(renew_at);
-        loop {
+        let mut accepted = false;
+        let outcome = loop {
             tokio::select! {
                 msg = stream.next() => match msg {
-                    Some(Ok(Message::Text(t))) => self.on_relay_frame(t.as_str()),
-                    Some(Ok(Message::Close(_))) | Some(Err(_)) | None => return Ok(()),
+                    Some(Ok(Message::Text(t))) => {
+                        accepted |= matches!(parse(t.as_str()), Frame::Ready { .. });
+                        self.on_relay_frame(t.as_str());
+                    }
+                    Some(Ok(Message::Close(_))) | Some(Err(_)) | None => break accepted,
                     Some(Ok(_)) => {}
                 },
                 Some(out) = rx.recv() => {
                     if sink.send(Message::text(out)).await.is_err() {
-                        return Ok(());
+                        break accepted;
                     }
                 }
                 _ = &mut renew_at => {
@@ -175,7 +186,7 @@ impl Cloud {
                         Ok((t, r)) => {
                             let frame = json!({ "type": "access", "access": t }).to_string();
                             if sink.send(Message::text(frame)).await.is_err() {
-                                return Ok(());
+                                break accepted;
                             }
                             r
                         }
@@ -185,7 +196,12 @@ impl Cloud {
                     renew_at.as_mut().reset(tokio::time::Instant::now() + next);
                 }
             }
+        };
+        if !outcome {
+            // Closed without accepting us: the ticket may be what it refused, so the redial asks for a new one.
+            self.tickets.forget("account", None);
         }
+        Ok(outcome)
     }
 
     fn on_relay_frame(self: &Arc<Self>, text: &str) {
@@ -196,11 +212,16 @@ impl Cloud {
         if let Frame::Nudge { topic, .. } = &frame
             && SYNC_TOPICS.contains(&topic.as_str())
             && self.ready()
-            && !lock(&self.live).syncing
+            && self.nudge_pending.begin()
         {
+            // Every device of the account hears the same nudge: wait 0 to 3 s, and let a burst of nudges share one pass.
             let me = self.clone();
             tokio::spawn(async move {
-                let _ = me.sync_once().await;
+                tokio::time::sleep(pace::nudge_delay(pace::unit())).await;
+                me.nudge_pending.end();
+                if me.ready() && !lock(&me.live).syncing {
+                    let _ = me.sync_once().await;
+                }
             });
         }
     }
@@ -213,15 +234,29 @@ mod tests {
     #[test]
     fn reads_the_relay_frames_and_nothing_else() {
         assert_eq!(
-            parse(r#"{"type":"ready","dev":"mac","expiresAt":"x","devices":[{"dev":"mac","kind":"computer"},{"dev":"phone","kind":"phone"}]}"#),
-            Frame::Ready { dev: "mac".into(), devices: vec![("mac".into(), "computer".into()), ("phone".into(), "phone".into())] }
+            parse(
+                r#"{"type":"ready","dev":"mac","expiresAt":"x","devices":[{"dev":"mac","kind":"computer"},{"dev":"phone","kind":"phone"}]}"#
+            ),
+            Frame::Ready {
+                dev: "mac".into(),
+                devices: vec![("mac".into(), "computer".into()), ("phone".into(), "phone".into())]
+            }
         );
         assert_eq!(
             parse(r#"{"type":"presence","dev":"phone","kind":"phone","online":false}"#),
             Frame::Presence { dev: "phone".into(), kind: "phone".into(), online: false }
         );
-        assert_eq!(parse(r#"{"type":"nudge","topic":"sync","rev":3,"from":"pc"}"#), Frame::Nudge { topic: "sync".into(), from: "pc".into() });
-        for junk in ["", "[]", r#"{"type":"presence","dev":"x"}"#, r#"{"type":"signal","from":"x","data":"y"}"#, r#"{"type":"access-ok"}"#] {
+        assert_eq!(
+            parse(r#"{"type":"nudge","topic":"sync","rev":3,"from":"pc"}"#),
+            Frame::Nudge { topic: "sync".into(), from: "pc".into() }
+        );
+        for junk in [
+            "",
+            "[]",
+            r#"{"type":"presence","dev":"x"}"#,
+            r#"{"type":"signal","from":"x","data":"y"}"#,
+            r#"{"type":"access-ok"}"#,
+        ] {
             assert_eq!(parse(junk), Frame::Other, "{junk}");
         }
     }
