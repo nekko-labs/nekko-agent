@@ -62,6 +62,8 @@ class NekkoApp : Application() {
     lateinit var haptics: AndroidHaptics
         private set
     private lateinit var chatLists: ChatListFiles
+    /** Saved chats and chat lists are encoded and written here, not on the main thread (#3413). */
+    private val saveQueue = com.nekko.protocol.BackgroundIO("nekko-saved-copies")
     /** The fingerprint or screen lock for Change actions, through whichever activity is on screen. */
     val ownerCheck = ActivityOwnerCheck()
 
@@ -99,6 +101,7 @@ class NekkoApp : Application() {
             helloSigner = com.nekko.android.security.KeystoreHelloSigner(),
             routeAllowed = RoutePolicy::allowed,
             offlineFiles = OfflineFileStore(this),
+            io = saveQueue,
             // Every paired computer stays connected, as on the iPhone (decision 0047).
             stayConnected = true,
             onForget = { id ->
@@ -106,7 +109,7 @@ class NekkoApp : Application() {
                 paneLayouts.forget(id)
             },
         )
-        chatLists = ChatListFiles(this)
+        chatLists = ChatListFiles(this, saveQueue)
         if (phonePrefs.get(ChatListFiles.ENABLED)) computers.chatListCache = chatLists
         if (phonePrefs.get(OfflineFileStore.KEEP_TRANSCRIPTS)) computers.setKeepTranscripts(true)
         appLock = AppLock(enabled = phonePrefs.get(AppLock.ENABLED), persist = { phonePrefs.set(AppLock.ENABLED, it) })
@@ -149,6 +152,8 @@ class NekkoApp : Application() {
             override fun onStop(owner: LifecycleOwner) {
                 // What is typed is on disk before Android may end the app.
                 computers.drafts.flush()
+                // Saved chats and the chat list wait a moment to coalesce; Android may end the app before that.
+                computers.flushSaves()
                 // An Always allow left untaken never runs later by itself.
                 alwaysAllow.clear()
                 appLock.onBackground()

@@ -1,5 +1,5 @@
 import { useDownloadAction } from './useDownloadAction.js';
-import { DownloadProgress } from './DownloadProgress.js';
+import { EngineUpdateStatus } from './EngineUpdateStatus.js';
 import { useEffect, useState } from 'react';
 import type { EngineInstall, EngineInstallPreview } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
@@ -66,12 +66,12 @@ export function MlxInstallCard({ install, onChanged }: { install?: EngineInstall
           <button className="btn btn-primary mt-2 py-1 text-xs" disabled={busy || download.active} onClick={() => void act(false)}>
             {download.active ? 'Downloading…' : busy ? 'Starting…' : 'Install MLX'}
           </button>
-          {download.active && <DownloadProgress group={download.group} />}
           {install?.reason && install.reason !== 'MLX is not installed yet.' && (
             <p role="alert" className="mt-2 text-xs text-ink-soft">{install.reason}</p>
           )}
         </>
       )}
+      <EngineUpdateStatus download={download} onChanged={onChanged} />
     </div>
   );
 }
