@@ -57,6 +57,11 @@ export class Presence {
     return `${orgId ?? "account"}|${deviceId}`;
   }
 
+  /** This presence's clock (a test moves it). */
+  clock(): number {
+    return this.now();
+  }
+
   get size(): number {
     return this.entries.size;
   }
