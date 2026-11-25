@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { authenticate, type Caller, type Plan, SYNC_PLANS } from "./auth.js";
 import type { Db } from "./db.js";
+import { holdMemory, pageWeight } from "./memory-gate.js";
 
 /**
  * End-to-end encrypted sync (docs/SYNC-ENCRYPTION.md). The server stores
@@ -431,6 +432,12 @@ export function registerSync(app: FastifyInstance, db: Db): void {
     if (!caller) return;
     const { collection, objectId } = req.params as { collection: string; objectId: string };
     if (!COLLECTION.test(collection) || !OBJECT_ID.test(objectId)) return reply.code(404).send({ error: "not-found" });
+    const { rows: size } = await db.query<{ size: number }>(
+      "select octet_length(blob) as size from sync_objects where user_id = $1 and collection = $2 and object_id = $3",
+      [caller.userId, collection, objectId],
+    );
+    if (!size.length) return reply.code(404).send({ error: "not-found" });
+    await holdMemory(app, req, pageWeight(Number(size[0].size)));
     const { rows } = await db.query<ObjectRow>(
       "select collection, object_id, revision, key_id, blob, seq from sync_objects where user_id = $1 and collection = $2 and object_id = $3",
       [caller.userId, collection, objectId],
@@ -460,6 +467,8 @@ export function registerSync(app: FastifyInstance, db: Db): void {
     }
     const more = sizes.length > take;
     if (!take) return { objects: [], next: since, more };
+    // Wait for room before the blobs come into memory (#3342).
+    await holdMemory(app, req, pageWeight(sizes.slice(0, take).reduce((n, r) => n + Number(r.size), 0)));
     const { rows } = await db.query<ObjectRow>(
       `select collection, object_id, revision, key_id, blob, seq from sync_objects
         where user_id = $1 and seq > $2 and seq <= $3 order by seq`,
@@ -490,6 +499,12 @@ export function registerSync(app: FastifyInstance, db: Db): void {
     const { collection, objectId, revision } = req.params as { collection: string; objectId: string; revision: string };
     const rev = Number(revision);
     if (collection !== LIBRARY_COLLECTION || !OBJECT_ID.test(objectId) || !isPositiveInt(rev)) return reply.code(404).send({ error: "not-found" });
+    const { rows: size } = await db.query<{ size: number }>(
+      "select octet_length(blob) as size from sync_object_history where user_id = $1 and collection = $2 and object_id = $3 and revision = $4",
+      [caller.userId, collection, objectId, rev],
+    );
+    if (!size.length) return reply.code(404).send({ error: "not-found" });
+    await holdMemory(app, req, pageWeight(Number(size[0].size)));
     const { rows } = await db.query<{ key_id: number; blob: Buffer }>(
       "select key_id, blob from sync_object_history where user_id = $1 and collection = $2 and object_id = $3 and revision = $4",
       [caller.userId, collection, objectId, rev],

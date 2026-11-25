@@ -19,6 +19,7 @@ import { registerOrgs } from "./orgs.js";
 import { registerRelay, type RelayOptions } from "./relay.js";
 import { registerShares } from "./shares.js";
 import { registerSync } from "./sync.js";
+import { BusyError, budgetForMachine, MemoryGate, registerMemoryGate } from "./memory-gate.js";
 
 export interface ServerOptions {
   db: Db;
@@ -68,6 +69,11 @@ export interface ServerOptions {
   deleteAuthUser?: DeleteAuthUser;
   /** Called on every 5xx answer (ALERT_EMAIL); summaries carry no request data. */
   alert?: Alert;
+  /**
+   * Request queueing by memory (#3342). Defaults to this machine's memory less
+   * the idle process; `false` turns it off.
+   */
+  memoryGate?: MemoryGate | false;
   /** Request logging, redacted (see LOG_SERIALIZERS); an object adds pino options such as a stream (tests). */
   logger?: boolean | { stream: { write(line: string): void } };
 }
@@ -125,6 +131,9 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     }
   });
 
+  // Big bodies and pages wait their turn for memory (src/memory-gate.ts).
+  if (opts.memoryGate !== false) registerMemoryGate(app, opts.memoryGate ?? new MemoryGate({ budgetBytes: budgetForMachine() }));
+
   // Fastify's own 404 logs the full URL, query string included.
   app.setNotFoundHandler((_req, reply) => reply.code(404).send({ error: "not-found" }));
 
@@ -134,6 +143,8 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
   // which the apps retry on their own (#3186).
   app.setErrorHandler((error: FastifyError, req, reply) => {
     if ((error.statusCode ?? 500) < 500) return reply.send(error);
+    // The memory queue was full or slow: the apps retry `busy` on their own.
+    if (error instanceof BusyError) return reply.code(503).header("retry-after", "5").send({ error: "busy" });
     req.log.error({ err: error }, "request failed");
     if (databaseUnavailable(error)) return reply.code(503).header("retry-after", "5").send({ error: "unavailable" });
     return reply.code(error.statusCode ?? 500).send({ error: "internal" });

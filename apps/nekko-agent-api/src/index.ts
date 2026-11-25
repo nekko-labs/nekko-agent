@@ -12,6 +12,7 @@ import { purgeLibraryHistory } from "./shares.js";
 import { Stripe } from "./billing.js";
 import { parseSigningKey } from "./relay.js";
 import { buildServer, DEFAULT_ORIGINS } from "./server.js";
+import { budgetForMachine, MemoryGate, memoryReport } from "./memory-gate.js";
 import { supabaseAdminDeleter, supabaseVerifier } from "./supabase.js";
 
 const url = process.env.DATABASE_URL;
@@ -117,7 +118,15 @@ const staffEmails = process.env.NEKKO_STAFF_EMAILS ? process.env.NEKKO_STAFF_EMA
 const accountsAllowedDomains = parseList(process.env.NEKKO_ACCOUNTS_ALLOWED_DOMAINS);
 const accountsAllowedEmails = parseList(process.env.NEKKO_ACCOUNTS_ALLOWED_EMAILS);
 if (!accountsAllowedDomains.length && !accountsAllowedEmails.length) console.warn("NEKKO_ACCOUNTS_ALLOWED_DOMAINS / _EMAILS not set: any account with a proven email may sign in.");
-const app = buildServer({ db, relay, accountsAllowedDomains, accountsAllowedEmails, stripe, staffEmails, privacyReviewers: parseList(process.env.NEKKO_PRIVACY_REVIEWER_SUBJECTS), fleetEnabled: process.env.NEKKO_FLEET_ENABLED === "1", orgsEnabled: process.env.NEKKO_ORGS_ENABLED === "1", orgsAllowedEmails, allowedOrigins, logger: true, signIn, machines, mailer, publicUrl: process.env.PUBLIC_URL || undefined, deleteAuthUser, alert });
+// Memory (README "Memory"): the heap cap comes from start.sh, the request budget from the machine.
+const memoryGate = new MemoryGate({ budgetBytes: budgetForMachine() });
+const memory = memoryReport(memoryGate.budgetBytes);
+console.log(memory.line);
+if (memory.warning) {
+  console.warn(memory.warning);
+  alert(memory.warning);
+}
+const app = buildServer({ db, memoryGate, relay, accountsAllowedDomains, accountsAllowedEmails, stripe, staffEmails, privacyReviewers: parseList(process.env.NEKKO_PRIVACY_REVIEWER_SUBJECTS), fleetEnabled: process.env.NEKKO_FLEET_ENABLED === "1", orgsEnabled: process.env.NEKKO_ORGS_ENABLED === "1", orgsAllowedEmails, allowedOrigins, logger: true, signIn, machines, mailer, publicUrl: process.env.PUBLIC_URL || undefined, deleteAuthUser, alert });
 await app.listen({ host: "0.0.0.0", port: Number(process.env.PORT ?? 4320) });
 
 for (const signal of ["SIGTERM", "SIGINT"] as const) {
