@@ -128,6 +128,8 @@ data class ChatUi(
     val workspaceId: String? = null,
     /** Each finished reply's measurements, by the id of the block they follow (#2112, the iPhone's #1911). */
     val footers: Map<String, com.nekko.protocol.TurnDetails> = emptyMap(),
+    /** Changes whenever [blocks] changed anywhere but its last block (see [ChatProjector]). */
+    val layout: Int = 0,
 )
 
 /**
@@ -733,7 +735,8 @@ class ChatController(
             return used + (chars + 3) / 4
         }
 
-        fun project(state: ChatState, env: ChatEnv): ChatUi {
+        /** [projector] keeps the parsed saved transcript between calls; a new one (the default) parses it afresh. */
+        fun project(state: ChatState, env: ChatEnv, projector: ChatProjector = ChatProjector()): ChatUi {
             val (providerId, modelId) = resolveModel(state.session, env.defaults)
             val unpaired = env.conn == RelayState.DENIED || env.denied != null
             val away = !unpaired && env.conn != RelayState.ONLINE
@@ -755,8 +758,8 @@ class ChatController(
             } else {
                 null
             }
-            val saved = state.session?.let { Transcript.fromMessages(it.messages) } ?: emptyList()
             val turn = state.turn
+            val shown = projector.blocks(state.session, turn.blocks)
             // Out of reach with no saved copy: say so rather than load forever.
             val notSaved = if (state.session == null && state.loadError == null && away) {
                 "This chat isn’t saved on this phone yet. It shows when ${env.computerName} answers."
@@ -767,8 +770,9 @@ class ChatController(
                 ready = state.session != null || state.loadError != null || notSaved != null,
                 title = plainText(state.session?.title ?: "").ifEmpty { "Chat" },
                 subtitle = listOfNotNull(modelId, env.computerName).joinToString(" · "),
-                blocks = com.nekko.protocol.QuestionReplies.project(Transcript.mergeLive(saved, turn.blocks)),
-                footers = state.session?.let { com.nekko.protocol.TurnDetails.footers(it.messages) } ?: emptyMap(),
+                blocks = shown,
+                layout = projector.layout,
+                footers = projector.footers,
                 running = turn.running || (image && state.session.running),
                 approval = turn.approval,
                 question = turn.question,
