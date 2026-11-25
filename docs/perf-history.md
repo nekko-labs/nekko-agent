@@ -386,13 +386,13 @@ Conditions: production API on Fly `shared-cpu-1x` 256 MB (MemTotal 209.8 MB), No
 |---|---|---|
 | V8 heap limit on the 256 MB machine | 259 MB (Node default) | 104 MB (`start.sh`, 50%) |
 | Node 22, `--max-old-space-size=104` alone | 152 MB heap limit | (not used: semi-space pinned) |
-| Node RSS idle after a restart | 92 MB (91,944 kB) | not yet measured after deploy |
+| Node RSS idle after a restart | 92 MB (91,944 kB) | 84 MB (83,632 kB), 2026-11-25 16:02 UTC |
 | Peak RSS, one 24 MB push body | 62.7 MB | unchanged; queued |
 | Peak RSS, one 8 MB push body | 27.7 MB | unchanged; queued |
 | Peak RSS, one 8 MB pull page | 49.9 MB | unchanged; queued |
 | Peak RSS, one 16 MB pull object | 94.4 MB | unchanged; runs alone |
 
-Why: the machine was OOM-killed at 14:53:42 UTC on 2026-11-25 by a burst of pushes, then stalled for minutes twice by pulls of large pages that a client retried while the first was still running. The per-byte costs set the queue's estimates (3x a body, 7x a page, adding pg's receive buffer). Production numbers after the deploy are still to be added. Source: #3342.
+Why: the machine was OOM-killed at 14:53:42 UTC on 2026-11-25 by a burst of pushes, then stalled for minutes twice by pulls of large pages that a client retried while the first was still running. The per-byte costs set the queue's estimates (3x a body, 7x a page, adding pg's receive buffer). Deployed 2026-11-25 16:01 UTC from 7cc6e9302; startup logged `memory: machine 210 MB, heap limit 104 MB (50%), request budget 98 MB`, and the Mac that had stalled the API twice finished its pull backlog with every request answered 200. Source: #3342, #3350.
 
 ### #2021 Light-theme alignment: baseline cold-paint failure (2026-11-06)
 Area: renderer. Result: no regression demonstrated; unchanged base also fails.
