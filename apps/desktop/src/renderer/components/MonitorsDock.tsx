@@ -4,6 +4,7 @@ import type { AutomationTask, EngineStatus, GpuStats, LocalModel, MonitorKind, P
 import { formatTemperature, temperatureTone, RUNTIME_CAPABILITIES, MODEL_PRICING, MODEL_COMPARISON_TIERS, MODEL_PRICING_SOURCE, MODEL_PRICING_CHECKED_AT, getModelPrice, DEFAULT_LOCAL_COST_BENCHMARK, describeLimitsProblem, formatUSD, gpuMemoryLabel, isLocalProvider, MODALITY_LABELS, limitsKeyFor, oauthProviderOffered } from '@nekko-agent/shared';
 import { MONITORS, normalizeMonitorOrder, placeMonitor, reorderMonitor, type CommandWallState, type MonitorKey } from '../commandWall.js';
 import { useStore } from '../store.js';
+import { stableSelector } from '../selectStable.js';
 import { useProviderLimitsPortfolio } from '../useLimits.js';
 import { accountEmailOf, useAccountEmails } from '../accountEmails.js';
 import { BUDGET_RANGE_LABEL, attributionRange, budgetRange, localRuntimeMetrics, utilizationProviders } from './monitorMetrics.js';
@@ -693,10 +694,12 @@ const LOCAL_MODELS_POLL_MS = 6000;
  * GPU offload, context and KV cache themselves stay on Model Server, which
  * explains what changing them costs.
  */
+const engineChats = stableSelector((s: { sessions?: SessionSummary[] }) => (s.sessions ?? []).filter((c) => c.providerId === ENGINE_PROVIDER_ID && c.modelId));
+
 export function LocalModels({ initial }: { initial?: { status: EngineStatus | null; models: LocalModel[] } } = {}) {
   const computer = useWatchedComputer();
   const favorites = useStore((s) => s.settings?.favoriteModels);
-  const chats = useStore((s) => s.sessions);
+  const chats = useStore(engineChats);
   const [busy, setBusy] = useState<string | null>(null);
   const [status, setStatus] = useState<EngineStatus | null>(initial?.status ?? null);
   const [models, setModels] = useState<LocalModel[]>(initial?.models ?? []);
