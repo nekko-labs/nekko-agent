@@ -6,7 +6,8 @@ import kotlinx.serialization.json.*
 
 @Serializable data class PhoneProvider(val id: String, val kind: String, val label: String, val baseUrl: String, val workspaceId: String? = null, val enabled: Boolean = true)
 /** [acceptsImages]: true or false where the provider's list says, null when it doesn't. [created]: when the provider published it (OpenAI's `created`, seconds since 1970), if it says. */
-@Serializable data class PhoneModel(val id: String, val name: String, val acceptsImages: Boolean? = null, val created: Long? = null)
+/** [contextLength]: the context window in tokens, where the list gives one (OpenRouter, Gemini, Anthropic; #2950). */
+@Serializable data class PhoneModel(val id: String, val name: String, val acceptsImages: Boolean? = null, val created: Long? = null, val contextLength: Long? = null)
 /** [images]: the user's photos as image data URLs; absent in chats saved before photos. */
 @Serializable data class PhoneMessage(val id: String, val role: String, val text: String, val at: Long, val error: String? = null, val images: List<String>? = null)
 @Serializable data class PhoneChat(val id: String, val title: String, val providerId: String, val modelId: String, val createdAt: Long, val updatedAt: Long, val messages: List<PhoneMessage> = emptyList())
@@ -194,7 +195,8 @@ object PhoneProviders {
             val o = e as? JsonObject ?: return@mapNotNull null
             val id = o.string("id") ?: return@mapNotNull null
             val created = (o["created"] as? JsonPrimitive)?.takeIf { !it.isString }?.longOrNull
-            if (id.isBlank() || id.length > 1024 || id.any { it.isISOControl() } || kind in setOf("openai", "gemini") && skip.any { id.contains(it) }) null else PhoneModel(id, o.string("display_name") ?: o.string("name") ?: id, acceptsImages(o, kind), created)
+            val context = listOf("context_length", "inputTokenLimit", "max_input_tokens", "context_window").firstNotNullOfOrNull { k -> (o[k] as? JsonPrimitive)?.takeIf { !it.isString }?.longOrNull?.takeIf { it > 0 } }
+            if (id.isBlank() || id.length > 1024 || id.any { it.isISOControl() } || kind in setOf("openai", "gemini") && skip.any { id.contains(it) }) null else PhoneModel(id, o.string("display_name") ?: o.string("name") ?: id, acceptsImages(o, kind), created, context)
         }.distinctBy { it.id }
     }
 

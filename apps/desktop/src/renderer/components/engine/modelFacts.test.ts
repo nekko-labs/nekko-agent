@@ -43,6 +43,45 @@ describe('a model with a problem wears it', () => {
   it('picks the worst problem across a family', () => {
     expect(familyProblem([{ name: 'a', modality: 'vision', hasProjector: false }, { name: 'b', lastLoadError: 'bad file' }])?.text).toBe('Last load failed');
     expect(familyProblem([{ name: 'a' }, { name: 'b' }])).toBeNull();
+    // An image model is never refused for llama.cpp's reasons: it counts as one that runs.
+    const old = { level: 'blocked', cause: 'engineAge', reason: 'too old' } as const;
+    expect(familyProblem([{ name: 'img', modality: 'image', loadCheck: old }, { name: 'b', loadCheck: old }])).toBeNull();
+    expect(familyProblem([{ name: 'img', modality: 'image', loadCheck: old }])).toBeNull();
+  });
+
+  describe('what the engine in use says', () => {
+    const blocked = { level: 'blocked' as const, reason: 'Needs llama.cpp b11556 or newer. The engine is too old for this file: it is b11224.' };
+    const warning = { level: 'warning' as const, reason: 'The engine version could not be read.' };
+
+    it('shows the engine’s refusal as "Can’t run here" in its words', () => {
+      expect(modelProblem({ name: 'Bonsai', loadCheck: blocked })).toEqual({ text: "Can't run here", tone: 'warning', detail: blocked.reason });
+    });
+
+    it('shows a warning as a softer problem', () => {
+      expect(modelProblem({ name: 'Bonsai', loadCheck: warning })).toEqual({ text: 'May not run here', tone: 'warning', detail: warning.reason });
+    });
+
+    it('puts a failed load before it', () => {
+      expect(modelProblem({ name: 'Bonsai', loadCheck: warning, lastLoadError: 'invalid ggml type 143' })?.text).toBe('Last load failed');
+    });
+
+    it('does not let a file the engine refuses speak for a family that has one it runs', () => {
+      const ptq1 = { name: 'Bonsai-PTQ1_0', loadCheck: blocked };
+      expect(familyProblem([ptq1, { name: 'Bonsai-Q2_0' }])).toBeNull();
+      expect(familyProblem([ptq1])?.text).toBe("Can't run here");
+      expect(familyProblem([ptq1, { name: 'Bonsai-Q8_0', lastLoadError: 'out of memory' }])?.text).toBe('Last load failed');
+    });
+
+    it('names the fix when only the engine’s age is in the way', () => {
+      const tooOld = { level: 'blocked' as const, cause: 'engineAge' as const, reason: blocked.reason };
+      const format = { level: 'blocked' as const, cause: 'weightFormat' as const, reason: 'Needs a modified llama.cpp.' };
+      expect(modelProblem({ name: 'Bonsai-Q2_0', loadCheck: tooOld })).toEqual({ text: 'Needs a newer engine', tone: 'warning', detail: tooOld.reason });
+      expect(modelProblem({ name: 'Bonsai-PTQ1_0', loadCheck: format })?.text).toBe("Can't run here");
+      // A reason no engine can fix still wins over the engine's own verdict.
+      expect(modelProblem({ name: 'Whisper', modality: 'audio', loadCheck: tooOld })?.text).toBe("Can't run here");
+      // With nothing in the family that runs, the file an update would fix speaks for it.
+      expect(familyProblem([{ name: 'Bonsai-PTQ1_0', loadCheck: format }, { name: 'Bonsai-Q2_0', loadCheck: tooOld }])?.text).toBe('Needs a newer engine');
+    });
   });
 });
 

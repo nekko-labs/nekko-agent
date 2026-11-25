@@ -196,6 +196,20 @@
   --text-base: 16px;
   --text-xl: 20px;
   --text-2xl: 24px;
+
+  /*
+    Memory meters (model bars, GPU capacity): fixed colours, the same in every
+    theme, each hue far from the others so the parts of a bar read apart at a
+    glance on light and dark paper alike. Never tie these to theme tokens.
+  */
+  --color-meter-model: #3b82f6;
+  --color-meter-context: #f59e0b;
+  --color-meter-min: #14b8a6;
+  --color-meter-rec: #f59e0b;
+  --color-meter-max: #a855f7;
+  --color-meter-free: #6b7280;
+  --color-meter-short: #ef4444;
+  --color-meter-track: rgb(128 128 128 / 0.28);
 }
 
 @theme {

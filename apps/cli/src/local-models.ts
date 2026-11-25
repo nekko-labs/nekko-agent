@@ -92,6 +92,7 @@ export async function listLocalModels(client: Client) {
     modality: m.modality,
     format: m.format ?? 'gguf',
     fit: m.gpuFit,
+    loadCheck: m.loadCheck,
     maxContext: m.maxContext,
     lastLoadError: m.lastLoadError,
   }));

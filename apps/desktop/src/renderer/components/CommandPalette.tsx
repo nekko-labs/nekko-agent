@@ -96,7 +96,7 @@ export function CommandPalette() {
       ...(viewEnabled('memory', settings) ? [go('memory', 'Go to Memory', 'Global and per-project memory')] : []),
       go('settings', 'Go to Settings', 'Every preference, in one page'),
       { id: 'toggle-context', label: 'Toggle context panel', description: 'Show or hide the panel beside the chat', run: () => toggleContextPanel() },
-      { id: 'feedback', label: 'Send feedback', description: 'Report a bug or share an idea with the Nekko team', hint: 'Help', run: openFeedback },
+      { id: 'feedback', label: 'Send feedback', description: 'Report a bug or share an idea with the Nekko team', hint: 'Help', run: () => openFeedback('palette') },
       { id: 'whats-new', label: "What's new", description: 'The changes in this version, and the full release notes', hint: 'Help', run: openWhatsNew },
       { id: 'mode', label: expert ? 'Switch to Simple' : 'Switch to Detailed', description: expert ? 'Everyday controls only' : 'Show every control', run: () => setExpert(!expert) },
       { id: 'simple-settings', label: 'Choose what Simple shows', description: 'Pick the controls Simple mode keeps', hint: 'Settings', run: () => openSettingsGroup('simple') },

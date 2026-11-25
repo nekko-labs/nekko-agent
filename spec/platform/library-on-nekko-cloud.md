@@ -16,7 +16,7 @@ Requested 2026-11-14: with Nekko Cloud on a paid plan, let people (1) sync Libra
 
 - Nekko Labs can't read a synced or shared Library file. Synced files are sealed with the account's sync keys, like chats. A shared file is sealed with a key that exists only in its link, after the `#`, which browsers never send to a server.
 - Everything is off until switched on: `library-cloud` covers sync, sharing and versions; `library-multiplayer` covers editing together. Both start off and are turned on by the team first ([plans and billing](plans-and-billing.md#the-switch)).
-- Writing needs Pro or Team, and everything stored (synced files, kept revisions, shared files and their versions) counts toward the plan's storage (Pro 5 GB, Team 20 GB). Reading, deleting and restoring a deleted share never depend on the plan or the switch.
+- Writing needs Pro or Enterprise, and everything stored (synced files, kept revisions, shared files and their versions) counts toward the plan's storage (Pro 5 GB, Enterprise 20 GB). Reading, deleting and restoring a deleted share never depend on the plan or the switch.
 
 ## Sync (#2748)
 

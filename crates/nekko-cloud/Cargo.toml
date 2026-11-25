@@ -1,6 +1,6 @@
 [package]
 name = "nekko-cloud"
-description = "Nekko Cloud for the engine daemon: sign-in through Supabase Auth, the device token, and end-to-end encrypted chat sync (Pro and Team) on top of nekko-sync. The server only ever receives ciphertext."
+description = "Nekko Cloud for the engine daemon: sign-in through Supabase Auth, the device token, and end-to-end encrypted chat sync (Pro and Enterprise) on top of nekko-sync. The server only ever receives ciphertext."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

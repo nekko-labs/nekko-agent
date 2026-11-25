@@ -15,6 +15,14 @@
 /** KV-cache element type. Halving the element halves the cache. */
 export type KvCacheDtype = 'f16' | 'q8_0' | 'q4_0' | 'fp8';
 
+/**
+ * The KV cache the built-in engine (llama.cpp) loads with unless told
+ * otherwise; mirrors `ENGINE_KV_CACHE_DTYPE` in crates/nekko-engine/src/capacity.rs.
+ * Half the memory of f16 and the same answers in our measurements (#3325).
+ * Other runtimes set their cache server-wide and keep `DEFAULT_FIT_REQUEST`'s f16.
+ */
+export const ENGINE_KV_CACHE_DTYPE: KvCacheDtype = 'q8_0';
+
 /** What we know about a model, normalized across runtimes. */
 export interface ModelFacts {
   id: string;

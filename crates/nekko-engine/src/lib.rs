@@ -12,6 +12,7 @@ pub mod gpu_adapters;
 pub mod install;
 pub mod launch;
 pub mod library;
+pub mod load_check;
 pub mod mlx;
 pub mod placement;
 pub mod runtimes;

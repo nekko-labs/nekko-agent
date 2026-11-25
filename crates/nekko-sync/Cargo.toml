@@ -1,6 +1,6 @@
 [package]
 name = "nekko-sync"
-description = "End-to-end encrypted chat sync with Nekko Cloud (Pro and Team): the account key hierarchy, record sealing, key wrapping to devices and the recovery key, and anonymous sealed donations. Nekko Cloud only ever stores the ciphertext this crate makes."
+description = "End-to-end encrypted chat sync with Nekko Cloud (Pro and Enterprise): the account key hierarchy, record sealing, key wrapping to devices and the recovery key, and anonymous sealed donations. Nekko Cloud only ever stores the ciphertext this crate makes."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

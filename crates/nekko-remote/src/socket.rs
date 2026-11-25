@@ -139,8 +139,7 @@ pub fn encode_uri_component(s: &str) -> String {
 /// A Nekko Cloud Relay ticket for this computer's room (decision 0116), from
 /// the Cloud API: fetched before every dial, and again after `renew_after` to
 /// renew it in place. An error is the reason the owner sees.
-pub type Access =
-    Arc<dyn Fn() -> Pin<Box<dyn Future<Output = Result<AccessTicket, String>> + Send>> + Send + Sync>;
+pub type Access = Arc<dyn Fn() -> Pin<Box<dyn Future<Output = Result<AccessTicket, String>> + Send>> + Send + Sync>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AccessTicket {
@@ -228,7 +227,8 @@ impl LinkHandle for RelayAgent {
 }
 
 async fn run(shared: Arc<Shared>, spec: Spawn, mut stopped: watch::Receiver<bool>) {
-    let Spawn { url, access, secret, room, host_key, verify, dispatch, mut events, terminals, summaries, pending } = spec;
+    let Spawn { url, access, secret, room, host_key, verify, dispatch, mut events, terminals, summaries, pending } =
+        spec;
     let host = crate::agent::Host { room: room.clone(), key: host_key };
     let derive = tokio::task::spawn_blocking(move || e2e::derive_key(&secret, &room));
     let key = tokio::select! {
@@ -289,8 +289,16 @@ async fn run(shared: Arc<Shared>, spec: Spawn, mut stopped: watch::Receiver<bool
                 Ok((ws, _)) => {
                     nekko_net::record(ID, nekko_net::Event::new("connect").host(&host));
                     let renew = access.as_ref().zip(ticket.as_ref().map(|t| t.renew_after));
-                    let (code, reason) =
-                        serve(&shared, ws, &verify, &dispatch, (&summaries, &pending), renew, &mut events, &mut stopped).await;
+                    let (code, reason) = serve(
+                        &shared,
+                        ws,
+                        (&verify, &dispatch),
+                        (&summaries, &pending),
+                        renew,
+                        &mut events,
+                        &mut stopped,
+                    )
+                    .await;
                     let mut ev = nekko_net::Event::new("close").host(&host);
                     if code != 1000 {
                         ev = ev.error(if reason.is_empty() { format!("code {code}") } else { reason.clone() });
@@ -334,13 +342,13 @@ type Ws = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<t
 async fn serve(
     shared: &Arc<Shared>,
     ws: Ws,
-    verify: &Verifier,
-    dispatch: &PhoneDispatcher,
+    handlers: (&Verifier, &PhoneDispatcher),
     sources: (&Option<Summaries>, &Option<Pending>),
     renew: Option<(&Access, Duration)>,
     events: &mut Events,
     stopped: &mut watch::Receiver<bool>,
 ) -> (u16, String) {
+    let (verify, dispatch) = handlers;
     let (summaries, pending) = sources;
     let (mut sink, mut stream) = ws.split();
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();

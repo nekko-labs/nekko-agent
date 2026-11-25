@@ -7,6 +7,8 @@ import Foundation
 public enum AgentRows {
     public static let watchTool = "agent_watch"
     public static let subagentTool = "spawn_agent"
+    /// The tools that start a clip, whose watch has a chip above the message box.
+    public static let clipTools: Set<String> = ["generate_video"]
 
     // MARK: Watches
 
@@ -21,6 +23,17 @@ public enum AgentRows {
         public var prompt: String
         /// The id this call armed or cancelled, once its result is in.
         public var id: String?
+
+        /// Public, so the app can describe a watch it did not parse from a call
+        /// (the clip chip); Swift's memberwise initializer would be internal.
+        public init(action: Action, kind: AgentWatch.Kind?, url: String?, seconds: Double?, prompt: String, id: String?) {
+            self.action = action
+            self.kind = kind
+            self.url = url
+            self.seconds = seconds
+            self.prompt = prompt
+            self.id = id
+        }
     }
 
     public static func parseWatch(_ input: [String: JSONValue], output: String?, failed: Bool = false) -> WatchCall {
@@ -29,7 +42,7 @@ public enum AgentRows {
         let raw: Double? = switch kind {
         case .timer?: input["delay_seconds"]?.double ?? 300
         case .pr?: input["timeout_seconds"]?.double ?? 3600
-        case nil: nil
+        case .clip?, nil: nil
         }
         var id: String?
         if !failed, let output, let r = output.range(of: #"Watch (?:already )?armed: ([\w-]+)"#, options: .regularExpression) {
@@ -78,6 +91,8 @@ public enum AgentRows {
             return "Watching \(pr) · wakes on any PR change" + (limit.isEmpty ? "" : " or after \(limit)")
         case .timer?:
             return "Timer watch · wakes after " + (limit.isEmpty ? "its delay" : limit)
+        case .clip?:
+            return watchName(.clip)
         case nil:
             return "Agent watch"
         }
@@ -111,6 +126,12 @@ public enum AgentRows {
     /// The chip an armed watch wears: time left, overdue, due, triggered, cancelled, failed.
     public static func watchClock(_ w: WatchCall, view: AgentWatch?, now: Int64) -> Clock? {
         guard let view else { return nil }
+        // A clip has no clock: it wakes the chat when it ends, which takes minutes.
+        if view.kind == .clip, view.status == .active {
+            return view.pending
+                ? Clock(text: "finished · waiting for the chat", tone: .normal, detail: "The clip ended; the chat continues as soon as it is free.", ticking: true)
+                : Clock(text: "in progress", tone: .normal, detail: "Made on this computer; the chat wakes when the clip is ready. Cancel, or the chat’s Stop, stops it.", ticking: true)
+        }
         switch view.status {
         case .done: return Clock(text: "triggered", tone: .quiet, detail: "This watch fired and woke the chat.", ticking: false)
         case .cancelled: return Clock(text: "cancelled", tone: .quiet, detail: view.lastError.map { "Cancelled: \($0)" } ?? "This watch was cancelled.", ticking: false)
@@ -133,6 +154,40 @@ public enum AgentRows {
         let when = w.kind == .pr ? "Wakes on a PR change, or at \(time(view.deadlineAt)) at the latest." : "Wakes at \(time(view.deadlineAt))."
         return Clock(text: "\(prefix)\(span(ms: left)) left\(retrying)", tone: view.failures > 0 ? .warn : .normal, detail: when + lastError, ticking: true)
     }
+
+    /// A clip's stage as the chip says it: the media job's own stages (`clipStage` in agentWatches.ts).
+    public static func clipStage(_ stage: String?) -> String {
+        guard let stage, !stage.isEmpty else { return "starting" }
+        if stage == "waiting" { return "waiting for another picture or clip" }
+        if stage == "loading" { return "loading the video model" }
+        if let r = stage.range(of: #"^step:(\d+)/(\d+)$"#, options: .regularExpression) {
+            let parts = stage[r].dropFirst(5).split(separator: "/")
+            return "step \(parts[0]) of \(parts[1])"
+        }
+        return "starting"
+    }
+
+    /// The chip's name for a watch kind (`watchName`; a PR watcher's auto flag is not on the phone).
+    public static func watchName(_ kind: AgentWatch.Kind) -> String {
+        switch kind {
+        case .clip: return "Making a clip"
+        case .pr: return "PR watcher"
+        case .timer: return "Timer watcher"
+        }
+    }
+
+    /// What a watch chip reads beside its name, for a watch still armed: a clip's stage (while it is
+    /// not waiting on the chat), else nil.
+    public static func watchProgress(_ view: AgentWatch) -> String? {
+        guard view.kind == .clip, view.status == .active, !view.pending else { return nil }
+        return clipStage(view.clipStage)
+    }
+
+    /// The label of the button that stops a watch.
+    public static func cancelLabel(_ kind: AgentWatch.Kind) -> String { kind == .clip ? "Cancel clip" : "Cancel watcher" }
+
+    /// Watches that earn a chip above the message box: the ones still armed.
+    public static func chips(_ watches: [AgentWatch]) -> [AgentWatch] { watches.filter { $0.status == .active } }
 
     static func time(_ ms: Int64) -> String {
         Date(timeIntervalSince1970: Double(ms) / 1000).formatted(date: .omitted, time: .shortened)

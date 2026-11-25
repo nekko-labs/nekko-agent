@@ -495,6 +495,39 @@ impl Table {
                 Ok(crate::hypergate::detect(&base).await.map_or(Value::Null, Value::Object))
             }),
         );
+        // The Connectors page's Hypergate check: is it on this computer, and is it up?
+        t.add(
+            &["mcp:hypergate:check"],
+            handler!(|ctx, channel, args| {
+                let base = crate::hypergate::base(crate::hypergate::port_arg(arg(&args, 0)), |k| std::env::var(k).ok());
+                let info = crate::hypergate::detect(&base).await;
+                let cli = tokio::task::spawn_blocking(|| {
+                    crate::hypergate::find_cli(|k| std::env::var(k).ok(), |p| p.is_file())
+                })
+                .await
+                .map_err(|e| e.to_string())?;
+                // A daemon that answers is installed, even run from a checkout with no CLI found.
+                Ok(json!({
+                    "installed": info.is_some() || cli.is_some(),
+                    "info": info.map_or(Value::Null, Value::Object),
+                }))
+            }),
+        );
+        // Start an installed Hypergate and wait for it to answer (null: it did not).
+        t.add(
+            &["mcp:hypergate:start"],
+            handler!(|ctx, channel, args| {
+                let base = crate::hypergate::base(crate::hypergate::port_arg(arg(&args, 0)), |k| std::env::var(k).ok());
+                if let Some(info) = crate::hypergate::detect(&base).await {
+                    return Ok(Value::Object(info));
+                }
+                let cli = crate::hypergate::find_cli(|k| std::env::var(k).ok(), |p| p.is_file())
+                    .ok_or("Hypergate is not installed on this computer.")?;
+                crate::hypergate::start(&cli)?;
+                let up = crate::hypergate::wait_until_up(&base, std::time::Duration::from_secs(20)).await;
+                Ok(up.map_or(Value::Null, Value::Object))
+            }),
+        );
         // Probe and claim a token here, save the entry, and run the server list.
         t.add(
             &["mcp:hypergate:connect"],
@@ -597,10 +630,27 @@ impl Table {
             crate::downloads::CHANNELS,
             handler!(|ctx, channel, args| ctx.downloads.clone().route(channel, &args).await),
         );
-        t.add(crate::library::CHANNELS, handler!(|ctx, channel, args| ctx.library.clone().route(channel, &args).await));
+        t.add(
+            crate::library::CHANNELS,
+            handler!(|ctx, channel, args| {
+                // A loaded model's file is open in its server, and Windows will not
+                // delete an open file (os error 32), so it is unloaded first.
+                if channel == "engine:deleteModel" {
+                    let id = args.first().map(nekko_js::display).unwrap_or_default();
+                    if ctx.server.model.loaded_ids().contains(&id) {
+                        ctx.server.model.unload(&id).await;
+                    }
+                }
+                ctx.library.clone().route(channel, &args).await
+            }),
+        );
         t.add(
             crate::catalog::CHANNELS,
             handler!(|ctx, channel, args| crate::catalog::route(&ctx.catalog, channel, &args).await),
+        );
+        t.add(
+            crate::catalog::CHECK_CHANNELS,
+            handler!(|ctx, _channel, args| crate::catalog::route_checks(&ctx.catalog, &ctx.library, &args).await),
         );
         t.add(
             crate::tooling::CHANNELS,

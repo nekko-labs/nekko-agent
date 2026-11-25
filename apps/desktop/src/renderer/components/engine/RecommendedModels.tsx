@@ -153,8 +153,8 @@ export function RecommendationList({
         ))}
       </div>
       <div className="mt-(--q-inline) flex flex-wrap items-center gap-x-4 gap-y-1 text-2xs text-ink-faint">
-        <span className="inline-flex items-center gap-1.5"><span className="inline-block h-1.5 w-2.5 rounded-sm bg-accent" aria-hidden />weights</span>
-        <span className="inline-flex items-center gap-1.5"><span className="inline-block h-1.5 w-2.5 rounded-sm bg-info" aria-hidden />context and working memory</span>
+        <span className="inline-flex items-center gap-1.5"><span className="inline-block h-1.5 w-2.5 rounded-sm bg-meter-model" aria-hidden />weights</span>
+        <span className="inline-flex items-center gap-1.5"><span className="inline-block h-1.5 w-2.5 rounded-sm bg-meter-context" aria-hidden />context and working memory</span>
         <span>{feedText(recs)} Speeds are for the start of a conversation: ~ marks an estimate, "here" what this machine measured.</span>
       </div>
     </section>
@@ -166,15 +166,16 @@ export function MemoryMeter({ memoryBytes, weightsBytes, budgetBytes, className 
   const { weights, rest } = memorySplit(memoryBytes, weightsBytes, budgetBytes);
   return (
     <span
-      className={`relative inline-block h-1.5 overflow-hidden rounded-full bg-surface-2 ${className}`}
+      className={`relative inline-block h-1.5 overflow-hidden rounded-full bg-meter-track ${className}`}
       role="meter"
       aria-valuemin={0}
       aria-valuemax={budgetBytes}
       aria-valuenow={memoryBytes}
       aria-label={`${formatBytes(memoryBytes)} of ${formatBytes(budgetBytes)}`}
     >
-      <span className="absolute inset-y-0 left-0 rounded-full bg-accent transition-[width] duration-(--dur-slow) ease-(--ease-out)" style={{ width: `${weights * 100}%` }} />
-      <span className="absolute inset-y-0 rounded-r-full bg-info transition-[width,left] duration-(--dur-slow) ease-(--ease-out)" style={{ left: `${weights * 100}%`, width: `${rest * 100}%` }} />
+      {/* The whole fill as one bar, weights drawn over its start: no seam between the two to show a gap. */}
+      <span className="absolute inset-y-0 left-0 rounded-r-full bg-meter-context transition-[width] duration-(--dur-slow) ease-(--ease-out)" style={{ width: `${(weights + rest) * 100}%` }} />
+      <span className={`absolute inset-y-0 left-0 bg-meter-model transition-[width] duration-(--dur-slow) ease-(--ease-out) ${rest > 0 ? '' : 'rounded-r-full'}`} style={{ width: `${weights * 100}%` }} />
     </span>
   );
 }

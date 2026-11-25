@@ -141,6 +141,9 @@ pub struct ModelFacts {
     pub kv_layout: Option<KvLayout>,
     /// Read from the GGUF too; only the placement planner uses it.
     pub weight_layout: Option<WeightLayout>,
+    /// The runtime keeps an f16 KV cache whatever is asked: an MLX model,
+    /// which `mlx_lm.server` serves without `--kv-bits` (#3325).
+    pub kv_f16_only: bool,
 }
 
 impl ModelFacts {
@@ -155,6 +158,7 @@ impl ModelFacts {
             max_context: n("maxContext"),
             kv_layout: v.get("kvLayout").and_then(KvLayout::from_value),
             weight_layout: v.get("weightLayout").and_then(WeightLayout::from_value),
+            kv_f16_only: v.get("format").and_then(Value::as_str) == Some("mlx"),
         }
     }
 }
@@ -236,14 +240,32 @@ impl FitRequest {
     }
 }
 
+/// The KV cache the built-in engine (llama.cpp) uses unless a load says
+/// otherwise. Measured on Qwen3-8B at 26k of context (llama.cpp b12470,
+/// Metal, #3325): half the memory of f16, decode 26% faster, prefill 8%
+/// slower, and greedy output token-for-token identical to f16 over 400 tokens.
+/// Ollama, LM Studio and vLLM set their cache server-wide, so their planning
+/// keeps f16; MLX ignores it (`ModelFacts::kv_f16_only`).
+pub const ENGINE_KV_CACHE_DTYPE: &str = "q8_0";
+
 /// `kvBytesPerElement`; `NaN` for a type it does not know (`undefined` in JS).
+/// llama.cpp's block types carry an f16 scale per 32 values: q8_0 stores 34
+/// bytes and q4_0 18 bytes a block, which is what `llama-server` allocates
+/// (Qwen3-8B at 32k: 4608 MiB f16, 2448 q8_0, 1296 q4_0, b12470, #3325).
+/// `fp8` is vLLM's, one byte with no block scale.
 pub fn kv_bytes_per_element(dtype: &str) -> f64 {
     match dtype {
         "f16" => 2.0,
-        "q8_0" | "fp8" => 1.0,
-        "q4_0" => 0.5,
+        "q8_0" => 34.0 / 32.0,
+        "fp8" => 1.0,
+        "q4_0" => 18.0 / 32.0,
         _ => f64::NAN,
     }
+}
+
+/// The KV type a load really gets: f16 for a runtime that ignores the choice.
+fn kv_dtype<'a>(facts: &ModelFacts, req: &'a FitRequest) -> &'a str {
+    if facts.kv_f16_only { "f16" } else { &req.kv_cache_dtype }
 }
 
 /// `kvCacheBytes`: `None` when the geometry is unknown.
@@ -271,7 +293,7 @@ pub fn kv_cache_bytes(facts: &ModelFacts, req: &FitRequest) -> Option<f64> {
             slots * jmin((ctx / slots).floor(), l.sliding_window + UBATCH_TOKENS)
         };
         let elements = l.full_per_token * ctx + l.sliding_per_token * window_cells;
-        return Some(elements * kv_bytes_per_element(&req.kv_cache_dtype));
+        return Some(elements * kv_bytes_per_element(kv_dtype(facts, req)));
     }
     if !truthy(facts.layers) || !truthy(facts.kv_heads) || !truthy(facts.head_dim) {
         return None;
@@ -279,7 +301,7 @@ pub fn kv_cache_bytes(facts: &ModelFacts, req: &FitRequest) -> Option<f64> {
     let slots = jmax(1.0, req.parallel_slots);
     let ctx = jmax(0.0, req.context_tokens);
     let (layers, kv_heads, head_dim) = (facts.layers?, facts.kv_heads?, facts.head_dim?);
-    Some(2.0 * layers * kv_heads * head_dim * ctx * kv_bytes_per_element(&req.kv_cache_dtype) * slots)
+    Some(2.0 * layers * kv_heads * head_dim * ctx * kv_bytes_per_element(kv_dtype(facts, req)) * slots)
 }
 
 /// `estimateOverheadBytes`.
@@ -620,7 +642,7 @@ fn suggest_fixes(
             }),
         ));
     }
-    if req.kv_cache_dtype == "f16" {
+    if req.kv_cache_dtype == "f16" && !facts.kv_f16_only {
         let candidate = FitRequest { kv_cache_dtype: "q8_0".into(), ..req.clone() };
         let saves = kv_delta(&candidate);
         if saves > 0.0 && is_better(&replan(&candidate)) {
@@ -681,6 +703,9 @@ pub struct AutoFitInput<'a> {
     pub parallel_slots: Option<f64>,
     pub max_context_tokens: Option<f64>,
     pub options: PlanOptions,
+    /// Plan with [`ENGINE_KV_CACHE_DTYPE`] from the start (the built-in
+    /// engine), instead of f16 with q8_0 as a compromise (other runtimes).
+    pub engine_kv: bool,
 }
 
 /// `autoFit`: settings solved from one budget slider.
@@ -713,7 +738,14 @@ pub fn auto_fit(input: &AutoFitInput) -> Value {
     let mut compromises: Vec<String> = Vec::new();
     let mut best: Option<(FitRequest, FitPlan)> = None;
     'outer: for &ctx in &stops {
-        for dtype in ["f16", "q8_0"] {
+        let dtypes: &[&str] = if facts.kv_f16_only {
+            &["f16"]
+        } else if input.engine_kv {
+            &[ENGINE_KV_CACHE_DTYPE]
+        } else {
+            &["f16", "q8_0"]
+        };
+        for &dtype in dtypes {
             let req = request(ctx, dtype);
             let plan = compute_fit(facts, &req, &budget_hw, &input.options);
             if plan.verdict == "unknown" {
@@ -732,7 +764,7 @@ pub fn auto_fit(input: &AutoFitInput) -> Value {
         }
     }
     if let Some((req, _)) = &best {
-        if req.kv_cache_dtype != "f16" {
+        if req.kv_cache_dtype != "f16" && !input.engine_kv {
             compromises.push("Used a smaller KV cache element (q8_0) to keep this much context.".into());
         }
         if !stops.is_empty() && req.context_tokens < stops[0] {
@@ -746,7 +778,8 @@ pub fn auto_fit(input: &AutoFitInput) -> Value {
     let (req, plan) = match best {
         Some(b) => b,
         None => {
-            let mut req = request(stops.last().copied().unwrap_or(2048.0), "q8_0");
+            let fallback = if facts.kv_f16_only { "f16" } else { "q8_0" };
+            let mut req = request(stops.last().copied().unwrap_or(2048.0), fallback);
             let plan = compute_fit(facts, &req, &budget_hw, &input.options);
             if let (Some(g), Some(t)) = (plan.gpu_layers, plan.total_layers.filter(|t| truthy(Some(*t)))) {
                 req.gpu_layer_fraction = if t > 0.0 { g / t } else { 0.0 };

@@ -479,7 +479,7 @@ private fun ChatScreenContent(
         )
     }
     if (showModelEffort) {
-        ModelEffortSheet(chat, computers, onSet = vm::setOptions, onLoadModels = { vm.loadModels() }, onRunOption = vm::setRunOption, onLoadTools = vm::tools, onSetTool = { name, on -> vm.setTool(name, on, chat.disabledTools) }, onDismiss = { showModelEffort = false },
+        ModelEffortSheet(chat, computers, onSet = vm::setOptions, onLoadModels = { vm.loadModels() }, onLoadLimits = { id -> com.nekko.protocol.ProviderLimits.from(vm.repo.remote().call(com.nekko.protocol.Channels.LIMITS_GET, kotlinx.serialization.json.JsonPrimitive(id))) }, onRunOption = vm::setRunOption, onLoadTools = vm::tools, onSetTool = { name, on -> vm.setTool(name, on, chat.disabledTools) }, onDismiss = { showModelEffort = false },
             onRevokeTool = { t -> vm.revokeAlwaysAllowed(t, chat.allowedMcpTools) }, onForgetRecipient = { r -> vm.forgetRecipient(r, chat.knownRecipients) })
     }
     val terminals by vm.terminalsOpen.collectAsStateWithLifecycle()
@@ -781,6 +781,10 @@ private fun ChatScreenContent(
                         }
                         WaitingList(waiting, sendingId, online, onEdit = vm::editWaiting, onDelete = vm::deleteWaiting, onSendNow = vm::sendWaitingNow)
                         refusal?.let { RefusalNote(it, onDismiss = vm::dismissRefusal) }
+                        // Always there while the provider reports limits, quiet until they near (#2950, the iPhone's #2923).
+                        if (chat.chatType != "image" && chat.savedAt == null) {
+                            com.nekko.android.ui.chat.ComputerLimitLine(vm.repo, chat.providerId, computers.activeId, online, Modifier.padding(horizontal = 4.dp)) { showModelEffort = true }
+                        }
                     }
                     // The agent's plan, right on the composer's top edge (#2115).
                     val planUi by vm.plan.collectAsStateWithLifecycle()

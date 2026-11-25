@@ -24,7 +24,7 @@ public final class CloudSync {
     public enum Phase: String, Sendable {
         case signedOut = "signed-out"
         case needsPlan = "needs-plan"
-        /// Signed in on Pro or Team, but no computer has turned sync on yet.
+        /// Signed in on Pro or Enterprise, but no computer has turned sync on yet.
         case notSetUp = "off"
         case needsJoin = "needs-join"
         case awaitingApproval = "awaiting-approval"
@@ -954,7 +954,7 @@ public final class CloudSync {
         guard (200..<300).contains(status) else {
             invalidateFleet()
             let code = v.str("error") ?? v.str("error_code") ?? ""
-            let message = code == "account-not-available" ? "Nekko Cloud is invite-only for now. This account isn't on the list yet." : v.str("message") ?? v.str("msg") ?? (status == 402 ? "Sync needs a Pro or Team plan." : status == 401 ? "You're signed out of Nekko Cloud." : "Nekko Cloud answered \(status).")
+            let message = code == "account-not-available" ? "Nekko Cloud is invite-only for now. This account isn't on the list yet." : v.str("message") ?? v.str("msg") ?? (status == 402 ? "Sync needs a Pro or Enterprise plan." : status == 401 ? "You're signed out of Nekko Cloud." : "Nekko Cloud answered \(status).")
             throw CloudError(status: status, code: code, message: message)
         }
         return v

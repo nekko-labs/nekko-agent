@@ -1023,8 +1023,11 @@ final class LiveRelayTests: XCTestCase {
             let frame = element.frame
             let navigation = app.navigationBars.firstMatch
             let top = navigation.exists ? navigation.frame.maxY : app.frame.minY
-            let viewport = CGRect(x: app.frame.minX + 8, y: top + 8,
-                                  width: app.frame.width - 16, height: app.frame.maxY - top - 16)
+            // Only the vertical edges matter. Settings is a plain list since #2947, so its
+            // rows (and the row-wide switch in them) are the full width of the screen; a
+            // side margin here made every row "outside" and the reveal fail after 16 drags.
+            let viewport = CGRect(x: app.frame.minX, y: top + 8,
+                                  width: app.frame.width, height: app.frame.maxY - top - 16)
             return !frame.isEmpty && viewport.contains(frame) && element.isHittable
         }
         for upward in [true, false] {
@@ -1143,8 +1146,11 @@ final class LiveRelayTests: XCTestCase {
         if let name { attach(app, name) }
         // It also closes by itself 3.4 s after it plays (without VoiceOver), so a tap
         // can find Let's go already gone (seen in testFollowUpInASubagent). Let it
-        // close; tap only if it is still up after that.
-        if !waitGone(done, 6) {
+        // close; tap only if it is still up after that. On a loaded runner the 3.4 s
+        // timer fired between a 6 s wait giving up and the tap resolving the button
+        // ("No matches found for pairSuccess.done", run 45404241625), so wait longer
+        // for the timer and tap only a button that is still there.
+        if !waitGone(done, 12), done.exists {
             done.tap()
             _ = waitGone(done, 5)
         }

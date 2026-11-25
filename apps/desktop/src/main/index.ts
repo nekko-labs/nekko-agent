@@ -220,7 +220,7 @@ function installMacAppMenu(): void {
     // and zoom past Settings' text size; the page steps that setting itself.
     { label: 'View', submenu: [{ role: 'reload' }, { role: 'forceReload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
     { role: 'windowMenu' },
-    { role: 'help', submenu: [{ label: 'Send Feedback…', click: send('nekko-agent://feedback') }] },
+    { role: 'help', submenu: [{ label: 'Send Feedback…', click: send('nekko-agent://feedback?from=menu') }] },
   ]));
 }
 
@@ -755,7 +755,7 @@ app.whenReady().then(async () => {
       engine,
       showUi: showWindow,
       newChat: () => deliverLink('nekko-agent://chat/new'),
-      feedback: () => deliverLink('nekko-agent://feedback'),
+      feedback: () => deliverLink('nekko-agent://feedback?from=tray'),
       serviceStarted: () => { for (const win of BrowserWindow.getAllWindows()) win.webContents.reload(); },
       quit: () => app.quit(),
       onError: message => dialog.showErrorBox('Nekko Agent', message),

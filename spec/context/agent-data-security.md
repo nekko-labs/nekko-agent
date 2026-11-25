@@ -45,5 +45,5 @@ area: context
   - **Planned:** an admin view for Team.
 - **Per-folder sensitivity labels** `[planned, P2]`: Confidential means local models only and no network in that chat. No automatic classifier for now.
 - **Claude Agent chats:** Claude Code sends their requests and runs their tools. The approval bridge gives them approvals, the egress gate and audit for the calls Claude Code asks about; the Privacy Shield cannot reach them. A local proxy could bring it to Claude Agent on an API key or cloud account `[not started; we will come back to it]`; on a Claude plan it is impossible (the terms require the unmodified Claude Code).
-- **Team plan** `[not started]`: SSO-only sign-in, provider and key rules, admin audit and the egress domain allowlist. We have not worked on them yet and will start when a Team customer asks.
+- **Enterprise plan** `[not started]`: SSO-only sign-in, provider and key rules, admin audit and the egress domain allowlist. We have not worked on them yet and will start when an Enterprise customer asks.
 - **Acceptance:** each defense flips its recorded eval outcomes from `ran` to `asked` in Guardrails; YOLO's recorded outcomes stay `ran`; ordinary chats that never read untrusted content ask no more than before; a tainted chat follows a link the page showed without asking (`a_tainted_chat_follows_a_link_the_page_showed_without_asking`).

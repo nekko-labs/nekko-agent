@@ -28,26 +28,41 @@ export function errorReport(err: unknown, source = 'renderer'): { source: string
 }
 
 /**
+ * Browser notices that arrive as window errors but are not faults, so they are
+ * not reported. Chromium raises "ResizeObserver loop completed with
+ * undelivered notifications" when a resize callback changes layout and the
+ * rest is delivered next frame; nothing is lost. It was over 98% of all error
+ * reports in November 2026.
+ */
+export function ignoredError(message: unknown): boolean {
+  return typeof message === 'string' && /^(?:[A-Za-z]*Error: )?ResizeObserver loop (?:completed with undelivered notifications|limit exceeded)/.test(message);
+}
+
+/**
+ * Queue one opt-in report, only while reports are on. The engine also drops it
+ * when they are off, keeps only the event's allowed fields and scrubs every
+ * string (crates/nekkod/src/telemetry.rs).
+ */
+export function capture(event: 'screen_viewed' | 'click' | 'feedback_opened' | 'error', props: Record<string, string>): void {
+  if (useStore.getState().settings?.telemetry?.enabled !== true) return;
+  void window.nekko.telemetryCapture?.(event, props).catch(() => {});
+}
+
+/**
  * Opt-in reports from the UI: which screen is open, which controls are
- * clicked, and uncaught errors. The engine drops them unless reports are on,
- * keeps only the allowed fields and scrubs every string
- * (crates/nekkod/src/telemetry.rs).
+ * clicked, and uncaught errors.
  */
 export function startTelemetry(): void {
-  const send = (event: 'screen_viewed' | 'click' | 'error', props: Record<string, string>) => {
-    if (useStore.getState().settings?.telemetry?.enabled !== true) return;
-    void window.nekko.telemetryCapture?.(event, props).catch(() => {});
-  };
   let last = useStore.getState().view;
   useStore.subscribe((s) => {
     if (s.view === last) return;
     last = s.view;
-    send('screen_viewed', { screen: s.view });
+    capture('screen_viewed', { screen: s.view });
   });
   document.addEventListener('click', (e) => {
     const control = clickControl(e.target);
-    if (control) send('click', { screen: useStore.getState().view, control });
+    if (control) capture('click', { screen: useStore.getState().view, control });
   }, { capture: true, passive: true });
-  window.addEventListener('error', (e) => send('error', errorReport(e.error ?? e.message)));
-  window.addEventListener('unhandledrejection', (e) => send('error', errorReport(e.reason)));
+  window.addEventListener('error', (e) => { if (!ignoredError(e.message)) capture('error', errorReport(e.error ?? e.message)); });
+  window.addEventListener('unhandledrejection', (e) => capture('error', errorReport(e.reason)));
 }

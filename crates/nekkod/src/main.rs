@@ -240,7 +240,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let compactions = compaction::Compactions::new();
     let sandboxes = sandbox::Sandboxes::new(data_dir.clone());
     let admission = admission::Admission::new(compactions.clone(), cfg.allow_browser_control);
-    let catalog = catalog::new(&settings, cfg.hugging_face_url.clone());
+    let catalog = catalog::new(&settings, cfg.hugging_face_url.clone(), &data_dir);
     let automation = Arc::new(automation::Automation::new(sessions.clone(), settings.clone(), hub.clone()));
     let remote = Arc::new(remote::Remote::new(data_dir.clone(), hub.clone()));
     let computers = computers::Computers::new(data_dir.clone(), hub.clone());

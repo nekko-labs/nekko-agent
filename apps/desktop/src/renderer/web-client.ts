@@ -475,6 +475,7 @@ function makeWebClient(): NekkoApi {
     engineCatalog: (query, format) => call(IpcChannels.engineCatalog, query, format),
     engineCatalogModel: (id) => call(IpcChannels.engineCatalogModel, id),
     engineCatalogDetail: (id) => call(IpcChannels.engineCatalogDetail, id),
+    engineCatalogChecks: (id, file) => call(IpcChannels.engineCatalogChecks, id, file),
     engineFolders: () => call(IpcChannels.engineFolders),
     engineFoldersSave: (folders) => call(IpcChannels.engineFoldersSave, folders),
     engineDownloadModel: (modelId, quantLabel) => call(IpcChannels.engineDownloadModel, modelId, quantLabel),
@@ -855,6 +856,8 @@ function makeWebClient(): NekkoApi {
     getMcpStatus: () => call(IpcChannels.mcpStatus),
     detectHypergate: (port) => call(IpcChannels.mcpHypergate, port),
     connectHypergate: (port) => call(IpcChannels.mcpHypergateConnect, port),
+    checkHypergate: (port) => call(IpcChannels.mcpHypergateCheck, port),
+    startHypergate: (port) => call(IpcChannels.mcpHypergateStart, port),
     registerPushToken: (token, platform) => registerPush(token, platform),
     checkForUpdates: async () => {
       const info = (await call(IpcChannels.appInfo)) as AppInfo;

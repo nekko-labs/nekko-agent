@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- New chat's model on device, the connect checklist, the limit line and picker detail (#2950, the iPhone's #2921-#2925). -->
+<resources>
+    <string name="newchat_runs_on">Runs on %1$s</string>
+    <string name="newchat_checklist_title">Nekko can do more with these</string>
+    <string name="newchat_checklist_count">%1$d of %2$d</string>
+    <string name="newchat_checklist_close">Close checklist</string>
+    <string name="newchat_checklist_hidden">Checklist hidden.</string>
+    <string name="newchat_undo">Undo</string>
+    <string name="newchat_close">Close</string>
+    <string name="newchat_connect">Connect</string>
+    <string name="newchat_done_named">Done, %1$s</string>
+    <string name="newchat_note">Nekko can’t use your files or tools yet.</string>
+    <string name="newchat_item_computer">Pair a computer</string>
+    <string name="newchat_item_computer_detail">Let Nekko use tools and your files</string>
+    <string name="newchat_item_folder">Add a folder</string>
+    <string name="newchat_item_folder_detail">A project for Nekko to work in</string>
+    <string name="newchat_item_folder_waiting">After you pair a computer</string>
+    <string name="newchat_item_git">Connect a git provider</string>
+    <string name="newchat_item_git_detail">GitHub, GitLab or Bitbucket</string>
+    <string name="newchat_item_tasks">Connect a task tool</string>
+    <string name="newchat_item_tasks_detail">Linear, Jira, Floop and more</string>
+    <string name="newchat_this_phone_detail">Its own models</string>
+    <string name="limit_reached">%1$s limit reached</string>
+    <string name="limit_used">%1$d%% of %2$s limit</string>
+    <string name="limit_resets">%1$s · resets %2$s</string>
+    <string name="limit_switch_model">Switch model</string>
+    <string name="model_dated_one">1 dated version</string>
+    <string name="model_dated_many">%1$d dated versions</string>
+    <string name="model_dated_hide">Hide dated versions</string>
+</resources>

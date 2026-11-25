@@ -8,6 +8,7 @@
 //! its tools online itself (`mcp:sync`).
 
 use serde_json::{Map, Value, json};
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 /// The port `hypergated` listens on unless it was told otherwise.
@@ -219,6 +220,131 @@ pub fn with_hypergate(servers: &[Value], info: &Value) -> Vec<Value> {
             Value::Object(out)
         })
         .collect()
+}
+
+/// Where Hypergate's CLI could be: every PATH folder, then the folders its
+/// installers use (the Windows setup, the macOS app, the Linux packages, npm).
+/// A GUI app on macOS starts with a bare PATH, hence the fixed folders.
+fn cli_candidates(env: &impl Fn(&str) -> Option<String>) -> Vec<PathBuf> {
+    let names: &[&str] = if cfg!(windows) { &["hypergate.exe", "hypergate.cmd"] } else { &["hypergate"] };
+    let mut dirs: Vec<PathBuf> = env("PATH").map(|p| std::env::split_paths(&p).collect()).unwrap_or_default();
+    if cfg!(windows) {
+        if let Some(local) = env("LOCALAPPDATA") {
+            dirs.push(Path::new(&local).join("Programs").join("Hypergate"));
+        }
+        if let Some(roaming) = env("APPDATA") {
+            dirs.push(Path::new(&roaming).join("npm"));
+        }
+    } else {
+        dirs.push("/Applications/Hypergate.app/Contents/MacOS".into());
+        if let Some(home) = env("HOME") {
+            dirs.push(Path::new(&home).join("Applications/Hypergate.app/Contents/MacOS"));
+            dirs.push(Path::new(&home).join(".npm-global/bin"));
+            dirs.push(Path::new(&home).join(".local/bin"));
+        }
+        dirs.extend(["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"].map(PathBuf::from));
+    }
+    dirs.iter().flat_map(|d| names.iter().map(move |n| d.join(n))).collect()
+}
+
+/// The installed `hypergate` CLI, or `None` when it is not on this computer.
+pub fn find_cli(env: impl Fn(&str) -> Option<String>, is_file: impl Fn(&Path) -> bool) -> Option<PathBuf> {
+    cli_candidates(&env).into_iter().find(|p| is_file(p))
+}
+
+/// `hypergate start --no-open`: brings the daemon up (a running one is left
+/// alone) without opening a browser, since connecting opens the manager as a
+/// tab here. Detached, so Hypergate outlives this daemon: it is the user's
+/// own app, not something we started for a turn.
+pub fn start(cli: &Path) -> Result<(), String> {
+    use std::process::{Command, Stdio};
+    let is_cmd = cli.extension().is_some_and(|e| e.eq_ignore_ascii_case("cmd"));
+    let mut cmd = if is_cmd {
+        // An npm shim only runs through cmd.exe.
+        #[cfg_attr(not(windows), allow(unused_mut))]
+        let mut c = Command::new(std::env::var("ComSpec").unwrap_or_else(|_| "cmd.exe".into()));
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            c.raw_arg(format!("/d /s /c \"\"{}\" start --no-open\"", cli.display()));
+        }
+        c
+    } else {
+        let mut c = Command::new(cli);
+        c.args(["start", "--no-open"]);
+        c
+    };
+    cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const DETACHED_PROCESS: u32 = 0x0000_0008;
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+        const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x0100_0000;
+        // Out of the daemon's kill-on-close job (procgroup.rs); a job above
+        // ours that forbids breaking away refuses the flag, so retry inside.
+        cmd.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_BREAKAWAY_FROM_JOB);
+        if cmd.spawn().is_ok() {
+            return Ok(());
+        }
+        cmd.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        // A new session: out of the daemon's process group, so the sweep at
+        // shutdown and the leftover reaper both leave it alone.
+        // SAFETY: setsid is async-signal-safe and takes no arguments.
+        unsafe {
+            cmd.pre_exec(|| {
+                libc::setsid();
+                Ok(())
+            });
+        }
+    }
+    cmd.spawn().map(|_| ()).map_err(|e| format!("Could not start Hypergate: {e}"))
+}
+
+/// After `start`, wait for the daemon to answer, up to `budget`.
+pub async fn wait_until_up(base: &str, budget: Duration) -> Option<Map<String, Value>> {
+    let deadline = Instant::now() + budget;
+    loop {
+        if let Some(info) = detect(base).await {
+            return Some(info);
+        }
+        if Instant::now() >= deadline {
+            return None;
+        }
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+}
+
+#[cfg(test)]
+mod install_tests {
+    use super::*;
+
+    #[test]
+    fn finds_the_cli_on_path_before_the_install_folders() {
+        let sep = if cfg!(windows) { ";" } else { ":" };
+        let path = format!("{}{sep}{}", Path::new("/a").display(), Path::new("/b").display());
+        let env = |k: &str| match k {
+            "PATH" => Some(path.clone()),
+            "LOCALAPPDATA" => Some("/local".into()),
+            "HOME" => Some("/home/me".into()),
+            _ => None,
+        };
+        let exe = if cfg!(windows) { "hypergate.exe" } else { "hypergate" };
+        let on_b = Path::new("/b").join(exe);
+        assert_eq!(find_cli(env, |p| p == on_b), Some(on_b.clone()));
+        let installed = if cfg!(windows) {
+            Path::new("/local").join("Programs").join("Hypergate").join(exe)
+        } else {
+            PathBuf::from("/Applications/Hypergate.app/Contents/MacOS/hypergate")
+        };
+        assert_eq!(find_cli(env, |p| p == installed), Some(installed.clone()));
+        assert_eq!(find_cli(env, |p| p == installed || p == on_b), Some(on_b));
+        assert_eq!(find_cli(env, |_| false), None);
+    }
 }
 
 /// The id of the MCP entry the gateway is saved as (`HYPERGATE_ENTRY_ID`).

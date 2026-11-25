@@ -58,7 +58,7 @@ describe("sync auth and plans", () => {
     expect((await call(a, u.token, "GET", "/v1/sync/state")).statusCode).toBe(401);
   });
 
-  it("lets Pro and Team write, and Free only read and delete", async () => {
+  it("lets Pro and Enterprise write, and Free only read and delete", async () => {
     const a = app();
     for (const plan of ["pro", "team"] as const) {
       const u = await user(plan);

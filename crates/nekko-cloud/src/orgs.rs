@@ -44,7 +44,7 @@ pub const HEARTBEAT: Duration = Duration::from_secs(30);
 const LOCKED: &str = "Unlock your account on this computer to use organizations.";
 const NO_KEY: &str = "Computers need the org key, ask an admin.";
 const NOT_SIGNED_IN: &str = "Sign in to Nekko Cloud first.";
-const NEEDS_PLAN: &str = "Organizations need a Pro or Team plan.";
+const NEEDS_PLAN: &str = "Organizations need a Pro or Enterprise plan.";
 
 pub type ModelFuture = Pin<Box<dyn Future<Output = Vec<LocalModel>> + Send>>;
 
