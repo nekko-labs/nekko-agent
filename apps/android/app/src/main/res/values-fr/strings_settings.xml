@@ -381,13 +381,16 @@
     <string name="settings_card_counts">Nombres seulement</string>
     <string name="settings_card_counts_detail">Combien de discussions sont en cours, rien d’autre</string>
     <string name="settings_card_minimal">Minimal</string>
-    <string name="settings_card_minimal_detail">Ce que fait la discussion qui a besoin de vous, avec Arrêter et Refuser. Aucun texte de discussion</string>
+    <string name="settings_card_minimal_detail">Totaux des discussions en cours, en attente et terminées. Aucun texte de discussion</string>
     <string name="settings_card_standard">Standard</string>
-    <string name="settings_card_standard_detail">Ajoute le nom de la discussion, son étape en cours et Autoriser</string>
+    <string name="settings_card_standard_detail">Les mêmes totaux que Minimal ; la carte n’affiche ni noms ni étapes des discussions</string>
     <string name="settings_card_detailed">Détaillé</string>
-    <string name="settings_card_detailed_detail">Ajoute la première ligne de la dernière réponse</string>
-    <string name="settings_card_footer_private">Aucun texte de discussion ne quitte votre ordinateur pour l’écran verrouillé.</string>
-    <string name="settings_card_footer_text">Les noms et étapes des discussions s’affichent quand le téléphone est déverrouillé ; un téléphone verrouillé qui masque les contenus sensibles affiche les textes de Minimal. Autoriser demande d’abord de déverrouiller.</string>
+    <string name="settings_card_detailed_detail">Les mêmes totaux que Minimal ; la carte n’affiche pas non plus les réponses</string>
+    <string name="settings_card_footer_none">Pas de carte. La notification de connexion indique seulement combien de discussions tournent, et sur quel ordinateur.</string>
+    <string name="settings_card_footer_minimal">Totaux uniquement. Aucun texte de discussion n’apparaît sur l’écran de verrouillage. Parler à Nekko demande d’abord de déverrouiller.</string>
+    <string name="settings_card_footer_standard">Sur Android, cette carte est la même qu’en Minimal : elle n’affiche ni noms ni étapes des discussions.</string>
+    <string name="settings_card_footer_detailed">Sur Android, cette carte est la même qu’en Minimal : elle n’affiche ni noms, ni étapes, ni réponses des discussions.</string>
+    <string name="settings_card_preview">Aperçu de la carte de l’écran de verrouillage</string>
     <string name="settings_warn_yolo">Avertir avant YOLO</string>
     <string name="settings_warn_yolo_detail">Expliquer ce que YOLO laisse passer avant qu’une discussion ou le mode par défaut d’un ordinateur y passe</string>
     <!-- Customize (#2426), the iPhone's page. -->

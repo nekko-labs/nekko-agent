@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { PendingInput, SessionSummary, ToolCall } from '@nekko-agent/shared';
-import { activitySentence, childActivity, compactSentence, delegationActivity, delegationChild, foldSubagentActivity, startSubagentActivity } from './subagentActivity.js';
+import { activitySentence, childActivity, compactSentence, delegationActivity, delegationChild, foldSubagentActivity, seedSubagentWaits, startSubagentActivity, waitingOn } from './subagentActivity.js';
 import { applyEvent, __resetLiveRuns } from './liveRuns.js';
 const child = { id: 'c', parentSessionId: 'p', title: 'Inspect', createdAt: 101, stalled: false } as SessionSummary;
 vi.mock('./store.js', () => ({ useStore: (select: (state: unknown) => unknown) => select({ sessions: [child], settings: {}, openChatPane: () => {} }) }));
@@ -10,6 +10,7 @@ import { PlanRail } from './components/PlanRail.js';
 import { ActivityGroup } from './components/agent-console/ActivityGroup.js';
 import { SubagentParentContext } from './components/agent-console/SubagentCue.js';
 import { ToolCard } from './components/agent-console/ToolCard.js';
+import { SubagentWaitNotice, waitingDescendants } from './components/SubagentWaitNotice.js';
 import { RowKeyContext, RowMemoryContext } from './components/agent-console/rowState.js';
 const call: ToolCall = { id: 'spawn', name: 'spawn_agent', input: { title: 'Inspect', task: 'Inspect the files. PRIVATE PROMPT '.repeat(1000) } };
 beforeEach(() => { vi.stubGlobal('requestAnimationFrame', () => 1); vi.stubGlobal('cancelAnimationFrame', () => {}); __resetLiveRuns(); });
@@ -30,7 +31,11 @@ it('keeps chat and rail identical across working, waiting, failure and completio
   expect(check()).toBe('working');
   applyEvent({ type: 'tool_approval_required', sessionId: 'c', call, reason: 'approval', severity: 'low' });
   expect(check()).toBe('waiting');
+  // A sibling tool's result after the request leaves the approval showing (#3270).
   applyEvent({ type: 'tool_result', sessionId: 'c', result: { toolCallId: 'read', output: 'ok' } });
+  expect(check()).toBe('waiting');
+  expect(childActivity(child).detail).toBe('Waiting for approval.');
+  applyEvent({ type: 'approval_resolved', sessionId: 'c', callId: 'spawn' });
   expect(check()).toBe('working');
   expect(delegationActivity(call, child, { toolCallId: 'spawn', output: 'returned' }).status).toBe('working');
   applyEvent({ type: 'error', sessionId: 'c', message: 'Provider unavailable.' });
@@ -44,7 +49,7 @@ it('keeps chat and rail identical across working, waiting, failure and completio
 });
 
 it('reports questions, retries, explicit stops and loop stops honestly', () => {
-  applyEvent({ type: 'question', sessionId: 'c', request: {} as never });
+  applyEvent({ type: 'question', sessionId: 'c', request: { callId: 'q' } as never });
   expect(childActivity(child).status).toBe('waiting');
   applyEvent({ type: 'question_resolved', sessionId: 'c', callId: 'q' });
   expect(childActivity(child).status).toBe('working');
@@ -164,4 +169,30 @@ it('bounds safe plain-text summaries and long prompt/result collapsed markup', (
   expect(expanded).toContain('PRIVATE PROMPT');
   expect(expanded).toContain('PRIVATE RESULT');
   expect(expanded).toContain('max-h-60 overflow-auto');
+});
+
+it('shows a sub-agent waiting for approval on its parent chat, also when seeded at launch (#3270)', () => {
+  const notice = () => renderToStaticMarkup(<SubagentWaitNotice sessionId="p" onOpen={() => {}} />);
+  expect(notice()).toBe('');
+  // The approval is the child's first event, before any other in its run.
+  applyEvent({ type: 'tool_approval_required', sessionId: 'c', call: { id: 'b', name: 'bash', input: {} }, reason: 'r', severity: 'low' });
+  expect(notice()).toContain('Sub-agent “Inspect” is waiting for your approval.');
+  expect(notice()).toContain('aria-label="Open sub-agent: Inspect"');
+  expect(renderToStaticMarkup(<SubagentWaitNotice sessionId="c" onOpen={() => {}} />)).toBe('');
+  applyEvent({ type: 'tool_call', sessionId: 'c', call: { id: 'r', name: 'read_file', input: {} } });
+  expect(waitingOn('c')).toBe('approval');
+  applyEvent({ type: 'approval_resolved', sessionId: 'c', callId: 'b' });
+  expect(notice()).toBe('');
+  // A window opened after the request learns it from the host's pending inputs.
+  seedSubagentWaits({ c: { sessionId: 'c', approval: { call: { id: 'b2', name: 'bash', input: {} }, reason: 'r', severity: 'low', requestedAt: 1 } } });
+  expect(childActivity(child, true)).toEqual({ status: 'waiting', detail: 'Waiting for approval.' });
+  applyEvent({ type: 'done', sessionId: 'c', messageId: 'm', stop: 'complete' });
+  expect(waitingOn('c')).toBeUndefined();
+});
+
+it('finds waiting grandchildren and lists approvals first', () => {
+  const grand = { id: 'g', parentSessionId: 'c', title: 'Deep', createdAt: 102 } as SessionSummary;
+  applyEvent({ type: 'question', sessionId: 'c', request: { callId: 'q', questions: [], askedAt: 1 } });
+  applyEvent({ type: 'tool_approval_required', sessionId: 'g', call: { id: 'b', name: 'bash', input: {} }, reason: 'r', severity: 'low' });
+  expect(waitingDescendants('p', [child, grand]).map(w => [w.child.id, w.wait])).toEqual([['g', 'approval'], ['c', 'question']]);
 });

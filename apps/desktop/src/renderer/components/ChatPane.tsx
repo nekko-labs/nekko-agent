@@ -98,6 +98,7 @@ import { ExpertMonitor, useExpertMode, useShown } from './ModeViews.js';
 import { hasAppChrome } from '../chrome.js';
 import { AgentMonitorButton, PlanRail } from './PlanRail.js';
 import { PlanSheet } from './PlanSheet.js';
+import { SubagentWaitNotice } from './SubagentWaitNotice.js';
 import { ReplyStatsRow } from './agent-console/TurnStatsLine.js';
 import { QuestionCard } from './QuestionCard.js';
 import { SecretBox } from './agent-console/SecretBox.js';
@@ -3274,6 +3275,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             {/* Folded away while the agent waits on the person, so it never covers the question or the approval above it (#3288). */}
             {!cleanStart && !question && !approval && (
               <PlanSheet key={sessionId + '-plan'} sessionId={sessionId} session={session} streaming={streaming} prs={prs} basePath={artifactBasePath} onOpenChild={commandCenter ? (id) => useStore.getState().focusChatOnWall(id, { keepLayout: true }) : undefined} />
+            )}
+            {!cleanStart && !question && !approval && (
+              <SubagentWaitNotice sessionId={sessionId} onOpen={commandCenter ? (id) => useStore.getState().focusChatOnWall(id, { keepLayout: true }) : (id) => useStore.getState().openChatPane(id)} />
             )}
 
             {chatLong && (

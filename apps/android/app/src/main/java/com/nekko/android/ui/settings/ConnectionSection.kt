@@ -112,6 +112,8 @@ fun ConnectionSection(deps: SettingsDeps) {
                 Text(stringResource(R.string.settings_card_title), style = MaterialTheme.typography.labelMedium, color = p.inkFaint, modifier = Modifier.padding(start = 12.dp, top = 8.dp))
                 // Stored at the app's first start (LiveCards.firstLevel); Minimal until then.
                 val current = cardLevel ?: LiveLevel.MINIMAL
+                // The card as this level draws it (the iPhone's Settings preview, #2933).
+                LockScreenCardPreview(current, Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
                 for ((level, title, detail) in listOf(
                     Triple(LiveLevel.NONE, R.string.settings_card_counts, R.string.settings_card_counts_detail),
                     Triple(LiveLevel.MINIMAL, R.string.settings_card_minimal, R.string.settings_card_minimal_detail),
@@ -121,10 +123,14 @@ fun ConnectionSection(deps: SettingsDeps) {
                     RadioRow(stringResource(title), stringResource(detail), selected = current == level, tag = "settings.card.${level.wire}") { deps.phonePrefs.set(LiveCards.LEVEL, level) }
                 }
                 Text(
-                    when (current) {
-                        LiveLevel.NONE, LiveLevel.MINIMAL -> stringResource(R.string.settings_card_footer_private)
-                        else -> stringResource(R.string.settings_card_footer_text)
-                    },
+                    stringResource(
+                        when (current) {
+                            LiveLevel.NONE -> R.string.settings_card_footer_none
+                            LiveLevel.MINIMAL -> R.string.settings_card_footer_minimal
+                            LiveLevel.STANDARD -> R.string.settings_card_footer_standard
+                            LiveLevel.DETAILED -> R.string.settings_card_footer_detailed
+                        },
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = p.inkSoft,
                     modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp),

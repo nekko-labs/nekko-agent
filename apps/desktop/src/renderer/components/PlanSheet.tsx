@@ -190,7 +190,7 @@ const CARD_ORDER: Record<AgentStatus, number> = { input: 0, working: 1, error: 2
  */
 export function subagentCardState(child: SessionSummary, running: boolean): { status: AgentStatus; detail: string } {
   const activity = childActivity(child, running);
-  const asking = activity.status === 'waiting' && /answer|approval/i.test(activity.detail);
+  const asking = activity.status === 'waiting' && /answer|approval|secret/i.test(activity.detail);
   const status: AgentStatus = asking ? 'input'
     : running ? 'working'
     : activity.status === 'failed' || activity.status === 'stopped' ? 'error'
