@@ -555,7 +555,7 @@ function makeWebClient(): NekkoApi {
     openTerminalStream: (id, handlers) => openTerminalStream(id, handlers),
     listShells: () => call(IpcChannels.terminalShells),
     createTerminal: (opts) => call(IpcChannels.terminalCreate, opts),
-    terminalSnapshot: (id) => call(IpcChannels.terminalSnapshot, id),
+    terminalSnapshot: (id, opts) => (opts ? call(IpcChannels.terminalSnapshot, id, opts) : call(IpcChannels.terminalSnapshot, id)),
     updateTerminal: (id, patch) => call(IpcChannels.terminalUpdate, id, patch),
     writeTerminal: (id, data) => call(IpcChannels.terminalWrite, id, data),
     resizeTerminal: (id, cols, rows) => call(IpcChannels.terminalResize, id, cols, rows),
