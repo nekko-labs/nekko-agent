@@ -39,6 +39,17 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Android: send confirmation backs off instead of re-reading the chat twice a second (#3411, 2026-11-26)
+Area: renderer (Android app, relay traffic)
+Result: improvement (call count in a JVM unit test; no phone, relay or engine measurement)
+Conditions: JVM unit test `OutboxTest` on the Apple M1 Max Mac, kotlinx-coroutines-test virtual time, a counting `FakeCaller`. One prompt is sent to a chat whose `chat:send` has not answered and whose `session:get` does not list the prompt yet (a long turn); `session:get` calls counted over the first 10 s of virtual time, the one read made before sending included. One run each side (the count is deterministic).
+
+| Metric | Before | After |
+|---|---|---|
+| `session:get` calls in the first 10 s of a send | 20 | 5 |
+
+Why: the confirmation loop read the whole chat every 500 ms until the chat listed the prompt id. It now waits on the computer's first event for the chat, on `chat:send` answering, or on a 0.5, 1, 2, 4 s backoff (the iPhone's `Outbox`). The unit test also shows an early wake: with the prompt already listed, the first event for the chat triggers the one re-read at once, instead of up to 500 ms later. Source: #3411.
+
 ## Plum and Indigo window glow steps instead of fading every frame (#3136, 2026-11-20)
 Area: GPU/memory
 Result: improvement expected; after number pending (measured once merged, see below)
@@ -1735,3 +1746,4 @@ Conditions: Linux AMD EPYC9V74 (4 threads), Chrome156.0.8078.4, Node22.23.4, one
 Separate profiled base/head cold p95:39.6/36.3ms, not gate-equivalent. Sampled `setCurrentTime` self-time fell175.837→0ms (113.407ms mount,62.430ms deletion across33 base switches). In-click style-recalculation total fell156.822→0ms; click duration median18.459→12.457ms. Whole-profile style/layout/paint still present; do not sum overlapping trace totals or infer a per-frame gain from cumulative CPU samples.
 
 Why: pause fresh SVGs without redundant zero-time seeks; cancel timers/listeners without seeking discarded SVGs; replace motion SVG by icon identity. Playback/reset and synchronous first-frame requirements unchanged. Both recovered head p95s meet33ms but first pair is slower; prior log-only head33.7ms misses. #1998 stays open; no budget reduction or increase in this PR. Main's separate48ms gate is not acceptance of this repair. Terminal skipped; Linux streaming/memory not requested. Source: [run42251252142](https://github.com/nekko-labs/nekko-agent/actions/runs/42251252142), artifact13521343207 ZIP SHA256 `0910a63aad23d1dfd6945c6cb37e224cb733147a64851de8e0bbfeb7f45add46`, [detailed provenance/limitations](../reports/cold-chat-paint-investigation.md). Diagnostic branch must never merge.
+- Android send confirmation (2026-11-26, #3411): not measured on a phone: bytes and frames per send over the relay, and the engine-side cost of the chat reads that no longer happen. A relay-side frame count of one send from a paired Android phone, before and after, would settle it.
