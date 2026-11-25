@@ -39,6 +39,18 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## iPhone delegating chats stop re-reading the chat list on every tool result (#3384, 2026-11-26)
+Area: renderer
+Result: improvement (reads per turn)
+Conditions: `swift test` on an Apple M1 Max, macOS 27.2.1, with a counting fake connection (`AgentStateRefreshTests.testOtherToolsResultsReadNothing`): a chat whose transcript holds a `spawn_agent` call, then ten `bash` tool results. Counts are `sessions:summaries` calls, not time.
+
+| Metric | Before | After |
+|---|---|---|
+| `sessions:summaries` calls caused by 10 shell tool results | 10 (12 calls in the test against 2 after the first read and the sub-agent's own result) | 0 (2 calls) |
+| `sessions:summaries` calls for a burst of 8 sub-agent results | not measured | 1 in flight, then 1 more (`testABurstOfSubAgentResultsIsCoalesced`) |
+
+Why: `ChatModel` refreshed the agent state (watches, child chats) on every tool result; it now refreshes only for a watch, clip or sub-agent result, and one refresh runs at a time with a trailing re-read. Not measured: bytes or milliseconds per read on a real account. Source: #3384.
+
 ## Plum and Indigo window glow steps instead of fading every frame (#3136, 2026-11-20)
 Area: GPU/memory
 Result: improvement expected; after number pending (measured once merged, see below)
