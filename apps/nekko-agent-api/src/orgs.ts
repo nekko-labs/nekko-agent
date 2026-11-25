@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { authenticate, type Caller, SYNC_PLANS } from "./auth.js";
 import type { Db } from "./db.js";
 import { FLEET_LEASE_SECONDS, MAX_DESCRIPTOR_BYTES } from "./fleet.js";
-import { Presence } from "./presence.js";
+import { LEASE_MS, Presence } from "./presence.js";
 import { b64url, bytes, currentKeyId, keyed } from "./sync.js";
 
 /**
@@ -367,20 +367,24 @@ export function registerOrgs(app: FastifyInstance, db: Db, opts: OrgsOptions = {
         order by f.device_id limit ${MAX_ORG_COMPUTERS}`,
       [orgId],
     );
+    const atRelay = rows.length && app.relayPresence ? await app.relayPresence.lookup(rows.map((r) => r.user_id)) : () => false;
     return {
       orgKeyId: m.keyId,
-      // Online comes from the lease kept in memory (presence.ts); seen_at is the stored last-seen.
+      // Online comes from the lease kept in memory (presence.ts) or the relay when configured
+      // (relay-presence.ts, one question per read for the members' accounts); seen_at is the stored last-seen.
       computers: rows.map((r) => {
         const live = presence.state(Presence.key(orgId, r.device_id), r.seen_at);
+        const viaRelay = !live.online && atRelay(r.user_id, r.device_id);
+        const now = presence.clock();
         return {
           deviceId: r.device_id,
           userId: r.user_id,
           orgKeyId: r.org_key_id,
           revision: Number(r.revision),
           descriptor: b64url(r.descriptor),
-          seenAt: live.seenAt,
-          expiresAt: live.expiresAt,
-          online: live.online,
+          seenAt: viaRelay ? new Date(now) : live.seenAt,
+          expiresAt: viaRelay ? new Date(now + LEASE_MS) : live.expiresAt,
+          online: live.online || viaRelay,
           you: r.device_id === caller.deviceId,
         };
       }),
