@@ -33,6 +33,8 @@ export const MIN_BUDGET_BYTES = 32 * 1024 * 1024;
  */
 export const BODY_FACTOR = 3;
 export const PAGE_FACTOR = 7;
+/** A request weighing at most this may pass the queue when it fits in the room left (see `acquire`). */
+export const SKIP_AHEAD_BYTES = 2 * 1024 * 1024;
 /** Bodies at or under this skip the queue: the common small calls never wait. */
 export const SMALL_BODY_BYTES = 64 * 1024;
 
@@ -52,8 +54,17 @@ export class BusyError extends Error {
   }
 }
 
+/** The client went away while its request waited for room. Nobody reads the answer; 499 keeps it out of the error log and the 5xx alerts. */
+export class AbortedError extends Error {
+  statusCode = 499;
+  constructor() {
+    super("aborted");
+  }
+}
+
 interface Waiter {
   weight: number;
+  since: number;
   admit: () => void;
   fail: (e: Error) => void;
   timer: NodeJS.Timeout;
@@ -82,21 +93,28 @@ export class MemoryGate {
    * Wait for room for `weight` bytes. Resolves with the release (call it once,
    * extra calls do nothing); rejects with BusyError. A weight larger than the
    * whole budget runs alone, once nothing else is in flight.
+   *
+   * The queue is FIFO, except that a small request that fits in the room left
+   * right now goes ahead of the waiters: a 5 KB page never sits behind a queued
+   * 16 MB one. To keep the head from starving, small requests stop passing once
+   * it has waited half of `maxWaitMs`; after that the line is strict again.
    */
   acquire(weight: number, signal?: AbortSignal): Promise<() => void> {
     const w = Math.max(0, Math.floor(weight));
-    // FIFO: nobody passes a waiter, so one big request is never starved by small ones.
+    if (signal?.aborted) return Promise.reject(new AbortedError());
     if (!this.queue.length && this.fits(w)) return Promise.resolve(this.take(w));
+    if (this.queue.length && w <= SKIP_AHEAD_BYTES && this.inFlight + w <= this.budgetBytes && Date.now() - this.queue[0].since < this.maxWaitMs / 2) return Promise.resolve(this.take(w));
     if (this.queue.length >= this.maxQueued) return Promise.reject(new BusyError());
     return new Promise((resolve, reject) => {
       const waiter: Waiter = {
         weight: w,
+        since: Date.now(),
         admit: () => resolve(this.take(w)),
         fail: reject,
         timer: setTimeout(() => this.drop(waiter, new BusyError()), this.maxWaitMs),
       };
       waiter.timer.unref();
-      signal?.addEventListener("abort", () => this.drop(waiter, new Error("aborted")), { once: true });
+      signal?.addEventListener("abort", () => this.drop(waiter, new AbortedError()), { once: true });
       this.queue.push(waiter);
     });
   }
@@ -156,7 +174,14 @@ export function memoryReport(budgetBytes: number, machineBytes = totalmem(), hea
   };
 }
 
-const releases = new WeakMap<FastifyRequest, (() => void)[]>();
+interface Held {
+  releases: (() => void)[];
+  /** The handler's answer is built (onSend ran): what is left is writing it. */
+  built: boolean;
+  /** The client closed before the response finished. */
+  aborted: boolean;
+}
+const held = new WeakMap<FastifyRequest, Held>();
 const aborts = new WeakMap<FastifyRequest, AbortController>();
 
 function abortFor(req: FastifyRequest): AbortController {
@@ -165,10 +190,20 @@ function abortFor(req: FastifyRequest): AbortController {
   return c;
 }
 
+/** Has the client's connection gone? A handler checks this between awaits and stops building a page nobody will read. */
+export const clientGone = (req: FastifyRequest): boolean => req.raw.socket.destroyed || abortFor(req).signal.aborted;
+
+/** Throws AbortedError (499) when the client is gone. */
+export function ensureClient(req: FastifyRequest): void {
+  if (clientGone(req)) throw new AbortedError();
+}
+
 /**
- * Hold `weight` bytes of the budget until this request's response is sent (or
- * the client goes away). Throws BusyError, which the error handler answers as
- * 503 busy.
+ * Hold `weight` bytes of the budget until this request's response is sent. A
+ * client that hangs up does not free it while the handler is still building
+ * the answer: the work, and its memory, are still there, so the room is given
+ * back when the handler finishes (or at once if it already had). Throws
+ * BusyError, which the error handler answers as 503 busy.
  */
 export async function holdMemory(app: FastifyInstance, req: FastifyRequest, weight: number): Promise<void> {
   const gate = app.memoryGate;
@@ -176,41 +211,79 @@ export async function holdMemory(app: FastifyInstance, req: FastifyRequest, weig
   const controller = abortFor(req);
   const release = await gate.acquire(weight, controller.signal);
   // Gone while it waited: give the room straight back.
-  if (controller.signal.aborted) return release();
-  const list = releases.get(req) ?? [];
-  list.push(release);
-  releases.set(req, list);
+  if (controller.signal.aborted) {
+    release();
+    throw new AbortedError();
+  }
+  const state = held.get(req) ?? { releases: [], built: false, aborted: false };
+  state.releases.push(release);
+  held.set(req, state);
 }
 
 /** Bytes a page of stored blobs costs to send. */
 export const pageWeight = (storedBytes: number) => storedBytes * PAGE_FACTOR;
 
+/**
+ * What a request's body weighs on the gate, 0 for none. The declared
+ * Content-Length is the client's word, so it is never trusted past the route's
+ * body limit: a request that declares more is not weighed at all (Fastify
+ * answers it 413 without reading it), and the weight is clamped to the limit.
+ */
+export function bodyWeight(req: FastifyRequest): number {
+  if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") return 0;
+  const limit = req.routeOptions.bodyLimit ?? 0;
+  const declared = req.headers["content-length"];
+  // A chunked body has no length: weigh it as its route's limit allows.
+  const chunked = declared === undefined && /chunked/i.test(String(req.headers["transfer-encoding"] ?? ""));
+  const length = chunked ? limit : Number(declared ?? 0);
+  if (!Number.isFinite(length) || length <= SMALL_BODY_BYTES) return 0;
+  if (limit && length > limit) return 0;
+  return length * BODY_FACTOR;
+}
+
 declare module "fastify" {
   interface FastifyInstance {
     memoryGate?: MemoryGate;
+  }
+  interface FastifyContextConfig {
+    /** The route takes its body's share of the memory budget itself, after authentication (see `gateAfterAuth`). */
+    gateAfterAuth?: boolean;
   }
 }
 
 /**
  * Queue every request whose body is over SMALL_BODY_BYTES before Fastify reads
- * it, and release what each request held once its answer is out.
+ * it, and release what each request held once its answer is out. Routes with
+ * `config.gateAfterAuth` are weighed by their own preParsing hook instead, once
+ * the caller is known and has passed the rate limit.
  */
 export function registerMemoryGate(app: FastifyInstance, gate: MemoryGate): void {
   app.decorate("memoryGate", gate);
   app.addHook("onRequest", async (req) => {
-    const length = Number(req.headers["content-length"] ?? 0);
-    // A chunked body has no length: weigh it as its route's limit allows.
-    const chunked = !req.headers["content-length"] && /chunked/i.test(String(req.headers["transfer-encoding"] ?? ""));
-    const bytes = chunked ? req.routeOptions.bodyLimit ?? 0 : length;
-    if (bytes > SMALL_BODY_BYTES) await holdMemory(app, req, bytes * BODY_FACTOR);
+    if (req.routeOptions.config?.gateAfterAuth) return;
+    const weight = bodyWeight(req);
+    if (weight) await holdMemory(app, req, weight);
   });
-  const releaseAll = async (req: FastifyRequest) => {
-    for (const release of releases.get(req) ?? []) release();
-    releases.delete(req);
+  const releaseAll = (req: FastifyRequest) => {
+    for (const release of held.get(req)?.releases ?? []) release();
+    held.delete(req);
   };
-  app.addHook("onResponse", releaseAll);
+  app.addHook("onSend", async (req, _reply, payload) => {
+    const state = held.get(req);
+    if (state) {
+      state.built = true;
+      // The client already left: the answer will not be written, so nothing more holds memory.
+      if (state.aborted) releaseAll(req);
+    }
+    return payload;
+  });
+  app.addHook("onResponse", async (req) => releaseAll(req));
   app.addHook("onRequestAbort", async (req) => {
     aborts.get(req)?.abort();
-    await releaseAll(req);
+    const state = held.get(req);
+    if (!state) return;
+    state.aborted = true;
+    // Still building the answer: keep the room until the handler stops.
+    if (state.built) releaseAll(req);
   });
 }

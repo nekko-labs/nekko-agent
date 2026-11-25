@@ -1,9 +1,10 @@
-import type { ModelInfo } from '@nekko-agent/shared';
+import type { ModelInfo, SessionSummary } from '@nekko-agent/shared';
 import { computerBlock } from './ComputerChip.js';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { isArchived } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
+import { stableSelector } from '../selectStable.js';
 import { AUTO_MODEL_ID } from '@nekko-agent/shared';
 import { ModelPicker } from './agent-console/ModelPicker.js';
 import { EffortSlider } from './ChatMetrics.js';
@@ -91,9 +92,11 @@ export function AgentWindowDropdown({ anchorRef, onAdd, onClose }: AgentWindowPi
   );
 }
 
+const unarchived = stableSelector((s: { sessions: SessionSummary[] }) => s.sessions.filter((c) => !isArchived(c)));
+
 /** Detailed surface: the host owns data loading and creation. */
 export function AgentWindowPicker({ onAdd, onClose, terminal = true }: AgentWindowPickerProps & { terminal?: boolean }) {
-  const sessions = useStore((s) => s.sessions);
+  const availableSessions = useStore(unarchived);
   const terminals = useStore((s) => s.terminals);
   const providers = useStore((s) => s.providers);
   const models = useStore((s) => s.models);
@@ -142,7 +145,6 @@ export function AgentWindowPicker({ onAdd, onClose, terminal = true }: AgentWind
     return () => { if (previous?.isConnected) previous.focus({ preventScroll: true }); };
   }, []);
   const enabledProviders = useMemo(() => (runOn ? remoteProviders : providers.filter((p) => p.enabled)), [runOn, remoteProviders, providers]);
-  const availableSessions = sessions.filter((s) => !isArchived(s));
   const folders = (runOn ? catalogs[runOn]?.workspaces : settings?.workspaces) ?? [];
 
   // Defaults, so a new chat is one click: the saved default model, else the
