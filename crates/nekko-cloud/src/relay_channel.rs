@@ -216,6 +216,11 @@ impl Cloud {
         if self.relay.apply(&frame) {
             self.changed();
         }
+        // Another of this account's computers changed what it shares: the Computers list reads it again
+        // (only with the slow beat, which leaves the 15 s poll for a minute).
+        if matches!(&frame, Frame::Nudge { topic, .. } if topic == "fleet") && crate::orgs::SLOW_HEARTBEAT_ENABLED {
+            self.changed();
+        }
         match &frame {
             // Back on the channel: whatever was nudged while it was down is waiting in Nekko Cloud.
             Frame::Ready { .. } => self.pull_soon(false),

@@ -244,6 +244,7 @@ export function registerSync(app: FastifyInstance, db: Db): void {
       // needs a revision guard, and must not consume fleet capacity forever.
       await tx.query("delete from fleet_computers where device_id = $1 and user_id = $2", [id, caller.userId]);
       await tx.query("delete from org_fleet_computers where device_id = $1 and user_id = $2", [id, caller.userId]);
+      app.presence.forgetDevice(id);
       return answer(204);
     }).then((a) => sendAnswer(reply, a));
   });
@@ -282,8 +283,9 @@ export function registerSync(app: FastifyInstance, db: Db): void {
         recovery,
         proofHash(proof),
       ]);
-      // The device that made the epoch holds it.
+      // The device that made the epoch holds it; what fleet beats remembered about the old epoch is dropped.
       await markProven(tx, caller, keyId);
+      app.presence.forgetUser(caller.userId);
       for (const w of parsed) {
         const ok = (await insertWrap(tx, caller.userId, keyId, w.deviceId, w.wrap)) === "ok";
         if (!ok) throw Object.assign(new Error("unknown device"), { statusCode: 400 });
@@ -531,6 +533,7 @@ export function registerSync(app: FastifyInstance, db: Db): void {
       await tx.query("update api_tokens set device_id = null, sync_proven_key_id = null where user_id = $1", [caller.userId]);
       await tx.query("delete from sync_devices where user_id = $1", [caller.userId]);
       await tx.query("delete from sync_usage where user_id = $1", [caller.userId]);
+      app.presence.forgetUser(caller.userId);
     });
     return reply.code(204).send();
   });
