@@ -483,6 +483,14 @@ the heap limit is over 75% of the machine (the cap was lost, say a Dockerfile
 that runs `node` directly), it also logs a warning and sends the error alert.
 After a deploy or a `fly scale`, check that line in `fly logs`.
 
+**Load probe** (`npm run probe:load`, `src/dev/load-probe.ts`): the real server on
+in-memory Postgres, with concurrent pushes through a small budget, a big pull
+that the client abandons and retries, and a request declaring a huge
+`Content-Length`; it exits 1 when one fails. `node --expose-gc
+dist/dev/load-probe.js --measure` prints peak RSS for one pull page and push
+latency at 50 and 200 objects (PGlite has no network round trip, so latencies
+understate Neon's).
+
 ## Cost
 
 Fly has no spending cap or billing alert; usage past the credits is billed to
