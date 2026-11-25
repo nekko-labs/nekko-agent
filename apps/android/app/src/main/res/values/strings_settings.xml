@@ -421,13 +421,16 @@
     <string name="settings_card_counts">Counts only</string>
     <string name="settings_card_counts_detail">How many chats are running, nothing else</string>
     <string name="settings_card_minimal">Minimal</string>
-    <string name="settings_card_minimal_detail">What the chat that needs you is doing, with Stop and Deny. No chat text</string>
+    <string name="settings_card_minimal_detail">Totals of working, waiting and finished chats. No chat text</string>
     <string name="settings_card_standard">Standard</string>
-    <string name="settings_card_standard_detail">Adds the chat\'s name, its live step and Allow</string>
+    <string name="settings_card_standard_detail">The same totals as Minimal; the card draws no chat names or steps</string>
     <string name="settings_card_detailed">Detailed</string>
-    <string name="settings_card_detailed_detail">Adds the first line of the latest reply</string>
-    <string name="settings_card_footer_private">No chat text leaves your computer for the lock screen.</string>
-    <string name="settings_card_footer_text">Chat names and steps show when the phone is unlocked; a locked phone that hides sensitive content shows the Minimal words. Allow asks you to unlock first.</string>
+    <string name="settings_card_detailed_detail">The same totals as Minimal; the card draws no replies either</string>
+    <string name="settings_card_footer_none">No card. The connection notification only says how many chats are running, and on which computer.</string>
+    <string name="settings_card_footer_minimal">Totals only. No chat text is shown on the lock screen. Talking to Nekko asks you to unlock first.</string>
+    <string name="settings_card_footer_standard">On Android this card is the same as Minimal: it draws no chat names or steps.</string>
+    <string name="settings_card_footer_detailed">On Android this card is the same as Minimal: it draws no chat names, steps or replies.</string>
+    <string name="settings_card_preview">Preview of the lock screen card</string>
     <string name="settings_warn_no_restrictions" translatable="false">Warn before No restrictions</string>
     <string name="settings_warn_no_restrictions_detail" translatable="false">Explain what No restrictions lets through before a chat or a computer\'s default switches to it</string>
     <!-- Legacy translation keys, unused by permission UI. Kept until locales are retranslated. -->
