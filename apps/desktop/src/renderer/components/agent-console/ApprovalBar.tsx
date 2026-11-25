@@ -4,6 +4,7 @@ import type { ToolCall } from '@nekko-agent/shared';
 import { ShieldQuestionIcon } from '../../gentleface-icons.js';
 import { offersToolScope, type ApprovalScope } from './approval-decision.js';
 import { confirmYolo } from '../YoloWarning.js';
+import { StatusDot } from '../primitives/Badge.js';
 
 export interface PendingApproval {
   call: ToolCall;
@@ -31,7 +32,7 @@ export function needsFullTextToggle(text: string, overflowing: boolean, expanded
 }
 
 /** Keyboard decisions stay scoped to this approval surface; Y approves once. */
-export function ApprovalBar({ approval, onDecide, computerName }: { approval: PendingApproval; computerName?: string; onDecide: (ok: boolean, scope?: ApprovalScope) => Promise<void> }) {
+export function ApprovalBar({ approval, onDecide, computerName, docked = false }: { approval: PendingApproval; computerName?: string; /** In the composer column, as a card the floating plan rises above. */ docked?: boolean; onDecide: (ok: boolean, scope?: ApprovalScope) => Promise<void> }) {
   const denyRef = useRef<HTMLButtonElement>(null);
   const deciding = useRef(false);
   const codeRef = useRef<HTMLElement>(null);
@@ -82,7 +83,8 @@ export function ApprovalBar({ approval, onDecide, computerName }: { approval: Pe
   const buttonClass = 'btn h-7 px-3! py-0! text-xs! disabled:opacity-50';
   return (
     <div
-      className="slide-up border-t border-line px-5 py-3"
+      className={docked ? 'slide-up mb-2 rounded-xl px-4 py-3' : 'slide-up border-t border-line px-5 py-3'}
+      data-approval-docked={docked || undefined}
       style={{ background: 'var(--surface-2)' }}
       role="alertdialog"
       aria-label={`Approval required: ${approval.reason}`}
@@ -94,7 +96,7 @@ export function ApprovalBar({ approval, onDecide, computerName }: { approval: Pe
         <div className="min-w-0 flex-1 basis-64">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-semibold">Approval required</span>
-            <span className="rounded-full px-2 py-0.5 text-2xs font-medium text-white" style={{ background: color }}>{approval.severity}</span>
+            <span className="inline-flex items-center gap-1.5 text-2xs font-medium text-ink-soft" data-approval-severity={approval.severity}><StatusDot color={color} />{approval.severity}</span>
             <span className="text-xs text-ink-faint">{approval.reason}</span>
           </div>
           <code
