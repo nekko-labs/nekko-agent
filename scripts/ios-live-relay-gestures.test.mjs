@@ -51,7 +51,9 @@ test('the follow-up uses one celebration helper which waits for auto-dismiss bef
   assert.doesNotMatch(followUp, /pairSuccess.done/);
   assert.match(followUp, /passCelebration\(app\)\s+XCTAssertTrue\(waitOnline\(app, 30\)/);
   const celebration = body('passCelebration');
-  assert.match(celebration, /if !waitGone\(done, 6\) \{\s+done.tap\(\)\s+_ = waitGone\(done, 5\)/);
+  // Waits out the 3.4 s auto-close with room for a loaded runner, then taps
+  // only a button that is still there (#3311).
+  assert.match(celebration, /if !waitGone\(done, 12\), done\.exists \{\s+done\.tap\(\)\s+_ = waitGone\(done, 5\)/);
   const success = read('App/Views/PairSuccessView.swift');
   assert.match(success, /guard !voiceOver else \{ return \}/);
   assert.match(success, /Task.sleep\(for: .seconds\(3.4\)\)/);

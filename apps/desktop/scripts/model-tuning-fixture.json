@@ -40,10 +40,10 @@
         "totalLayers": 48,
         "verdict": "wont-load",
         "weightsBytes": 48318382080,
-        "kvCacheBytes": 25165824,
+        "kvCacheBytes": 26738688,
         "overheadBytes": 369098752,
-        "requiredBytes": 48712646656,
-        "spillBytes": 42672848896,
+        "requiredBytes": 48714219520,
+        "spillBytes": 42674421760,
         "reasons": [
           {
             "code": "weights-exceed-device",
@@ -51,7 +51,7 @@
           },
           {
             "code": "exceeds-total-memory",
-            "bytes": 48712646656
+            "bytes": 48714219520
           }
         ],
         "suggestions": [],
@@ -90,11 +90,11 @@
     "speed": {
       "request": {
         "runOn": "hybrid",
-        "contextTokens": 32768,
+        "contextTokens": 65536,
         "sessions": 1,
         "kvCacheDtype": "q8_0",
         "gpuLayers": 48,
-        "cpuMoeLayers": 40,
+        "cpuMoeLayers": 41,
         "cpuFfnLayers": 0,
         "kvOnGpu": true,
         "mmap": true,
@@ -111,8 +111,8 @@
           "otherBytes": 536870912,
           "availBytes": 8053063680,
           "model": {
-            "weightsBytes": 6979321856,
-            "kvCacheBytes": 402653184,
+            "weightsBytes": 6509559808,
+            "kvCacheBytes": 855638016,
             "overheadBytes": 671088640,
             "pinnedBytes": 0
           }
@@ -122,7 +122,7 @@
           "otherBytes": 8053063680,
           "availBytes": 24159191040,
           "model": {
-            "weightsBytes": 18790481920,
+            "weightsBytes": 19260243968,
             "kvCacheBytes": 0,
             "overheadBytes": 536870912,
             "pinnedBytes": 0
@@ -142,7 +142,7 @@
         },
         {
           "field": "How to split it",
-          "value": "Experts of 40 of 48 layers in RAM",
+          "value": "Experts of 41 of 48 layers in RAM",
           "sentence": "This model uses only a few of its experts for each word, so they can wait in system memory while the graphics card does the core work."
         },
         {
@@ -152,7 +152,7 @@
         },
         {
           "field": "Context",
-          "value": "32K per session",
+          "value": "64K per session",
           "sentence": "The most that fits beside the model. Lower it to free memory."
         },
         {
@@ -162,8 +162,8 @@
         },
         {
           "field": "Memory precision",
-          "value": "Balanced",
-          "sentence": "Stores the conversation more compactly so the context fits. The difference is rarely noticeable."
+          "value": "Standard",
+          "sentence": "Stores the conversation in half the memory of Full, and replies a little faster. The answers match Full in our tests."
         },
         {
           "field": "Keep in memory",
@@ -179,7 +179,7 @@
         "sessions": 1,
         "kvCacheDtype": "q8_0",
         "gpuLayers": 48,
-        "cpuMoeLayers": 46,
+        "cpuMoeLayers": 47,
         "cpuFfnLayers": 0,
         "kvOnGpu": true,
         "mmap": true,
@@ -196,8 +196,8 @@
           "otherBytes": 536870912,
           "availBytes": 8053063680,
           "model": {
-            "weightsBytes": 4160749568,
-            "kvCacheBytes": 3221225472,
+            "weightsBytes": 3690987520,
+            "kvCacheBytes": 3422552064,
             "overheadBytes": 671088640,
             "pinnedBytes": 0
           }
@@ -207,7 +207,7 @@
           "otherBytes": 8053063680,
           "availBytes": 24159191040,
           "model": {
-            "weightsBytes": 21609054208,
+            "weightsBytes": 22078816256,
             "kvCacheBytes": 0,
             "overheadBytes": 536870912,
             "pinnedBytes": 0
@@ -227,7 +227,7 @@
         },
         {
           "field": "How to split it",
-          "value": "Experts of 46 of 48 layers in RAM",
+          "value": "Experts of 47 of 48 layers in RAM",
           "sentence": "This model uses only a few of its experts for each word, so they can wait in system memory while the graphics card does the core work."
         },
         {
@@ -247,8 +247,8 @@
         },
         {
           "field": "Memory precision",
-          "value": "Balanced",
-          "sentence": "Stores the conversation more compactly so the context fits. The difference is rarely noticeable."
+          "value": "Standard",
+          "sentence": "Stores the conversation in half the memory of Full, and replies a little faster. The answers match Full in our tests."
         },
         {
           "field": "Keep in memory",
@@ -266,8 +266,8 @@
         "otherBytes": 536870912,
         "availBytes": 8053063680,
         "model": {
-          "weightsBytes": 6979321856,
-          "kvCacheBytes": 402653184,
+          "weightsBytes": 6509559808,
+          "kvCacheBytes": 855638016,
           "overheadBytes": 671088640,
           "pinnedBytes": 0
         }
@@ -277,7 +277,7 @@
         "otherBytes": 8053063680,
         "availBytes": 24159191040,
         "model": {
-          "weightsBytes": 18790481920,
+          "weightsBytes": 19260243968,
           "kvCacheBytes": 0,
           "overheadBytes": 536870912,
           "pinnedBytes": 0
@@ -329,24 +329,23 @@
         "totalLayers": 40,
         "verdict": "fits",
         "weightsBytes": 9019431321.6,
-        "kvCacheBytes": 5368709120,
+        "kvCacheBytes": 5704253440,
         "overheadBytes": 436207616,
-        "requiredBytes": 14824348057.6,
+        "requiredBytes": 15159892377.6,
         "spillBytes": 0,
         "reasons": [
           {
             "code": "kv-cache-dominates",
-            "bytes": 5368709120,
-            "sharePct": 36.2
+            "bytes": 5704253440,
+            "sharePct": 37.6
           }
         ],
         "suggestions": [],
         "gpuLayers": 40
       },
       "headline": "64k of context, entirely on the GPU.",
-      "tradeoff": "About 13.8 GB of VRAM, leaving 9.2 GB for everything else.",
+      "tradeoff": "About 14.1 GB of VRAM, leaving 8.9 GB for everything else.",
       "compromises": [
-        "Used a smaller KV cache element (q8_0) to keep this much context.",
         "Context is 64k rather than the model's 128k, which would not fit in this budget."
       ]
     },
@@ -396,7 +395,7 @@
           "availBytes": 24696061952,
           "model": {
             "weightsBytes": 9019431321.6,
-            "kvCacheBytes": 10737418240,
+            "kvCacheBytes": 11408506880,
             "overheadBytes": 436207616,
             "pinnedBytes": 0
           }
@@ -416,7 +415,7 @@
           "tableBytes": 0,
           "overflowBytes": 0
         },
-        "spareVramBytes": 3697698406.4000015
+        "spareVramBytes": 3026609766.4000015
       },
       "why": [
         {
@@ -436,8 +435,8 @@
         },
         {
           "field": "Memory precision",
-          "value": "Balanced",
-          "sentence": "Stores the conversation more compactly so the context fits. The difference is rarely noticeable."
+          "value": "Standard",
+          "sentence": "Stores the conversation in half the memory of Full, and replies a little faster. The answers match Full in our tests."
         },
         {
           "field": "Keep in memory",
@@ -448,11 +447,11 @@
     },
     "context": {
       "request": {
-        "runOn": "hybrid",
+        "runOn": "gpu",
         "contextTokens": 131072,
         "sessions": 1,
-        "kvCacheDtype": "f16",
-        "gpuLayers": 31,
+        "kvCacheDtype": "q8_0",
+        "gpuLayers": 40,
         "cpuMoeLayers": 0,
         "cpuFfnLayers": 0,
         "kvOnGpu": true,
@@ -462,7 +461,7 @@
         "moeCacheBytes": 0
       },
       "plan": {
-        "verdict": "tight",
+        "verdict": "fits",
         "unified": false,
         "deviceName": "Test GPU",
         "vram": {
@@ -470,8 +469,8 @@
           "otherBytes": 1073741824,
           "availBytes": 24696061952,
           "model": {
-            "weightsBytes": 6990059274.24,
-            "kvCacheBytes": 16642998272,
+            "weightsBytes": 9019431321.6,
+            "kvCacheBytes": 11408506880,
             "overheadBytes": 436207616,
             "pinnedBytes": 0
           }
@@ -481,9 +480,9 @@
           "otherBytes": 15032385536,
           "availBytes": 51539607552,
           "model": {
-            "weightsBytes": 2029372047.3600006,
-            "kvCacheBytes": 4831838208,
-            "overheadBytes": 536870912,
+            "weightsBytes": 0,
+            "kvCacheBytes": 0,
+            "overheadBytes": 0,
             "pinnedBytes": 0
           }
         },
@@ -491,18 +490,13 @@
           "tableBytes": 0,
           "overflowBytes": 0
         },
-        "spareVramBytes": 0
+        "spareVramBytes": 3026609766.4000015
       },
       "why": [
         {
           "field": "Run on",
-          "value": "Hybrid",
-          "sentence": "It is too big for graphics memory alone, so the graphics card and system memory share it."
-        },
-        {
-          "field": "How to split it",
-          "value": "31 of 40 layers on the GPU",
-          "sentence": "As many layers as fit go on the graphics card; the rest run on the processor."
+          "value": "GPU only",
+          "sentence": "The whole model fits in graphics memory, which is the fastest place to run it."
         },
         {
           "field": "Context",
@@ -516,8 +510,8 @@
         },
         {
           "field": "Memory precision",
-          "value": "Most reliable",
-          "sentence": "There is room to store the conversation exactly."
+          "value": "Standard",
+          "sentence": "Stores the conversation in half the memory of Full, and replies a little faster. The answers match Full in our tests."
         },
         {
           "field": "Keep in memory",
@@ -536,7 +530,7 @@
         "availBytes": 24696061952,
         "model": {
           "weightsBytes": 9019431321.6,
-          "kvCacheBytes": 10737418240,
+          "kvCacheBytes": 11408506880,
           "overheadBytes": 436207616,
           "pinnedBytes": 0
         }
@@ -556,7 +550,7 @@
         "tableBytes": 0,
         "overflowBytes": 0
       },
-      "spareVramBytes": 3697698406.4000015
+      "spareVramBytes": 3026609766.4000015
     }
   },
   "dense8": {
@@ -598,10 +592,10 @@
         "totalLayers": 40,
         "verdict": "spills",
         "weightsBytes": 9019431321.6,
-        "kvCacheBytes": 167772160,
+        "kvCacheBytes": 178257920,
         "overheadBytes": 310378496,
-        "requiredBytes": 9497581977.6,
-        "spillBytes": 3457784217.6000004,
+        "requiredBytes": 9508067737.6,
+        "spillBytes": 3468269977.6000004,
         "reasons": [
           {
             "code": "weights-exceed-device",
@@ -609,15 +603,15 @@
           },
           {
             "code": "partial-offload",
-            "bytes": 3457784217.6000004,
-            "sharePct": 36.4
+            "bytes": 3468269977.6000004,
+            "sharePct": 36.5
           }
         ],
         "suggestions": [],
         "gpuLayers": 24
       },
       "headline": "2k of context, 24 of 40 layers on the GPU.",
-      "tradeoff": "About 8.8 GB of VRAM, leaving 1.9 GB for everything else.",
+      "tradeoff": "About 8.9 GB of VRAM, leaving 1.9 GB for everything else.",
       "compromises": [
         "Part of the model will run on the CPU, which is much slower than the GPU."
       ]
@@ -660,7 +654,7 @@
         "kvCacheDtype": "q8_0",
         "gpuLayers": 40,
         "cpuMoeLayers": 0,
-        "cpuFfnLayers": 30,
+        "cpuFfnLayers": 31,
         "kvOnGpu": true,
         "mmap": true,
         "pin": false,
@@ -676,8 +670,8 @@
           "otherBytes": 536870912,
           "availBytes": 8053063680,
           "model": {
-            "weightsBytes": 4825395757.056,
-            "kvCacheBytes": 2684354560,
+            "weightsBytes": 4685594571.5712,
+            "kvCacheBytes": 2852126720,
             "overheadBytes": 436207616,
             "pinnedBytes": 0
           }
@@ -687,7 +681,7 @@
           "otherBytes": 8053063680,
           "availBytes": 24159191040,
           "model": {
-            "weightsBytes": 4194035564.5440006,
+            "weightsBytes": 4333836750.0288,
             "kvCacheBytes": 0,
             "overheadBytes": 536870912,
             "pinnedBytes": 0
@@ -707,7 +701,7 @@
         },
         {
           "field": "How to split it",
-          "value": "Feed-forward of 30 of 40 layers in RAM",
+          "value": "Feed-forward of 31 of 40 layers in RAM",
           "sentence": "The attention math and the context stay on the graphics card, which matters most for speed; the bulkiest part of some layers moves to system memory."
         },
         {
@@ -722,8 +716,8 @@
         },
         {
           "field": "Memory precision",
-          "value": "Balanced",
-          "sentence": "Stores the conversation more compactly so the context fits. The difference is rarely noticeable."
+          "value": "Standard",
+          "sentence": "Stores the conversation in half the memory of Full, and replies a little faster. The answers match Full in our tests."
         },
         {
           "field": "Keep in memory",
@@ -738,7 +732,7 @@
         "contextTokens": 131072,
         "sessions": 1,
         "kvCacheDtype": "q8_0",
-        "gpuLayers": 15,
+        "gpuLayers": 14,
         "cpuMoeLayers": 0,
         "cpuFfnLayers": 0,
         "kvOnGpu": true,
@@ -756,8 +750,8 @@
           "otherBytes": 536870912,
           "availBytes": 8053063680,
           "model": {
-            "weightsBytes": 3382286745.6000004,
-            "kvCacheBytes": 4026531840,
+            "weightsBytes": 3156800962.5600004,
+            "kvCacheBytes": 3992977408,
             "overheadBytes": 436207616,
             "pinnedBytes": 0
           }
@@ -767,8 +761,8 @@
           "otherBytes": 8053063680,
           "availBytes": 24159191040,
           "model": {
-            "weightsBytes": 5637144576,
-            "kvCacheBytes": 6710886400,
+            "weightsBytes": 5862630359.04,
+            "kvCacheBytes": 7415529472,
             "overheadBytes": 536870912,
             "pinnedBytes": 0
           }
@@ -787,7 +781,7 @@
         },
         {
           "field": "How to split it",
-          "value": "15 of 40 layers on the GPU",
+          "value": "14 of 40 layers on the GPU",
           "sentence": "As many layers as fit go on the graphics card; the rest run on the processor."
         },
         {
@@ -802,8 +796,8 @@
         },
         {
           "field": "Memory precision",
-          "value": "Balanced",
-          "sentence": "Stores the conversation more compactly so the context fits. The difference is rarely noticeable."
+          "value": "Standard",
+          "sentence": "Stores the conversation in half the memory of Full, and replies a little faster. The answers match Full in our tests."
         },
         {
           "field": "Keep in memory",
@@ -821,8 +815,8 @@
         "otherBytes": 536870912,
         "availBytes": 8053063680,
         "model": {
-          "weightsBytes": 4825395757.056,
-          "kvCacheBytes": 2684354560,
+          "weightsBytes": 4685594571.5712,
+          "kvCacheBytes": 2852126720,
           "overheadBytes": 436207616,
           "pinnedBytes": 0
         }
@@ -832,7 +826,7 @@
         "otherBytes": 8053063680,
         "availBytes": 24159191040,
         "model": {
-          "weightsBytes": 4194035564.5440006,
+          "weightsBytes": 4333836750.0288,
           "kvCacheBytes": 0,
           "overheadBytes": 536870912,
           "pinnedBytes": 0

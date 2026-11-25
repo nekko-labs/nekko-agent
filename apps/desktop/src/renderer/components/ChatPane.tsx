@@ -32,7 +32,7 @@ import { createPortal } from 'react-dom';
 import { DictationButton } from './DictationButton.js';
 import { voiceComposer } from '../voiceActions.js';
 import { decideApproval, type ApprovalScope } from './agent-console/approval-decision.js';
-import type { AgentEvent, AskAnswer, AskRequest, SecretRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
+import type { AgentEvent, ChatMessage, AskAnswer, AskRequest, SecretRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
 import { CHAT_MODE_LABEL, chatCodeModeSavings, privacyMode, CLAUDE_CODE_PROVIDER_KIND, canOfferSubagent, subagentModelChoice, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, claudePlanUsageNotice, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress, usageLimitResetAt } from '@nekko-agent/shared';
 import type { AutoProviderPick, BootedSimulator, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
@@ -91,6 +91,7 @@ import { SUBSCRIPTION_KINDS } from './providers/AddProvider.js';
 import { cutPrompt, messageCuts, type MessageCuts } from './agent-console/messageCut.js';
 
 import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, transcriptRowStamp, type TranscriptRow } from './agent-console/transcript.js';
+import { unsavedPrompt, withUnsavedPrompt } from './agent-console/unsavedPrompt.js';
 import { ContextGauge, EffortChipGauge, EffortSection, EffortSlider, formatContextTokens } from './ChatMetrics.js';
 import { AsksFirstMenu } from './AsksFirstMenu.js';
 import { ExpertMonitor, useExpertMode, useShown } from './ModeViews.js';
@@ -697,6 +698,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // state that is already set.
   const streamingRef = useRef(false);
   const thinkingRef = useRef(false);
+  // The prompt sent from here until its turn saves it (agent-console/unsavedPrompt.ts).
+  const [sentPrompt, setSentPrompt] = useState<ChatMessage | null>(null);
+  useEffect(() => setSentPrompt(null), [sessionId]);
   /**
    * The reply that just finished, kept on screen until its persisted copy is in
    * `session`, then cleared in the same commit, so the end of a reply never
@@ -1818,6 +1822,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     useStore.getState().pushToast('error', message.replace(/^chat:send: /, '') || 'The message could not be sent.');
     loadSession(sessionId).then((s) => { if (s) setSession(s); }).catch(() => {});
   };
+  /** The engine has a turn for this chat, heard from here or not. An unanswered check sends as before. */
+  const turnRunningHere = async () => {
+    try { return (await window.nekko.runningSessions()).includes(sessionId); }
+    catch { return false; }
+  };
   const sendDraft = async (override?: string, admitted?: () => void, wrap: (text: string) => string = (t) => t): Promise<boolean | undefined> => {
     if (remoteBlock) {
       useStore.getState().pushToast('error', `${remoteBlock}. This message wasn't sent.`);
@@ -1840,7 +1849,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     if (!text.trim() && images.length === 0 && videos.length === 0 && !skill) return false;
     // A follow-up never interrupts work by accident. Queue the same payload the
     // turn would have sent so attachments and skills run when their turn arrives.
-    if (streamingRef.current && !imageMode) {
+    // A turn this pane has heard nothing from yet counts too: a Claude Code
+    // wake-up waiting on a background sub-agent sends no events for minutes,
+    // and a prompt sent then would wait unseen behind it instead of queuing.
+    if ((streamingRef.current || await turnRunningHere()) && !imageMode) {
       if (override === undefined) await queueDraft(wrap);
       else {
         const updated = await window.nekko.queuePrompt(sessionId, queuedPayloadFor(wrap(input), images, skill, videos));
@@ -1886,30 +1898,32 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     if (override === undefined) { setDraft(''); setPendingImages([]); setPendingVideos([]); setAttachmentNotes({}); setFreshPaths([]); clearDraft(sessionId); }
     setActiveSkill(null);
     beginTurn(true);
-    setSession((prev) =>
-      prev ? {
-        ...prev,
-        messages: [...prev.messages, {
-          id: 'tmp',
-          role: 'user',
-          content: text,
-          ...(images.length ? { images } : {}),
-          ...(videos.length ? { videos } : {}),
-          ...(skill ? { skill: { name: skill.name, input } } : {}),
-          createdAt: Date.now(),
-        }],
-      } : prev,
-    );
-    admitted?.();
-    await window.nekko.sendChat({
-      sessionId,
-      providerId: brain.providerId,
-      modelId: brain.modelId,
-      text,
+    const sent: ChatMessage = {
+      id: 'tmp',
+      role: 'user',
+      content: text,
       ...(images.length ? { images } : {}),
       ...(videos.length ? { videos } : {}),
       ...(skill ? { skill: { name: skill.name, input } } : {}),
-    });
+      createdAt: Date.now(),
+    };
+    setSentPrompt(sent);
+    setSession((prev) => prev ? { ...prev, messages: [...prev.messages, sent] } : prev);
+    admitted?.();
+    try {
+      await window.nekko.sendChat({
+        sessionId,
+        providerId: brain.providerId,
+        modelId: brain.modelId,
+        text,
+        ...(images.length ? { images } : {}),
+        ...(videos.length ? { videos } : {}),
+        ...(skill ? { skill: { name: skill.name, input } } : {}),
+      });
+    } finally {
+      // The turn is over (or was refused): its prompt is saved or was never taken.
+      setSentPrompt((p) => (p === sent ? null : p));
+    }
 
     // Auto-file a project-less chat under the project it's about, inferred from
     // its attachments + first prompt, so it lands in the right sidebar group.
@@ -2707,7 +2721,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const runAnchor = streaming ? session?.activeRun?.afterMessageId : undefined;
   useEffect(() => { if (runAnchor) anchorLiveRun(sessionId, runAnchor); }, [sessionId, runAnchor]);
   const transcriptThroughId = (getLiveRun(sessionId) ?? held)?.transcriptThroughId ?? runAnchor;
-  const settled = useMemo(() => (messages && liveTurn ? transcriptBeforeLiveTurn(messages, transcriptThroughId) : messages), [messages, liveTurn, transcriptThroughId]);
+  // A sent prompt whose turn has not saved it yet stays last, even when the
+  // live turn's boundary (a wake-up's anchor, say) cuts it off.
+  const unsaved = messages ? unsavedPrompt(messages, sentPrompt) : null;
+  const settled = useMemo(() => {
+    const shown = messages && liveTurn ? transcriptBeforeLiveTurn(messages, transcriptThroughId) : messages;
+    return shown && withUnsavedPrompt(shown, unsaved);
+  }, [messages, liveTurn, transcriptThroughId, unsaved]);
   const rows = useMemo(
     () => (settled ? toTranscriptRows(settled, extractPrUrls, collectSessionPrUrls, prs) : []),
     [settled, prs],

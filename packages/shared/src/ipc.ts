@@ -85,6 +85,7 @@ export const IpcChannels = {
   engineCatalog: 'engine:catalog',
   engineCatalogModel: 'engine:catalogModel',
   engineCatalogDetail: 'engine:catalogDetail',
+  engineCatalogChecks: 'engine:catalogChecks',
   engineDownloadModel: 'engine:downloadModel',
   engineDownloadCompanions: 'engine:downloadCompanions',
   engineImageCompanions: 'engine:imageCompanions',
@@ -666,8 +667,8 @@ export interface NekkoApi {
   connectionsEvents(id: string, limit?: number): Promise<import('./connections.js').ConnectionEvent[]>;
   /** Forget every logged event. */
   connectionsClear(): Promise<import('./connections.js').ConnectionsStatus>;
-  /** Opt-in reports: queue a UI event (`screen_viewed`, `feature_used`, `error`); ignored while reports are off. */
-  telemetryCapture(event: 'screen_viewed' | 'click' | 'feature_used' | 'app_opened' | 'app_closed' | 'error', props: Record<string, string | number | boolean>): Promise<null>;
+  /** Opt-in reports: queue a UI event (`screen_viewed`, `feature_used`, `feedback_opened`, `error`); ignored while reports are off. */
+  telemetryCapture(event: 'screen_viewed' | 'click' | 'feature_used' | 'feedback_opened' | 'app_opened' | 'app_closed' | 'error', props: Record<string, string | number | boolean>): Promise<null>;
   /** Whether reports are on, whether this build has a project to send to, and how many events wait. */
   telemetryStatus(): Promise<{ enabled: boolean; configured: boolean; queued: number }>;
   /** Send feedback: the app facts the sheet may share (app, version, OS, CPU type; nothing identifying). */
@@ -831,6 +832,13 @@ export interface NekkoApi {
   engineCatalogModel(id: string): Promise<import('./engine.js').CatalogModel | null>;
   /** The same, plus the model card, for a model's own page. */
   engineCatalogDetail(id: string): Promise<import('./engine.js').CatalogModelDetail | null>;
+  /**
+   * What the engine in use makes of each build of a repo, keyed by file: the
+   * library rows' `loadCheck`, for builds not yet downloaded. Without `file` it
+   * answers from headers already known and fetches nothing; with it, that one
+   * build's header is read first (a few MB, once ever per file content).
+   */
+  engineCatalogChecks(id: string, file?: string): Promise<Record<string, import('./engine.js').ModelLoadCheck>>;
   /** Where the library looks for models, and what a scan found in each folder. */
   engineFolders(): Promise<import('./engine.js').ModelFolderReport>;
   /** Replace the folder list. The folder downloads land in is not part of it. */

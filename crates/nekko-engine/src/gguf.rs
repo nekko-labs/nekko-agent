@@ -39,6 +39,12 @@ pub struct GgufMetadata {
     pub kv_layout: Option<KvLayout>,
     /// Expert, feed-forward and lookup-table shares, when the tensor table was read.
     pub weight_layout: Option<WeightLayout>,
+    /// The highest tensor type past llama.cpp's own ([`GGML_TYPE_COUNT`]): a
+    /// fork's weight format, which stock llama.cpp refuses outright.
+    pub unknown_weight_type: Option<u32>,
+    /// The oldest llama.cpp build ([`ENGINE_REQUIREMENTS`]) that reads this file
+    /// as its maker meant, from header keys it carries.
+    pub min_engine_build: Option<u32>,
 }
 
 impl GgufMetadata {
@@ -70,6 +76,8 @@ impl GgufMetadata {
         if let Some(w) = &self.weight_layout {
             m.insert("weightLayout".into(), w.to_value());
         }
+        number(&mut m, "unknownWeightType", self.unknown_weight_type.map(f64::from));
+        number(&mut m, "minEngineBuild", self.min_engine_build.map(f64::from));
         Value::Object(m)
     }
 }
@@ -113,8 +121,68 @@ fn file_type(n: f64) -> Option<&'static str> {
         36 => "TQ1_0",
         37 => "TQ2_0",
         38 => "MXFP4",
+        // `LLAMA_FTYPE_MOSTLY_*` in llama.h (b12436; unchanged at b12470 and b12478).
+        39 => "NVFP4",
+        40 => "Q1_0",
+        41 => "Q2_0",
+        42 => "F8_E4M3",
         _ => return None,
     })
+}
+
+/// Whether a repo's quantization label (`Q4_K_M`, `BF16`) names a format stock
+/// llama.cpp knows: one of the `general.file_type` names above, which include
+/// F32, F16 and BF16. Anything else (PrismML's `PTQ1_0` and `PQ2_0`, or a label
+/// that is only a file name) may be a fork's format, so it is never offered as a
+/// build the engine can run. A repo's own spelling of a standard type (`Q4_K_XL`)
+/// is left out too: a missed offer costs less than a wrong one.
+pub fn is_stock_quant(label: &str) -> bool {
+    let upper = label.trim().to_uppercase();
+    (0..64).any(|n| file_type(f64::from(n)) == Some(upper.as_str()))
+}
+
+/// llama.cpp's `GGML_TYPE_COUNT`: it refuses a file with a tensor of any type
+/// at or past it ("invalid ggml type"). 44 in `ggml/include/ggml.h` at b12436
+/// and at b12464, b12470 and b12478, the release this app pins. Recheck it, and the sizes in [`ggml_block`],
+/// whenever the pinned llama.cpp release changes (`builds::release_pin`).
+const GGML_TYPE_COUNT: u32 = 44;
+
+/// The llama.cpp release [`GGML_TYPE_COUNT`] and the sizes in [`ggml_block`] were
+/// last checked against. A test ties it to `builds::release_pin`, so the automated
+/// pin-bump PR fails until someone rechecks both at the new release and updates this.
+pub const GGML_TYPES_CHECKED_AT: &str = "b12478";
+
+/// From this tensor type up, a type is a fork's own range and the managed engine
+/// refuses the file; between [`GGML_TYPE_COUNT`] and here it may only be a type
+/// newer than this engine knows, so the file is let through with a warning and
+/// llama.cpp decides. Upstream has added 44 types in years, so it will not reach
+/// 128 soon; the forks' on-disk types start well above it (ik_llama.cpp's lowest,
+/// Q6_0, is 133; PrismML's PQ2_0 and PTQ1_0 are 142 and 143). Its Q8_0_X4 family
+/// (97-99) never reaches a file, and would only warn.
+pub const FORK_WEIGHT_TYPE_FLOOR: u32 = 128;
+
+/// Header keys that only a llama.cpp build of at least this number reads
+/// correctly: older builds load the file without a warning and give wrong
+/// output. `(key, first build)`. PrismML's `prism.hadamard.*` keys are read from
+/// b11556 on (ggml-org/llama.cpp#29600, "model : support for Prism Bonsai 2 27B").
+const ENGINE_REQUIREMENTS: &[(&str, u32)] = &[("prism.hadamard.version", 11556)];
+
+/// The quant a file name ends with (`...-Q4_K_M`, `...-PTQ1_0`, `...-BF16`), for a
+/// header whose `general.file_type` we do not know.
+pub fn quant_from_file_name(stem: &str) -> Option<String> {
+    // A quant has underscores of its own (`Q4_K_M`), so only `-` and `.` part it from the name.
+    let upper = stem.to_uppercase();
+    upper.match_indices(['-', '.']).map(|(i, _)| &upper[i + 1..]).find(|s| is_quant(s)).map(str::to_string)
+}
+
+fn is_quant(s: &str) -> bool {
+    matches!(s, "F32" | "F16" | "BF16" | "FP16" | "FP32" | "MXFP4" | "NVFP4") || {
+        // [letters]Q<digit>[_part]*: Q4_K_M, IQ2_XS, TQ1_0, PTQ1_0.
+        let Some(q) = s.find('Q') else { return false };
+        s[..q].chars().all(|c| c.is_ascii_alphabetic())
+            && s[q + 1..].chars().next().is_some_and(|c| c.is_ascii_digit())
+            && s[q + 1..].split('_').all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_alphanumeric()))
+    }
 }
 
 /// Read a GGUF file's metadata, or `None` when it is not a readable GGUF.
@@ -137,6 +205,32 @@ pub fn read_metadata(path: &str) -> Option<GgufMetadata> {
                 Parsed::Truncated => None,
             }
         }
+    }
+}
+
+/// How much of a remote file to fetch for its header: [`FIRST_READ`] first, and
+/// up to [`MAX_HEADER_BYTES`] when [`read_metadata_prefix`] asks for more.
+pub const HEADER_FIRST_READ: usize = FIRST_READ;
+pub const HEADER_MAX_READ: usize = MAX_HEADER_BYTES;
+
+/// A header read from the first bytes of a file (fetched rather than opened).
+pub enum HeaderRead {
+    /// The header, or `None` when the bytes are not a readable GGUF.
+    Done(Option<Box<GgufMetadata>>),
+    /// The header runs past these bytes: fetch more (up to [`HEADER_MAX_READ`]).
+    NeedMore,
+}
+
+/// [`read_metadata`] over the first bytes of a file. `whole`: no more bytes will
+/// come, so a tensor table cut short leaves the layout out instead of asking.
+pub fn read_metadata_prefix(prefix: &[u8], whole: bool) -> HeaderRead {
+    if prefix.len() < 24 {
+        return HeaderRead::Done(None);
+    }
+    match parse(prefix, whole) {
+        Parsed::Done(m) => HeaderRead::Done(m),
+        Parsed::Truncated if whole => HeaderRead::Done(None),
+        Parsed::Truncated => HeaderRead::NeedMore,
     }
 }
 
@@ -223,13 +317,18 @@ fn parse(buf: &[u8], last: bool) -> Parsed {
         Err(Stop::Bad) => return Parsed::Done(None),
     };
     let mut meta = to_metadata(&kv);
-    match tensor_table(&mut r, tensors) {
-        Ok((attn, bytes)) => {
+    let mut attn = Vec::new();
+    let mut bytes = WeightBytes::default();
+    match tensor_table(&mut r, tensors, &mut attn, &mut bytes) {
+        Ok(()) => {
             meta.kv_layout = kv_layout(&kv, &arrays, &attn, tensors);
             meta.weight_layout = bytes.layout(&kv);
+            meta.unknown_weight_type = bytes.foreign;
         }
         Err(Stop::Eof) if !last => return Parsed::Truncated,
-        Err(_) => {}
+        // A table that cannot be read to its end (cut short at the most a header may take, or malformed) gives
+        // no layout, but a tensor type past llama.cpp's own that was already read is still a fact about the file.
+        Err(_) => meta.unknown_weight_type = bytes.foreign,
     }
     Parsed::Done(Some(Box::new(meta)))
 }
@@ -269,6 +368,13 @@ fn ggml_block(kind: u32) -> Option<(f64, f64)> {
         34 => (256.0, 54.0),
         35 => (256.0, 66.0),
         39 => (32.0, 17.0), // MXFP4
+        // Types 40-43, from ggml-org/llama.cpp b12436 (unchanged at b12470 and b12478): `blck_size` and `type_size` in
+        // `type_traits` (ggml/src/ggml.c), with the structs in ggml/src/ggml-common.h
+        // (`ggml_half` is 16 bits) and ggml/include/ggml.h (`ggml_fp8_e4m3_t` is one byte).
+        40 => (64.0, 36.0),  // NVFP4: QK_NVFP4 64, block_nvfp4 = 4 scale bytes + 32 of 4-bit values
+        41 => (128.0, 18.0), // Q1_0: QK1_0 128, block_q1_0 = half + 16 bytes
+        42 => (64.0, 18.0),  // Q2_0: QK2_0 64, block_q2_0 = half + 16 bytes
+        43 => (1.0, 1.0),    // F8_E4M3
         _ => return None,
     })
 }
@@ -285,10 +391,16 @@ struct WeightBytes {
     table: f64,
     /// A tensor of a type we cannot size: no shares rather than wrong ones.
     unknown_type: bool,
+    /// The highest tensor type llama.cpp itself does not know: the one that decides
+    /// whether the file is a fork's ([`FORK_WEIGHT_TYPE_FLOOR`]) or merely newer.
+    foreign: Option<u32>,
 }
 
 impl WeightBytes {
     fn add(&mut self, name: &str, shape: &[f64], kind: u32) {
+        if kind >= GGML_TYPE_COUNT && self.foreign.is_none_or(|f| kind > f) {
+            self.foreign = Some(kind);
+        }
         let Some((block, size)) = ggml_block(kind) else {
             self.unknown_type = true;
             return;
@@ -334,12 +446,10 @@ impl WeightBytes {
 /// The tensor table's attention projections (`blk.N.attn_k`, `attn_v`,
 /// `attn_qkv`), which layers are recurrent (`blk.N.ssm_*`), and the bytes of
 /// every tensor by kind.
-fn tensor_table(r: &mut Reader, count: f64) -> Result<(Vec<AttnTensor>, WeightBytes), Stop> {
+fn tensor_table(r: &mut Reader, count: f64, out: &mut Vec<AttnTensor>, bytes: &mut WeightBytes) -> Result<(), Stop> {
     if count > 1_000_000.0 {
         return Err(Stop::Bad);
     }
-    let mut out = Vec::new();
-    let mut bytes = WeightBytes::default();
     for _ in 0..count as u64 {
         let name = r.string()?;
         let dims = r.u32()?;
@@ -366,7 +476,7 @@ fn tensor_table(r: &mut Reader, count: f64) -> Result<(Vec<AttnTensor>, WeightBy
             out.push(AttnTensor { layer, kind, width });
         }
     }
-    Ok((out, bytes))
+    Ok(())
 }
 
 /// Every second or sixth layer slides where the file has a window but no
@@ -463,12 +573,18 @@ fn to_metadata(kv: &[(String, Val)]) -> GgufMetadata {
         kv_heads: num_of(kv, "attention.head_count_kv").or(heads),
         head_dim: head_dim.filter(|d| d.is_finite() && *d != 0.0),
         max_context: num_of(kv, "context_length"),
-        quantization: file_type_id
-            .map(|t| file_type(t).map_or_else(|| format!("type {}", nekko_js::number_to_string(t)), str::to_string)),
+        // A number we do not know says nothing; the library falls back to the file name.
+        quantization: file_type_id.and_then(file_type).map(str::to_string),
         parameter_size: str_of(kv, "general.size_label"),
         chat_template: str_of(kv, "tokenizer.chat_template"),
         kv_layout: None,
         weight_layout: None,
+        unknown_weight_type: None,
+        min_engine_build: ENGINE_REQUIREMENTS
+            .iter()
+            .filter(|(key, _)| kv.iter().any(|(k, _)| k == key))
+            .map(|(_, build)| *build)
+            .max(),
     }
 }
 
