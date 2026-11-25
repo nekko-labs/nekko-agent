@@ -430,6 +430,8 @@ export interface Session {
   guidance?: GuidanceLevel;
   /** How this chat's turns reach their tools: a tool list, or code mode. Unset is `list`. */
   toolApproach?: ToolApproach;
+  /** Opt this chat into coordinating work across agents. Only true enables it. */
+  orchestrate?: boolean;
   /** Offline: no tool calls, no connectors/internet (local models only). */
   offline?: boolean;
   /**

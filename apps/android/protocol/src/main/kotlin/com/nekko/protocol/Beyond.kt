@@ -27,6 +27,7 @@ data class RunOption(val key: String, val values: List<String> = emptyList()) {
             RunOption("incognito"),
             RunOption("gitIsolation"),
             RunOption("workMode", listOf("default", "better-review", "design", "best-output")),
+            RunOption("orchestrate"),
             RunOption("toolApproach", listOf("list", "code")),
             RunOption("memory", listOf("all", "project", "off")),
             RunOption("guidance", listOf("rules", "root", "off")),
@@ -37,6 +38,10 @@ data class RunOption(val key: String, val values: List<String> = emptyList()) {
         fun values(o: JsonObject?): Map<String, JsonElement> =
             all.mapNotNull { option -> o?.get(option.key)?.takeIf { it !is JsonNull }?.let { option.key to it } }.toMap()
     }
+
+    val isApproach: Boolean get() = key == "workMode" || key == "orchestrate"
+
+    fun isOn(value: JsonElement?): Boolean = value == JsonPrimitive(true)
 
     /** The choice shown: Privacy Shield's mode, `default` while the chat follows the computer. */
     fun shown(v: JsonElement?): String? =

@@ -129,7 +129,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -261,6 +260,7 @@ private val RUN_OPTION_TITLES = mapOf(
     "incognito" to "Incognito",
     "gitIsolation" to "Separate Git branch",
     "workMode" to "Work mode",
+    "orchestrate" to "Orchestrate",
     "toolApproach" to "Tool style",
     "memory" to "Memory",
     "guidance" to "Project rules",
@@ -290,7 +290,11 @@ private fun RunOptionRow(option: RunOption, value: JsonElement?, onSet: (JsonEle
     if (option.values.isEmpty()) {
         Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("run.${option.key}"), verticalAlignment = Alignment.CenterVertically) {
             Text(title, style = MaterialTheme.typography.bodyMedium, color = p.ink, modifier = Modifier.weight(1f))
-            Switch(checked = (value as? JsonPrimitive)?.booleanOrNull == true, onCheckedChange = { onSet(JsonPrimitive(it)) })
+            Switch(
+                checked = option.isOn(value),
+                onCheckedChange = { onSet(JsonPrimitive(it)) },
+                modifier = Modifier.semantics { contentDescription = title },
+            )
         }
     } else {
         val current = option.shown(value) ?: option.values.first()
@@ -463,7 +467,9 @@ fun ModelEffortSheet(
             }
             if (LocalSimple.current.shown("run-settings")) {
                 Text("Run settings", style = MaterialTheme.typography.titleSmall, color = p.ink)
-                RunOption.all.forEach { option ->
+                val (approach, otherOptions) = RunOption.all.partition { it.isApproach }
+                (otherOptions + approach).forEach { option ->
+                    if (option == approach.firstOrNull()) SectionTitle("Approach")
                     RunOptionRow(option, chat.runOptions[option.key]) { value ->
                         error = null
                         scope.launch {

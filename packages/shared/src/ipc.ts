@@ -1068,7 +1068,7 @@ export interface NekkoApi {
   specPath(sessionId: string): Promise<string | null>;
   setSessionOptions(
     id: string,
-    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'memory' | 'guidance' | 'toolApproach' | 'offline' | 'cloudOnly' | 'incognito' | 'syncOff' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'chatType' | 'imageParams' | 'archivedAt' | 'privacy' | 'turnFailure' | 'allowedMcpTools' | 'knownRecipients'>>,
+    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'memory' | 'guidance' | 'toolApproach' | 'orchestrate' | 'offline' | 'cloudOnly' | 'incognito' | 'syncOff' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'chatType' | 'imageParams' | 'archivedAt' | 'privacy' | 'turnFailure' | 'allowedMcpTools' | 'knownRecipients'>>,
     /** `chatOnly` leaves the new-chat defaults alone, for a change the app made rather than the user. */
     opts?: { chatOnly?: boolean },
   ): Promise<Session | null>;

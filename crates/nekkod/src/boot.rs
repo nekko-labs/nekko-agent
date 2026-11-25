@@ -116,6 +116,7 @@ pub fn reconcile_interrupted(store: &nekko_store::SessionStore) -> usize {
                     list.push(interrupted_reply());
                 }
             }
+            crate::orchestrate_state::interrupt_spawn(s);
             s.remove("activeRun");
             Ok(true)
         });

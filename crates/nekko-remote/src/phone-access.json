@@ -500,6 +500,7 @@
   "mode",
   "modelId",
   "offline",
+  "orchestrate",
   "order",
   "pinned",
   "privacy",
@@ -568,7 +569,8 @@
   "cloudOnly",
   "gitIsolation",
   "incognito",
-  "offline"
+  "offline",
+  "orchestrate"
  ],
  "engineKeys": [
   "autoStart",

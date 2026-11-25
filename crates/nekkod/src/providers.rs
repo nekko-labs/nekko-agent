@@ -331,12 +331,22 @@ pub async fn listed_models_fresh(ctx: &Ctx, id: &str) -> Result<Vec<nekko_agent:
 }
 
 async fn list(ctx: &Ctx, id: &str, fresh: bool) -> Result<Vec<nekko_agent::ModelInfo>, String> {
-    use nekko_agent::Provider;
     // Checked before resolving, so a disabled subscription is not refreshed either.
     let Some(saved) = find(&providers(ctx).await, id).filter(|p| is_enabled(p)).cloned() else {
         return Ok(Vec::new());
     };
-    let config = resolve(ctx, &saved).await?;
+    list_saved(ctx, &saved, id, fresh).await
+}
+
+/// List the same provider record that the caller already checked, not whatever now owns its ID.
+pub(crate) async fn list_saved(
+    ctx: &Ctx,
+    saved: &Value,
+    id: &str,
+    fresh: bool,
+) -> Result<Vec<nekko_agent::ModelInfo>, String> {
+    use nekko_agent::Provider;
+    let config = resolve(ctx, saved).await?;
     let cacheable = matches!(config.get("kind").and_then(Value::as_str), Some("anthropic" | "chatgpt"));
     let key = catalog_key(&config);
     if cacheable

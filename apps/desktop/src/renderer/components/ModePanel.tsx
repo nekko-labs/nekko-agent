@@ -87,8 +87,8 @@ export function modePanelActions({ session, isCloudModel, claudeAgent = false, o
     await window.nekko.updateSettings(patch);
     await useStore.getState().refreshSettings();
   };
-  const patchChat = async (patch: Partial<Session>) => {
-    const next = await window.nekko.setSessionOptions(session.id, patch as never);
+  const patchChat = async (patch: Parameters<typeof window.nekko.setSessionOptions>[1]) => {
+    const next = await window.nekko.setSessionOptions(session.id, patch);
     onChange(next);
     return next;
   };
@@ -139,6 +139,10 @@ export function modePanelActions({ session, isCloudModel, claudeAgent = false, o
     /** A tool list, or code mode, for this chat's turns. */
     async setToolApproach(toolApproach: ToolApproach) {
       try { await patchChat({ toolApproach }); } catch (e) { toastError(e); }
+    },
+    /** Coordinate work across agents independently of how tools are offered. */
+    async setOrchestrate(orchestrate: boolean) {
+      try { await patchChat({ orchestrate }); } catch (e) { toastError(e); }
     },
     /** Offer or withhold one MCP server's tools in this chat. It keeps running for other chats. */
     async setMcpServer(id: string, on: boolean) {
@@ -246,6 +250,7 @@ export function ModePanel({
   const execution = getExecutionMode(session);
   const sandbox = execution === 'sandbox';
   const workMode = getWorkMode(session.workMode);
+  const orchestrate = session.orchestrate === true;
   const narrow = typeof window !== 'undefined' && window.innerWidth < 720;
 
   // A flyout sits out the panel's side when there is room, else beside its row.
@@ -470,6 +475,11 @@ export function ModePanel({
 
           <section className="mode-col" aria-label="Approach">
             <p className="mode-sec"><CompassIcon /> Approach</p>
+            <div className="mode-row">
+              <span className="mode-ic"><RouteIcon /></span>
+              <span className="min-w-0 flex-1">{title('Orchestrate', 'Have this chat coordinate work across agents and review their results. Tool style and approvals stay the same.')}</span>
+              {sw(orchestrate, () => void actions.setOrchestrate(!orchestrate), 'Orchestrate')}
+            </div>
             {flyRow('skills', <SparkleIcon />, 'Skills', workMode.label, workMode.id === 'default' ? 'No extra skills. Pick a work mode to bring its skills along.' : `${workMode.description} Applies ${WORK_MODES.find((m) => m.id === workMode.id)!.skills.map((n) => `/${n}`).join(', ')}.`)}
             <div className="mode-row is-disabled" aria-disabled="true">
               <span className="mode-ic"><DocTextIcon /></span>

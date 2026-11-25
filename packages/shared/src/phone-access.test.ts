@@ -49,6 +49,7 @@ const SETTINGS = {
   skipDeleteConfirmation: false,
   automationsPaused: false,
   orchestration: { strategy: 'solo', maxDepth: 2, maxParallel: 4, delegationRoute: { providerId: 'p1', modelId: 'm1' } },
+  promptProfiles: { modelInstructions: { 'p1::m1': 'model-specific private guidance' } },
   prompts: [{ id: 'fix', name: 'fix', body: 'Find and fix the bug.' }],
   sandboxMode: 'workspace',
   providers: [{ id: 'p1', kind: 'anthropic', label: 'Claude', baseUrl: 'https://x', apiKey: 'sk-secret', tokenKey: 'tk', enabled: true }],
@@ -194,6 +195,7 @@ describe('settings from a phone', () => {
 
   it('exposes effort read-only, never as a phone-writable global setting', () => {
     expect(code(() => screenPhoneCall('settings:update', [{ effort: 'max' }]))).toBe('setting-denied');
+    expect(code(() => screenPhoneCall('settings:update', [{ promptProfiles: SETTINGS.promptProfiles }]))).toBe('setting-denied');
   });
 
   it('exposes the delegation strategy read-only', () => {
@@ -281,6 +283,9 @@ describe('chat options from a phone', () => {
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { executionMode: 'local' }]))).toBe('value-invalid');
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { workMode: 'design', autoModel: true }]))).toBe('ok');
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { autoModel: 'yes' }]))).toBe('value-invalid');
+    for (const value of [true, false, 'true', 1, null]) {
+      expect(code(() => screenPhoneCall('session:setOptions', ['s1', { orchestrate: value }]))).toBe(typeof value === 'boolean' ? 'ok' : 'value-invalid');
+    }
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { unattended: true }]))).toBe('option-denied');
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', null]))).toBe('value-invalid');
   });
