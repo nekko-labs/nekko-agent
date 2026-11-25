@@ -83,7 +83,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import com.nekko.android.computer.MachineController
 import com.nekko.android.data.Computer
 import com.nekko.android.data.ComputersRepository
@@ -131,9 +134,10 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
         )
     }
     val m by machine.state.collectAsStateWithLifecycle()
-    DisposableEffect(machine) {
-        machine.start()
-        onDispose { machine.stop() }
+    // The 30 s read runs while the screen is on show, not while the app sits in the background.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(machine, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { machine.poll() }
     }
     // Back online, or this computer just became the one in use: read it again.
     LaunchedEffect(s.conn, s.activeId) { if (s.conn == RelayState.ONLINE && s.activeId == computerId) machine.refresh() }
