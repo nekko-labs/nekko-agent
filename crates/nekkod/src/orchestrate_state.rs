@@ -342,7 +342,7 @@ impl<'a> Route<'a> {
     fn with_playbook(&self, mut instruction: String, worker: bool, settings: &Value) -> String {
         // Admission selected the exact user overlay for this route. Leave it
         // in the base prompt, once, without adding a competing book.
-        if !string(settings, "modelSystemInstructions").is_some_and(|text| !nekko_js::trim(text).is_empty()) {
+        if string(settings, "modelSystemInstructions").is_none_or(|text| nekko_js::trim(text).is_empty()) {
             instruction.push_str(&self.playbook.render(worker));
         }
         instruction
