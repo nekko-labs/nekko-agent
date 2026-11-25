@@ -76,7 +76,7 @@ For loopback testing, generate design tokens with the website build, then start 
   account sign-in alone is insufficient. `GET` lists this account's encrypted
   descriptors and 90-second presence leases; `PUT /self` publishes only the
   caller's computer with `{keyId, revision, descriptor}`; `POST /self/heartbeat`
-  renews its lease; `DELETE /self` withdraws it. Publishing/heartbeats need
+  renews its lease (held in memory, `src/presence.ts`; the database's last-seen is written when the computer comes online and hourly); `DELETE /self` withdraws it. Publishing/heartbeats need
   Pro/Enterprise; reads and withdrawal remain available after downgrade. Descriptors
   are capped at 16 KiB, with at most 100 retained advertisements per account.
   Sign-out, expiry, revocation and key rotation invalidate discovery. Desktop
@@ -329,6 +329,21 @@ rm relay-ticket.pem
 ```
 
 Set that public key on the relay as `NEKKO_RELAY_TICKET_KEY`.
+
+**Fleet presence from the relay** (optional, `src/relay-presence.ts`). With
+`NEKKO_RELAY_PRESENCE_URL` (the relay's base URL; `https`, or `http` only for
+`localhost`, `.internal` and `.flycast`, e.g. `http://nekko-relay.internal:8080`)
+and `NEKKO_RELAY_PRESENCE_SECRET` (the same value as the relay's
+`NEKKO_RELAY_PRESENCE_SECRET`) set, the fleet lists (`GET /v1/fleet`,
+`GET /v1/orgs/:id/fleet`) also report a computer online when the relay has its
+device online. The API calls `GET /presence?acct=<hash>&acct=...` with
+`authorization: Bearer <secret>` once per list read for the accounts shown
+(answers are kept 5 s), never per heartbeat. A relay that is down, slow (1.5 s)
+or answers badly changes nothing: the memory lease alone decides. Unset (or
+only one of the two set, which logs a warning) is the behaviour without it.
+```bash
+fly secrets set NEKKO_RELAY_PRESENCE_URL='http://nekko-relay.internal:8080' NEKKO_RELAY_PRESENCE_SECRET="$(openssl rand -base64 32)"
+```
 
 ## Billing: Stripe
 

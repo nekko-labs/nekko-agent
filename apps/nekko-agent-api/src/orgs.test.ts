@@ -6,6 +6,7 @@ import { issueToken } from "./auth.js";
 import type { Db } from "./db.js";
 import { MAX_DESCRIPTOR_BYTES } from "./fleet.js";
 import { migrate } from "./migrate.js";
+import { Presence } from "./presence.js";
 import { MAX_ORG_COMPUTERS, MAX_ORG_MEMBERS, MAX_ORGS_PER_USER } from "./orgs.js";
 import { buildServer } from "./server.js";
 import { pgliteDb } from "./test-db.js";
@@ -16,10 +17,13 @@ const proof = (k: number): string => vectors.epochProofs.find((p: { keyId: numbe
 const sealed = () => Buffer.concat([Buffer.from([1]), randomBytes(304)]).toString("base64url");
 let db: Db;
 let app: ReturnType<typeof buildServer>;
+/** The presence clock: tests move it instead of editing seen_at. */
+let skew = 0;
 beforeEach(async () => {
   db = pgliteDb(new PGlite());
   await migrate(db, undefined, { lock: false });
-  app = buildServer({ db, allowedOrigins: [], orgsEnabled: true });
+  skew = 0;
+  app = buildServer({ db, allowedOrigins: [], orgsEnabled: true, presence: new Presence(() => Date.now() + skew) });
 });
 afterEach(async () => { await app.close(); await db.close(); });
 
@@ -456,7 +460,7 @@ describe("organizations: computers", () => {
     expect((await fleet(owner.token, orgId))[0].you).toBe(true);
     const phone = await join(owner);
     expect((await fleet(phone.token, orgId))[0].you).toBe(false);
-    await db.query("update org_fleet_computers set seen_at = now() - interval '91 seconds'");
+    skew += 91_000;
     expect((await fleet(member.token, orgId))[0].online).toBe(false);
     expect((await call(owner.token, "POST", `/v1/orgs/${orgId}/fleet/self/heartbeat`)).statusCode).toBe(200);
     expect((await fleet(member.token, orgId))[0]).toMatchObject({ online: true, revision: 1 });
