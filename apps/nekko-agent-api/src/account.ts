@@ -259,6 +259,7 @@ export function registerAccount(
     let subject: string | null;
     try {
       subject = await deleteAccount(db, caller.userId, deletion);
+      app.presence.forgetUser(caller.userId);
     } catch (e) {
       if (e instanceof BillingTeardownFailed) {
         req.log.error({ err: e.message }, "account deletion stopped: the Stripe subscription could not be cancelled");
