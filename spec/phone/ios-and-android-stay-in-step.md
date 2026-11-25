@@ -128,3 +128,9 @@ Nothing is recorded as a true OS exclusive yet.
 | Feature | iPhone | Android | Follow-up |
 | --- | --- | --- | --- |
 | Collapsed progress notes and continuation summaries | Implemented on #2452 branch, native-unverified | Same folds (2026-11-13); the system bar hides the keyboard | None |
+
+## Performance pass (iPhone first, 2026-11-26)
+
+| Feature | iPhone | Android | Follow-up |
+| --- | --- | --- | --- |
+| Mermaid web view released when idle, disk cache pruned to 30 days and 64 MB (#3389) | Implemented, unit-tested in NekkoKit | Not implemented: the web view lives for the process and the disk cache grows | https://github.com/nekko-labs/nekko-agent/issues/3436 |

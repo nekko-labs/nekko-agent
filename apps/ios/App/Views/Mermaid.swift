@@ -267,8 +267,53 @@ final class MermaidRenderer {
     private let memory: NSCache<NSString, CachedDrawing> = {
         let c = NSCache<NSString, CachedDrawing>()
         c.countLimit = 120
+        // Bounded by pixels as well as count, as Android's is (48 MB).
+        c.totalCostLimit = 48 * 1024 * 1024
         return c
     }()
+
+    /// The web view is released when no diagram has been drawn for this long (#3389);
+    /// the next diagram makes a new one (about a second of setup, once).
+    static let idleRelease: TimeInterval = 60
+    /// The disk cache is kept within this many bytes and days.
+    static let diskBytes = 64 * 1024 * 1024
+    static let diskDays: TimeInterval = 30
+
+    private lazy var idle = IdleRelease(after: Self.idleRelease) { [weak self] in self?.teardown() }
+    private var prunedAt = 0
+    private var written = 0
+
+    private init() {
+        // A web view is the most expensive thing this holds, and the drawings are on disk.
+        NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.memory.removeAllObjects()
+                self?.idle.releaseIfIdle()
+            }
+        }
+    }
+
+    /// Delete drawings older than `diskDays`, then the oldest until the folder is within
+    /// `diskBytes`. Runs off the main actor.
+    private func pruneDisk() {
+        let folder = Self.folder
+        Task.detached(priority: .utility) {
+            let keys: [URLResourceKey] = [.fileSizeKey, .contentModificationDateKey]
+            guard let urls = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: keys) else { return }
+            let files = urls.compactMap { url -> CachePruner.File? in
+                guard let v = try? url.resourceValues(forKeys: Set(keys)) else { return nil }
+                return CachePruner.File(name: url.lastPathComponent, bytes: v.fileSize ?? 0, modified: v.contentModificationDate ?? .distantPast)
+            }
+            for name in CachePruner.plan(files, maxBytes: Self.diskBytes, maxAge: Self.diskDays * 86_400, now: Date()) {
+                try? FileManager.default.removeItem(at: folder.appendingPathComponent(name))
+            }
+        }
+    }
+
+    private static func cost(_ d: Drawing) -> Int {
+        let image = d.image
+        return Int(image.size.width * image.scale * image.size.height * image.scale * 4) + d.svg.utf8.count
+    }
 
     private final class CachedDrawing {
         let drawing: Drawing
@@ -296,7 +341,7 @@ final class MermaidRenderer {
         let k = key(source, dark, width, scale)
         if let hit = memory.object(forKey: k as NSString) { return hit.drawing }
         guard let d = await Self.readDisk(k, scale: scale) else { return nil }
-        memory.setObject(CachedDrawing(d), forKey: k as NSString)
+        memory.setObject(CachedDrawing(d), forKey: k as NSString, cost: Self.cost(d))
         return d
     }
 
@@ -312,6 +357,9 @@ final class MermaidRenderer {
     /// diagram scrolled away) drops its job before it renders, so the queue only
     /// draws what is still wanted.
     func draw(source: String, dark: Bool, width: Int, scale: CGFloat) async -> Result<Drawing, Failure> {
+        if prunedAt == 0 { prunedAt = 1; pruneDisk() }
+        idle.begin()
+        defer { idle.end() }
         if let hit = await cached(source: source, dark: dark, width: width, scale: scale) { return .success(hit) }
         let previous = tail
         let job = Task { @MainActor () -> Result<Drawing, Failure> in
@@ -354,7 +402,9 @@ final class MermaidRenderer {
                   let image = UIImage(data: data, scale: scale) else { return .failure(.unavailable("no image")) }
             let drawing = Drawing(image: image, svg: svg)
             let k = key(source, dark, width, scale)
-            memory.setObject(CachedDrawing(drawing), forKey: k as NSString)
+            memory.setObject(CachedDrawing(drawing), forKey: k as NSString, cost: Self.cost(drawing))
+            written += 1
+            if written % 25 == 0 { pruneDisk() }
             try? data.write(to: Self.folder.appendingPathComponent(k + ".png"), options: .atomic)
             try? svg.write(to: Self.folder.appendingPathComponent(k + ".svg"), atomically: true, encoding: .utf8)
             timings.append(Date().timeIntervalSince(started) * 1000)
@@ -369,6 +419,7 @@ final class MermaidRenderer {
     }
 
     private func teardown() {
+        starting?.cancel()
         web?.stopLoading()
         web?.removeFromSuperview()
         web = nil
@@ -376,6 +427,8 @@ final class MermaidRenderer {
 
     /// For the Debug fixture screen: whether the renderer's page can reach the network (it must not).
     func networkProbe() async -> String {
+        idle.begin()
+        defer { idle.end() }
         guard let web = try? await webView() else { return "renderer unavailable" }
         let js = "try { await fetch('https://example.com/', { cache: 'no-store' }); return 'reached'; } catch (e) { return 'blocked'; }"
         let r = try? await web.callAsyncJavaScript(js, arguments: [:], in: nil, contentWorld: .page)
