@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   FEEDBACK_MAX_CHARS, FEEDBACK_SCREENSHOT_MAX_BYTES, agentPrompt, appInfoLine, feedbackNote, feedbackNoteLength,
-  feedbackScreenshotProblem, feedbackScreenshotType, feedbackContactProblem,
+  feedbackScreenshotProblem, feedbackScreenshotType, feedbackContactProblem, includeContactLabel, savedFeedbackContact, sentFeedbackContact,
 } from './feedback.js';
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -77,5 +77,29 @@ describe('optional feedback contact', () => {
     const contact = { name: '🐈 Ada', email: 'ada@example.com' };
     expect(feedbackNoteLength('good', 'Hi', 'There', contact)).toBe([...feedbackNote('good', 'Hi', 'There', contact)].length);
     expect(feedbackNoteLength('good', '', '', contact)).toBeGreaterThan(0);
+  });
+});
+
+describe('contact details from About you', () => {
+  it('starts from the saved name and email, trimmed, or blank', () => {
+    expect(savedFeedbackContact({ userName: ' Ada ', userEmail: 'ada@example.com ' })).toEqual({ name: 'Ada', email: 'ada@example.com' });
+    expect(savedFeedbackContact({})).toEqual({ name: '', email: '' });
+    expect(savedFeedbackContact(null)).toEqual({ name: '', email: '' });
+  });
+
+  it('offers to include only what is filled in', () => {
+    expect(includeContactLabel({ name: 'Ada', email: 'ada@example.com' })).toBe('Include my name and email');
+    expect(includeContactLabel({ name: 'Ada', email: ' ' })).toBe('Include my name');
+    expect(includeContactLabel({ email: 'ada@example.com' })).toBe('Include my email');
+    expect(includeContactLabel({ name: '', email: '' })).toBeNull();
+  });
+
+  it('leaves them out of the note when switched off', () => {
+    const contact = { name: 'Ada', email: 'ada@example.com' };
+    expect(feedbackNote('improve', 'S', 'D', sentFeedbackContact(contact, true))).toContain('ada@example.com');
+    const without = feedbackNote('improve', 'S', 'D', sentFeedbackContact(contact, false));
+    expect(without).toBe('Needs improvement: S\n\nD');
+    // Switched off, a bad email no longer blocks sending.
+    expect(feedbackContactProblem(sentFeedbackContact({ email: 'nope' }, false))).toBeNull();
   });
 });

@@ -45,6 +45,7 @@ Each event carries:
 | `screen_viewed` | UI, when the main view changes | the view's name (`models`, `settings`…) |
 | `click` | UI, on any click | `screen`, `control`: the nearest control's `data-testid` or `aria-label`, only when it is fixed text in the source (`apps/desktop/src/renderer/clickLabels.json`, made by `apps/desktop/scripts/click-labels.mjs`; a test fails while it is stale). A label built from a file, chat or person's name is never in the list, so that click is not reported. Controls with neither attribute are not reported |
 | `feature_used` | UI | `feature` |
+| `feedback_opened` `[added 2026-11-25, #3322; unit-tested and checked in a hidden renderer, not yet seen arriving in PostHog]` | UI, each time the Send feedback sheet opens | `source`: `rail`, `palette`, `about`, `menu` (macOS Help), `tray`, or `link` (`nekko-agent://feedback` from outside the app). The menu and tray send the link with `?from=menu` / `?from=tray`. Never the note, its kind or contact details. Philip asked to see how often people reach for feedback; the rail's `click` (`rail-feedback`) covers only one of the six ways in |
 | `error` | engine panics, uncaught UI errors and Electron main crashes | source, message (class and first line only), stack (frame names only) |
 
 - The engine accepts only these events and properties; anything else is dropped. The UI cannot send `app_started`, `turn_started`, `voice_used` or `runner_job` (`ENGINE_ONLY`).
