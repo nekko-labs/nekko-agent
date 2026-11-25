@@ -76,3 +76,39 @@ export const MEMORY_BUDGETS = [
   { id: 'nodes_per_lap', label: 'DOM nodes kept per lap of chat switches, after warm-up', unit: 'nodes', budget: 50, measure: (m) => m.leak.nodesPerLap },
   { id: 'listeners_per_lap', label: 'Event listeners kept per lap of chat switches, after warm-up', unit: 'listeners', budget: 20, measure: (m) => m.leak.listenersPerLap },
 ];
+
+/**
+ * Report-only probes: measured on every run and printed in the CI summary, but
+ * with no budget, so they cannot fail a run (a row here has no `budget`, `ci` or
+ * `target`, and a test holds that). Added 2026-11-26 (#3374) to measure the
+ * renderer and daemon optimizations that follow it. A probe becomes a budget
+ * only through the recalibration rule above: from real runner samples, with
+ * Philip's approval, in its own entry in docs/perf-history.md.
+ *
+ * `probe` is the phase that produces it (`--only <probe>`), `measure` reads the
+ * figure from that phase's result, `digits` is how many decimals to print.
+ */
+const p95 = (xs) => (xs?.length ? [...xs].sort((a, b) => a - b)[Math.max(1, Math.ceil(0.95 * xs.length)) - 1] : null);
+const med = (xs) => (xs?.length ? [...xs].sort((a, b) => a - b)[Math.floor((xs.length - 1) / 2)] : null);
+export const REPORT_ONLY_PROBES = [
+  { id: 'long_stream_frame_p50', probe: 'long', label: 'Main-thread work per frame, 16 KB mixed-markdown reply streaming at 300 tokens/s: p50', unit: 'ms', digits: 2, measure: (m) => med(m.work) },
+  { id: 'long_stream_frame_p95', probe: 'long', label: 'Main-thread work per frame, 16 KB reply streaming: p95', unit: 'ms', digits: 2, measure: (m) => p95(m.work) },
+  { id: 'long_stream_frame_p95_last_third', probe: 'long', label: 'Main-thread work per frame, 16 KB reply streaming: p95 of the last third of the frames (the longest reply)', unit: 'ms', digits: 2, measure: (m) => p95(m.lastThird) },
+  { id: 'concurrent_frame_p50', probe: 'concurrent', label: 'Main-thread work per frame in chat A (streaming) while chat B finishes turns: p50', unit: 'ms', digits: 2, measure: (m) => med(m.work) },
+  { id: 'concurrent_frame_p95', probe: 'concurrent', label: 'Main-thread work per frame in chat A (streaming) while chat B finishes turns: p95', unit: 'ms', digits: 2, measure: (m) => p95(m.work) },
+  { id: 'concurrent_frame_max', probe: 'concurrent', label: 'Main-thread work per frame in chat A (streaming) while chat B finishes turns: worst frame', unit: 'ms', digits: 2, measure: (m) => (m.work?.length ? Math.max(...m.work) : null) },
+  { id: 'startup_fcp_p50', probe: 'startup', label: 'Cold profile: first contentful paint, median of the loads', unit: 'ms', digits: 0, measure: (m) => m.fcp.p50 },
+  { id: 'startup_interactive_p50', probe: 'startup', label: 'Cold profile: main view interactive (rail and a board window on screen, a frame and a task later), median', unit: 'ms', digits: 0, measure: (m) => m.interactive.p50 },
+  { id: 'startup_interactive_max', probe: 'startup', label: 'Cold profile: main view interactive, slowest load', unit: 'ms', digits: 0, measure: (m) => m.interactive.max },
+  { id: 'renderer_js_bytes', probe: 'startup', label: 'Renderer production build: total JavaScript, raw', unit: 'KiB', digits: 0, measure: (m) => (m.build ? m.build.totalBytes / 1024 : null) },
+  { id: 'renderer_js_gzip_bytes', probe: 'startup', label: 'Renderer production build: total JavaScript, gzip', unit: 'KiB', digits: 0, measure: (m) => (m.build ? m.build.totalGzipBytes / 1024 : null) },
+  { id: 'renderer_js_loaded_bytes', probe: 'startup', label: 'Renderer JavaScript loaded by the time the main view is interactive, raw', unit: 'KiB', digits: 0, measure: (m) => m.loadedJsBytes / 1024 },
+  { id: 'renderer_js_chunks', probe: 'startup', label: 'Renderer production build: JavaScript chunks', unit: 'chunks', digits: 0, measure: (m) => m.build?.count ?? null },
+  { id: 'idle_hidden_renderer_main', probe: 'idle', label: 'Idle CPU, window hidden, no agent: renderer main thread', unit: '% of a core', digits: 2, measure: (m) => m.noAgent.rendererMainPct },
+  { id: 'idle_hidden_renderer_all', probe: 'idle', label: 'Idle CPU, window hidden, no agent: all renderer processes', unit: '% of a core', digits: 2, measure: (m) => m.noAgent.rendererProcessesPct },
+  { id: 'idle_hidden_agent_renderer_main', probe: 'idle', label: 'Idle CPU, window hidden, one agent running: renderer main thread', unit: '% of a core', digits: 2, measure: (m) => m.agent.rendererMainPct },
+  { id: 'idle_hidden_agent_renderer_all', probe: 'idle', label: 'Idle CPU, window hidden, one agent running: all renderer processes', unit: '% of a core', digits: 2, measure: (m) => m.agent.rendererProcessesPct },
+  { id: 'idle_hidden_agent_gpu', probe: 'idle', label: 'Idle CPU, window hidden, one agent running: GPU process', unit: '% of a core', digits: 2, measure: (m) => m.agent.gpuPct },
+  { id: 'idle_hidden_agent_browser', probe: 'idle', label: 'Idle CPU, window hidden, one agent running: browser process', unit: '% of a core', digits: 2, measure: (m) => m.agent.browserPct },
+  { id: 'idle_hidden_agent_server', probe: 'idle', label: 'Idle CPU, window hidden, one agent running: Local Web UI server and nekkod (stands in for the main process)', unit: '% of a core', digits: 2, measure: (m) => m.agent.serverPct },
+];
