@@ -8,6 +8,42 @@ export interface ModelFamily {
   catalog: CatalogModel[];
 }
 
+export type ModelSort = 'recent' | 'name' | 'size';
+
+export const MODEL_SORT_LABELS: Record<ModelSort, string> = {
+  recent: 'Recent',
+  name: 'Name',
+  size: 'Size',
+};
+
+/** The timestamp of the newest installed variant in a family. */
+export function familyAddedAt(family: Pick<ModelFamily, 'local'>): number {
+  return family.local.reduce((latest, model) => Math.max(latest, model.addedAt || 0), 0);
+}
+
+/** The bytes occupied by all installed variants in a family. */
+export function familySizeBytes(family: Pick<ModelFamily, 'local'>): number {
+  return family.local.reduce((total, model) => total + (model.sizeBytes || 0), 0);
+}
+
+/** Installed variants in a stable order, with the newest model first by default. */
+export function sortLibraryModels<T extends Pick<LibraryModel, 'id' | 'name' | 'sizeBytes' | 'addedAt'>>(models: readonly T[], sort: ModelSort = 'recent'): T[] {
+  return [...models].sort((a, b) => {
+    const order = sort === 'recent' ? (b.addedAt || 0) - (a.addedAt || 0)
+      : sort === 'size' ? (b.sizeBytes || 0) - (a.sizeBytes || 0) : 0;
+    return order || a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
+  });
+}
+
+/** Families use the same sort labels as their installed variants. */
+export function sortModelFamilies<T extends Pick<ModelFamily, 'name' | 'local'>>(families: readonly T[], sort: ModelSort = 'recent'): T[] {
+  return [...families].sort((a, b) => {
+    if (sort === 'recent') return familyAddedAt(b) - familyAddedAt(a) || a.name.localeCompare(b.name);
+    if (sort === 'size') return familySizeBytes(b) - familySizeBytes(a) || a.name.localeCompare(b.name);
+    return a.name.localeCompare(b.name);
+  });
+}
+
 export function modelFamilyName(value: string): string {
   return value.split('/').pop()!
     .replace(/\.gguf$/i, '')

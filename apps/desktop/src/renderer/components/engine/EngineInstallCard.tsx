@@ -1,5 +1,5 @@
 import { useDownloadAction } from './useDownloadAction.js';
-import { DownloadProgress } from './DownloadProgress.js';
+import { EngineUpdateStatus } from './EngineUpdateStatus.js';
 import { useState } from 'react';
 import { ENGINE_BACKEND_LABELS, type EngineInstall } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
@@ -88,7 +88,6 @@ export function EngineInstallCard({
               I already have llama.cpp
             </button>
           </div>
-          {busy && <DownloadProgress group={download.group} />}
           <p className="mt-2 text-2xs text-ink-faint">
             From llama.cpp's own GitHub releases: tens of megabytes for Vulkan or CPU, several hundred for CUDA.
             Nothing is downloaded until you press the button.
@@ -122,6 +121,7 @@ export function EngineInstallCard({
           </p>
         </div>
       )}
+      <EngineUpdateStatus download={download} onChanged={onChanged} />
     </div>
   );
 }
