@@ -3,6 +3,7 @@ import { computerIdOf } from '@nekko-agent/shared';
 import { ComputerChip } from './ComputerChip.js';
 import { syncedComputer } from '../syncedComputers.js';
 import { terminalExcerpt } from './terminalExcerpt.js';
+import { startExcerptPoll } from './terminalExcerptPoll.js';
 import { HOME, applyWallDrop, heldSize, sameTarget, wallDropTargetAt, type Rect, type WallDropTarget } from '../wallDrag.js';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -82,18 +83,33 @@ export function browserLabel(url: string): string {
   try { const u = new URL(url); return u.host || 'Browser'; } catch { return 'Browser'; }
 }
 
+/** A card shows two lines: the last 8 KB of output holds them. */
+const EXCERPT_BYTES = 8 * 1024;
+
+/**
+ * A card's last lines of a terminal. Reads only the tail of the output
+ * (`EXCERPT_BYTES`, not the whole scrollback), and only while the card is on
+ * screen, the window is shown and the terminal runs: a card scrolled away or
+ * hidden, or a terminal that exited, makes no request at all.
+ */
 export function TerminalExcerpt({ terminalId }: { terminalId: string }) {
   const [text, setText] = useState('Reading terminal output…');
+  const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     let disposed = false;
-    const refresh = () => { void window.nekko.terminalSnapshot(terminalId).then(snap => {
-      if (!disposed) setText(terminalExcerpt(snap?.buffer ?? ''));
-    }).catch(() => { if (!disposed) setText('Terminal output unavailable'); }); };
-    refresh();
-    const timer = setInterval(refresh, 3000);
-    return () => { disposed = true; clearInterval(timer); };
+    return (() => {
+      const stop = startExcerptPoll({
+        element: ref.current,
+        read: () => window.nekko.terminalSnapshot(terminalId, { maxBytes: EXCERPT_BYTES }).then((snap) => {
+          if (!disposed) setText(terminalExcerpt(snap?.buffer ?? ''));
+          return !snap || snap.info.running === false;
+        }, () => { if (!disposed) setText('Terminal output unavailable'); return false; }),
+        onExit: (exited) => window.nekko.onTerminalEvent((e) => { if (e.type === 'exit' && e.terminalId === terminalId) exited(); }),
+      });
+      return () => { disposed = true; stop(); };
+    })();
   }, [terminalId]);
-  return <span className="font-mono whitespace-pre-wrap">{text}</span>;
+  return <span ref={ref} className="font-mono whitespace-pre-wrap">{text}</span>;
 }
 
 /**
