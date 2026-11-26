@@ -40,7 +40,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock, RwLock};
 use std::time::Duration;
 use store::{Link, RunnerRecord, Store, same_scope, same_target};
-use supervisor::{Ask, RunnerState, RunnerView, Supervisor, TICK};
+use supervisor::{Ask, RunnerState, RunnerView, SlotState, Supervisor, TICK};
 use vm::HelperVm;
 use vm::Vm;
 
@@ -118,6 +118,18 @@ pub struct Runners<S: Sense = HostSense, V: Vm = HelperVm, P: Provider = ByLink<
     linux_image: OnceLock<Arc<linux_image::LinuxImageJob>>,
     /// The Mac as of the last tick, for the image builder's gates.
     mac: Arc<std::sync::Mutex<Option<signals::MacState>>>,
+}
+
+fn fleet_row(v: &RunnerView) -> nekko_cloud::RunnerSummary {
+    let busy = v.slots.iter().filter(|s| matches!(s.state, SlotState::Running | SlotState::Draining)).count();
+    let busy = u8::try_from(busy).unwrap_or(u8::MAX);
+    nekko_cloud::RunnerSummary {
+        label: v.config.label.clone(),
+        state: serde_json::to_value(v.state).ok().and_then(|s| s.as_str().map(str::to_string)).unwrap_or_default(),
+        busy,
+        // A busy VM still holds its slot, so it counts in what this runner has.
+        slots: v.available.saturating_add(v.linux_available).max(busy),
+    }
 }
 
 /// The last `max` bytes of `text`, from the start of a line.
@@ -506,6 +518,12 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
         let view = id.map_or(Value::Null, |id| json!(views.iter().find(|v| v.config.id == id)));
         self.publish(views);
         Ok(view)
+    }
+
+    /// What this Mac's runners tell its organizations (decision 0064): label,
+    /// state and how many VMs are busy out of those it may run now.
+    pub fn fleet_summary(&self) -> Vec<nekko_cloud::RunnerSummary> {
+        self.views.lock().map(|v| v.iter().map(fleet_row).collect()).unwrap_or_default()
     }
 
     pub async fn route(&self, channel: &str, args: &[Value]) -> Result<Value, String> {

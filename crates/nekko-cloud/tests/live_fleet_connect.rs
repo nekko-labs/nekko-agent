@@ -63,6 +63,7 @@ fn device(url: &str, label: &str) -> Device {
             Box::pin(async move { vec![m] })
         }),
         connect: Some(Arc::new(move || c.lock().unwrap().clone())),
+        runners: None,
     });
     Device { cloud, connect, _dir: dir }
 }
