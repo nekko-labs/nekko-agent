@@ -2,44 +2,83 @@ import Foundation
 import XCTest
 @testable import NekkoKit
 
+/// A clock the test moves by hand: a timer's sleep returns only after `fire()`, or
+/// at once when its task is cancelled (as `Task.sleep` does). Nothing here depends
+/// on how fast the machine is (#3441: the wall-clock version flaked on CI Macs).
+@MainActor
+final class ManualClock {
+    /// Timers waiting on this clock right now.
+    private(set) var sleepers = 0
+    private var ticks = 0
+
+    func sleep(_ nanoseconds: UInt64) async {
+        let started = ticks
+        sleepers += 1
+        defer { sleepers -= 1 }
+        while ticks == started, !Task.isCancelled {
+            try? await Task.sleep(nanoseconds: 1_000_000)
+        }
+    }
+
+    /// Every timer waiting now runs out.
+    func fire() { ticks += 1 }
+}
+
 @MainActor
 final class IdleReleaseTests: XCTestCase {
-    func testReleasesAfterTheLastUseEndsAndIdleTimePasses() async throws {
-        var released = 0
-        let idle = IdleRelease(after: 0.05) { released += 1 }
-        idle.begin()
-        try await Task.sleep(nanoseconds: 150_000_000)
-        XCTAssertEqual(released, 0, "never while in use")
-        idle.end()
-        try await Task.sleep(nanoseconds: 30_000_000)
-        XCTAssertEqual(released, 0, "not before the idle time")
-        try await Task.sleep(nanoseconds: 200_000_000)
-        XCTAssertEqual(released, 1)
+    /// Waits up to five seconds for something the main actor is about to do.
+    private func eventually(_ what: String, _ condition: () -> Bool) async {
+        let deadline = Date().addingTimeInterval(5)
+        while !condition(), Date() < deadline {
+            try? await Task.sleep(nanoseconds: 1_000_000)
+        }
+        XCTAssertTrue(condition(), what)
     }
 
-    func testANewUseRestartsTheClock() async throws {
+    func testReleasesAfterTheLastUseEndsAndIdleTimePasses() async {
+        let clock = ManualClock()
         var released = 0
-        let idle = IdleRelease(after: 0.1) { released += 1 }
-        idle.begin(); idle.end()
-        try await Task.sleep(nanoseconds: 60_000_000)
+        let idle = IdleRelease(after: 60, sleep: { await clock.sleep($0) }) { released += 1 }
         idle.begin()
-        try await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(clock.sleepers, 0, "no idle clock while in use")
+        idle.end()
+        await eventually("the idle clock starts when the use ends") { clock.sleepers == 1 }
+        XCTAssertEqual(released, 0, "not before the idle time")
+        clock.fire()
+        await eventually("released once the idle time passes") { released == 1 }
+        XCTAssertEqual(idle.releases, 1)
+    }
+
+    func testANewUseRestartsTheClock() async {
+        let clock = ManualClock()
+        var released = 0
+        let idle = IdleRelease(after: 60, sleep: { await clock.sleep($0) }) { released += 1 }
+        idle.begin(); idle.end()
+        await eventually("the idle clock starts") { clock.sleepers == 1 }
+        idle.begin()
+        await eventually("a new use stops the clock") { clock.sleepers == 0 }
+        clock.fire()
         XCTAssertEqual(released, 0)
         idle.end()
-        try await Task.sleep(nanoseconds: 300_000_000)
-        XCTAssertEqual(released, 1)
+        await eventually("the clock starts again when that use ends") { clock.sleepers == 1 }
+        XCTAssertEqual(released, 0)
+        clock.fire()
+        await eventually("released once, after the last use") { released == 1 }
+        XCTAssertEqual(idle.releases, 1)
     }
 
-    func testOverlappingUsesWaitForTheLastOne() async throws {
+    func testOverlappingUsesWaitForTheLastOne() async {
+        let clock = ManualClock()
         var released = 0
-        let idle = IdleRelease(after: 0.03) { released += 1 }
+        let idle = IdleRelease(after: 60, sleep: { await clock.sleep($0) }) { released += 1 }
         idle.begin(); idle.begin()
         idle.end()
-        try await Task.sleep(nanoseconds: 150_000_000)
-        XCTAssertEqual(released, 0)
+        XCTAssertEqual(clock.sleepers, 0, "one use is still open")
         idle.end()
-        try await Task.sleep(nanoseconds: 200_000_000)
-        XCTAssertEqual(released, 1)
+        await eventually("the clock starts after the last use") { clock.sleepers == 1 }
+        XCTAssertEqual(released, 0)
+        clock.fire()
+        await eventually("released after the last use") { released == 1 }
     }
 
     func testReleaseIfIdleSkipsABusyResource() {

@@ -7,15 +7,25 @@ import Foundation
 /// diagram does not keep a WebKit process alive for the life of the app.
 @MainActor
 public final class IdleRelease {
+    /// Waits out the idle time. Real use sleeps; tests pass a clock they move by hand,
+    /// so a busy CI machine can never make the timer fire early or late.
+    public typealias Sleep = @MainActor (_ nanoseconds: UInt64) async -> Void
+
     private let after: TimeInterval
+    private let sleep: Sleep
     private let release: @MainActor () -> Void
     private var users = 0
     private var timer: Task<Void, Never>?
     /// How many times `release` has run (tests read it).
     public private(set) var releases = 0
 
-    public init(after: TimeInterval, release: @escaping @MainActor () -> Void) {
+    public init(
+        after: TimeInterval,
+        sleep: @escaping Sleep = { nanoseconds in _ = try? await Task.sleep(nanoseconds: nanoseconds) },
+        release: @escaping @MainActor () -> Void
+    ) {
         self.after = after
+        self.sleep = sleep
         self.release = release
     }
 
@@ -38,7 +48,8 @@ public final class IdleRelease {
         timer?.cancel()
         let nanos = UInt64(max(0, after) * 1_000_000_000)
         timer = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: nanos)
+            guard let wait = self?.sleep else { return }
+            await wait(nanos)
             guard let self, !Task.isCancelled, self.users == 0 else { return }
             self.timer = nil
             self.releases += 1
