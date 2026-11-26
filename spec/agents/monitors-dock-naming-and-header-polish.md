@@ -78,3 +78,14 @@ User intent (Philip): nothing in a monitor wears a button box; the header's mini
 
 Not verified: packaged app, native window chrome, real runner and provider data (the fixture is synthetic).
 
+
+## Height resize above and below the wall (2026-11-26)
+
+User intent (Philip): when the monitors dock sits at the top or bottom, it gets the same kind of resize bar the side positions have, to make it taller or shorter.
+
+- **Edge handle** `[implemented; unit-tested; renderer-verified in an isolated fixture]`. Docked at the top or bottom, the dock's edge facing the wall is a horizontal handle: the same thin accent grip as the side handle, shown on hover, focus or drag, with a row-resize cursor. Dragging it moves the dock's ceiling. Left and right docks keep their width handle; there is only ever one.
+- **Limits.** The dock stays as tall as its monitors, up to the dragged height, so a short dock never gains empty space. The default ceiling is 360px (unchanged), the smallest is 120px, and it grows only until every monitor in the row shows its whole body, leaving the wall at least 240px. A drag within 20px of 360px snaps to it.
+- **Keyboard and reset.** The handle is a focusable separator: Arrow Up and Down move the edge 24px in the direction they point, Home or a double-click returns to 360px.
+- **Not saved.** Like the side width, the height is local to the mounted view and resets when the dock remounts. Narrow layouts (under 768px) keep their fixed height and show no handle.
+
+Not verified: packaged app, native window chrome, real provider data (the fixture is synthetic).

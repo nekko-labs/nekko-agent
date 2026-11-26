@@ -29,7 +29,17 @@ pub const CHANNELS: &[&str] = &[
     "computers:createSession",
     "computers:stats",
     "computers:connectFleet",
+    // Pairing a computer found on this network (pair_lobby.rs).
+    "computers:nearby",
+    "computers:lobbyOpen",
+    "computers:lobbyAnswer",
+    "computers:lobbyClose",
+    "computers:lobbyJoin",
 ];
+
+/// A pairing lobby's news for the window: `asking` (name, code) on the host,
+/// `closed` (paired, error) on either side.
+pub const LOBBY: &str = "computers:lobby";
 
 /// The event a window refreshes on: a link's state changed, or the list did.
 pub const UPDATED: &str = "computers:updated";
@@ -127,6 +137,15 @@ pub struct Computers {
     tunnel: std::sync::OnceLock<(u16, Arc<str>)>,
     /// Nekko Cloud, for computers of this account found in an org's fleet.
     cloud: std::sync::OnceLock<Arc<nekko_cloud::Cloud>>,
+    /// The pairing lobby this computer has open, if any: one at a time.
+    lobby: Mutex<Option<HostLobby>>,
+}
+
+struct HostLobby {
+    id: String,
+    /// The owner's Pair or Don't pair, while the host is asking.
+    answer: Option<tokio::sync::oneshot::Sender<bool>>,
+    stop: Arc<tokio::sync::Notify>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -243,6 +262,7 @@ impl Computers {
             ctx: std::sync::OnceLock::new(),
             tunnel: std::sync::OnceLock::new(),
             cloud: std::sync::OnceLock::new(),
+            lobby: Mutex::default(),
         })
     }
 
@@ -802,6 +822,23 @@ impl Computers {
         match channel {
             "computers:list" => Ok(self.list()),
             "computers:pair" => self.pair(arg(0)).await,
+            "computers:nearby" => self.nearby().await,
+            "computers:lobbyOpen" => self.lobby_open(arg(0)).await,
+            "computers:lobbyAnswer" => {
+                let tx = lock(&self.lobby)
+                    .as_mut()
+                    .and_then(|l| l.answer.take())
+                    .ok_or("Nothing is waiting for an answer.")?;
+                let _ = tx.send(arg(0).as_bool() == Some(true));
+                Ok(Value::Null)
+            }
+            "computers:lobbyClose" => {
+                if let Some(l) = lock(&self.lobby).as_ref() {
+                    l.stop.notify_one();
+                }
+                Ok(Value::Null)
+            }
+            "computers:lobbyJoin" => self.lobby_join(arg(0)).await,
             "computers:rename" => {
                 let name = arg(1).as_str().map(str::trim).filter(|n| !n.is_empty()).ok_or("A name is required.")?;
                 self.edit(id, |p| p.name = name.chars().take(60).collect())
@@ -865,6 +902,140 @@ fn fleet_refusal(state: &State, name: &str) -> String {
         State::Denied(_) => format!("{name} refused this computer."),
         State::Stale => format!("{name}'s remote access changed. Open the Computers list again."),
         _ => format!("Could not reach {name}."),
+    }
+}
+
+impl Computers {
+    fn visibility(&self) -> Option<Arc<crate::mdns::NetworkVisibility>> {
+        self.ctx.get()?.desktop.as_ref().map(|d| d.visibility().clone())
+    }
+
+    /// `computers:nearby`: computers on this network with a lobby open, not this one's own.
+    async fn nearby(&self) -> Result<Value, String> {
+        if !nekko_net::allowed("network-visibility") {
+            return Err(nekko_net::blocked_message("network-visibility"));
+        }
+        let own = lock(&self.lobby).as_ref().map(|l| l.id.clone());
+        let found = crate::mdns::browse(Duration::from_millis(1500)).await;
+        Ok(Value::Array(found.into_iter().filter(|f| f["lobby"].as_str() != own.as_deref()).collect()))
+    }
+
+    /// `computers:lobbyOpen [link]`: open a lobby on the link's relay for its
+    /// life, name it in the network advert, and hand the link over sealed when
+    /// the owner approves a joiner whose code matches. Replaces an open one.
+    async fn lobby_open(self: &Arc<Self>, link: &Value) -> Result<Value, String> {
+        let relay = link.get("relayUrl").and_then(Value::as_str).unwrap_or_default().to_string();
+        if let Some(problem) = nekko_remote::route::relay_url_problem(&relay) {
+            return Err(problem);
+        }
+        if let Some(old) = lock(&self.lobby).take() {
+            old.stop.notify_one();
+        }
+        let id = crate::pair_lobby::new_lobby();
+        let ticket = if nekko_remote::route::is_cloud_relay(&relay) {
+            let cloud = self.cloud.get().ok_or("Sign in to Nekko Cloud to use its relay.")?;
+            Some(crate::fleet::relay_tickets(cloud.clone())(id.clone())().await?.ticket)
+        } else {
+            None
+        };
+        let url = nekko_remote::agent_url(&relay, &id, &id, ticket.as_deref());
+        let ws = tokio::time::timeout(PAIR_LIMIT, tokio_tungstenite::connect_async(url.as_str()))
+            .await
+            .map_err(|_| "The relay didn't answer.".to_string())?
+            .map_err(|e| format!("Couldn't open a lobby on the relay: {e}"))?
+            .0;
+        let stop = Arc::new(tokio::sync::Notify::new());
+        *lock(&self.lobby) = Some(HostLobby { id: id.clone(), answer: None, stop: stop.clone() });
+        let visibility = self.visibility();
+        if let Some(v) = &visibility {
+            v.set_lobby(Some((id.clone(), relay))).await;
+        }
+        let (me, link, lobby) = (self.clone(), link.clone(), id.clone());
+        tokio::spawn(async move {
+            let ask = |name: String, code: String| {
+                let (tx, rx) = tokio::sync::oneshot::channel();
+                if let Some(l) = lock(&me.lobby).as_mut().filter(|l| l.id == lobby) {
+                    l.answer = Some(tx);
+                }
+                me.hub.publish(LOBBY, json!({ "state": "asking", "name": name, "code": code }), false);
+                async move { rx.await.unwrap_or(false) }
+            };
+            let done = tokio::select! {
+                r = crate::pair_lobby::host(ws, &lobby, &link, ask) => r,
+                _ = tokio::time::sleep(crate::pair_lobby::TTL) => Err("The link ran out.".into()),
+                _ = stop.notified() => Ok(false),
+            };
+            let mine = {
+                let mut held = lock(&me.lobby);
+                let mine = held.as_ref().is_some_and(|l| l.id == lobby);
+                if mine {
+                    *held = None;
+                }
+                mine
+            };
+            if mine && let Some(v) = &visibility {
+                v.set_lobby(None).await;
+            }
+            let (paired, error) = match done {
+                Ok(p) => (p, None),
+                Err(e) => (false, Some(e)),
+            };
+            me.hub.publish(
+                LOBBY,
+                json!({ "state": "closed", "role": "host", "paired": paired, "error": error }),
+                false,
+            );
+        });
+        Ok(json!({ "lobby": id }))
+    }
+
+    /// `computers:lobbyJoin [{ lobby, relay }]`: join a lobby found nearby,
+    /// answer with the code to compare, and pair in the background once the
+    /// other computer's owner approves.
+    async fn lobby_join(self: &Arc<Self>, found: &Value) -> Result<Value, String> {
+        let text = |k: &str| found.get(k).and_then(Value::as_str).unwrap_or_default().to_string();
+        let (lobby, relay) = (text("lobby"), text("relay"));
+        if lobby.len() != 32 || !lobby.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Err("That computer's lobby isn't valid.".into());
+        }
+        if let Some(problem) = nekko_remote::route::relay_url_problem(&relay) {
+            return Err(problem);
+        }
+        let url = nekko_remote::client::client_url(&relay, &lobby, &lobby);
+        let ws = tokio::time::timeout(PAIR_LIMIT, tokio_tungstenite::connect_async(url.as_str()))
+            .await
+            .map_err(|_| "The relay didn't answer.".to_string())?
+            .map_err(|_| "That computer's lobby has closed. Make a new link there.".to_string())?
+            .0;
+        let (tx, rx) = tokio::sync::oneshot::channel::<String>();
+        let (done_tx, done_rx) = tokio::sync::oneshot::channel::<String>();
+        let me = self.clone();
+        tokio::spawn(async move {
+            let joined = tokio::time::timeout(
+                crate::pair_lobby::TTL,
+                crate::pair_lobby::join(ws, &lobby, &this_name(), |c| {
+                    let _ = tx.send(c);
+                }),
+            )
+            .await
+            .unwrap_or_else(|_| Err("The other computer didn't answer in time.".into()));
+            let result = match joined {
+                Ok(link) => me.pair(&link).await.map(|_| ()),
+                Err(e) => Err(e),
+            };
+            if let Err(e) = &result {
+                let _ = done_tx.send(e.clone());
+            }
+            me.hub.publish(
+                LOBBY,
+                json!({ "state": "closed", "role": "joiner", "paired": result.is_ok(), "error": result.err() }),
+                false,
+            );
+        });
+        tokio::select! {
+            code = rx => code.map(|code| json!({ "code": code })).map_err(|_| "That computer's lobby closed.".into()),
+            e = done_rx => Err(e.unwrap_or_else(|_| "That computer's lobby closed.".into())),
+        }
     }
 }
 

@@ -47,6 +47,18 @@ export interface ComputerStatus extends PairedComputer {
   icon?: string;
 }
 
+/** A computer on this network with a pairing lobby open (`computers:nearby`). */
+export interface NearbyComputer {
+  name: string;
+  lobby: string;
+  relay: string;
+}
+
+/** A pairing lobby's news (`computers:lobby`): the host asks its owner, then either side closes. */
+export type ComputerLobbyEvent =
+  | { state: 'asking'; name: string; code: string }
+  | { state: 'closed'; role: 'host' | 'joiner'; paired: boolean; error?: string | null };
+
 /** What `computers:pair` takes: a parsed pairing link. */
 export interface ComputerPairingLink {
   relayUrl: string;

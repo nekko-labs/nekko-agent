@@ -30,3 +30,9 @@ for (const { label, Icon, glyph, paths, hash, fills } of [
     });
   });
 }
+
+it('rotates the Models glyph clockwise around its center without rotating the rail SVG', () => {
+  const html = renderToStaticMarkup(<ModelsColorIcon />);
+  expect(html).toContain('<path transform="rotate(90 8 8)"');
+  expect(html).not.toMatch(/<svg[^>]*transform=/);
+});

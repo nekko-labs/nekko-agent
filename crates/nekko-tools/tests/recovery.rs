@@ -137,6 +137,36 @@ async fn invalid_batch_leaves_disk_and_snapshots_untouched_then_valid_batch_comm
 }
 
 #[tokio::test]
+async fn single_entry_and_legacy_edit_work_but_mixed_and_missing_inputs_never_write() {
+    let r = Rig::new();
+    std::fs::write(r.file(), "old").unwrap();
+    let ctx = r.context(r.tracker(), true);
+    for (input, message) in [
+        (
+            json!({"path":r.file(),"old_string":"old","new_string":"wrong","edits":[
+                {"old_string":"old","new_string":"still wrong"}
+            ]}),
+            "Use either edits or old_string/new_string, not both.",
+        ),
+        (json!({"path":r.file()}), "old_string not found"),
+        (json!({"path":r.file(),"edits":[{"old_string":"old"}]}), "new_string must be a string"),
+    ] {
+        let bad = edit(&ctx, input).await;
+        assert!(bad.is_error && bad.output.contains(message), "{}", bad.output);
+        assert_eq!(std::fs::read_to_string(r.file()).unwrap(), "old");
+        assert!(!r.0.join("changes/saved.json").exists());
+    }
+
+    let one = edit(&ctx, json!({"path":r.file(),"edits":[{"old_string":"old","new_string":"$&"}]})).await;
+    assert!(!one.is_error, "{}", one.output);
+    assert_eq!(std::fs::read_to_string(r.file()).unwrap(), "$&");
+    let legacy = edit(&ctx, json!({"path":r.file(),"old_string":"$&","new_string":"new"})).await;
+    assert!(!legacy.is_error, "{}", legacy.output);
+    assert_eq!(std::fs::read_to_string(r.file()).unwrap(), "new");
+    assert_eq!(r.tracker().list_changes("saved").unwrap()[0].original, "old");
+}
+
+#[tokio::test]
 async fn batches_obey_approval_read_only_jail_and_git_config_gates() {
     let r = Rig::new();
     let outside = Rig::new();

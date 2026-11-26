@@ -56,7 +56,7 @@ use zeroize::Zeroize;
 
 pub use fleet_link::{ConnectInfo, FleetAdmitted, FleetTarget, HelloBinding};
 pub use http::client;
-pub use org_records::LocalModel;
+pub use org_records::{LocalModel, RunnerSummary};
 pub use orgs::{HEARTBEAT, HostInfo, ModelFuture};
 
 pub const CHANNELS: &[&str] = &[
@@ -440,6 +440,22 @@ impl Cloud {
                 (404, _) => "Nekko Cloud Relay isn't available for this account yet.".into(),
                 (401, _) => "Sign in to Nekko Cloud again to use Nekko Cloud Relay.".into(),
                 _ => format!("Couldn't get a Nekko Cloud Relay ticket: {}", err.message),
+            }),
+        }
+    }
+
+    /// Tells Nekko Cloud which CI runners its picker may send jobs to (decision 0064), or
+    /// takes this computer out with `None`. Errors are what the owner reads.
+    pub async fn runner_presence(&self, body: Option<Value>) -> Result<(), String> {
+        let token = self.token().map_err(|_| "Sign in to Nekko Cloud to use the Nekko Cloud picker.".to_string())?;
+        let method = if body.is_some() { reqwest::Method::PUT } else { reqwest::Method::DELETE };
+        match self.api.send(&token, method, "/v1/runners/presence", body).await {
+            Ok(_) => Ok(()),
+            Err(err) => Err(match (err.status, err.code.as_str()) {
+                (402, _) => "The Nekko Cloud picker is part of Nekko Cloud Pro.".into(),
+                (404, _) => "The Nekko Cloud picker isn't available for this account yet.".into(),
+                (401, _) => "Sign in to Nekko Cloud again to use the Nekko Cloud picker.".into(),
+                _ => format!("Nekko Cloud didn't take this Mac's runners: {}", err.message),
             }),
         }
     }

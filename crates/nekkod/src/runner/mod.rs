@@ -29,7 +29,7 @@ use gitlab::{GitLab, GitlabConnectRequest};
 use keychain::{key_name, runner_vault, token_key};
 use nekko_cloud::vault::Vault;
 use nekko_connectors::Net;
-use nekko_runner::{HostNets, RunnerSettings};
+use nekko_runner::{Guest, HostNets, RunnerSettings, Scope};
 use provider::{ByLink, Provider};
 use serde_json::{Value, json};
 use signals::HostSense;
@@ -40,7 +40,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock, RwLock};
 use std::time::Duration;
 use store::{Link, RunnerRecord, Store, same_scope, same_target};
-use supervisor::{Ask, RunnerState, RunnerView, Supervisor, TICK};
+use supervisor::{Ask, RunnerState, RunnerView, SlotState, Supervisor, TICK};
 use vm::HelperVm;
 use vm::Vm;
 
@@ -104,6 +104,8 @@ pub struct Runners<S: Sense = HostSense, V: Vm = HelperVm, P: Provider = ByLink<
     asks: std::sync::Mutex<Vec<(String, Ask)>>,
     /// The views last published; `runner:list` answers from here.
     views: std::sync::Mutex<Vec<RunnerView>>,
+    /// Why Nekko Cloud last refused the picker presence (decision 0064).
+    picker_error: std::sync::Mutex<Option<String>>,
     /// Vault items a connect is storing, with how many connects are in flight.
     connecting: std::sync::Mutex<HashMap<String, u32>>,
     /// Vault items queued registration removals still sign with, as of the last step.
@@ -118,6 +120,69 @@ pub struct Runners<S: Sense = HostSense, V: Vm = HelperVm, P: Provider = ByLink<
     linux_image: OnceLock<Arc<linux_image::LinuxImageJob>>,
     /// The Mac as of the last tick, for the image builder's gates.
     mac: Arc<std::sync::Mutex<Option<signals::MacState>>>,
+}
+
+/// Keeps Nekko Cloud's picker presence current (decision 0064): every 30 s, well inside its
+/// 90 s lease, while any runner has `cloudPicker` on; one withdrawal once none has.
+pub fn picker_presence_loop(runners: Arc<Runners>, cloud: Arc<nekko_cloud::Cloud>) {
+    tokio::spawn(async move {
+        let mut sent = false;
+        loop {
+            match runners.picker_presence() {
+                Some(body) => {
+                    let result = cloud.runner_presence(Some(body)).await;
+                    sent = result.is_ok();
+                    runners.set_picker_error(result.err());
+                }
+                None if sent => {
+                    // Best effort: the lease lapses on its own if this fails.
+                    sent = cloud.runner_presence(None).await.is_err();
+                    runners.set_picker_error(None);
+                }
+                None => {}
+            }
+            tokio::time::sleep(Duration::from_secs(30)).await;
+        }
+    });
+}
+
+/// One runner's picker presence: full repo names (at most 20) and the VMs that could take a
+/// job now, none while a gate holds it, it is off or it shows an error.
+fn picker_row(v: &RunnerView) -> Value {
+    let repos: Vec<String> = match &v.config.scope {
+        Scope::Repo { owner, repo } => vec![format!("{owner}/{repo}")],
+        Scope::Org { org } => {
+            v.repos.iter().map(|r| if r.contains('/') { r.clone() } else { format!("{org}/{r}") }).collect()
+        }
+    };
+    let takes = v.config.settings.enabled && v.reasons.is_empty() && v.error.is_none();
+    let free = |guest: Guest, available: u8| {
+        let held = v
+            .slots
+            .iter()
+            .filter(|s| {
+                s.guest == guest && matches!(s.state, SlotState::Running | SlotState::Draining | SlotState::Cleaning)
+            })
+            .count();
+        if takes { usize::from(available).saturating_sub(held) } else { 0 }
+    };
+    json!({
+        "label": v.config.label,
+        "repos": repos.into_iter().take(20).collect::<Vec<_>>(),
+        "free": { "macos": free(Guest::Macos, v.available), "linux": free(Guest::Linux, v.linux_available) },
+    })
+}
+
+fn fleet_row(v: &RunnerView) -> nekko_cloud::RunnerSummary {
+    let busy = v.slots.iter().filter(|s| matches!(s.state, SlotState::Running | SlotState::Draining)).count();
+    let busy = u8::try_from(busy).unwrap_or(u8::MAX);
+    nekko_cloud::RunnerSummary {
+        label: v.config.label.clone(),
+        state: serde_json::to_value(v.state).ok().and_then(|s| s.as_str().map(str::to_string)).unwrap_or_default(),
+        busy,
+        // A busy VM still holds its slot, so it counts in what this runner has.
+        slots: v.available.saturating_add(v.linux_available).max(busy),
+    }
 }
 
 /// The last `max` bytes of `text`, from the start of a line.
@@ -307,6 +372,7 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
             pending: std::sync::Mutex::new(None),
             asks: std::sync::Mutex::default(),
             views: std::sync::Mutex::new(views),
+            picker_error: std::sync::Mutex::default(),
             connecting: std::sync::Mutex::new(HashMap::new()),
             queued_keys: std::sync::Mutex::default(),
             deferred: std::sync::Mutex::default(),
@@ -422,7 +488,11 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
         }
     }
 
-    fn publish(&self, views: Vec<RunnerView>) {
+    fn publish(&self, mut views: Vec<RunnerView>) {
+        let err = self.picker_error.lock().ok().and_then(|e| e.clone());
+        for v in &mut views {
+            v.cloud_picker_error = err.clone().filter(|_| v.config.settings.cloud_picker);
+        }
         let Ok(mut last) = self.views.lock() else { return };
         if *last != views {
             self.hub.publish(EVENT, json!(views), false);
@@ -456,6 +526,7 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
                     queue: Vec::new(),
                     accept_why: Vec::new(),
                     suggested_size: None,
+                    cloud_picker_error: None,
                 });
                 let (was, now) = (&v.config.settings, &r.config.settings);
                 // A new size has no jobs behind it yet; the next tick says so.
@@ -506,6 +577,36 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
         let view = id.map_or(Value::Null, |id| json!(views.iter().find(|v| v.config.id == id)));
         self.publish(views);
         Ok(view)
+    }
+
+    /// What the Nekko Cloud picker may know (decision 0064): each GitHub runner whose owner
+    /// turned on `cloudPicker`, its repos and its free VMs. None when no runner asks for it.
+    pub fn picker_presence(&self) -> Option<Value> {
+        let views = self.views.lock().ok()?;
+        let rows: Vec<Value> = views
+            .iter()
+            .filter(|v| v.config.settings.cloud_picker && !v.config.id.starts_with("gl-"))
+            .map(picker_row)
+            .collect();
+        (!rows.is_empty()).then(|| json!({ "runners": rows }))
+    }
+
+    /// Shows (or clears) Nekko Cloud's refusal on the runners that use the picker.
+    pub fn set_picker_error(&self, err: Option<String>) {
+        if let Ok(mut e) = self.picker_error.lock() {
+            if *e == err {
+                return;
+            }
+            *e = err;
+        }
+        let views = self.views.lock().map(|v| v.clone()).unwrap_or_default();
+        self.publish(views);
+    }
+
+    /// What this Mac's runners tell its organizations (decision 0064): label,
+    /// state and how many VMs are busy out of those it may run now.
+    pub fn fleet_summary(&self) -> Vec<nekko_cloud::RunnerSummary> {
+        self.views.lock().map(|v| v.iter().map(fleet_row).collect()).unwrap_or_default()
     }
 
     pub async fn route(&self, channel: &str, args: &[Value]) -> Result<Value, String> {

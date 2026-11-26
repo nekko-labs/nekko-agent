@@ -139,6 +139,8 @@ export function LinuxImageRow({ image, onAction }: { image: LinuxImageView; onAc
   );
 }
 
+export const CLOUD_PICKER_LABEL = 'Let the Nekko Cloud picker send jobs here';
+
 /** The settings form (mockup 4); pure so tests render it statically. */
 export function SettingsBody({ view, image = null, linuxImage = null, onLinuxImage, draft, onDraft, onEnabled, onSave, onApplySize, onRemove, onCancel, onRebuild, onRefresh, saving, saveError = null, toggling = false }: {
   view: RunnerView;
@@ -331,6 +333,13 @@ export function SettingsBody({ view, image = null, linuxImage = null, onLinuxIma
       <Row label="Safety">
         <Check label="Re-run jobs lost to sleep" checked={draft.rerunLostJobs} onChange={(v) => set('rerunLostJobs', v)} />
       </Row>
+      {!view.config.id.startsWith('gl-') && (
+        <Row label="Nekko Cloud" hint="Pro or Enterprise; GitHub only">
+          <Check label={CLOUD_PICKER_LABEL} checked={draft.cloudPicker} onChange={(v) => set('cloudPicker', v)} />
+          <p className="mt-1 text-xs text-ink-faint">Shares this runner's label, its repos and how many VMs are free with Nekko Cloud, so a workflow's picker job can send jobs here and use a hosted runner when none is free.</p>
+          {view.cloudPickerError && draft.cloudPicker && <p role="alert" className="mt-1 text-xs text-danger" data-testid="runner-cloud-picker-error">{view.cloudPickerError}</p>}
+        </Row>
+      )}
       <Row label="Max job time">
         <Seg label="Max job time" value={draft.maxJobMinutes} options={jobChoices.map((m) => ({ value: m, label: formatMinutes(m * 60) }))} onChange={(v) => set('maxJobMinutes', v)} />
       </Row>
