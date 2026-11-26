@@ -43,6 +43,7 @@ import {
   DISPLAYS_PLACEMENT_CHANNEL, DISPLAYS_REPORT_CHANNEL, DISPLAYS_TOGGLE_CHANNEL, type DisplaysState,
   DISPLAYS_DESKTOP_CHANNEL, DISPLAYS_GO_CHANNEL, DISPLAYS_SPACES_MODE_CHANNEL,
 } from '../displayWindows.js';
+import { STORAGE_CLEAR_CACHES_CHANNEL } from '../storageCaches.js';
 
 // Every call goes to the engine's socket (see `routing.ts`).
 const engine = createEngineSocket((operation) => ipcRenderer.invoke(ENGINE_ENDPOINT_CHANNEL, operation));
@@ -313,6 +314,7 @@ const api: NekkoApi = {
   removeWorktrees: (roots) => inv(IpcChannels.storageRemoveWorktrees, roots),
   listRunnerImages: () => inv(IpcChannels.storageRunnerImages),
   removeRunnerImage: (name) => inv(IpcChannels.storageRemoveRunnerImage, name),
+  clearAppCaches: () => ipcRenderer.invoke(STORAGE_CLEAR_CACHES_CHANNEL),
 
   readFile: (path) => inv(IpcChannels.fileRead, path),
   // The main process serves these on loopback, not the engine (main/htmlPreview.ts).

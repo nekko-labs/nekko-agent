@@ -1173,6 +1173,8 @@ export interface NekkoApi {
   listRunnerImages(): Promise<import('./storage.js').RunnerImage[]>;
   /** Remove one leftover runner image (refused for any in use). */
   removeRunnerImage(name: string): Promise<{ freed: number }>;
+  /** Desktop only: clear the app's browser caches (not sign-ins, local storage or chats). Absent in the Local Web UI. */
+  clearAppCaches?(): Promise<void>;
 
   /** Read a file as text (for the in-app viewer/editor). */
   readFile(path: string): Promise<FileContent>;
