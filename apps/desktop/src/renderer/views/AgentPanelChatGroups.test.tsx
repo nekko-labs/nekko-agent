@@ -57,11 +57,11 @@ describe('Agents panel, chat groups', () => {
     expect(html.match(/data-chat-group-dot/g)).toHaveLength(2);
   });
 
-  it('draws a thin border in the group colour around a cluster and an empty bucket', () => {
+  it('draws a bar in the group colour down the left edge only of a cluster and an empty bucket', () => {
     localStorage.setItem(DEFINED_CHAT_GROUPS_KEY, JSON.stringify([{ name: 'Empty', color: 3 }, { name: 'Docs', color: 4 }]));
     const html = renderSidebar({ sessions: [agentSummary('a', { chatGroup: 'Docs' })] });
-    expect(html).toMatch(/data-chat-group-cluster="Docs"[^>]*style="border:1px solid color-mix\(in srgb, var\(--zone-tint-4\) 55%, transparent\)"/);
-    expect(html).toMatch(/data-chat-group-empty="Empty"[^>]*style="border:1px solid color-mix\(in srgb, var\(--zone-tint-3\) 55%, transparent\)"/);
+    expect(html).toMatch(/data-chat-group-cluster="Docs"[^>]*style="border-left:2.25px solid color-mix\(in srgb, var\(--zone-tint-4\) 55%, transparent\)"/);
+    expect(html).toMatch(/data-chat-group-empty="Empty"[^>]*style="border-left:2.25px solid color-mix\(in srgb, var\(--zone-tint-3\) 55%, transparent\)"/);
   });
 
   it('shows no done check in the Done group, but keeps it under other groupings and in other statuses', () => {
@@ -220,8 +220,8 @@ describe('defined chat groups', () => {
   it('renders a custom colour on the border, and on the dot of an unboxed card', () => {
     localStorage.setItem(DEFINED_CHAT_GROUPS_KEY, JSON.stringify([{ name: 'Docs', color: '#AB12CD' }, { name: 'Empty', color: '#00ff7f' }]));
     const html = renderSidebar({ sessions: [agentSummary('a', { chatGroup: 'Docs' })] });
-    expect(html).toMatch(/data-chat-group-cluster="Docs"[^>]*style="border:1px solid color-mix\(in srgb, #ab12cd 55%, transparent\)"/);
-    expect(html).toMatch(/data-chat-group-empty="Empty"[^>]*style="border:1px solid color-mix\(in srgb, #00ff7f 55%, transparent\)"/);
+    expect(html).toMatch(/data-chat-group-cluster="Docs"[^>]*style="border-left:2.25px solid color-mix\(in srgb, #ab12cd 55%, transparent\)"/);
+    expect(html).toMatch(/data-chat-group-empty="Empty"[^>]*style="border-left:2.25px solid color-mix\(in srgb, #00ff7f 55%, transparent\)"/);
     localStorage.setItem(AGENT_PANEL_VIEW_KEY, JSON.stringify({ ...DEFAULT_AGENT_PANEL_VIEW, clusterChatGroups: false }));
     const unboxed = renderSidebar({ sessions: [agentSummary('a', { chatGroup: 'Docs' })] });
     expect(unboxed).toMatch(/aria-label="Group: Docs"[^>]*style="background:#ab12cd"/);

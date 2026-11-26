@@ -42,7 +42,7 @@ Put chats in groups of the user's own (for example "Frontend fixes", or just a c
 - Removing it, or the last chat leaving a group, removes the sub-heading.
 - Switching the preference off removes the sub-headings and keeps the labels.
 - Names differing only in case are one group.
-- A group's cluster and empty bucket are bordered in its colour; its chats carry a dot in that colour everywhere; the colour survives renaming.
+- A group's cluster and empty bucket have a 2.25px bar in its colour down the left edge only (no full box); its chats carry a dot in that colour everywhere; the colour survives renaming.
 - Cards in the Done group show no check.
 - A group made from the **+** menu appears as an empty bucket, can be picked in the Group and tags picker, and takes a chat dropped on it.
 - Renaming or deleting a group changes every chat in it, archived ones too; renaming an id group touches no chat that already stores the id.

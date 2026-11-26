@@ -48,7 +48,8 @@ import {
 
 /** A chat group's thin border, in its colour: the one place the panel draws a border, at the user's request. */
 function groupBorder(color: string): React.CSSProperties {
-  return { border: `1px solid color-mix(in srgb, ${color} 55%, transparent)` };
+  // Only a bar down the left edge.
+  return { borderLeft: `2.25px solid color-mix(in srgb, ${color} 55%, transparent)` };
 }
 
 /** Something being dragged in the sidebar (a project or a workspace). */
