@@ -3704,8 +3704,9 @@ select:not([multiple]):not([size]) {
    beam, rocket and glow, just still, so a wall of busy agents left on screen
    behind another app stops costing the GPU. See appActivity.ts. */
 html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inactive] *::after { animation-play-state: paused !important; }
-/* A pane the workspace keeps mounted but parked (ChatPane sets this from usePaneVisible) holds its frame too, as the window does when it is unfocused; the decor clock (decorClock.ts) skips it. */
-[data-pane-hidden] *, [data-pane-hidden] *::before, [data-pane-hidden] *::after { animation-play-state: paused !important; }
+/* A parked pane holds its frame too, but through useParkedAnimations (parkedAnimations.ts), not a rule
+   here: data-pane-hidden flips on every chat switch, and a rule matching every descendant of it restyled
+   both transcripts inside the switch (#712). Keep stylesheet rules off data-pane-hidden. */
 .command-wall-window[data-wall-selected] .wall-num, .wall-composer[data-has-agent] .wall-num { background: var(--accent); color: var(--win); }
 .wall-layout-control { position: relative; display: inline-flex; align-items: center; gap: 8px; }
 /* Reveal by grid track rather than a fixed pixel width: a fixed 38px was
