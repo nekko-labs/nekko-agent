@@ -28,14 +28,7 @@ struct Handle {
 }
 
 impl Link for Fake {
-    fn connect(
-        &self,
-        url: &str,
-        _: &str,
-        _: &str,
-        _: nekko_remote::client::SigningKey,
-        verify: Verifier,
-    ) -> Arc<dyn LinkHandle> {
+    fn connect(&self, url: &str, _: &str, _: &str, _: nekko_remote::client::SigningKey, verify: Verifier) -> Arc<dyn LinkHandle> {
         self.links.lock().unwrap().push((url.to_string(), verify));
         self.said.lock().unwrap().push(format!("connect {url}"));
         Arc::new(Handle { url: url.to_string(), fake: self.clone() })
@@ -97,14 +90,7 @@ fn computer(also: Value) -> (tempfile::TempDir, Arc<RemoteService>, Fake) {
 }
 
 fn verify_on(fake: &Fake, url: &str, h: &Value) -> Value {
-    let v = fake
-        .links
-        .lock()
-        .unwrap()
-        .iter()
-        .find(|(u, _)| u == url)
-        .map(|(_, v)| v.clone())
-        .expect("a link to that relay");
+    let v = fake.links.lock().unwrap().iter().find(|(u, _)| u == url).map(|(_, v)| v.clone()).expect("a link to that relay");
     v(h)
 }
 
@@ -127,13 +113,10 @@ fn a_computer_is_reachable_through_every_relay_at_once() {
     assert_eq!(*fake.said.lock().unwrap(), [format!("connect {TAILNET}"), format!("connect {CLOUD_RELAY_URL}")]);
     let status = svc.route("remote:status", &[]).unwrap();
     assert_eq!(status["online"], json!(true));
-    assert_eq!(
-        status["relays"],
-        json!([
-            { "url": TAILNET, "via": "direct", "online": true, "error": null },
-            { "url": CLOUD_RELAY_URL, "via": "cloud", "online": true, "error": null },
-        ])
-    );
+    assert_eq!(status["relays"], json!([
+        { "url": TAILNET, "via": "direct", "online": true, "error": null },
+        { "url": CLOUD_RELAY_URL, "via": "cloud", "online": true, "error": null },
+    ]));
     // An old phone comes in either way.
     for url in [TAILNET, CLOUD_RELAY_URL] {
         assert_eq!(verify_on(&fake, url, &hello("phone-1", json!({})))["type"], "welcome", "{url}");
@@ -141,10 +124,7 @@ fn a_computer_is_reachable_through_every_relay_at_once() {
     // Turning the extra route off reconnects through the main one only.
     fake.said.lock().unwrap().clear();
     svc.route("remote:setRelays", &[json!([])]).unwrap();
-    assert_eq!(
-        *fake.said.lock().unwrap(),
-        [format!("stop {TAILNET}"), format!("stop {CLOUD_RELAY_URL}"), format!("connect {TAILNET}")]
-    );
+    assert_eq!(*fake.said.lock().unwrap(), [format!("stop {TAILNET}"), format!("stop {CLOUD_RELAY_URL}"), format!("connect {TAILNET}")]);
     assert!(saved(&dir).get("alsoRelays").is_none());
 }
 
@@ -177,10 +157,7 @@ fn a_device_limited_to_one_route_is_turned_away_on_the_other() {
     assert_eq!(verify_on(&fake, CLOUD_RELAY_URL, &hello("phone-1", json!({})))["type"], "welcome");
 
     svc.route("remote:setRoute", &[json!("phone-1"), json!("direct")]).unwrap();
-    assert_eq!(
-        verify_on(&fake, CLOUD_RELAY_URL, &hello("phone-1", json!({}))),
-        json!({ "type": "denied", "reason": "route" })
-    );
+    assert_eq!(verify_on(&fake, CLOUD_RELAY_URL, &hello("phone-1", json!({}))), json!({ "type": "denied", "reason": "route" }));
     assert_eq!(verify_on(&fake, TAILNET, &hello("phone-1", json!({})))["type"], "welcome");
 
     svc.route("remote:setRoute", &[json!("phone-1"), json!("auto")]).unwrap();
@@ -207,10 +184,7 @@ fn changing_a_route_closes_a_live_connection_on_the_old_one() {
     assert!(fake.said.lock().unwrap().is_empty(), "already on an allowed route");
     svc.route("remote:setRoute", &[json!("phone-1"), json!("cloud")]).unwrap();
     // Every route's agent is told; the device's other sockets were none.
-    assert_eq!(
-        *fake.said.lock().unwrap(),
-        [format!("disconnect phone-1 on {TAILNET}"), format!("disconnect phone-1 on {CLOUD_RELAY_URL}")]
-    );
+    assert_eq!(*fake.said.lock().unwrap(), [format!("disconnect phone-1 on {TAILNET}"), format!("disconnect phone-1 on {CLOUD_RELAY_URL}")]);
 }
 
 #[test]

@@ -546,10 +546,7 @@ impl RemoteService {
                 // Only while one is in: the shape is unchanged for everyone else.
                 .with("fleet", Some(self.fleet_rows()).filter(|r| r.as_array().is_some_and(|a| !a.is_empty())))
                 // Decision 0116, only while there is more than one relay: each route's state.
-                .with(
-                    "alsoRelays",
-                    cfg.get("alsoRelays").cloned().filter(|v| v.as_array().is_some_and(|a| !a.is_empty())),
-                )
+                .with("alsoRelays", cfg.get("alsoRelays").cloned().filter(|v| v.as_array().is_some_and(|a| !a.is_empty())))
                 .with("relays", routes.map(|r| r.rows()))
                 .to_value()
         } else {
@@ -866,9 +863,7 @@ impl RemoteService {
             return Err(format!("remote:setRelays: at most {MAX_ALSO_RELAYS} relays besides the main one"));
         }
         let _io = lock(&self.io);
-        let cfg = self
-            .load()
-            .with("alsoRelays", Some(Value::Array(clean)).filter(|v| v.as_array().is_some_and(|a| !a.is_empty())));
+        let cfg = self.load().with("alsoRelays", Some(Value::Array(clean)).filter(|v| v.as_array().is_some_and(|a| !a.is_empty())));
         self.save(&cfg)?;
         let enabled = nekko_js::truthy(cfg.get("enabled")) && nekko_js::truthy(cfg.get("relayUrl"));
         if enabled {
