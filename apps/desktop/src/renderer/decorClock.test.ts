@@ -128,4 +128,16 @@ describe('decorClock', () => {
     expect(beam.plays).toBe(1);
     expect(clock.running()).toBe(false);
   });
+
+  it('holds the frame of a decoration inside a parked pane, and moves it again when the pane is shown', () => {
+    const hop = fakeAnimation('pixel-hop');
+    let parked = true;
+    (hop.target as unknown as { closest: (sel: string) => unknown }).closest = (sel) => (parked && sel === '[data-pane-hidden]' ? {} : null);
+    const clock = setup([hop]);
+    clock.doc.timeline.currentTime = 1500; clock.tick();
+    expect(hop.currentTime).toBe(0);
+    parked = false;
+    clock.doc.timeline.currentTime = 1600; clock.tick();
+    expect(hop.currentTime).toBe(1500);
+  });
 });

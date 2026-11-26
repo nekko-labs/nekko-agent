@@ -17,7 +17,8 @@ import com.nekko.protocol.sendOptions
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -187,6 +188,8 @@ class Outbox(
     @Volatile private var flushing = false
     /** The last `error` event per chat: the reason a `chat:send` the computer answered was not taken. */
     private val lastErrors = HashMap<String, String>()
+    /** Per chat with a send waiting to be confirmed: woken by the computer's first event for it. */
+    private val firstEvent = HashMap<String, Channel<Unit>>()
 
     fun newId(): String = newId.invoke()
 
@@ -281,10 +284,18 @@ class Outbox(
         return item.draftKey
     }
 
-    /** The computer's events: an `error` for a chat is the reason a send was turned down. */
-    @Synchronized
+    /**
+     * The computer's events: an `error` for a chat is the reason a send was turned down, and the
+     * first event of any kind for a chat a send is waiting on means the computer started the turn,
+     * so it has the prompt: that send's confirmation wakes to re-read the chat once.
+     */
     fun onEvent(e: AgentEvent) {
-        if (e is AgentEvent.Error) lastErrors[e.sessionId] = e.message
+        val wake = synchronized(this) {
+            if (e is AgentEvent.Error) lastErrors[e.sessionId] = e.message
+            // Only the first: a streaming reply sends many, and one re-read is enough.
+            firstEvent.remove(e.sessionId)
+        }
+        wake?.trySend(Unit)
     }
 
     // ---- delivering ----
@@ -420,6 +431,11 @@ class Outbox(
             synchronized(this) { lastErrors.remove(id) }
             // `chat:send` answers when the whole turn ends (maybe hours): the prompt counts as delivered once the chat lists its id.
             val send = CompletableDeferred<Throwable?>()
+            // The chat is re-read when the computer's first event for it arrives (it has started the
+            // turn, so it has the prompt), when `chat:send` answers, or else on a backoff
+            // (pollMs, x2, x4, x8, then x8), not the whole chat twice a second.
+            val wake = Channel<Unit>(Channel.CONFLATED)
+            synchronized(this) { firstEvent[id] = wake }
             val job = scope.launch {
                 try {
                     c.callWithTimeout(TURN_TIMEOUT_MS, Channels.CHAT_SEND, sendOptions(id, p, m, item.text, item.skill, item.images, item.id))
@@ -429,31 +445,39 @@ class Outbox(
                     throw e
                 } catch (e: Exception) {
                     send.complete(e)
+                } finally {
+                    wake.trySend(Unit)
                 }
             }
             var waited = 0L
-            while (true) {
-                delay(pollMs)
-                waited += pollMs
-                val finished = send.isCompleted
-                try {
-                    val s = Session.from(c.call(Channels.SESSION_GET, JsonPrimitive(id))) ?: return Outcome.Refused(DELETED)
-                    if (item.id in s.clientMessageIds) return Outcome.Delivered(id)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    if (!finished) return outcome(e)
+            var step = pollMs
+            try {
+                while (true) {
+                    withTimeoutOrNull(step) { wake.receive() }
+                    waited += step
+                    step = minOf(step * 2, pollMs * 8)
+                    val finished = send.isCompleted
+                    try {
+                        val s = Session.from(c.call(Channels.SESSION_GET, JsonPrimitive(id))) ?: return Outcome.Refused(DELETED)
+                        if (item.id in s.clientMessageIds) return Outcome.Delivered(id)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        if (!finished) return outcome(e)
+                    }
+                    if (finished) {
+                        val error = send.await()
+                            // Answered, and the chat doesn't have it: the computer turned it down.
+                            ?: return Outcome.Refused(synchronized(this) { lastErrors[id] } ?: "Your computer didn’t start this prompt.")
+                        if (error is RelayException && error.fromComputer && error.message.orEmpty().contains("already", ignoreCase = true)) return Outcome.Again
+                        return outcome(error)
+                    }
+                    if (waited >= confirmTimeoutMs) {
+                        return Outcome.Later("No answer from your computer yet.")
+                    }
                 }
-                if (finished) {
-                    val error = send.await()
-                        // Answered, and the chat doesn't have it: the computer turned it down.
-                        ?: return Outcome.Refused(synchronized(this) { lastErrors[id] } ?: "Your computer didn’t start this prompt.")
-                    if (error is RelayException && error.fromComputer && error.message.orEmpty().contains("already", ignoreCase = true)) return Outcome.Again
-                    return outcome(error)
-                }
-                if (waited >= confirmTimeoutMs) {
-                    return Outcome.Later("No answer from your computer yet.")
-                }
+            } finally {
+                synchronized(this) { if (firstEvent[id] === wake) firstEvent.remove(id) }
             }
         } catch (e: CancellationException) {
             throw e

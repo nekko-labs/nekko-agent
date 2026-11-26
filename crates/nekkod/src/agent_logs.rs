@@ -31,9 +31,16 @@ pub const PREFIX: &str = "agent_";
 
 pub type ReadSettings = Arc<dyn Fn() -> Value + Send + Sync>;
 
+/// How long an exited agent terminal keeps its output in memory. Its saved
+/// log (`sessions/<id>.commands.log`) holds the same output and is what a
+/// snapshot reads first, so past this only the terminal's entry is kept.
+const EXITED_BUFFER_KEEP: std::time::Duration = std::time::Duration::from_secs(10 * 60);
+
 struct Term {
     info: Map<String, Value>,
     buffer: String,
+    /// When the chat's turn ended; `None` while a command runs.
+    exited_at: Option<std::time::Instant>,
 }
 
 enum Op {
@@ -278,11 +285,12 @@ impl AgentLogs {
                 info.insert("agentSessionId".into(), json!(session_id));
                 info.insert("createdAt".into(), json!(nekko_js::now_ms_f64()));
                 info.insert("running".into(), json!(running));
-                Term { info, buffer: String::new() }
+                Term { info, buffer: String::new(), exited_at: None }
             });
             if running {
                 term.info.insert("running".into(), json!(true));
                 term.info.shift_remove("exitCode");
+                term.exited_at = None;
             }
             term.buffer = keep_tail(std::mem::take(&mut term.buffer) + data);
         }
@@ -301,6 +309,7 @@ impl AgentLogs {
                 Some(t) if js::truthy(t.info.get("running")) => {
                     t.info.insert("running".into(), json!(false));
                     t.info.insert("exitCode".into(), json!(0));
+                    t.exited_at = Some(std::time::Instant::now());
                     true
                 }
                 _ => false,
@@ -309,10 +318,30 @@ impl AgentLogs {
         if ended {
             self.hub.publish("terminal:event", json!({ "type": "exit", "terminalId": id, "code": 0 }), false);
         }
+        self.evict_exited(std::time::Instant::now());
+    }
+
+    /// Free the in-memory output of every terminal that exited at least
+    /// [`EXITED_BUFFER_KEEP`] before `now`: a chat that ran a command once
+    /// would otherwise hold up to [`MAX_BUFFER`] units for as long as the
+    /// daemon runs. The terminal stays listed, and a snapshot reads its saved
+    /// log as always (the memory copy only stands in when there is no log).
+    /// Returns how many were freed.
+    fn evict_exited(&self, now: std::time::Instant) -> usize {
+        let mut freed = 0;
+        for t in lock(&self.terms).values_mut() {
+            let old = t.exited_at.is_some_and(|at| now.saturating_duration_since(at) >= EXITED_BUFFER_KEEP);
+            if old && !t.buffer.is_empty() {
+                t.buffer = String::new();
+                freed += 1;
+            }
+        }
+        freed
     }
 
     /// `listAgentTerminals`.
     pub fn list(&self) -> Vec<Value> {
+        self.evict_exited(std::time::Instant::now());
         let mut infos: Vec<Map<String, Value>> = lock(&self.terms).values().map(|t| t.info.clone()).collect();
         // Manually ordered first (in order), then by age, as `sortTerminals` sorts.
         infos.sort_by(|a, b| {
@@ -333,10 +362,17 @@ impl AgentLogs {
     /// The agent half of `terminalSnapshot`: the saved log (after every write
     /// before it), or what this process holds, or `null`.
     pub async fn snapshot(&self, id: &str) -> Result<Value, String> {
+        self.snapshot_tail(id, None).await
+    }
+
+    /// [`snapshot`](Self::snapshot) reading only the last `max` bytes of the saved
+    /// log (at most [`MAX_BUFFER`]), for a caller that shows a few lines: a
+    /// window's card polls this every few seconds.
+    pub async fn snapshot_tail(&self, id: &str, max: Option<usize>) -> Result<Value, String> {
         let sid = id.strip_prefix(PREFIX).unwrap_or(id).to_string();
         let path = self.path(&sid)?;
         let (tx, rx) = mpsc::channel();
-        self.send(Op::Read(path, MAX_BUFFER, tx));
+        self.send(Op::Read(path, max.map_or(MAX_BUFFER, |m| m.clamp(1, MAX_BUFFER)), tx));
         let persisted =
             tokio::task::spawn_blocking(move || rx.recv().unwrap_or(Ok(None))).await.map_err(|e| e.to_string())??;
         if let Some(t) = lock(&self.terms).get(id) {
@@ -438,6 +474,79 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
+    }
+
+    #[tokio::test]
+    async fn a_tail_snapshot_reads_only_the_end_of_the_saved_log() {
+        let dir = temp("tail-snapshot");
+        let l = logs(&dir);
+        let text: String = (0..2000).map(|i| format!("line {i:04}\n")).collect();
+        l.append("s_tail", None, &text);
+        let whole = l.snapshot("agent_s_tail").await.unwrap();
+        assert_eq!(whole["buffer"].as_str().unwrap().len(), text.len());
+        let tail = l.snapshot_tail("agent_s_tail", Some(100)).await.unwrap();
+        let tail = tail["buffer"].as_str().unwrap();
+        assert!(tail.len() <= 100 && tail.ends_with("line 1999\n"), "{tail:?}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// Timing of what a window's terminal card asks for: run by hand with
+    /// `cargo test -p nekkod --bin nekkod agent_logs::tests::time_ -- --ignored --nocapture`.
+    #[tokio::test]
+    #[ignore]
+    async fn time_a_card_s_snapshot_against_a_tail() {
+        let dir = temp("time-tail");
+        let l = logs(&dir);
+        let line = "compiling crate-name v0.10.1004 (/some/long/path/to/the/crate) finished in 1.23s\n";
+        let text: String = line.repeat(4_000_000 / line.len());
+        std::fs::create_dir_all(dir.join("sessions")).unwrap();
+        l.append("s_time", None, &text);
+        l.snapshot("agent_s_time").await.unwrap();
+        let median = |mut v: Vec<f64>| {
+            v.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            v[v.len() / 2]
+        };
+        for (name, max) in [("whole snapshot", None), ("tail 8 KB", Some(8 * 1024))] {
+            let mut times = Vec::new();
+            let mut bytes = 0;
+            for _ in 0..15 {
+                let t = std::time::Instant::now();
+                let snap = l.snapshot_tail("agent_s_time", max).await.unwrap();
+                bytes = snap.to_string().len();
+                times.push(t.elapsed().as_secs_f64() * 1e3);
+            }
+            println!("{name}: reply {bytes} bytes, median {:.3} ms", median(times));
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[tokio::test]
+    async fn an_exited_terminals_memory_is_freed_after_ten_minutes_and_its_log_still_answers() {
+        let dir = temp("evict");
+        let l = logs(&dir);
+        l.append("s_evict", None, "$ cargo build\ndone\n");
+        let id = format!("{PREFIX}s_evict");
+        let held = |l: &AgentLogs| lock(&l.terms).get(&id).unwrap().buffer.len();
+        let now = std::time::Instant::now();
+        let after = |mins: u64, secs: u64| now + std::time::Duration::from_secs(mins * 60 + secs);
+        assert!(held(&l) > 0);
+        // Running: never freed.
+        assert_eq!(l.evict_exited(after(60, 0)), 0);
+        l.finish("s_evict");
+        // Just exited: kept. Past ten minutes: freed, and the terminal stays listed.
+        assert_eq!(l.evict_exited(after(9, 0)), 0);
+        assert!(held(&l) > 0);
+        assert_eq!(l.evict_exited(after(10, 5)), 1);
+        assert_eq!(held(&l), 0);
+        assert_eq!(l.list().len(), 1);
+        // The snapshot reads the saved log, so the final output is still there.
+        let snap = l.snapshot(&id).await.unwrap();
+        assert!(snap["buffer"].as_str().unwrap().contains("done"), "{snap}");
+        // A new command makes it live again.
+        l.append("s_evict", None, "next\n");
+        assert!(held(&l) > 0);
+        assert_eq!(l.evict_exited(after(60, 0)), 0);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[tokio::test]

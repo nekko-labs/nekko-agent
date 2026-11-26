@@ -23,7 +23,13 @@ import { SimulatorChipSegment, SimulatorRows } from './Simulators.js';
  * on Windows and Linux, `ioreg` on macOS).
  */
 
-const POLL_MS = 2000;
+/**
+ * The daemon caches a GPU probe for 1 s (`probe.rs`), so a 2 s poll never found
+ * the cache warm: every poll spawned `nvidia-smi` (or `ioreg`). Polling at 3 s
+ * keeps the meter moving and spawns a third fewer probes; matching the cache
+ * with a 1 s poll would have spawned three times as many.
+ */
+const POLL_MS = 3000;
 
 export interface ResourceSample {
   gpu: GpuStats | null;

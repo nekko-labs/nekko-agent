@@ -1,9 +1,11 @@
+import { useVisibleInterval } from '../visibleInterval.js';
 import { monitorPickup } from './monitorPickup.js';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { AutomationTask, EngineStatus, GpuStats, LocalModel, MonitorKind, ProviderConfig, RuntimeStatus, SessionSummary, SubscriptionLimits, SystemStats, UsageSlice, UsageSummary } from '@nekko-agent/shared';
 import { formatTemperature, temperatureTone, RUNTIME_CAPABILITIES, MODEL_PRICING, MODEL_COMPARISON_TIERS, MODEL_PRICING_SOURCE, MODEL_PRICING_CHECKED_AT, getModelPrice, DEFAULT_LOCAL_COST_BENCHMARK, describeLimitsProblem, formatUSD, gpuMemoryLabel, isLocalProvider, MODALITY_LABELS, limitsKeyFor, oauthProviderOffered } from '@nekko-agent/shared';
 import { MONITORS, normalizeMonitorOrder, placeMonitor, reorderMonitor, type CommandWallState, type MonitorKey } from '../commandWall.js';
 import { useStore } from '../store.js';
+import { stableSelector } from '../selectStable.js';
 import { useProviderLimitsPortfolio } from '../useLimits.js';
 import { accountEmailOf, useAccountEmails } from '../accountEmails.js';
 import { BUDGET_RANGE_LABEL, attributionRange, budgetRange, localRuntimeMetrics, utilizationProviders } from './monitorMetrics.js';
@@ -693,10 +695,12 @@ const LOCAL_MODELS_POLL_MS = 6000;
  * GPU offload, context and KV cache themselves stay on Model Server, which
  * explains what changing them costs.
  */
+const engineChats = stableSelector((s: { sessions?: SessionSummary[] }) => (s.sessions ?? []).filter((c) => c.providerId === ENGINE_PROVIDER_ID && c.modelId));
+
 export function LocalModels({ initial }: { initial?: { status: EngineStatus | null; models: LocalModel[] } } = {}) {
   const computer = useWatchedComputer();
   const favorites = useStore((s) => s.settings?.favoriteModels);
-  const chats = useStore((s) => s.sessions);
+  const chats = useStore(engineChats);
   const [busy, setBusy] = useState<string | null>(null);
   const [status, setStatus] = useState<EngineStatus | null>(initial?.status ?? null);
   const [models, setModels] = useState<LocalModel[]>(initial?.models ?? []);
@@ -704,24 +708,21 @@ export function LocalModels({ initial }: { initial?: { status: EngineStatus | nu
   // Bumped after a change on a watched computer, to read it again at once.
   const [tick, setTick] = useState(0);
   useEffect(() => {
-    let live = true;
     if (!initial && tick === 0) setRead(false);
-    const refresh = async () => {
-      // A connected computer answers with its phone view: `installed` instead of the path, and no names.
-      const [s, m] = computer
-        ? [await window.nekko.computerEngineStatus(computer).catch(() => null) as EngineStatus | null, []]
-        : await Promise.all([
-          window.nekko.engineStatus().catch(() => null),
-          window.nekko.engineModels().catch(() => []),
-        ]);
-      if (!live) return;
-      setStatus(s); setModels(Array.isArray(m) ? m : []); setRead(true);
-    };
-    void refresh();
-    const t = setInterval(refresh, LOCAL_MODELS_POLL_MS);
-    return () => { live = false; clearInterval(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [computer, tick]);
+  // Paused while the dock is hidden or the window is minimised; reads at once when it comes back.
+  useVisibleInterval(async (live) => {
+    // A connected computer answers with its phone view: `installed` instead of the path, and no names.
+    const [s, m] = computer
+      ? [await window.nekko.computerEngineStatus(computer).catch(() => null) as EngineStatus | null, []]
+      : await Promise.all([
+        window.nekko.engineStatus().catch(() => null),
+        window.nekko.engineModels().catch(() => []),
+      ]);
+    if (!live()) return;
+    setStatus(s); setModels(Array.isArray(m) ? m : []); setRead(true);
+  }, LOCAL_MODELS_POLL_MS, { immediate: true, deps: [computer, tick] });
   useEffect(() => setTick(0), [computer]);
   const store = useStore.getState;
   const names = new Map(models.map((m) => [m.id, m.name]));
