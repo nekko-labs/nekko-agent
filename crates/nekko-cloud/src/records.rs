@@ -252,12 +252,26 @@ pub fn updated_at(chat: &Value) -> f64 {
     chat.get("updatedAt").and_then(Value::as_f64).unwrap_or(0.0)
 }
 
+/// The capability a device lists in the sealed account record once it opens deflated chat records
+/// (blob version 2, decision 0124). A writer compresses only when every device lists it.
+pub const CAP_DEFLATE: &str = "z1";
+
 /// A device the account trusts, as the sealed account record lists it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TrustedDevice {
     pub id: String,
     pub public_key: String,
     pub label: String,
+    /// What this device can do beyond the base format (`CAP_DEFLATE`). Names this build does not
+    /// know are kept as they are. An older build drops them when it writes the record, which only
+    /// ever turns a capability off.
+    pub caps: Vec<String>,
+}
+
+impl TrustedDevice {
+    pub fn can(&self, cap: &str) -> bool {
+        self.caps.iter().any(|c| c == cap)
+    }
 }
 
 /// The sealed account record of one key epoch.
@@ -266,16 +280,29 @@ pub struct AccountRecord {
     pub epoch: u32,
     pub recovery_public: String,
     pub devices: Vec<TrustedDevice>,
+    /// A device has sealed a deflated record for this account. A device that could not read them
+    /// before it was updated pulls again from the start when it sees this (decision 0124).
+    pub compressed: bool,
 }
 
 impl AccountRecord {
     pub fn to_bytes(&self) -> Vec<u8> {
-        let devices: Vec<Value> =
-            self.devices.iter().map(|d| json!({ "id": d.id, "publicKey": d.public_key, "label": d.label })).collect();
-        serde_json::to_vec(
-            &json!({ "v": 2, "epoch": self.epoch, "recoveryPublic": self.recovery_public, "devices": devices }),
-        )
-        .unwrap_or_default()
+        let devices: Vec<Value> = self
+            .devices
+            .iter()
+            .map(|d| {
+                let mut o = json!({ "id": d.id, "publicKey": d.public_key, "label": d.label });
+                if !d.caps.is_empty() {
+                    o["caps"] = json!(d.caps);
+                }
+                o
+            })
+            .collect();
+        let mut v = json!({ "v": 2, "epoch": self.epoch, "recoveryPublic": self.recovery_public, "devices": devices });
+        if self.compressed {
+            v["compressed"] = json!(true);
+        }
+        serde_json::to_vec(&v).unwrap_or_default()
     }
 
     pub fn parse(bytes: &[u8]) -> Option<AccountRecord> {
@@ -293,10 +320,20 @@ impl AccountRecord {
                     id: d.get("id")?.as_str()?.to_string(),
                     public_key: d.get("publicKey")?.as_str()?.to_string(),
                     label: d.get("label").and_then(Value::as_str).unwrap_or("").to_string(),
+                    caps: d
+                        .get("caps")
+                        .and_then(Value::as_array)
+                        .map(|c| c.iter().filter_map(|c| c.as_str().map(String::from)).collect())
+                        .unwrap_or_default(),
                 })
             })
             .collect();
-        Some(AccountRecord { epoch, recovery_public: v.get("recoveryPublic")?.as_str()?.to_string(), devices })
+        Some(AccountRecord {
+            epoch,
+            recovery_public: v.get("recoveryPublic")?.as_str()?.to_string(),
+            devices,
+            compressed: v.get("compressed").and_then(Value::as_bool) == Some(true),
+        })
     }
 
     pub fn trusts(&self, id: &str) -> bool {
@@ -306,6 +343,11 @@ impl AccountRecord {
     /// The listed device with this id and public key.
     pub fn lists(&self, id: &str, public_key: &str) -> bool {
         self.devices.iter().any(|d| d.id == id && d.public_key == public_key)
+    }
+
+    /// Every device the record lists opens deflated records.
+    pub fn all_read_deflate(&self) -> bool {
+        !self.devices.is_empty() && self.devices.iter().all(|d| d.can(CAP_DEFLATE))
     }
 
     pub fn add(&mut self, d: TrustedDevice) {
@@ -422,14 +464,23 @@ mod tests {
     fn tombstones_and_account_records_round_trip() {
         assert_eq!(parse_chat(&tombstone(9.0)), Some(ChatRecord::Deleted { at: 9.0 }));
         assert_eq!(parse_chat(b"{\"v\":1}"), None);
-        let mut a = AccountRecord { epoch: 3, recovery_public: "rp".into(), devices: vec![] };
-        a.add(TrustedDevice { id: "d1".into(), public_key: "pk".into(), label: "Mac".into() });
-        a.add(TrustedDevice { id: "d1".into(), public_key: "pk".into(), label: "Mac Studio".into() });
+        let mut a = AccountRecord { epoch: 3, recovery_public: "rp".into(), devices: vec![], compressed: false };
+        a.add(TrustedDevice { id: "d1".into(), public_key: "pk".into(), label: "Mac".into(), caps: vec![] });
+        a.add(TrustedDevice { id: "d1".into(), public_key: "pk".into(), label: "Mac Studio".into(), caps: vec![] });
         let back = AccountRecord::parse(&a.to_bytes()).unwrap();
         assert_eq!(back, a);
         assert_eq!(back.devices.len(), 1);
         assert!(back.trusts("d1") && !back.trusts("d2"));
         assert!(back.lists("d1", "pk") && !back.lists("d1", "other"));
+        // Capabilities and the compressed mark round trip, unknown names included; a record without
+        // them (an older build wrote it) reads as none.
+        let mut b = back.clone();
+        b.devices[0].caps = vec![CAP_DEFLATE.into(), "future".into()];
+        b.compressed = true;
+        assert_eq!(AccountRecord::parse(&b.to_bytes()).unwrap(), b);
+        assert!(b.all_read_deflate() && !a.all_read_deflate());
+        assert!(!AccountRecord::default().all_read_deflate(), "no device listed is not everyone");
+        assert!(!String::from_utf8(a.to_bytes()).unwrap().contains("caps"));
         // The old format, or an epoch of 0, is refused.
         assert_eq!(AccountRecord::parse(br#"{"v":1,"recoveryPublic":"rp","devices":[]}"#), None);
         assert_eq!(AccountRecord::parse(br#"{"v":2,"epoch":0,"recoveryPublic":"rp","devices":[]}"#), None);
