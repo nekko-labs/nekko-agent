@@ -83,7 +83,7 @@ What is not hidden: how many records you have, roughly how big they are, when th
 
 ## Wire format
 
-The reference implementation is `crates/nekko-sync`; `apps/ios/Protocol/Sources/NekkoProtocol/SyncCrypto.swift` matches it byte for byte, and both are tested against `crates/nekko-sync/tests/golden/sync-crypto.json`. All binary values are base64url without padding.
+The reference implementation is `crates/nekko-sync`; `apps/ios/Protocol/Sources/NekkoProtocol/SyncCrypto.swift` and Android's `apps/android/protocol/src/main/kotlin/com/nekko/protocol/SyncCrypto.kt` match it byte for byte, and all three are tested against `crates/nekko-sync/tests/golden/sync-crypto.json` (Android on the JVM and, in `SealedBoxDeviceTest`, on the phone's own crypto providers). All binary values are base64url without padding.
 
 | Blob | Layout | Key and nonce | Associated data |
 | --- | --- | --- | --- |
@@ -197,5 +197,5 @@ All sync routes take `Authorization: Bearer nk_…`. Writes answer `402 {"error"
 - [ ] Connect the Supabase project and deploy Nekko Cloud with it (settings in `apps/nekko-agent-api/README.md`).
 - [ ] Stripe plans into `users.plan`.
 - [ ] Generate the research key offline, pin it, and build donation redaction and sharing.
-- [ ] Android.
+- [ ] Android: the crypto is ported and held to the shared vectors (#2835, 2026-11-26); sign-in, the keyring unlock and the screens are next. The device key will be an Android Keystore agreement key from API 31 and a software key sealed by the Keystore below that.
 - [ ] The outside cryptography review ([scope and RFP](../reports/crypto-review-scope-2026-10-22.md)) before sync is switched on for anyone.
