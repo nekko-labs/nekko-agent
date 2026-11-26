@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import QRCode from 'qrcode';
 import {
   WEBAUTHN_CANCELLED,
   WEBAUTHN_CEREMONY_TIMEOUT_MS,
@@ -109,6 +108,7 @@ export function SecuritySettings() {
   const beginTotp = () =>
     run(async () => {
       const t = await api.securityTotpBegin!();
+      const { default: QRCode } = await import('qrcode');
       setTotp({ ...t, qr: await QRCode.toDataURL(t.uri, { margin: 1, width: 200 }).catch(() => '') });
     });
   /** Confirms the code app under the typed name. True once it is added, so the view clears the name only then. */
