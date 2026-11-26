@@ -18,6 +18,7 @@ import { fillTone } from './contextTone.js';
 import { SessionPrChip } from './SessionPrChip.js';
 import { ProviderMark, providerMarkKind } from './providers/ProviderMark.js';
 import { statusGroupOf, wakeSourcesOf } from '../views/agentPanelView.js';
+import { cutTitle } from '../views/cutTitle.js';
 
 /**
  * One workspace, as a card in the left sidebar.
@@ -270,6 +271,8 @@ function WorkspaceCardImpl({
   const lastReply = session?.lastReplyAt;
   const terminalView = terminal ? terminalPresentation(terminal) : null;
   const title = session?.title ?? terminalView?.title ?? 'Agent';
+  // A title cut from the first message says so, and the hover shows the whole message.
+  const cut = session ? cutTitle(title, session.firstUserText) : null;
   const isChat = !!session;
   // Claude Code picks the version from the plan: when its `system/init` reports
   // a specific id for the alias we sent ("claude-opus-4-7" against our "opus"),
@@ -321,7 +324,7 @@ function WorkspaceCardImpl({
       className={`agent-chip group relative w-full cursor-pointer rounded-xl px-3 py-1 text-left transition-colors duration-150 ${isChat ? 'agent-chip-chat' : isActive ? 'border border-accent/40 bg-accent-soft' : 'border border-line bg-surface hover:bg-surface-2'}`}
       data-agent-active={isActive || undefined}
       data-terminal-row={terminal?.id}
-      title={title}
+      title={cut?.full ?? title}
       data-zone-tint={zoneTint}
     >
       {zoneTint !== undefined && <span className="agent-chip-zone" style={{ background: `var(--zone-tint-${zoneTint})` }} aria-hidden />}
@@ -330,7 +333,7 @@ function WorkspaceCardImpl({
         {renaming && onRename
           ? <RenameField title={title} onDone={onRename} />
           : <span className="min-w-0 flex-1 truncate text-xs leading-[18px] font-semibold text-ink">
-            {title}
+            {cut?.shown ?? title}
           </span>}
         {/* A title-only card has no room for both: its PR says more than the time. */}
         {showUpdated && lastReply && (!status || status === 'done' || status === 'idle') && !(showPullRequests && prLine === 'title' && prs.length > 0) && (
