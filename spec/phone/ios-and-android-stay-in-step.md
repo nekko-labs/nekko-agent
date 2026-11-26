@@ -65,6 +65,12 @@ Both implementations use scoped counts and initial English `status`, `send to NA
 
 Both: JVM or Linux unit tests only; neither app's screens have been looked at on a device or emulator yet.
 
+## Chat groups and tags (#3334)
+
+| Feature | iPhone | Android | Gap / follow-up |
+| --- | --- | --- | --- |
+| Groups with colours and tags on chats ([spec](../agents/chat-groups.md), desktop since #3335): the list clusters chats by group and shows tags; the title reads group / #tags / title | Not built. `chatGroup` and `tags` already sync and are on the phone allowlist; the groups' names and colours are per-computer localStorage prefs the phone cannot read | Same | [#3478](https://github.com/nekko-labs/nekko-agent/issues/3478) (iPhone), [#3479](https://github.com/nekko-labs/nekko-agent/issues/3479) (Android) |
+
 ## Pending response messages (#2476, #2497)
 
 Both phones keep in-chat answers and one-time Allow/Deny as pending response messages: the iPhone since #2499 (2026-11-13), Android since [#2497](https://github.com/nekko-labs/nekko-agent/issues/2497) (2026-11-16, JVM-tested and emulator-verified, not on a physical phone).
