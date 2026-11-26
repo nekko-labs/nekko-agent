@@ -18,7 +18,7 @@ User intent: motion should never fight the user or cost frames, the Local Web UI
 ## Frame budget
 
 - **New-chat background.** The colour drift is three static gradient layers crossfaded by opacity (composited) over the static base, instead of animating registered custom properties; the frosted composer and Focus panel blur at 12 px.
-- **Resize drags.** Wall dividers, the chat composer's height, the context inspector's Folders/Context split and the monitors dock's width and monitor heights write to the page while dragging and commit to state once, on release. The wall's preview is drawn at most once a frame.
+- **Resize drags.** Wall dividers, the chat composer's height, the context inspector's Folders/Context split and the monitors dock's width (or height, docked above or below the wall) and monitor heights write to the page while dragging and commit to state once, on release. The wall's preview is drawn at most once a frame.
 - **Timestamp swipe.** The swipe transforms the transcript list directly and shows the times with one class, not inherited custom properties.
 - **No continuous layout or paint animation.** Usage and progress bars scale rather than animate width; the add tile's liquid border runs once; the companion share is set on the companions column rather than the whole window; the Settings and Models section spies read layout at most once a frame.
 

@@ -215,7 +215,7 @@ const PRINCIPLES: Section = Section {
             small: V::Omit,
         },
         Rule {
-            large: "Diagnose failures instead of retrying blindly. If a command errors or comes back empty, unauthorized, or \"not found\" (an empty `gh`/API result, a 401/403/404, \"permission denied\", \"could not read from remote\", an auth prompt), stop after one or two attempts and name the most likely cause: a private repository or one you don't have access to, missing or expired credentials / `gh` auth, a wrong remote or name, or a network / rate limit. Say which it is and how to fix it (for example, the user granting access or running `gh auth login`). Never loop on the same wall or pretend an empty result means success.",
+            large: "Diagnose failures instead of retrying blindly. If a command errors or comes back empty, unauthorized, or \"not found\" (an empty `gh`/API result, a 401/403/404, \"permission denied\", \"could not read from remote\", an auth prompt), stop after one or two attempts and name the most likely cause: a private repository or one you don't have access to, missing or expired credentials / `gh` auth, a wrong remote or name, or a network / rate limit. Say which it is and how to fix it (for example, renewing access through the configured connection). Never loop on the same wall or pretend an empty result means success.",
             medium: V::Same,
             small: V::Own(
                 r#"If a command fails or returns nothing, stop after one or two tries and name the likely cause (no access, missing login, wrong name, network) and how to fix it. Never loop on the same error."#,

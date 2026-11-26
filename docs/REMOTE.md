@@ -44,6 +44,8 @@ Inside a conversation, related tool calls fold under a purpose heading with an i
 
 A desktop can connect to another computer the same way a phone does (Settings, Computers). It uses the same sealed relay, the same Read and Change switches, the same activity list and the same revocation, and it can do more: read tool output whole, compact a chat and accept changes.
 
+**Without pasting a link.** On the computer you want to reach, make a link (Settings, Computers, *Make a link*). For the ten minutes it works, a computer on the same Wi-Fi finds it under *Add a computer*, *On this network*. Click **Connect** there and both screens show the same six digits. If they match, tap **Pair** on the first computer; if they don't, tap **Don't pair**, because something between the two swapped keys. Nothing is shared before **Pair**. This uses the local network, so on Tailscale alone paste the link instead.
+
 **Treat a connected computer like sitting at this one.** A phone asks for Face ID or the passcode before a change. A computer does not: the check is its own screen lock. It can start a chat in No restrictions mode, and an agent in No restrictions mode can do anything your account can on this computer, including reading files and keys. So a stolen, unlocked laptop can act on your other computers until you revoke it under *Paired devices*. What the computer can't do directly is call the app's own settings for provider keys, sign-ins and remote access, open a terminal, or attach a file from this computer to a chat.
 
 If you turn on step-up (Settings, Security), raising a chat's mode from a computer is refused until you confirm it on this computer.

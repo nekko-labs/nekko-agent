@@ -48,6 +48,11 @@ export interface MonitorsDockProps {
 
 const DEFAULT_DOCK_WIDTH = 248;
 const MIN_DOCK_WIDTH = 220;
+/** A top or bottom dock is as tall as its monitors, up to this; dragging its edge changes the ceiling. */
+const DEFAULT_DOCK_HEIGHT = 360;
+const MIN_DOCK_HEIGHT = 120;
+/** The wall keeps at least this much height beside a top or bottom dock. */
+const WALL_MIN_HEIGHT = 240;
 
 /**
  * The dock's show/hide button: an icon (the agent panel's pill, mirrored), with
@@ -155,6 +160,30 @@ export function MonitorsDock(props: MonitorsDockProps) {
   const size = (value: number) => { const next = Math.max(MIN_DOCK_WIDTH, Math.min(600, value)); setWidth(Math.abs(next - DEFAULT_DOCK_WIDTH) <= 20 ? DEFAULT_DOCK_WIDTH : next); };
   const [collapsing, setCollapsing] = useState<MonitorKey | null>(null);
   const dockRef = useRef<HTMLElement>(null);
+  // Docked above or below the wall, the dock's inner edge drags its height the
+  // same way: written straight onto the dock while dragging, committed on release.
+  const [height, setHeight] = useState(DEFAULT_DOCK_HEIGHT);
+  const [heightMax, setHeightMax] = useState(DEFAULT_DOCK_HEIGHT);
+  const heightDrag = useRef<{ y: number; height: number; max: number; last?: number } | null>(null);
+  /** The tallest the dock can usefully be: all of its monitors showing, and the wall keeping its room. */
+  const measureHeightMax = () => {
+    const node = dockRef.current;
+    if (!node) return DEFAULT_DOCK_HEIGHT;
+    // In a row, each monitor clips its own body, so the list itself rarely
+    // overflows: the most any one of them hides is how much taller the dock can go.
+    const list = monitorsRef.current;
+    const hidden = Math.max(0, list ? list.scrollHeight - list.clientHeight : 0, ...[...list?.querySelectorAll<HTMLElement>('[data-monitor]') ?? []].map((m) => m.scrollHeight - m.clientHeight));
+    const content = node.getBoundingClientRect().height + hidden;
+    const room = (node.parentElement?.clientHeight ?? 1000) - WALL_MIN_HEIGHT;
+    const max = Math.max(MIN_DOCK_HEIGHT, Math.min(Math.ceil(content), room));
+    setHeightMax(max);
+    return max;
+  };
+  const fitHeight = (value: number, max: number) => {
+    const next = Math.max(MIN_DOCK_HEIGHT, Math.min(max, value));
+    return Math.abs(next - DEFAULT_DOCK_HEIGHT) <= 20 ? DEFAULT_DOCK_HEIGHT : next;
+  };
+  const heightSign = dock.side === 'top' ? 1 : -1;
   const focusMonitor = useRef<{ key: MonitorKey; minimized: boolean } | null>(null);
   const minimizeTransition = useRef(dockMinimizeTransition());
   useEffect(() => () => minimizeTransition.current.cancel(), []);
@@ -229,7 +258,7 @@ export function MonitorsDock(props: MonitorsDockProps) {
   return (
     <>
     {collapsed}
-    <aside data-panel-open={dock.show} inert={!dock.show} aria-hidden={!dock.show} ref={dockRef} className="monitors-dock" style={{ '--dock-width': `${width}px` } as React.CSSProperties} data-dock-side={dock.side} aria-label="Monitors">
+    <aside data-panel-open={dock.show} inert={!dock.show} aria-hidden={!dock.show} ref={dockRef} className="monitors-dock" style={{ '--dock-width': `${width}px`, '--dock-height': `${height}px` } as React.CSSProperties} data-dock-side={dock.side} aria-label="Monitors">
       {(dock.side === 'left' || dock.side === 'right') && <div className="monitors-dock__resize" role="separator" tabIndex={0} aria-label="Resize monitors" aria-orientation="vertical" aria-valuemin={MIN_DOCK_WIDTH} aria-valuemax={600} aria-valuenow={width} title="Drag to resize monitors; double-click to reset"
         onPointerDown={(e) => { drag.current = { x: e.clientX, width, room: (e.currentTarget.parentElement?.parentElement?.clientWidth ?? 1000) - 240 }; e.currentTarget.setPointerCapture(e.pointerId); }}
         onPointerMove={(e) => {
@@ -242,6 +271,26 @@ export function MonitorsDock(props: MonitorsDockProps) {
         onPointerUp={() => { const last = drag.current?.last; drag.current = null; if (last != null) setWidth(last); }} onPointerCancel={() => { drag.current = null; }} onDoubleClick={() => setWidth(DEFAULT_DOCK_WIDTH)}
         onKeyDown={(e) => { if (e.key === 'Home') { e.preventDefault(); setWidth(DEFAULT_DOCK_WIDTH); } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); size(width + (e.key === 'ArrowRight' ? 24 : -24) * (dock.side === 'left' ? 1 : -1)); } }}>
         {/* The agent list's grip: a thin line that shows on hover and focus. */}
+        <span aria-hidden className="pane-grip monitors-dock__grip" />
+      </div>}
+      {(dock.side === 'top' || dock.side === 'bottom') && <div className="monitors-dock__resize" role="separator" tabIndex={0} aria-label="Resize monitors" aria-orientation="horizontal" aria-valuemin={MIN_DOCK_HEIGHT} aria-valuemax={Math.max(heightMax, height)} aria-valuenow={height} title="Drag to resize monitors; double-click to reset"
+        onFocus={measureHeightMax}
+        onPointerDown={(e) => { heightDrag.current = { y: e.clientY, height: dockRef.current?.getBoundingClientRect().height ?? height, max: measureHeightMax() }; e.currentTarget.setPointerCapture(e.pointerId); }}
+        onPointerMove={(e) => {
+          const d = heightDrag.current;
+          if (!d) return;
+          d.last = fitHeight(d.height + (e.clientY - d.y) * heightSign, d.max);
+          dockRef.current?.style.setProperty('--dock-height', `${d.last}px`);
+        }}
+        onPointerUp={() => { const last = heightDrag.current?.last; heightDrag.current = null; if (last != null) setHeight(last); }} onPointerCancel={() => { heightDrag.current = null; dockRef.current?.style.setProperty('--dock-height', `${height}px`); }} onDoubleClick={() => setHeight(DEFAULT_DOCK_HEIGHT)}
+        onKeyDown={(e) => {
+          if (e.key === 'Home') { e.preventDefault(); setHeight(DEFAULT_DOCK_HEIGHT); }
+          else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            const shown = Math.min(height, dockRef.current?.getBoundingClientRect().height ?? height);
+            setHeight(fitHeight(shown + (e.key === 'ArrowDown' ? 24 : -24) * heightSign, measureHeightMax()));
+          }
+        }}>
         <span aria-hidden className="pane-grip monitors-dock__grip" />
       </div>}
       <header className="monitors-dock__toolbar">
