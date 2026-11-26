@@ -1,4 +1,4 @@
-import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync } from 'node:fs';
+import { chmodSync, closeSync, copyFileSync, cpSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, rmSync, statSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -65,7 +65,20 @@ const MERGED_DIRS = new Set(['sessions', 'models', 'memory', 'engine', 'runners'
  * made: left behind and deleted with the old folder. A browser profile cannot
  * be merged into another one.
  */
-const DISPOSABLE_DIRS = new Set(['desktop', 'run', 'logs', 'bin', 'runtime', 'fonts', 'agent-browser']);
+const DISPOSABLE_DIRS = new Set(['desktop', 'run', 'logs', 'bin', 'runtime', 'fonts', 'agent-browser', 'catalog']);
+
+/**
+ * Chromium's own folders, found where an old build used its Electron app-data
+ * folder as the data root: disposable. Any other folder `unmerged` does not
+ * know keeps the old folder. Chromium's `Sessions` is left out on purpose: on
+ * a case-insensitive disk it is the chats folder.
+ */
+const CHROMIUM_DIRS = new Set([
+  'Cache', 'Code Cache', 'GPUCache', 'DawnCache', 'DawnGraphiteCache', 'DawnWebGPUCache', 'GrShaderCache', 'ShaderCache',
+  'Crashpad', 'IndexedDB', 'Local Storage', 'Session Storage', 'Network', 'Service Worker', 'Shared Dictionary',
+  'WebStorage', 'Partitions', 'Dictionaries', 'blob_storage', 'databases', 'shared_proto_db', 'VideoDecodeStats',
+  'Local Extension Settings', 'Extension State', 'File System',
+]);
 
 /** Per-install state under `runners/`: the target keeps its own. */
 const RUNNER_LOCAL = new Set(['install-id', 'memory.json', 'vms']);
@@ -315,16 +328,43 @@ function linesCovered(src: string, dst: string): boolean {
 
 const sameSize = (a: string, b: string): boolean => isFile(b) && statSync(a).size === statSync(b).size;
 
+const COMPARE_CHUNK = 1024 * 1024;
+
+/**
+ * `b` is a file with exactly the bytes of `a`. Read in chunks, so a large file
+ * is never held whole. One that cannot be read is not the same.
+ */
+function sameFile(a: string, b: string): boolean {
+  if (!sameSize(a, b)) return false;
+  let fa: number | undefined, fb: number | undefined;
+  try {
+    fa = openSync(a, 'r');
+    fb = openSync(b, 'r');
+    const ba = Buffer.alloc(COMPARE_CHUNK), bb = Buffer.alloc(COMPARE_CHUNK);
+    for (;;) {
+      const n = readSync(fa, ba, 0, COMPARE_CHUNK, null);
+      const m = readSync(fb, bb, 0, COMPARE_CHUNK, null);
+      if (n !== m || !ba.subarray(0, n).equals(bb.subarray(0, m))) return false;
+      if (n === 0) return true;
+    }
+  } catch {
+    return false;
+  } finally {
+    if (fa !== undefined) closeSync(fa);
+    if (fb !== undefined) closeSync(fb);
+  }
+}
+
 /**
  * `dst` holds every entry of the JSON file `src`, as `mergeJsonFile` merges
  * them: array items by id, object keys at the top. A file that does not parse
- * is only covered by one the same size.
+ * is only covered by an identical one.
  */
 function jsonCovered(src: string, dst: string): boolean {
   const a = readJson(src), b = readJson(dst);
   if (Array.isArray(a)) return Array.isArray(b) && a.every((x) => b.some((y) => itemKey(y) === itemKey(x)));
   if (isObj(a)) return isObj(b) && Object.keys(a).every((k) => Object.hasOwn(b, k));
-  return sameSize(src, dst);
+  return sameFile(src, dst);
 }
 
 type Json = Record<string, unknown>;
@@ -626,7 +666,7 @@ function mergeRunners(src: string, dst: string, pairs: Pairs, ci: boolean, repor
     } else if (!existsSync(to)) {
       moveOne(from, to);
       moved.push(to);
-    } else if (!sameSize(from, to)) {
+    } else if (!sameFile(from, to)) {
       report.conflicts.push(from);
     }
   }
@@ -634,14 +674,19 @@ function mergeRunners(src: string, dst: string, pairs: Pairs, ci: boolean, repor
   report.moved.push(...moved);
 }
 
-/** Files under `dir` (at `rel` in a data root) whose counterpart in `target` is missing or a different size. */
-function leftover(dir: string, rel: string, target: string): string[] {
+/**
+ * Files under `dir` (at `rel` in a data root) whose counterpart in `target` is
+ * missing or differs. `bySize` compares sizes only: for multi-gigabyte model
+ * and engine downloads, which nobody edits.
+ */
+function leftover(dir: string, rel: string, target: string, bySize = false): string[] {
   return dirEntries(dir).flatMap((f) => {
     if (f.isSymbolicLink()) return [];
     const p = join(dir, f.name);
-    if (f.isDirectory()) return leftover(p, `${rel}/${f.name}`, target);
+    if (f.isDirectory()) return leftover(p, `${rel}/${f.name}`, target, bySize);
     if (rel === 'models' && f.name === 'library.json') return [];
-    return sameSize(p, join(target, rel, f.name)) ? [] : [`${rel}/${f.name}`];
+    const counterpart = join(target, rel, f.name);
+    return (bySize ? sameSize(p, counterpart) : sameFile(p, counterpart)) ? [] : [`${rel}/${f.name}`];
   });
 }
 
@@ -664,15 +709,19 @@ function runnersLeft(src: string, target: string): string[] {
       if (!jsonCovered(from, to)) missing.push(rel);
     } else if (e.isDirectory()) {
       missing.push(...leftover(from, rel, target));
-    } else if (e.isFile() && !sameSize(from, to)) {
+    } else if (e.isFile() && !sameFile(from, to)) {
       missing.push(rel);
     }
   }
   return missing;
 }
 
-/** Files in a data root that the target does not already have. Empty means the root is safe to delete. */
-export function unmerged(root: string, target: string): string[] {
+/**
+ * Files in a data root that the target does not already have. Empty means the
+ * root is safe to delete. `otherRoots`: the item's other data roots, checked
+ * on their own, so a folder that is one is not reported here.
+ */
+export function unmerged(root: string, target: string, otherRoots: string[] = []): string[] {
   const missing: string[] = [];
   for (const e of dirEntries(root)) {
     const from = join(root, e.name), to = join(target, e.name);
@@ -692,10 +741,16 @@ export function unmerged(root: string, target: string): string[] {
       // A superseded engine build: the target downloaded its own, so nothing here is lost.
     } else if (e.isDirectory() && e.name === 'runners') {
       missing.push(...runnersLeft(from, target));
-    } else if (e.isDirectory() && LEGACY_PROFILE_ENTRIES.has(e.name) && !DISPOSABLE_DIRS.has(e.name)) {
+    } else if (e.isDirectory() && (DISPOSABLE_DIRS.has(e.name) || CHROMIUM_DIRS.has(e.name))) {
+      // Caches and running state: deleted with the old folder.
+    } else if (e.isDirectory() && LEGACY_PROFILE_ENTRIES.has(e.name)) {
       // models, engine and memory, and every other known data folder: a file
       // the merge could not place keeps the old folder.
-      missing.push(...leftover(from, e.name, target));
+      missing.push(...leftover(from, e.name, target, e.name === 'models' || e.name === 'engine'));
+    } else if (e.isDirectory() && !otherRoots.includes(from)) {
+      // A folder the merge does not know (a newer feature, another product)
+      // keeps the old folder.
+      missing.push(`${e.name}/`);
     }
   }
   return missing;
@@ -733,7 +788,7 @@ export function cleanup(items: LegacyItem[], env: LegacyEnv = legacyEnv(), opts:
   const ci = env.platform === 'win32' || env.platform === 'darwin';
   for (const item of items) {
     if (inside(item.path, env.target, ci) || inside(env.target, item.path, ci)) continue;
-    const left = item.dataRoots.filter((r) => !same(r, env.target, ci)).flatMap((r) => unmerged(r, env.target).map((f) => `${basename(r)}/${f}`));
+    const left = item.dataRoots.filter((r) => !same(r, env.target, ci)).flatMap((r) => unmerged(r, env.target, item.dataRoots).map((f) => `${basename(r)}/${f}`));
     if (left.length) { report.kept.push({ path: item.path, reason: `${left.length} item(s) not yet in ${env.target}, e.g. ${left.slice(0, 3).join(', ')}` }); continue; }
     try {
       if (item.kind === 'install') (opts.uninstall ?? defaultUninstall)(item);

@@ -375,3 +375,90 @@ describe('CI runners and other data folders', () => {
     expect(report.removed).toContain(s.main);
   });
 });
+
+describe('what cleanup counts as merged', () => {
+  it('keeps an old folder holding a same-length file that differs from the target copy', () => {
+    const { env } = world(); const s = seed(env);
+    put(join(s.main, 'skills', 'a', 'SKILL.md'), 'Use teh tool');
+    put(join(env.target, 'skills', 'a', 'SKILL.md'), 'Use the tool');
+    const items = detectLegacy(env);
+
+    consolidate(items, env);
+    expect(unmerged(s.main, env.target)).toContain('skills/a/SKILL.md');
+    const report = cleanup(items, env, { uninstall: () => {} });
+    expect(report.kept.map((k) => k.path)).toContain(join(env.home, '.agent-nekko'));
+  });
+
+  it('removes an old folder whose clashing file is identical', () => {
+    const { env } = world(); const s = seed(env);
+    put(join(s.main, 'skills', 'a', 'SKILL.md'), 'Use the tool');
+    put(join(env.target, 'skills', 'a', 'SKILL.md'), 'Use the tool');
+    const items = detectLegacy(env);
+
+    consolidate(items, env);
+    expect(unmerged(s.main, env.target)).toEqual([]);
+    expect(cleanup(items, env, { uninstall: () => {} }).removed).toContain(join(env.home, '.agent-nekko'));
+  });
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('keeps an old folder holding a clashing file it cannot read', () => {
+    const { env } = world(); const s = seed(env);
+    put(join(s.main, 'skills', 'a', 'SKILL.md'), 'Use the tool');
+    put(join(env.target, 'skills', 'a', 'SKILL.md'), 'Use the tool');
+    chmodSync(join(s.main, 'skills', 'a', 'SKILL.md'), 0o000);
+    try {
+      expect(unmerged(s.main, env.target)).toContain('skills/a/SKILL.md');
+    } finally {
+      chmodSync(join(s.main, 'skills', 'a', 'SKILL.md'), 0o600);
+    }
+  });
+
+  it('still compares model downloads by size', () => {
+    const { env } = world(); const s = seed(env);
+    put(join(s.main, 'models', 'chat', 'x.gguf'), 'aaaa');
+    put(join(env.target, 'models', 'chat', 'x.gguf'), 'bbbb');
+    expect(unmerged(s.main, env.target)).not.toContain('models/chat/x.gguf');
+  });
+
+  it('keeps an old folder holding a folder the merge does not know, and names it', () => {
+    const { env } = world(); const s = seed(env);
+    put(join(s.main, 'notes-v2', 'mine.md'), 'mine');
+    const items = detectLegacy(env);
+
+    consolidate(items, env);
+    expect(existsSync(join(s.main, 'notes-v2', 'mine.md'))).toBe(true);
+    expect(existsSync(join(env.target, 'notes-v2'))).toBe(false);
+    expect(unmerged(s.main, env.target)).toEqual(['notes-v2/']);
+    const report = cleanup(items, env, { uninstall: () => {} });
+    const kept = report.kept.find((k) => k.path === join(env.home, '.agent-nekko'));
+    expect(kept?.reason).toContain('notes-v2/');
+  });
+
+  it('treats caches and Chromium folders in a data root as disposable', () => {
+    const { env } = world();
+    const root = join(env.appData, '@open-paw', 'desktop');
+    put(join(root, 'settings.json'), { theme: 'old' });
+    put(join(root, 'Local State'), '{}');
+    for (const dir of ['Crashpad', 'IndexedDB', 'GPUCache', 'DawnGraphiteCache', 'catalog', 'agent-browser']) put(join(root, dir, 'x'), 'x');
+    put(join(env.target, 'settings.json'), { theme: 'new' });
+    const items = detectLegacy(env);
+
+    consolidate(items, env);
+    expect(unmerged(root, env.target)).toEqual([]);
+    expect(cleanup(items, env, { uninstall: () => {} }).removed).toContain(join(env.appData, '@open-paw'));
+  });
+
+  it('does not report a nested data root against the root that holds it', () => {
+    const { env } = world();
+    const outer = join(env.home, '.open-paw');
+    put(join(outer, 'settings.json'), { theme: 'outer' });
+    put(join(outer, 'profile-b', 'sessions', 's_b.json'), { id: 's_b' });
+    put(join(env.target, 'settings.json'), { theme: 'new' });
+    const items = detectLegacy(env);
+    expect(items.find((i) => i.path === outer)?.dataRoots).toEqual([outer, join(outer, 'profile-b')]);
+
+    consolidate(items, env);
+    expect(unmerged(outer, env.target, items.find((i) => i.path === outer)!.dataRoots)).toEqual([]);
+    expect(cleanup(items, env, { uninstall: () => {} }).removed).toContain(outer);
+    expect(existsSync(join(env.target, 'sessions', 's_b.json'))).toBe(true);
+  });
+});
