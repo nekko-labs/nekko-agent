@@ -1,4 +1,4 @@
-import { chmodSync, closeSync, copyFileSync, cpSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, rmSync, statSync } from 'node:fs';
+import { chmodSync, closeSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, readlinkSync, readSync, renameSync, rmSync, statSync, symlinkSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -89,9 +89,15 @@ const RUNNER_DISPOSABLE = new Set(['logs']);
 /** Under `runners/images/`, one install's unfinished builds, replaced images and downloads: left behind. */
 const imageLocal = (name: string): boolean => name === 'cache' || name.endsWith('-cache') || name.endsWith('.new') || name.endsWith('.old');
 
-/** The other known data folders in a root: they move file by file, and any left behind keeps the old folder. */
+const isOtherDataDir = (name: string): boolean => LEGACY_PROFILE_ENTRIES.has(name) && !MERGED_DIRS.has(name) && !DISPOSABLE_DIRS.has(name);
+
+/**
+ * The other known data folders in a root: they move file by file, and any left
+ * behind keeps the old folder. A symlink to a folder (a `skills` kept
+ * elsewhere) counts, and moves as a link.
+ */
 const otherDataDirs = (root: string): string[] => dirEntries(root)
-  .filter((e) => e.isDirectory() && LEGACY_PROFILE_ENTRIES.has(e.name) && !MERGED_DIRS.has(e.name) && !DISPOSABLE_DIRS.has(e.name))
+  .filter((e) => isOtherDataDir(e.name) && (e.isDirectory() || (e.isSymbolicLink() && isDir(join(root, e.name)))))
   .map((e) => e.name);
 
 export function legacyEnv(over: Partial<LegacyEnv> = {}): LegacyEnv {
@@ -106,6 +112,15 @@ const isDir = (p: string): boolean => { try { return statSync(p).isDirectory(); 
 const isFile = (p: string): boolean => { try { return statSync(p).isFile(); } catch { return false; } };
 const same = (a: string, b: string, ci: boolean): boolean => (ci ? resolve(a).toLowerCase() === resolve(b).toLowerCase() : resolve(a) === resolve(b));
 const dirEntries = (dir: string) => { try { return readdirSync(dir, { withFileTypes: true }); } catch { return []; } };
+
+/** The text of the symlink at `p`, or null when `p` is not one. */
+const linkAt = (p: string): string | null => { try { return lstatSync(p).isSymbolicLink() ? readlinkSync(p) : null; } catch { return null; } };
+
+/** Where the symlink at `p` points, resolved, or null when `p` is not one. */
+const linkTarget = (p: string): string | null => { const t = linkAt(p); return t === null ? null : resolve(dirname(p), t); };
+
+/** Something is at `p`, a dangling symlink included. */
+const present = (p: string): boolean => { try { lstatSync(p); return true; } catch { return false; } };
 
 function inside(path: string, root: string, ci: boolean): boolean {
   const rel = relative(ci ? resolve(root).toLowerCase() : resolve(root), ci ? resolve(path).toLowerCase() : resolve(path));
@@ -284,13 +299,35 @@ function moveOne(from: string, to: string): void {
   }
 }
 
+/**
+ * Move a symlink the target lacks, as the link: what it points at is never
+ * touched. A relative link is made absolute, so it still points at the same
+ * place. One the target has pointing elsewhere, or that cannot be made, is a
+ * conflict and stays in the source.
+ */
+function moveLink(from: string, to: string, moved: string[], conflicts: string[]): void {
+  const where = linkTarget(from)!;
+  if (present(to)) { if (linkTarget(to) !== where) conflicts.push(from); return; }
+  try {
+    if (isAbsolute(linkAt(from)!)) moveOne(from, to);
+    else {
+      mkdirSync(dirname(to), { recursive: true, mode: 0o700 });
+      symlinkSync(where, to, isDir(from) ? 'dir' : 'file');
+      rmSync(from, { force: true });
+    }
+    moved.push(to);
+  } catch {
+    conflicts.push(from);
+  }
+}
+
 /** Move what the target lacks. Same-name files are conflicts and stay in the source. */
 function moveMissing(src: string, dst: string, moved: string[], conflicts: string[]): void {
   mkdirSync(dst, { recursive: true, mode: 0o700 });
   for (const e of dirEntries(src)) {
-    if (e.isSymbolicLink()) continue;
     const from = join(src, e.name), to = join(dst, e.name);
-    if (!existsSync(to)) {
+    if (e.isSymbolicLink()) moveLink(from, to, moved, conflicts);
+    else if (!present(to)) {
       moveOne(from, to);
       moved.push(to);
     } else if (e.isDirectory() && isDir(to)) moveMissing(from, to, moved, conflicts);
@@ -298,7 +335,9 @@ function moveMissing(src: string, dst: string, moved: string[], conflicts: strin
   }
 }
 
+/** JSON files under `path`, never through a symlink: a moved link may point at a person's own folder. */
 function jsonFilesUnder(path: string): string[] {
+  if (linkAt(path) !== null) return [];
   if (isFile(path)) return path.endsWith('.json') ? [path] : [];
   return dirEntries(path).flatMap((e) => (e.isSymbolicLink() ? [] : jsonFilesUnder(join(path, e.name))));
 }
@@ -548,8 +587,10 @@ function mergeRoot(src: string, target: string, ci: boolean): RootReport {
   if (isDir(srcModels)) {
     const library = readJson(join(srcModels, 'library.json')) as { models?: Record<string, { file?: string; name?: string; architecture?: string; readable?: boolean; hasProjector?: boolean }> } | undefined;
     for (const e of dirEntries(srcModels)) {
-      if (e.name === 'library.json' || e.isSymbolicLink()) continue;
+      if (e.name === 'library.json') continue;
       const from = join(srcModels, e.name);
+      // A model folder kept on another disk: the link moves, so library paths through it still resolve.
+      if (e.isSymbolicLink()) { moveLink(from, join(tgtModels, e.name), report.moved, report.conflicts); continue; }
       if (!e.isDirectory() || e.name === '.companions' || MODEL_TYPES.test(e.name)) {
         const to = join(tgtModels, e.name);
         if (e.isDirectory()) moveMissing(from, to, report.moved, report.conflicts);
@@ -628,8 +669,13 @@ function mergeRoot(src: string, target: string, ci: boolean): RootReport {
   mergeRunners(join(src, 'runners'), join(target, 'runners'), allPairs, ci, report);
 
   for (const name of otherDataDirs(src)) {
+    const from = join(src, name), to = join(target, name);
+
+    // A linked data folder moves as the link, never its contents.
+    if (linkAt(from) !== null) { moveLink(from, to, report.moved, report.conflicts); continue; }
+
     const moved: string[] = [];
-    moveMissing(join(src, name), join(target, name), moved, report.conflicts);
+    moveMissing(from, to, moved, report.conflicts);
     for (const path of moved.flatMap(jsonFilesUnder)) copyJson(path, path, allPairs, ci);
     report.moved.push(...moved);
   }
@@ -686,11 +732,13 @@ function mergeRunners(src: string, dst: string, pairs: Pairs, ci: boolean, repor
  */
 function leftover(dir: string, rel: string, target: string, bySize = false): string[] {
   return dirEntries(dir).flatMap((f) => {
-    if (f.isSymbolicLink()) return [];
-    const p = join(dir, f.name);
+    const p = join(dir, f.name), counterpart = join(target, rel, f.name);
+    // A symlink counts once the target has one pointing the same way. Engine
+    // links are part of a download, not something a person made.
+    const engine = rel === 'engine' || rel.startsWith('engine/');
+    if (f.isSymbolicLink()) return engine || linkTarget(counterpart) === linkTarget(p) ? [] : [`${rel}/${f.name}`];
     if (f.isDirectory()) return leftover(p, `${rel}/${f.name}`, target, bySize);
     if (rel === 'models' && f.name === 'library.json') return [];
-    const counterpart = join(target, rel, f.name);
     return (bySize ? sameSize(p, counterpart) : sameFile(p, counterpart)) ? [] : [`${rel}/${f.name}`];
   });
 }
@@ -753,6 +801,9 @@ export function unmerged(root: string, target: string, otherRoots: string[] = []
       // models, engine and memory, and every other known data folder: a file
       // the merge could not place keeps the old folder.
       missing.push(...leftover(from, e.name, target, e.name === 'models' || e.name === 'engine'));
+    } else if (e.isSymbolicLink() && isOtherDataDir(e.name) && isDir(from)) {
+      // A linked data folder: merged once the target links the same way.
+      if (linkTarget(to) !== linkTarget(from)) missing.push(e.name);
     } else if (e.isDirectory() && !otherRoots.includes(from)) {
       // A folder the merge does not know (a newer feature, another product)
       // keeps the old folder.

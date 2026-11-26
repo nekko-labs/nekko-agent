@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, truncateSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, statSync, symlinkSync, truncateSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { cleanup, consolidate, detectLegacy, legacyEnv, summarize, unmerged, type LegacyEnv } from './legacy-profiles.js';
 
 const dirs: string[] = [];
@@ -483,6 +483,85 @@ describe('what cleanup counts as merged', () => {
     consolidate(items, env);
     expect(unmerged(root, env.target)).toEqual([]);
     expect(cleanup(items, env, { uninstall: () => {} }).removed).toContain(join(env.appData, '@open-paw'));
+  });
+
+  describe.skipIf(process.platform === 'win32')('symlinks', () => {
+    /** A skill a person keeps in their own folder, linked into the data folder. */
+    function linkedSkill(root: string, s: { main: string }) {
+      const own = join(root, 'dev', 'my-skill');
+      put(join(own, 'SKILL.md'), 'mine');
+      put(join(own, 'meta.json'), { home: join(s.main, 'skills') });
+      return own;
+    }
+
+    it('moves a linked skill as the link, leaving the folder it points at alone', () => {
+      const { root, env } = world(); const s = seed(env);
+      const own = linkedSkill(root, s);
+      mkdirSync(join(s.main, 'skills'), { recursive: true });
+      symlinkSync(own, join(s.main, 'skills', 'my-skill'));
+      const items = detectLegacy(env);
+
+      consolidate(items, env);
+      expect(readlinkSync(join(env.target, 'skills', 'my-skill'))).toBe(own);
+      expect(json(join(own, 'meta.json')).home).toBe(join(s.main, 'skills'));
+      expect(unmerged(s.main, env.target)).toEqual([]);
+      expect(cleanup(items, env, { uninstall: () => {} }).removed).toContain(s.main);
+      expect(readFileSync(join(own, 'SKILL.md'), 'utf8')).toBe('mine');
+    });
+
+    it('keeps an old folder whose linked skill clashes with a different one in the target', () => {
+      const { root, env } = world(); const s = seed(env);
+      const own = linkedSkill(root, s);
+      mkdirSync(join(s.main, 'skills'), { recursive: true });
+      symlinkSync(own, join(s.main, 'skills', 'my-skill'));
+      put(join(env.target, 'skills', 'my-skill', 'SKILL.md'), 'another');
+      const items = detectLegacy(env);
+
+      consolidate(items, env);
+      expect(unmerged(s.main, env.target)).toEqual(['skills/my-skill']);
+      expect(cleanup(items, env, { uninstall: () => {} }).kept[0].reason).toContain('skills/my-skill');
+      expect(readlinkSync(join(s.main, 'skills', 'my-skill'))).toBe(own);
+    });
+
+    it('keeps a relative link pointing at the same place after the move', () => {
+      const { root, env } = world(); const s = seed(env);
+      const own = linkedSkill(root, s);
+      mkdirSync(join(s.main, 'skills'), { recursive: true });
+      symlinkSync(relative(join(s.main, 'skills'), own), join(s.main, 'skills', 'my-skill'));
+      const items = detectLegacy(env);
+
+      consolidate(items, env);
+      expect(realpathSync(join(env.target, 'skills', 'my-skill'))).toBe(realpathSync(own));
+      expect(unmerged(s.main, env.target)).toEqual([]);
+    });
+
+    it('moves a linked model folder as the link, and checks it', () => {
+      const { root, env } = world(); const s = seed(env);
+      const disk = join(root, 'external', 'big-model');
+      put(join(disk, 'w.gguf'), 'weights');
+      symlinkSync(disk, join(s.main, 'models', 'big-model'));
+      expect(unmerged(s.main, env.target)).toContain('models/big-model');
+
+      consolidate(detectLegacy(env), env);
+      expect(readlinkSync(join(env.target, 'models', 'big-model'))).toBe(disk);
+      expect(unmerged(s.main, env.target)).not.toContain('models/big-model');
+    });
+
+    it('moves a linked data folder as the link', () => {
+      const { root, env } = world(); const s = seed(env);
+      const own = join(root, 'dev', 'skills');
+      put(join(own, 'a', 'SKILL.md'), 'mine');
+      symlinkSync(own, join(s.main, 'skills'));
+      expect(unmerged(s.main, env.target)).toContain('skills');
+      const items = detectLegacy(env);
+
+      consolidate(items, env);
+      expect(readlinkSync(join(env.target, 'skills'))).toBe(own);
+      expect(existsSync(join(own, 'a', 'SKILL.md'))).toBe(true);
+      expect(unmerged(s.main, env.target)).toEqual([]);
+      expect(cleanup(items, env, { uninstall: () => {} }).removed).toContain(s.main);
+      expect(existsSync(join(own, 'a', 'SKILL.md'))).toBe(true);
+    });
   });
 
   it('does not report a nested data root against the root that holds it', () => {
