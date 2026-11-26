@@ -286,7 +286,7 @@ public final class ComputersStore {
     public var transcriptCache: TranscriptCache? {
         didSet {
             guard transcriptCache !== oldValue else { return }
-            if transcriptCache == nil { oldValue?.removeAll() }
+            if transcriptCache == nil, let oldValue { transcripts.wipeAll(oldValue) }
             transcripts.use(transcriptCache, computerId: offlineComputer)
         }
     }
@@ -744,7 +744,7 @@ public final class ComputersStore {
             offlineComputer = nil
         }
         offlineFiles?.remove(id)
-        transcriptCache?.removeComputer(id)
+        transcripts.wipeComputer(id)
         computers.removeAll { $0.id == id }
         attention[id] = nil
         saveIndex()
@@ -1054,6 +1054,9 @@ public final class ComputersStore {
     /// rather than left retrying in the background. No background mode is
     /// involved: the grace fits in the app's ordinary background time.
     public func enterBackground(grace: TimeInterval = 30) {
+        // Saves wait a moment to coalesce; the app may be suspended before that moment ends.
+        chatListCache?.flush()
+        transcripts.flushNow()
         graceTask?.cancel()
         guard client != nil || !links.isEmpty, !suspended else { return }
         let anyOnline = conn == .online || peers.values.contains { $0.conn == .online }

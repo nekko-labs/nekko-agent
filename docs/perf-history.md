@@ -39,6 +39,27 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## iPhone delegating chats stop re-reading the chat list on every tool result (#3384, 2026-11-26)
+Area: renderer
+Result: improvement (reads per turn)
+Conditions: `swift test` on an Apple M1 Max, macOS 27.2.1, with a counting fake connection (`AgentStateRefreshTests.testOtherToolsResultsReadNothing`): a chat whose transcript holds a `spawn_agent` call, then ten `bash` tool results. Counts are `sessions:summaries` calls, not time.
+
+| Metric | Before | After |
+|---|---|---|
+| `sessions:summaries` calls caused by 10 shell tool results | 10 (12 calls in the test against 2 after the first read and the sub-agent's own result) | 0 (2 calls) |
+| `sessions:summaries` calls for a burst of 8 sub-agent results | not measured | 1 in flight, then 1 more (`testABurstOfSubAgentResultsIsCoalesced`) |
+
+Why: `ChatModel` refreshed the agent state (watches, child chats) on every tool result; it now refreshes only for a watch, clip or sub-agent result, and one refresh runs at a time with a trailing re-read. Not measured: bytes or milliseconds per read on a real account. Source: #3384.
+## Android: send confirmation backs off instead of re-reading the chat twice a second (#3411, 2026-11-26)
+Area: renderer (Android app, relay traffic)
+Result: improvement (call count in a JVM unit test; no phone, relay or engine measurement)
+Conditions: JVM unit test `OutboxTest` on the Apple M1 Max Mac, kotlinx-coroutines-test virtual time, a counting `FakeCaller`. One prompt is sent to a chat whose `chat:send` has not answered and whose `session:get` does not list the prompt yet (a long turn); `session:get` calls counted over the first 10 s of virtual time, the one read made before sending included. One run each side (the count is deterministic).
+
+| Metric | Before | After |
+|---|---|---|
+| `session:get` calls in the first 10 s of a send | 20 | 5 |
+
+Why: the confirmation loop read the whole chat every 500 ms until the chat listed the prompt id. It now waits on the computer's first event for the chat, on `chat:send` answering, or on a 0.5, 1, 2, 4 s backoff (the iPhone's `Outbox`). The unit test also shows an early wake: with the prompt already listed, the first event for the chat triggers the one re-read at once, instead of up to 500 ms later. Source: #3411.
 ## Android chat re-reads stop re-reading the runnable skills (#3415, 2026-11-26)
 Area: renderer (Android app, relay traffic)
 Result: improvement (reads per re-read)
@@ -116,6 +137,21 @@ Conditions: Apple M1 Max, macOS 27.2, Node v26.8.1, vitest 5.0.5 with jsdom, Rea
 | p95 per delta | 32.93, 34.35, 38.98, 36.95, 87.59 ms | 9.52, 11.03, 8.86, 10.41, 4.65 ms |
 
 Why: `ChatMarkdown` rebuilt its render context from `text` on every delta, so no finished `TextSegment` ever held its `React.memo`; the context now depends only on stable inputs and the verification evidence is kept by value. A unit test counts renders of a finished block across deltas (3 before, 1 after). Not measured: real-browser frame time and the Electron harness; the new long-reply probes in `scripts/perf` had not landed.
+## pr:sessionList reads PR URLs from the summaries, and a batch channel (2026-11-26)
+Area: engine daemon
+Result: improvement (the store read behind each call)
+Conditions: Apple M1 Max, macOS 27.2, release `nekko-store` test build, machine busy with other builds (load average 43 while measuring), so read the ratio only. Synthetic chats in a temp data dir: 500 small chats and one large one (2,000 messages of 10 KB text and 20 screenshots, a 20.1 MB file). `crates/nekko-store/tests/summaries_timing.rs`, `time_pr_session_list_on_a_large_chat` (ignored by default); median of 9 calls.
+
+| Metric | Before | After |
+|---|---|---|
+| Store read per `pr:sessionList` call, large chat | 21.29 ms (`get` of the whole chat, PR URLs collected from its transcript, then a list for the sub-agents' PRs) | 0.058 ms (`summary(id)`) |
+
+The "before" list call is the kept-list `summaries()` of the store after the previous change, which is faster than the one `pr:sessionList` called when this was written (see the entry below: 5.077 ms per find at 500 chats, 50.908 ms at 2,000), so the real before is higher than 21.29 ms.
+
+Why: `pr:sessionList` read, parsed and restored the pictures of the whole chat on every PR poll and prefetch only to collect PR URLs the summaries already hold (rolled up from sub-agent chats). It now reads them from `SessionStore::summary(id)`, and `pr:sessionListMany` answers for up to 64 chats in one call, which the board's PR prefetch and the cards' shared 20 s poll use. Source: this PR.
+
+Unmeasured: the call's end-to-end time over IPC with `gh` or the GitHub API in it (the PR state itself is cached per URL by the daemon as before), and the request count per minute with many cards on screen, before and after.
+
 ## Chat listings keep the file list and stop writing running chats (2026-11-26)
 Area: engine daemon
 Result: improvement (warm listing, one chat's summary, a listing while a chat runs)
@@ -137,6 +173,19 @@ An earlier run of the same test with 1 MB replies, under heavier load, gave the 
 Why: `summaries()` no longer calls `flush_all()` (a running chat's summary is made from its memory, with the user's on-disk fields, and cached per hold), keeps the chat file list in memory (only chats this store wrote are read again, plus a full look every 30 s for outside changes) instead of one `stat` per chat per call, and `summary(id)` checks one file and rolls up the sub-agents' PRs from the kept list. Source: this PR.
 
 Unmeasured: the real daemon under several running agents (event rate, disk writes saved by the 2 s save debounce now holding), a real chat folder with 1,000+ chats of mixed sizes, Windows.
+
+## iPhone saved chats and chat lists stop encoding and writing on the main thread (#3386, 2026-11-26)
+Area: renderer
+Result: improvement (main-thread time per save); not profiled in the running app
+Conditions: Apple M1 Max, macOS 27.2.1, Xcode 27.2, `swift test` (debug build on a macOS host, not an iPhone or the simulator), other builds running on the same machine so timings drift between runs. `XCTClockMetric`, 5 iterations. Synthetic chat of 300 messages of 2,000 characters (about 600 KB), the shape `SavedTranscripts` caps at 1 MB. Tests: `SavedTranscriptsTests.testMeasureEncodeAndHashOfASave`, `testMeasureMainThreadCostOfASave`, `testMeasureMainThreadCostOfAnUnchangedSave`.
+
+| Metric | Before | After |
+|---|---|---|
+| Main thread, 5 saves of a changed chat (before: encode and hash only, not counting the file write) | 0.475553-0.630217 s (values 0.519456, 0.630217, 0.529841, 0.502801, 0.475553 s) | 0.000058-0.000099 s (values 0.000058, 0.000094, 0.000099, 0.000091, 0.000074 s) |
+| Main thread, 10 saves of the same unchanged chat | the same full encode and hash each time (not measured separately) | 0.000131-0.000464 s (values 0.000169, 0.000191, 0.000464, 0.000131, 0.000209 s) |
+| Writes for 12 saves of one chat in a burst | 12 chat files and 12 index files (one per save; by construction) | 1 chat file and 1 index (`testABurstOfSavesIsOneWrite`) |
+
+Why: `ChatModel.reload` saved the whole session on the main thread after every read: serialise (up to twice), FNV-hash byte by byte, write the file and the index. Now an unchanged chat only moves in the recent list, and a changed one is queued, then encoded, hashed and written on a background queue, newest copy per chat; the chat list files (`saveList` after each summaries read) coalesce the same way. The encode and hash still cost the same, on another thread. Not measured: file write time on an iPhone, hitches in a long chat on a device. Source: #3386.
 
 ## Plum and Indigo window glow steps instead of fading every frame (#3136, 2026-11-20)
 Area: GPU/memory
@@ -1693,6 +1742,7 @@ speed. Source: [#152](https://github.com/nekko-labs/nekko-agent/pull/152).
 ## Unmeasured
 
 - Nekko Cloud duplicate calls (2026-11-26, #3365): traffic-shape change. Counted against test stubs, not production: five `cloud:refresh` calls in a row made 2 stub calls (`/v1/auth/me`, `/v1/sync/state`) instead of 10, and six concurrent ones made 2 instead of 12; three overlapping iPhone `sync()` calls made 1 pull instead of 3, and a second sync 2 s after the first skipped `/v1/auth/me` and `/v1/sync/state` (the pull still ran). Wanted pictures are fetched 3 at a time (peak in-flight 3 in the unit test, with fake 15 ms fetches); the real wall-time effect is unmeasured. Not measured: how often real clients make these repeat calls.
+- Relay reconnect jitter (2026-11-26, #3385, iPhone): the backoff of 1, 2, 4 ... 30 s now gets 0 to 50% random extra, so clients that lose a relay together spread their redials. Tested for bounds and spread (200 draws at attempt 3 all fall in 8 s to under 12 s and more than 100 distinct values), but the effect on a relay restart is not measured. Counting dials per second at the relay after restarting it with many connected clients, before and after, would settle it.
 - Visible-interval timers, hidden-pane animations and watch reads (2026-11-26): the ChatPane 500 ms and 4 s timers, the active-watch chips, `agentWatches`, the local-models monitor, `VoiceSettings` (1 s), `RemoteAccess` (5 s, several), `ConnectionsSettings`, `RunnerCard` and the limits clock (now one shared ticker) pause while the window is hidden or their pane is parked; the mascot and pixel animations hold their frame in a parked pane; a chat's next-wake read runs on `agent_watch` results and turn ends, with a 60 s fallback, not after every tool result and every 15 s. Unit tests show the pause and resume, but no CPU, wakeup or energy figure was measured, and neither was the count of `session:nextWatch` calls per turn. The idle-CPU-with-the-window-hidden probe being added to `scripts/perf` would settle the timers; a count of `nextAgentWatchAt` calls over one 20-tool-call turn on both revisions would settle the watch reads.
 - Replies queued for one socket are bounded, and live `tool_result` frames drop their pictures (2026-11-26): `rpc_socket`'s per-socket reply queue (`out_tx`) was unbounded, and the hub's `tool_result` frames carried each screenshot as a base64 data URL (replayed to every window that connects mid-turn, queued for every socket, the relay and the API client). Now a socket whose writer holds more than 64 MiB of replies is dropped (as a send past 30 s already was; a lone reply is always queued), and a live `tool_result` event carries `nekko-blob:<sha256>.<ext>` references for pictures of 4 KB or more (the saved chat still has the data URLs). Only unit-level sizes were checked: a 20,000-byte PNG made the event's JSON about 26.7 KB as a data URL and under 300 bytes as a reference (asserted in `a_tool_results_pictures_leave_the_event_as_blob_references`). Not measured: the hub ring's resident bytes, the relay's bytes per tool result, or nekkod's memory with a stalled socket during a screenshot-heavy turn, before and after. A turn of 30 one-megabyte screenshots with one window deliberately not reading, `private bytes` sampled every second on both revisions, would settle it.
 - Organization heartbeat off the fast path (2026-11-26, #3425): built but switched off, so no traffic change today. If turned on (API lease of at least 12 minutes, computer on the Relay account channel), by the code a sharing computer's heartbeat goes from every 30 s (2,880 a day) to every 10 minutes (144 a day), and the Computers list poll from 15 s to 60 s while the channel is up. Not measured.
@@ -1869,6 +1919,7 @@ Conditions: Linux AMD EPYC9V74 (4 threads), Chrome156.0.8078.4, Node22.23.4, one
 Separate profiled base/head cold p95:39.6/36.3ms, not gate-equivalent. Sampled `setCurrentTime` self-time fell175.837→0ms (113.407ms mount,62.430ms deletion across33 base switches). In-click style-recalculation total fell156.822→0ms; click duration median18.459→12.457ms. Whole-profile style/layout/paint still present; do not sum overlapping trace totals or infer a per-frame gain from cumulative CPU samples.
 
 Why: pause fresh SVGs without redundant zero-time seeks; cancel timers/listeners without seeking discarded SVGs; replace motion SVG by icon identity. Playback/reset and synchronous first-frame requirements unchanged. Both recovered head p95s meet33ms but first pair is slower; prior log-only head33.7ms misses. #1998 stays open; no budget reduction or increase in this PR. Main's separate48ms gate is not acceptance of this repair. Terminal skipped; Linux streaming/memory not requested. Source: [run42251252142](https://github.com/nekko-labs/nekko-agent/actions/runs/42251252142), artifact13521343207 ZIP SHA256 `0910a63aad23d1dfd6945c6cb37e224cb733147a64851de8e0bbfeb7f45add46`, [detailed provenance/limitations](../reports/cold-chat-paint-investigation.md). Diagnostic branch must never merge.
+- Android send confirmation (2026-11-26, #3411): not measured on a phone: bytes and frames per send over the relay, and the engine-side cost of the chat reads that no longer happen. A relay-side frame count of one send from a paired Android phone, before and after, would settle it.
 - Android chat open (2026-11-26, #3415): the 300-message `session:get` per open and re-read, and the `chat:pending` and `context:preview` reads that still follow each re-read, are unchanged and unmeasured. They wait on the engine contract in #3439. Bytes per open and decode time on Main for a 300-message chat, before and after the paged open, would settle it.
 - Android idle costs (2026-11-26, #3412): the computer page's 30 s poll and a chat's 15 s watch tick now stop while the screen is not started; the Keystore key is opened once per process instead of once per secure-store read; an agent event that changes no activity returns the same computers state; relay redials add 0 to 50% jitter. Not measured: calls made in the background and battery over a 30 minute idle with the app backgrounded (Energy Profiler or `adb shell dumpsys batterystats` plus Perfetto, before and after), the milliseconds a Keystore `getEntry` costs per read on a mid-range phone (a `Trace.beginSection` around `AndroidSecureStore.get` on cold start), and the allocation rate per streamed token in the repository. JVM unit tests cover the behaviour only.
 - Android streaming (2026-11-26, #3410): not measured on a phone or emulator: dropped frames and P90/P99 frame time while streaming into a 300-message chat, the recomposition count of the visible rows, the effect of the per-frame word join on frames, and battery over a long run. A Macrobenchmark `FrameTimingMetric` run streaming `android/scripts/fake-model.mjs` output into a 300-message chat, before and after on the same emulator or device, would settle it.
