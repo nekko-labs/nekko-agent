@@ -23,7 +23,7 @@ export interface StorageUsage {
   worktreeBytes: Record<string, number>;
 }
 
-/** Why "Remove idle worktrees" keeps a worktree (decision 0121). */
+/** Why "Remove idle worktrees" keeps a worktree (decision 0122). */
 export type KeptReason = 'recent' | 'dirty' | 'unpushed' | 'running' | 'locked' | 'open' | 'ignored';
 
 export interface IdleWorktree {

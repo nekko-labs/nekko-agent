@@ -3,7 +3,7 @@ status: accepted
 date: 2026-11-26
 ---
 
-# 0121. Bulk worktree cleanup includes worktrees agents made outside Nekko
+# 0122. Bulk worktree cleanup includes worktrees agents made outside Nekko
 
 ## Context
 

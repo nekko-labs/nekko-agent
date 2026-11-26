@@ -54,7 +54,7 @@ One row per category, largest first, each with its size and one action. While a 
 
 ### Remove idle worktrees
 
-Decided 2026-11-26 by Philip: the bulk action includes worktrees made outside Nekko (by an agent running `git worktree add`, as this repo's own instructions tell agents to), because those are the ones that filled his disk; the existing merged-PR sweep only ever touches chat-made ones. See [decision 0121](../../docs/decisions/0121-bulk-worktree-cleanup-includes-agent-made-worktrees.md).
+Decided 2026-11-26 by Philip: the bulk action includes worktrees made outside Nekko (by an agent running `git worktree add`, as this repo's own instructions tell agents to), because those are the ones that filled his disk; the existing merged-PR sweep only ever touches chat-made ones. See [decision 0122](../../docs/decisions/0122-bulk-worktree-cleanup-includes-agent-made-worktrees.md).
 
 A worktree is **idle** and offered for removal only when all of these hold, checked when the preview is built and again right before each removal:
 

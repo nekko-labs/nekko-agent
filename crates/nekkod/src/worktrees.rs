@@ -959,7 +959,7 @@ fn split_blocks(s: &str) -> Vec<String> {
     s.replace("\r\n", "\n").split("\n\n").map(str::to_string).collect()
 }
 
-/// Why a worktree is kept by "Remove idle worktrees" (decision 0121).
+/// Why a worktree is kept by "Remove idle worktrees" (decision 0122).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kept {
     Recent,

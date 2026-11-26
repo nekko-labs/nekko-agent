@@ -129,3 +129,4 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0119](0119-share-the-nekko-folder-but-not-the-agent-profile.md) | `~/.nekko` is the shared host root, Agent owns the nested profile by default, and host access does not extend to sandbox chats | accepted |
 | [0120](0120-chat-pictures-sync-as-their-own-records.md) | Pictures in synced chats travel as their own sealed `picture` records, named by their bytes and kept per computer, instead of being left out of the chat's record | accepted |
 | [0121](0121-advertise-one-edit-file-input-shape.md) | Advertise a single array form for single and batch `edit_file` calls; keep the legacy pair accepted at runtime | accepted |
+| [0122](0122-bulk-worktree-cleanup-includes-agent-made-worktrees.md) | Settings → Storage's bulk "Remove idle worktrees" includes worktrees agents made outside Nekko, behind a 3-day idle rule, and always keeps the branch | accepted |
