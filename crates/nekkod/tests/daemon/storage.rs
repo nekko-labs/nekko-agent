@@ -39,12 +39,15 @@ async fn measures_each_category_in_the_background() {
     std::fs::remove_dir_all(data).ok();
 }
 
+#[cfg(unix)]
 fn git(dir: &std::path::Path, args: &[&str]) -> String {
     let out = std::process::Command::new("git").args(args).current_dir(dir).output().unwrap();
     assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
     String::from_utf8_lossy(&out.stdout).into_owned()
 }
 
+// Ages folders through `File::open` on a directory, which Windows refuses.
+#[cfg(unix)]
 #[tokio::test(flavor = "multi_thread")]
 async fn removes_idle_worktrees_and_keeps_their_branches() {
     let base = std::env::temp_dir().join(format!("nekkod-storage-wt-{}", std::process::id()));

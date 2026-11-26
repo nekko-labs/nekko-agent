@@ -37,7 +37,7 @@ A new **Storage** page in the Settings rail, under **Nekko Agent**, after **Tool
 
 ### The bar
 
-One stacked bar of the whole disk: each Nekko category in its own colour, then **Other apps and files** (used space Nekko did not measure as its own), then **Free**. Under it, one legend line per segment with its size. The disk is the volume that holds Nekko's data folder; when a category lives on another volume (a models folder on an external drive, a project on another disk) its row says so and it is left out of this bar.
+One stacked bar of the whole disk: each Nekko category in its own colour, then **Other apps and files** (used space Nekko did not measure as its own), then **Free**. Under it, one legend line per segment with its size. The disk is the volume that holds Nekko's data folder; when a models folder lives on another volume its row says how much is there and that part is left out of this bar (unix; worktrees on another disk are not told apart yet).
 
 ### The rows
 
@@ -60,14 +60,15 @@ A worktree is **idle** and offered for removal only when all of these hold, chec
 
 - it is a linked worktree, never the main checkout;
 - not locked, and not the checkout of a running chat;
-- no uncommitted changes (`git status --porcelain` is empty, untracked files included; ignored build output does not count);
+- no uncommitted changes, untracked files included whatever Git's `status.showUntrackedFiles` says;
+- no ignored files other than build output a tool recreates (`node_modules`, `target`, `.next`, `dist`, `build`, `DerivedData`, `out`, `.turbo`, `.vite`, `.cache`, `coverage`, `Pods`, `.DS_Store` and the like): `git worktree remove` deletes ignored files without asking, and an ignored `.shots/`, `.env` or notes folder may be evidence or work;
 - **nothing happened in it for 3 days**: its Git metadata (`HEAD`, `index`, `logs/HEAD` in its Git dir) and its root folder were last modified more than 72 hours ago;
 - **no running program has it open**: no process's working directory is inside it, and no Nekko terminal session is in it;
 - **nothing committed would be lost**: every commit on its `HEAD` is on a remote branch (`git rev-list HEAD --not --remotes` is empty), or its branch's pull request merged with this exact head commit (the sweep's existing check, for squash merges). A detached `HEAD` with commits on no remote is never idle.
 
 Removal runs `git worktree remove` (never `--force`) and **keeps the branch**: unlike the single Remove in Git management, the bulk action never deletes a branch, so a branch whose PR is still open, or that was pushed but not merged, can be checked out again later.
 
-The preview lists each worktree that would go (its folder, branch, project, size and why it counts as idle: "pushed", "PR merged") with a total, plus a count of worktrees kept and why ("3 have uncommitted changes, 2 were used in the last 3 days, 1 is running"). The person can untick any row; above the list, a running count ("130 of 131 selected · 166 GB") and **Select all** and **Deselect all** (Philip, 2026-11-26: any long pick list in Storage gets both). With nothing selected the remove button is disabled. One removal failing never stops the others; the result says how much was freed and lists anything that could not be removed with Git's reason.
+The preview lists each worktree that would go (its folder, branch, project, size and why it counts as idle: "pushed", "PR merged") with a total, plus a count of worktrees kept and why ("3 have uncommitted changes, 2 were used in the last 3 days, 1 is running, 1 has ignored files that aren't build output"). The person can untick any row; above the list, a running count ("130 of 131 selected · 166 GB") and **Select all** and **Deselect all** (Philip, 2026-11-26: any long pick list in Storage gets both). With nothing selected the remove button is disabled. One removal failing never stops the others; the result says how much was freed and lists anything that could not be removed with Git's reason.
 
 ### Leftover CI runner images
 

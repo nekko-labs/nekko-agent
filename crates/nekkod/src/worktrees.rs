@@ -968,6 +968,7 @@ pub enum Kept {
     Running,
     Locked,
     Open,
+    Ignored,
 }
 
 impl Kept {
@@ -979,8 +980,27 @@ impl Kept {
             Kept::Running => "running",
             Kept::Locked => "locked",
             Kept::Open => "open",
+            Kept::Ignored => "ignored",
         }
     }
+}
+
+/// Ignored paths a build, package manager or OS recreates; anything else ignored keeps a worktree.
+fn regenerable(path: &str) -> bool {
+    const ALSO: &[&str] = &[
+        "out",
+        ".turbo",
+        ".vite",
+        ".cache",
+        ".parcel-cache",
+        "coverage",
+        ".gradle",
+        "Pods",
+        "__pycache__",
+        ".pytest_cache",
+        ".DS_Store",
+    ];
+    path.trim_matches('"').split('/').any(|part| crate::storage::BUILD_DIRS.contains(&part) || ALSO.contains(&part))
 }
 
 /// Quiet this long before a worktree counts as idle.
@@ -1004,9 +1024,23 @@ fn check(
     if cwds.iter().any(|d| d.starts_with(&real)) {
         return Err(Kept::Open);
     }
-    match git_no_locks(&c.root, &["status", "--porcelain"]) {
-        Ok(out) if out.trim().is_empty() => {}
-        _ => return Err(Kept::Dirty),
+    // Untracked and ignored files both: `git worktree remove` deletes ignored files without asking,
+    // so only build output a tool recreates may be ignored. Flags override any status config.
+    let status = git_no_locks(
+        &c.root,
+        &["status", "--porcelain", "--ignored", "--untracked-files=normal", "--ignore-submodules=none"],
+    )
+    .map_err(|_| Kept::Dirty)?;
+    let mut ignored = false;
+    for line in status.lines().filter(|l| !l.is_empty()) {
+        match line.strip_prefix("!! ") {
+            Some(path) if regenerable(path) => {}
+            Some(_) => ignored = true,
+            None => return Err(Kept::Dirty),
+        }
+    }
+    if ignored {
+        return Err(Kept::Ignored);
     }
     let gitdir = git_no_locks(&c.root, &["rev-parse", "--absolute-git-dir"]).map_err(|_| Kept::Dirty)?;
     let gitdir = gitdir.trim();
@@ -1072,6 +1106,7 @@ pub fn remove_idle(
             Kept::Running => "Its chat is running.",
             Kept::Locked => "It is locked.",
             Kept::Open => "A program is working in it.",
+            Kept::Ignored => "It has ignored files that aren't build output.",
         }
         .into());
     }
@@ -1367,6 +1402,7 @@ mod tests {
     }
 
     /// Sets the worktree's Git metadata and folder 73 hours into the past.
+    #[cfg(unix)]
     fn age(root: &str) {
         let then = std::time::SystemTime::now() - Duration::from_secs(73 * 60 * 60);
         let gitdir = git(root, &["rev-parse", "--absolute-git-dir"]).unwrap();
@@ -1379,14 +1415,17 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     fn candidate(r: &Repo, root: &str) -> Candidate {
         candidates(&r.settings(), &|_| None).into_iter().find(|c| norm(&c.root) == norm(root)).expect("listed")
     }
 
+    #[cfg(unix)]
     fn now() -> std::time::SystemTime {
         std::time::SystemTime::now()
     }
 
+    #[cfg(unix)]
     #[test]
     fn idle_needs_three_quiet_days() {
         let r = Repo::new("idle-quiet");
@@ -1397,6 +1436,7 @@ mod tests {
         assert_eq!(check(&candidate(&r, &wt), now(), &[], None), Ok("pushed"));
     }
 
+    #[cfg(unix)]
     #[test]
     fn an_untracked_file_keeps_it() {
         let r = Repo::new("idle-untracked");
@@ -1407,6 +1447,36 @@ mod tests {
         assert_eq!(check(&candidate(&r, &wt), now(), &[], None), Err(Kept::Dirty));
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn ignored_files_that_are_not_build_output_keep_it() {
+        let r = Repo::new("idle-ignored");
+        std::fs::write(Path::new(&r.root).join(".git/info/exclude"), "node_modules/\n.shots/\n").unwrap();
+        let wt = linked(&r, "a", &["-b", "a"]);
+        r.git(&["update-ref", "refs/remotes/origin/a", "a"]);
+        std::fs::create_dir_all(Path::new(&wt).join("node_modules/x")).unwrap();
+        std::fs::write(Path::new(&wt).join("node_modules/x/i.js"), "x").unwrap();
+        age(&wt);
+        assert_eq!(check(&candidate(&r, &wt), now(), &[], None), Ok("pushed"), "build output alone is fine");
+        std::fs::create_dir_all(Path::new(&wt).join(".shots")).unwrap();
+        std::fs::write(Path::new(&wt).join(".shots/after.png"), "evidence").unwrap();
+        age(&wt);
+        assert_eq!(check(&candidate(&r, &wt), now(), &[], None), Err(Kept::Ignored));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn untracked_files_count_even_when_git_is_told_to_hide_them() {
+        let r = Repo::new("idle-hidden-untracked");
+        r.git(&["config", "status.showUntrackedFiles", "no"]);
+        let wt = linked(&r, "a", &["-b", "a"]);
+        r.git(&["update-ref", "refs/remotes/origin/a", "a"]);
+        std::fs::write(Path::new(&wt).join("draft.txt"), "x").unwrap();
+        age(&wt);
+        assert_eq!(check(&candidate(&r, &wt), now(), &[], None), Err(Kept::Dirty));
+    }
+
+    #[cfg(unix)]
     #[test]
     fn a_commit_on_no_remote_keeps_it_unless_its_pr_merged_at_that_head() {
         let r = Repo::new("idle-unpushed");
@@ -1422,6 +1492,7 @@ mod tests {
         assert_eq!(check(&c, now(), &[], Some("0000000")), Err(Kept::Unpushed));
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_detached_head_is_idle_only_when_its_commits_are_on_a_remote() {
         let r = Repo::new("idle-detached");
@@ -1432,6 +1503,7 @@ mod tests {
         assert_eq!(check(&candidate(&r, &wt), now(), &[], None), Ok("pushed"));
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_program_working_inside_keeps_it() {
         let r = Repo::new("idle-open");
@@ -1442,6 +1514,7 @@ mod tests {
         assert_eq!(check(&candidate(&r, &wt), now(), &[inside], None), Err(Kept::Open));
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_locked_worktree_is_kept() {
         let r = Repo::new("idle-locked");
@@ -1452,6 +1525,7 @@ mod tests {
         assert_eq!(check(&candidate(&r, &wt), now(), &[], None), Err(Kept::Locked));
     }
 
+    #[cfg(unix)]
     #[test]
     fn removing_an_idle_worktree_keeps_its_branch() {
         let r = Repo::new("idle-remove");
@@ -1463,6 +1537,7 @@ mod tests {
         assert_eq!(r.git(&["branch", "--list", "a"]).trim(), "a");
     }
 
+    #[cfg(unix)]
     #[test]
     fn removal_checks_again_and_refuses_what_changed() {
         let r = Repo::new("idle-recheck");
@@ -1482,6 +1557,7 @@ mod tests {
         assert!(out[1].get("bytes").is_none(), "unmeasured has no size");
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_timeout_returns_and_ends_the_whole_group() {
         let marker = std::env::temp_dir().join(format!("nekkod-run-group-{}", std::process::id()));

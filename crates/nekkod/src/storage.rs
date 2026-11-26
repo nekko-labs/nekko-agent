@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 pub const CHANNELS: &[&str] = &["storage:usage", "storage:disk"];
 
 /// Folders a build or package manager recreates; counted as build output and not walked into twice.
-const BUILD_DIRS: &[&str] = &["node_modules", "target", ".next", "dist", "build", "DerivedData"];
+pub(crate) const BUILD_DIRS: &[&str] = &["node_modules", "target", ".next", "dist", "build", "DerivedData"];
 
 /// The desktop app's browser caches, inside `<data>/desktop` (Electron's session folder).
 pub const CACHE_DIRS: &[&str] = &[
@@ -200,10 +200,14 @@ fn device(p: &Path) -> Option<u64> {
 /// Bytes of each category measured from the data folder alone: models, caches, other.
 pub fn data_categories(data: &Path, models_dir: Option<&Path>) -> Vec<Value> {
     let mut models = dir_size(&data.join("models")) + dir_size(&data.join("engine"));
-    let mut elsewhere = false;
+    let (mut elsewhere, mut elsewhere_bytes) = (false, 0);
     if let Some(m) = models_dir.filter(|m| !m.starts_with(data)) {
-        models += dir_size(m);
+        let bytes = dir_size(m);
+        models += bytes;
         elsewhere = device(m).is_some() && device(m) != device(data);
+        if elsewhere {
+            elsewhere_bytes = bytes;
+        }
     }
     let desktop = data.join("desktop");
     let caches: u64 = CACHE_DIRS.iter().map(|n| dir_size(&desktop.join(n))).sum();
@@ -222,7 +226,7 @@ pub fn data_categories(data: &Path, models_dir: Option<&Path>) -> Vec<Value> {
         }
     }
     vec![
-        json!({ "id": "models", "bytes": models, "detail": { "elsewhere": elsewhere } }),
+        json!({ "id": "models", "bytes": models, "detail": { "elsewhere": elsewhere, "elsewhereBytes": elsewhere_bytes } }),
         json!({ "id": "caches", "bytes": caches }),
         json!({ "id": "other", "bytes": other.saturating_sub(caches) }),
     ]
@@ -338,5 +342,7 @@ mod tests {
         file(&elsewhere.path().join("b.gguf"), 20);
         let cats = data_categories(d.path(), Some(elsewhere.path()));
         assert_eq!(bytes_of(&cats, "models"), 30);
+        let models = cats.iter().find(|c| c["id"] == "models").unwrap();
+        assert_eq!(models["detail"]["elsewhereBytes"], 0, "same volume: all of it is on this disk");
     }
 }

@@ -6,7 +6,8 @@ export interface StorageCategory {
   id: StorageCategoryId;
   /** `null` until first measured. */
   bytes: number | null;
-  detail?: { buildOutputBytes?: number; count?: number; picturesBytes?: number; elsewhere?: boolean };
+  /** `elsewhereBytes`: the part on another disk, left out of this disk's bar. */
+  detail?: { buildOutputBytes?: number; count?: number; picturesBytes?: number; elsewhere?: boolean; elsewhereBytes?: number };
 }
 
 export interface DiskSpace { total: number; free: number }
@@ -23,7 +24,7 @@ export interface StorageUsage {
 }
 
 /** Why "Remove idle worktrees" keeps a worktree (decision 0121). */
-export type KeptReason = 'recent' | 'dirty' | 'unpushed' | 'running' | 'locked' | 'open';
+export type KeptReason = 'recent' | 'dirty' | 'unpushed' | 'running' | 'locked' | 'open' | 'ignored';
 
 export interface IdleWorktree {
   root: string;
