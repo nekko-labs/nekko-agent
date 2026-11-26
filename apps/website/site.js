@@ -1,3 +1,4 @@
+const tSite = window.NekkoSiteLanguage?.t ?? ((text, values = {}) => text.replace(/\{(\w+)\}/g, (whole, name) => values[name] ?? whole));
 // Nekko Agent marketing site: starfield backdrop, scroll reveals, OS highlight.
 (function () {
   // ---- drifting starfield (space-travel feel, honors reduced motion) ----
@@ -178,12 +179,12 @@
       const b = chosen();
       mainVer.textContent = version;
       if (!b) {
-        mainTitle.textContent = 'Download Nekko Agent';
+        mainTitle.textContent = tSite('Download Nekko Agent');
         main.href = RELEASES;
         main.title = mobile ? 'Install on your computer, then pair this phone' : 'All builds on GitHub Releases';
         return;
       }
-      mainTitle.textContent = `Download for ${OS_NAME[b.os]}`;
+      mainTitle.textContent = tSite('Download for {platform}', { platform: OS_NAME[b.os] });
       main.href = urlFor(b) || RELEASES;
       main.title = `${b.fmt} · ${b.hint}`;
     }
@@ -208,8 +209,9 @@
           if (b === current) a.setAttribute('aria-current', 'true');
           // cta slug: <src>-download-item-<os>-<fmt>-<arch>, e.g. hero-download-item-win-exe-x64
           a.setAttribute('data-cta', `${src}-download-item-${b.os}-${b.fmt.replace(/^\./, '')}-${b.arch}`);
-          a.innerHTML =
-            `<span class="dl-fmt">${b.fmt}</span><span class="dl-hint">${b.hint}</span>`;
+          a.innerHTML = '<span class="dl-fmt"></span><span class="dl-hint"></span>';
+          a.firstElementChild.textContent = b.fmt;
+          a.lastElementChild.textContent = tSite(b.hint);
           menu.appendChild(a);
           wrote = true;
         }
@@ -224,7 +226,8 @@
       all.href = RELEASES;
       all.setAttribute('role', 'menuitem');
       all.setAttribute('data-cta', `${src}-download-all-releases`);
-      all.innerHTML = `<span class="dl-fmt">All downloads</span><span class="dl-hint">GitHub Releases</span>`;
+      all.innerHTML = '<span class="dl-fmt"></span><span class="dl-hint">GitHub Releases</span>';
+      all.firstElementChild.textContent = tSite('All downloads');
       menu.appendChild(all);
     }
 
@@ -330,7 +333,7 @@
 
     const panel = document.createElement('section');
     panel.className = 'install-help';
-    panel.setAttribute('aria-label', 'Installing Nekko Agent on Windows');
+    panel.setAttribute('aria-label', tSite('Installing Nekko Agent on Windows'));
     panel.innerHTML = `
       <div class="ih-head">
         <div>
@@ -344,9 +347,13 @@
         <button class="ih-link ih-replay" type="button" hidden>Play again</button>
         <button class="ih-link ih-swap" type="button"></button>
       </div>`;
+    panel.querySelector('.ih-title').textContent = tSite('Your download has started');
+    panel.querySelector('.ih-sub').textContent = tSite("Windows may ask you to confirm before it runs. Here's what to click.");
+    panel.querySelector('.ih-close').setAttribute('aria-label', tSite('Close'));
     const video = panel.querySelector('video');
     const replay = panel.querySelector('.ih-replay');
     const swap = panel.querySelector('.ih-swap');
+    replay.textContent = tSite('Play again');
     let plays = 0;
 
     function load(key) {
@@ -397,11 +404,11 @@
     if (!note) return;
     const b = chosen();
     if (b) {
-      note.textContent = `${b.fmt} · ${b.hint}. Not your machine? Use the arrow for every other build.`;
+      note.textContent = tSite('{format} · {detail}. Not your machine? Use the arrow for every other build.', { format: b.fmt, detail: tSite(b.hint) });
     } else {
       note.textContent = mobile
-        ? 'Nekko Agent runs on your computer. Choose a desktop build from the menu.'
-        : 'Pick a build from the menu, or see them all on GitHub Releases.';
+        ? tSite('Nekko Agent runs on your computer. Choose a desktop build from the menu.')
+        : tSite('Pick a build from the menu, or see them all on GitHub Releases.');
     }
   }
 
@@ -445,13 +452,13 @@
     }
     if (!ok) window.getSelection()?.selectAllChildren(termCmd); // let them hit copy themselves
     copyBtn.classList.toggle('done', ok);
-    copyLabel.textContent = ok ? 'Copied' : 'Select all';
-    copyBtn.setAttribute('aria-label', ok ? 'Command copied to clipboard' : 'Command selected, copy it with your keyboard');
+    copyLabel.textContent = ok ? tSite('Copied') : tSite('Select all');
+    copyBtn.setAttribute('aria-label', ok ? tSite('Command copied to clipboard') : tSite('Command selected, copy it with your keyboard'));
     clearTimeout(copyTimer);
     copyTimer = setTimeout(() => {
       copyBtn.classList.remove('done');
-      copyLabel.textContent = 'Copy';
-      copyBtn.setAttribute('aria-label', 'Copy command to clipboard');
+      copyLabel.textContent = tSite('Copy');
+      copyBtn.setAttribute('aria-label', tSite('Copy command to clipboard'));
     }, 1900);
   });
 
@@ -648,7 +655,7 @@
   const set = (open) => {
     nav.classList.toggle('nav-open', open);
     btn.setAttribute('aria-expanded', String(open));
-    btn.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+    btn.setAttribute('aria-label', open ? tSite('Close menu') : tSite('Open menu'));
   };
   btn.addEventListener('click', () => set(!nav.classList.contains('nav-open')));
   nav.querySelectorAll('.nav-links a').forEach((a) => a.addEventListener('click', () => set(false)));
@@ -676,12 +683,12 @@
   const done = form.querySelector('.beta-done');
   let body = null; // the saved signup, re-sent with the name in step two
   const lines = {
-    idle: "Psst… want to see what's next?",
-    watching: 'Ooh, keep going…',
-    eager: 'Do it, do it!',
-    confused: 'Hmm, that email looks a bit off.',
-    celebrate: "Yay! You're in!",
-    name: 'Saved! What should I call you?',
+    idle: tSite("Psst… want to see what's next?"),
+    watching: tSite('Ooh, keep going…'),
+    eager: tSite('Do it, do it!'),
+    confused: tSite('Hmm, that email looks a bit off.'),
+    celebrate: tSite("Yay! You're in!"),
+    name: tSite('Saved! What should I call you?'),
   };
   let mood = 'idle';
   const setMood = (m) => {
@@ -733,9 +740,9 @@
     const endpoint = form.dataset.endpoint;
     if (!endpoint) {
       // No sign-up service connected: say so rather than claim a sign-up that went nowhere.
-      note.textContent = "Beta sign-ups aren't open yet. Follow along on GitHub to hear about the first builds.";
+      note.textContent = tSite("Beta sign-ups aren't open yet. Follow along on GitHub to hear about the first builds.");
       setMood('idle'); // sets the idle line, so the bubble's own text goes after it
-      bubble.textContent = 'Almost ready! Check back soon.';
+      bubble.textContent = tSite('Almost ready! Check back soon.');
       return;
     }
     // What the API keeps: the page path (never the full URL) and any utm_* tags.
@@ -765,14 +772,14 @@
     button.disabled = false;
     if (!res || !res.ok) {
       if (res && res.status === 429) {
-        note.textContent = "That's a lot of sign-ups from here in a short time. Please try again in an hour.";
-        bubble.textContent = 'Whoa, slow down! Try again later.';
+        note.textContent = tSite("That's a lot of sign-ups from here in a short time. Please try again in an hour.");
+        bubble.textContent = tSite('Whoa, slow down! Try again later.');
       } else if (res && res.status === 400) {
-        note.textContent = 'Please check your email address and try again.';
+        note.textContent = tSite('Please check your email address and try again.');
         bubble.textContent = lines.confused;
       } else {
-        note.textContent = "That didn't go through. Please try again in a moment.";
-        bubble.textContent = 'Oops, something went wrong. Try again?';
+        note.textContent = tSite("That didn't go through. Please try again in a moment.");
+        bubble.textContent = tSite('Oops, something went wrong. Try again?');
       }
       peek.dataset.mood = mood = 'confused';
       return;
@@ -830,7 +837,7 @@
   video.addEventListener('ended', () => {
     end.hidden = false;
     setMood('eager');
-    if (mood === 'eager') bubble.textContent = 'Liked the tour? Pop your email in!';
+    if (mood === 'eager') bubble.textContent = tSite('Liked the tour? Pop your email in!');
   });
   video.addEventListener('play', () => { end.hidden = true; });
   tour.querySelector('[data-tour-join]').addEventListener('click', () => {
@@ -1091,7 +1098,8 @@
   tour.addEventListener('focusout', (e) => { if (!tour.contains(e.relatedTarget)) { keyboard = false; if (!pointer) chosen = false; sync(); } });
   pauseBtn.addEventListener('click', () => {
     userPaused = !userPaused;
-    pauseBtn.setAttribute('aria-label', userPaused ? 'Play the tour' : 'Pause the tour');
+    const t = window.NekkoSiteLanguage?.t ?? ((text) => text);
+    pauseBtn.setAttribute('aria-label', userPaused ? t('Play the tour') : t('Pause the tour'));
     sync();
   });
   document.addEventListener('visibilitychange', sync);

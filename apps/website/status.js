@@ -9,12 +9,15 @@
 (function () {
   'use strict';
 
+  var t = window.NekkoSiteLanguage?.t || function (text, values) {
+    return text.replace(/\{(\w+)\}/g, function (_, name) { return values?.[name] || ''; });
+  };
   var LABELS = {
-    ok: 'Working',
-    degraded: 'Partly working',
-    down: 'Not working',
-    unreachable: 'Not answering',
-    checking: 'Checking…',
+    ok: t('Working'),
+    degraded: t('Partly working'),
+    down: t('Not working'),
+    unreachable: t('Not answering'),
+    checking: t('Checking…'),
   };
   var CHECK_TIMEOUT_MS = 8000;
   var RECHECK_MS = 60000;
@@ -29,10 +32,10 @@
 
   /** The banner for a list of shown states. */
   function overall(states) {
-    if (states.indexOf('checking') !== -1) return { state: 'checking', text: 'Checking our services…' };
-    if (states.indexOf('down') !== -1 || states.indexOf('unreachable') !== -1) return { state: 'down', text: 'Something isn’t working right now' };
-    if (states.indexOf('degraded') !== -1) return { state: 'degraded', text: 'Some things are only partly working' };
-    return { state: 'ok', text: 'Everything is working' };
+    if (states.indexOf('checking') !== -1) return { state: 'checking', text: t('Checking our services…') };
+    if (states.indexOf('down') !== -1 || states.indexOf('unreachable') !== -1) return { state: 'down', text: t('Something isn’t working right now') };
+    if (states.indexOf('degraded') !== -1) return { state: 'degraded', text: t('Some things are only partly working') };
+    return { state: 'ok', text: t('Everything is working') };
   }
 
   function check(url, fetchImpl) {
@@ -55,7 +58,7 @@
   function dateText(iso) {
     var d = new Date(iso + 'T00:00:00Z');
     if (isNaN(d)) return iso;
-    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+    return d.toLocaleDateString(window.NekkoSiteLanguage?.locale === 'en' ? 'en-GB' : window.NekkoSiteLanguage?.locale || 'en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
   }
 
   function start(root) {
@@ -71,7 +74,7 @@
       banner.dataset.state = top.state;
       banner.querySelector('.status-banner-text').textContent = top.text;
       var when = root.querySelector('.status-checked');
-      when.textContent = checkedAt ? 'Checked at ' + checkedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' · updated by hand on ' + dateText(data.updated) : '';
+      when.textContent = checkedAt ? t('Checked at {time} · updated by hand on {date}', { time: checkedAt.toLocaleTimeString(window.NekkoSiteLanguage?.locale, { hour: '2-digit', minute: '2-digit' }), date: dateText(data.updated) }) : '';
 
       var list = root.querySelector('.status-services');
       list.textContent = '';
@@ -84,9 +87,9 @@
         var pill = el('span', 'status-pill', LABELS[shown[i]]);
         head.appendChild(pill);
         li.appendChild(head);
-        if (s.what) li.appendChild(el('p', 'status-what', s.what));
+        if (s.what) li.appendChild(el('p', 'status-what', t(s.what)));
         var note = s.note;
-        if (!note && shown[i] === 'unreachable') note = 'It didn’t answer from your browser just now. If your own connection is fine, it’s likely on our side.';
+        if (!note && shown[i] === 'unreachable') note = t('It didn’t answer from your browser just now. If your own connection is fine, it’s likely on our side.');
         if (note) li.appendChild(el('p', 'status-note', note));
         list.appendChild(li);
       });
@@ -94,11 +97,11 @@
       var inc = root.querySelector('.status-incidents');
       inc.textContent = '';
       var incidents = data.incidents || [];
-      if (!incidents.length) inc.appendChild(el('p', 'status-empty', 'No incidents recently.'));
+      if (!incidents.length) inc.appendChild(el('p', 'status-empty', t('No incidents recently.')));
       incidents.forEach(function (x) {
         var art = el('article', 'status-incident');
         art.appendChild(el('h3', null, x.title));
-        art.appendChild(el('p', 'micro', dateText(x.date) + (x.resolved ? ' · Resolved' : ' · Ongoing')));
+        art.appendChild(el('p', 'micro', dateText(x.date) + (x.resolved ? ' · ' + t('Resolved') : ' · ' + t('Ongoing'))));
         if (x.text) art.appendChild(el('p', null, x.text));
         inc.appendChild(art);
       });
@@ -106,18 +109,18 @@
       var ki = root.querySelector('.status-known');
       ki.textContent = '';
       var issues = data.knownIssues || [];
-      if (!issues.length) ki.appendChild(el('p', 'status-empty', 'No known issues right now.'));
+      if (!issues.length) ki.appendChild(el('p', 'status-empty', t('No known issues right now.')));
       issues.forEach(function (x) {
         var art = el('article', 'status-issue');
         art.appendChild(el('h3', null, x.title));
         var meta = [];
         if (x.where) meta.push(x.where);
-        if (x.since) meta.push('Since ' + dateText(x.since));
+        if (x.since) meta.push(t('Since {date}', { date: dateText(x.since) }));
         if (meta.length) art.appendChild(el('p', 'micro', meta.join(' · ')));
         if (x.detail) art.appendChild(el('p', null, x.detail));
         if (x.workaround) {
           var w = el('p', 'status-workaround');
-          w.appendChild(el('strong', null, 'Workaround: '));
+          w.appendChild(el('strong', null, t('Workaround:') + ' '));
           w.appendChild(document.createTextNode(x.workaround));
           art.appendChild(w);
         }
@@ -134,7 +137,7 @@
       })).then(function () { checkedAt = new Date(); render(); });
     }
 
-    fetch('status.json', { cache: 'no-store' })
+    fetch('/status.json', { cache: 'no-store' })
       .then(function (res) { return res.json(); })
       .then(function (json) {
         data = json;
@@ -147,7 +150,7 @@
       .catch(function () {
         var banner = root.querySelector('.status-banner');
         banner.dataset.state = 'down';
-        banner.querySelector('.status-banner-text').textContent = 'The status list didn’t load. Try reloading the page.';
+        banner.querySelector('.status-banner-text').textContent = t('The status list didn’t load. Try reloading the page.');
       });
   }
 

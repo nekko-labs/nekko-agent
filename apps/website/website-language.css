@@ -1,0 +1,40 @@
+.website-language-menu { position: relative; flex: none; color: var(--ink); z-index: 3; }
+.website-language-menu summary {
+  display: grid; place-items: center; width: 36px; height: 36px;
+  border-radius: 8px; border: 1px solid var(--line); cursor: pointer;
+  list-style: none;
+}
+.website-language-menu summary::-webkit-details-marker { display: none; }
+.website-language-field {
+  display: grid; gap: 8px; padding: 8px; font: 500 14px/1.4 system-ui, sans-serif;
+  color: var(--ink);
+}
+.website-language-menu > .website-language-field {
+  position: absolute; inset-block-start: calc(100% + 8px); inset-inline-end: 0;
+  min-inline-size: 12rem; background: var(--site-language-paper); border: 1px solid var(--line);
+  border-radius: 8px; padding: 16px;
+}
+:root { --site-language-paper: Canvas; }
+:root[data-theme='dark'], :root[data-ds-theme='dusk'] { color-scheme: dark; }
+.website-language-field select {
+  width: 100%; min-height: 32px; font: inherit; border: 1px solid var(--line);
+  border-radius: 8px; padding-inline: 8px; color: var(--ink); background: var(--site-language-paper);
+}
+.website-language-menu summary:focus-visible, .website-language-field select:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.website-language-mobile { display: none; }
+.website-language-fixed { position: fixed; inset-block-start: 20px; inset-inline-end: 20px; }
+/* The site header normally clips its glass to the pill. When a language
+   disclosure is open, allow only its existing outer layer to extend below. */
+header:has(> .website-language-menu[open]) { overflow: visible; }
+@media (max-width: 900px) {
+  .website-language-home { display: none; }
+  .nav-open .website-language-mobile { display: grid; inline-size: min(14rem, 100%); align-self: center; }
+  .nav.nav-open .nav-links { max-block-size: 65dvh; overflow-y: auto; }
+}
+@media (max-width: 860px) {
+  .website-language-docs { display: none; }
+  #sidebar .website-language-mobile { display: grid; }
+}
+@media (pointer: coarse) {
+  .website-language-menu summary, .website-language-field select { min-width: 44px; min-height: 44px; }
+}

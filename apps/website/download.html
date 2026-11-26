@@ -35,6 +35,8 @@
     </style>
     <script src="/analytics-config.js?v=1" defer></script>
     <script src="/analytics.js?v=4" defer></script>
+    <link rel="stylesheet" href="/website-language.css">
+    <script src="/website-language.js"></script>
   </head>
   <body>
     <main class="dl-redirect">
@@ -56,6 +58,7 @@
       // correct installer asset. Falls through to the GitHub
       // Releases page if detection or the release manifest comes up empty.
       (function () {
+        var t = window.NekkoSiteLanguage?.t || function (text, values) { return text.replace('{label}', values?.label || ''); };
         var RELEASES = 'https://github.com/nekko-labs/nekko-agent/releases/latest';
         // Mirrors BUILDS in site.js. Keep the two in step when adding a platform.
         var BUILDS = [
@@ -118,16 +121,16 @@
 
         // Mobile or unknown desktop: don't redirect, show the manual picker.
         if (!build) {
-          headingEl.textContent = mobile ? 'Download Nekko Agent on your computer' : 'Download Nekko Agent';
+          headingEl.textContent = mobile ? t(t("Download Nekko Agent on your computer")) : t(t("Download Nekko Agent"));
           subEl.textContent = mobile
-            ? "Nekko Agent runs on Windows, macOS and Linux. Install it on your computer, then pair this phone from the app."
-            : "We couldn't detect your platform. Pick a build below.";
+            ? t("Nekko Agent runs on Windows, macOS and Linux. Install it on your computer, then pair this phone from the app.")
+            : t("We couldn't detect your platform. Pick a build below.");
           track(null);
           return;
         }
 
         var label = osLabel[build.os] + (build.arch === 'arm64' ? ' (Apple Silicon)' : build.os === 'mac' ? ' (Intel)' : '');
-        subEl.textContent = 'Downloading the ' + label + ' installer.';
+        subEl.textContent = t('Downloading the {label} installer.', { label: label });
 
         fetch('/release.json', { cache: 'no-store' })
           .then(function (r) { return r.ok ? r.json() : null; })
@@ -141,7 +144,7 @@
             }
             targetEl.textContent = url;
             fallbackEl.href = url;
-            fallbackEl.textContent = 'Click here if your download did not start';
+            fallbackEl.textContent = t(t("Click here if your download did not start"));
             return track({ fmt: build.fmt, url: url }).then(function () {
               // Replace so the back button returns to wherever they came from,
               // not to this intermediate page.

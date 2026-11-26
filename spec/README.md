@@ -240,6 +240,7 @@ Brand, website, onboarding and the mascot.
 - [Brand refresh and website redesign (2026-10-18)](brand/brand-refresh-and-website-redesign.md) (15 KB)
 - [Colour palette: Nekko and Indigo themes, app icon and website (2026-11-03)](brand/colour-palette.md) (6 KB)
 - [First-run setup (planned onboarding wizard)](brand/first-run-setup.md) (2 KB)
+- [Public website languages](brand/public-website-languages.md)
 - [Local marketing website preview (2026-10-17)](brand/local-marketing-website-preview.md) (1 KB)
 - [Mascot, polish & onboarding](brand/mascot-polish-onboarding.md) (17 KB)
 

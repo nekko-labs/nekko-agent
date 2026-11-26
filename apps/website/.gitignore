@@ -13,3 +13,6 @@
 
 # Generated from packages/shared/src/plan-catalog.json during the website build
 /plan-catalog.json
+
+# Generated from checked-in public website translation catalogs
+/l/
