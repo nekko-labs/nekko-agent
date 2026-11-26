@@ -10,23 +10,36 @@ type CommitRef = React.MutableRefObject<(() => Promise<void | boolean>) | null>;
 async function save(patch: Partial<AppSettings>) {
   const next = await window.nekko.updateSettings(patch);
   useStore.setState({ settings: next });
+  return next;
 }
 
+/** The engine's error without Electron's "Error invoking remote method" wrapper. */
+const message = (e: unknown) =>
+  (e instanceof Error ? e.message : String(e)).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+
 /**
- * Saves the email and joins Nekko Cloud's update list once per new address.
- * The address stays saved here even when Nekko Cloud can't be reached; the
- * returned message says so.
+ * Saves the email and joins Nekko Cloud's update list once per new address,
+ * or again for one that hasn't reached it yet. The address stays saved here
+ * even when Nekko Cloud can't be reached: the engine keeps it pending and
+ * sends it later, and the returned message says so. Clearing the email only
+ * forgets it here; the update emails each carry an unsubscribe link.
  */
 export async function saveEmail(email: string, name?: string): Promise<string | null> {
   const clean = email.trim();
   const before = useStore.getState().settings?.userEmail ?? '';
-  await save({ userEmail: clean });
-  if (!clean || clean.toLowerCase() === before.toLowerCase()) return null;
+  const next = await save(clean ? { userEmail: clean } : { userEmail: '', userEmailPending: null });
+  if (!clean) return null;
+  const unsent = (next.userEmailPending ?? '').trim().toLowerCase() === clean.toLowerCase();
+  if (clean.toLowerCase() === before.toLowerCase() && !unsent) return null;
   try {
     await window.nekko.updatesJoin(clean, name?.trim() || undefined);
     return null;
   } catch (e) {
-    return e instanceof Error ? e.message : String(e);
+    return message(e);
+  } finally {
+    // The engine recorded whether the address is still to be sent.
+    const fresh = await window.nekko.getSettings?.().catch(() => null);
+    if (fresh) useStore.setState({ settings: fresh });
   }
 }
 
@@ -61,7 +74,7 @@ export function NameStep({ commitRef, onSubmit }: { commitRef: CommitRef; onSubm
   const [name, setName] = useState(() => useStore.getState().settings?.userName ?? '');
   const trimmed = name.trim();
   useEffect(() => {
-    commitRef.current = () => save({ userName: trimmed.slice(0, 60) });
+    commitRef.current = async () => { await save({ userName: trimmed.slice(0, 60) }); };
     return () => { commitRef.current = null; };
   }, [commitRef, trimmed]);
   return (
@@ -151,7 +164,7 @@ export function WorkStep({ commitRef }: { commitRef: CommitRef }) {
   const [picked, setPicked] = useState<WorkProfile | undefined>(() => useStore.getState().settings?.workProfile);
   const name = useStore((s) => s.settings?.userName?.trim());
   useEffect(() => {
-    commitRef.current = picked ? () => save({ workProfile: picked }) : null;
+    commitRef.current = picked ? async () => { await save({ workProfile: picked }); } : null;
     return () => { commitRef.current = null; };
   }, [commitRef, picked]);
   return (

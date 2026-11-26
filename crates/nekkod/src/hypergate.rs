@@ -350,9 +350,27 @@ mod install_tests {
 /// The id of the MCP entry the gateway is saved as (`HYPERGATE_ENTRY_ID`).
 pub const ENTRY_ID: &str = "hypergate";
 
+/// A paired gateway stays the credential route even if its daemon is temporarily offline.
+pub fn enabled(settings: &Value) -> bool {
+    settings["mcpServers"].as_array().is_some_and(|servers| {
+        servers
+            .iter()
+            .any(|server| server["id"].as_str() == Some(ENTRY_ID) && server["enabled"].as_bool() == Some(true))
+    })
+}
+
 #[cfg(test)]
 mod with_hypergate_tests {
     use super::*;
+
+    #[test]
+    fn github_routing_uses_the_enabled_pairing_not_its_display_name() {
+        assert!(enabled(&json!({"mcpServers": [{"id":"hypergate", "name":"My gateway", "enabled":true}]})));
+        assert!(!enabled(
+            &json!({"mcpServers": [{"id":"hypergate", "enabled":false}, {"id":"other", "name":"Hypergate", "enabled":true}]})
+        ));
+        assert!(!enabled(&json!({})));
+    }
 
     #[test]
     fn appends_or_replaces_the_gateway_entry_keeping_its_name() {

@@ -152,6 +152,7 @@ const scenes: Record<string, () => Promise<RunnerView[]>> = {
   'settings-linux': async () => [view({ available: 2, linuxAvailable: 2 }, { linuxSlots: 2 })],
   'settings-linux-building': async () => [view({ available: 2, linuxAvailable: 0, linuxError: 'No Linux image yet.' }, { linuxSlots: 2 })],
   'settings-save': async () => [view()],
+  'settings-cloud': async () => [view({ cloudPickerError: 'The Nekko Cloud picker is part of Nekko Cloud Pro.' }, { cloudPicker: true })],
   'missing-logs': async () => [view({ recent: [{ ...audit(600, 'A job', 'finished', 3400), jobId: null, repo: null, workflow: null, job: null, url: null, vm: null }] })],
   'settings-bottom': async () => [view({ limit: 'memory', available: 1 })],
   'settings-suggested': async () => [view(

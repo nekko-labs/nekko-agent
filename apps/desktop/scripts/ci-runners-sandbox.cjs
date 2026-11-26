@@ -137,6 +137,10 @@ app.whenReady().then(async () => {
       await click(`document.querySelector('[aria-label^="Runner settings for"]')`); await sleep(500);
       await run("[...document.querySelectorAll('[role=dialog], [role=dialog] *')].forEach(e=>{e.scrollTop=e.scrollHeight})"); await sleep(200);
     },
+    'settings-cloud': async () => {
+      await click(`document.querySelector('[aria-label^="Runner settings for"]')`); await sleep(500);
+      await run("(()=>{const r=[...document.querySelectorAll('[role=dialog] p')].find(e=>e.textContent.startsWith('Nekko Cloud'));r&&r.scrollIntoView({block:'center'})})()"); await sleep(200);
+    },
     'settings-unsampled': async () => { await click(`document.querySelector('[aria-label^="Runner settings for"]')`); await sleep(500); },
     'linux-slots': async () => { await run("document.querySelector('[data-runner-card]')?.scrollIntoView({block:'start'})"); await sleep(200); },
     'settings-linux': async () => {
@@ -219,6 +223,7 @@ app.whenReady().then(async () => {
     'settings-linux': [['Linux slots and the ready image', "(()=>{const t=document.querySelector('[role=dialog]').innerText;return t.includes('nekko-cloud-mac-linux')&&t.includes('Rebuild Linux image')&&t.includes('ubuntu-24.04 · runner 2.338.1')})()"]],
     'settings-linux-building': [['the build in progress', "(()=>{const t=document.querySelector('[role=dialog]').innerText;return t.includes('Downloading: Downloading Ubuntu 24.04 (1 of 3) 42%')&&[...document.querySelectorAll('[role=dialog] button')].some(b=>b.textContent==='Cancel')})()"]],
     'settings-suggested': [['the suggestion with Apply', "document.querySelector('[role=dialog]').innerText.includes('Suggested for your jobs: 4 vCPUs, 8 GB (now 4 vCPUs, 12 GB).') && [...document.querySelectorAll('[role=dialog] button')].some(b=>b.textContent==='Apply')"]],
+    'settings-cloud': [['the picker switch, ticked, with Cloud\'s refusal', "(()=>{const t=document.body.innerText;return t.includes('Let the Nekko Cloud picker send jobs here')&&!!document.querySelector('[data-testid=runner-cloud-picker-error]')})()"]],
     'settings-unsampled': [['waits for the first reading', "document.body.innerText.includes('Waiting for this Mac\\'s first reading.') && !document.body.innerText.includes('Recommended:')"]],
   };
   try {

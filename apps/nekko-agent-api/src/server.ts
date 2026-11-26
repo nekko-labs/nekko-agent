@@ -9,7 +9,8 @@ import type { Db } from "./db.js";
 import { registerDonations } from "./donations.js";
 import { registerFeedback, type ScreenshotLimit } from "./feedback.js";
 import { registerMachines, type MachinesOptions } from "./machines.js";
-import { confirmSignup, page, sendConfirmation, unsubscribe, type Mailer } from "./confirmations.js";
+import { buttonPage, confirmSignup, confirmTokenValid, page, sendConfirmation, unsubscribe, unsubscribeTokenKnown, type Mailer } from "./confirmations.js";
+import { isSuppressed } from "./retention.js";
 import { parseSignup, recordSignup } from "./signups.js";
 import type { DeleteAuthUser } from "./supabase.js";
 import { registerHypergate } from "./hypergate.js";
@@ -17,6 +18,7 @@ import { registerFleet } from "./fleet.js";
 import { registerPrivacyCases } from "./privacy-cases.js";
 import { registerOrgs } from "./orgs.js";
 import { registerRelay, type RelayOptions } from "./relay.js";
+import { registerRunners, type RunnersOptions } from "./runners.js";
 import { registerShares } from "./shares.js";
 import { Presence, registerPresence } from "./presence.js";
 import type { RelayPresence } from "./relay-presence.js";
@@ -60,6 +62,8 @@ export interface ServerOptions {
   stripe?: Stripe;
   /** Nekko Cloud Relay tickets (decision 0116); without it the /v1/relay routes are absent. */
   relay?: RelayOptions;
+  /** CI runner presence and the Cloud picker (decision 0064); tests pass a clock and keys. */
+  runners?: RunnersOptions;
   /** Lower-case emails of Nekko team accounts, who switch unreleased features on. Defaults to DEFAULT_STAFF_EMAILS. */
   staffEmails?: string[];
   privacyReviewers?: string[];
@@ -118,7 +122,7 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
   const features: Features = {
     staff: new Set((opts.staffEmails ?? DEFAULT_STAFF_EMAILS).map((e) => e.trim().toLowerCase()).filter(Boolean)),
     // library-multiplayer joins once the service runs its relay (#2751).
-    available: new Set<Feature>([...(opts.stripe ? ["billing"] as const : []), "library-cloud", ...(opts.relay ? ["cloud-relay"] as const : [])]),
+    available: new Set<Feature>([...(opts.stripe ? ["billing"] as const : []), "library-cloud", "ci-fleet", ...(opts.relay ? ["cloud-relay"] as const : [])]),
   };
   const gate = accountGateFrom(opts.accountsAllowedDomains, opts.accountsAllowedEmails);
   if (gate) app.decorate("accountGate", gate);
@@ -207,6 +211,10 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
 
     const parsed = parseSignup(body);
     if (!parsed.ok) return reply.code(400).send({ error: parsed.error });
+    // An address that unsubscribed is kept only as a hash. Saving it again
+    // because someone typed it into a form would undo that, so nothing is
+    // stored; the answer is the same as any other signup.
+    if (await isSuppressed(opts.db, parsed.value.email)) return reply.code(202).send({ ok: true });
     const { id } = await recordSignup(opts.db, parsed.value);
     // A failed email never fails the signup: the row is saved, and signing up
     // again tomorrow retries.
@@ -217,30 +225,45 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     return reply.code(202).send({ ok: true });
   });
 
-  app.get("/v1/signups/confirm", async (req, reply) => {
-    const token = String((req.query as Record<string, unknown>).token ?? "");
+  // Opening a confirm or unsubscribe link only shows a button; pressing it
+  // posts back and acts. Mail security scanners open every link in a message.
+  const html = (reply: import("fastify").FastifyReply) =>
     reply.type("text/html; charset=utf-8").header("cache-control", "no-store").header("referrer-policy", "no-referrer");
-    if ((await confirmSignup(opts.db, token)) === "confirmed") {
-      return page("You're on the list", "<p>Thanks for confirming. We'll email you when your Nekko Agent beta invite is ready.</p>");
+  const tokenOf = (req: { query: unknown }) => String((req.query as Record<string, unknown>).token ?? "");
+  const expired = () => page("This link has expired",
+    "<p>Confirm links work once and last 7 days. If you already confirmed, you're all set. Otherwise sign up again for a fresh link.</p>");
+  const unknownLink = () => page("Link not recognised", "<p>Email hello@nekkoagent.com and we'll remove you by hand.</p>");
+
+  app.get("/v1/signups/confirm", async (req, reply) => {
+    const token = tokenOf(req);
+    html(reply);
+    if (!(await confirmTokenValid(opts.db, token))) return reply.code(400).send(expired());
+    return buttonPage("Confirm your email", "Press the button to confirm it was you who signed up.", `/v1/signups/confirm?token=${encodeURIComponent(token)}`, "Confirm my email");
+  });
+  app.post("/v1/signups/confirm", async (req, reply) => {
+    html(reply);
+    if ((await confirmSignup(opts.db, tokenOf(req))) === "confirmed") {
+      return page("You're on the list", "<p>Thanks for confirming. We'll be in touch.</p>");
     }
-    return reply.code(400).send(page("This link has expired",
-      "<p>Confirm links work once and last 7 days. If you already confirmed, you're all set. Otherwise sign up again on nekkoagent.com for a fresh link.</p>"));
+    return reply.code(400).send(expired());
   });
 
-  // One click: opening the link unsubscribes. POST is RFC 8058's one-click
-  // from mail apps' own Unsubscribe button.
-  const unsubscribeRoute = async (req: { query: unknown }, reply: import("fastify").FastifyReply) => {
-    const token = String((req.query as Record<string, unknown>).token ?? "");
-    reply.type("text/html; charset=utf-8").header("cache-control", "no-store").header("referrer-policy", "no-referrer");
-    if (await unsubscribe(opts.db, token)) {
-      return page("You're unsubscribed", "<p>We won't email you again. Changed your mind? Sign up again on nekkoagent.com.</p>");
+  app.get("/v1/signups/unsubscribe", async (req, reply) => {
+    const token = tokenOf(req);
+    html(reply);
+    if (!(await unsubscribeTokenKnown(opts.db, token))) return reply.code(404).send(unknownLink());
+    return buttonPage("Unsubscribe", "Press the button and we'll never email this address again.", `/v1/signups/unsubscribe?token=${encodeURIComponent(token)}`, "Unsubscribe");
+  });
+  // The page's button, and RFC 8058 one-click from mail apps' own Unsubscribe
+  // button (a form body "List-Unsubscribe=One-Click"; the token is in the URL).
+  app.post("/v1/signups/unsubscribe", async (req, reply) => {
+    html(reply);
+    if (await unsubscribe(opts.db, tokenOf(req))) {
+      return page("You're unsubscribed", "<p>We won't email you again. Changed your mind? Email hello@nekkoagent.com.</p>");
     }
-    return reply.code(404).send(page("Link not recognised", "<p>Email hello@nekkoagent.com and we'll remove you by hand.</p>"));
-  };
-  // Mail apps post a form body ("List-Unsubscribe=One-Click"); the token is in the URL.
+    return reply.code(404).send(unknownLink());
+  });
   app.addContentTypeParser("application/x-www-form-urlencoded", { parseAs: "string" }, (_req, body, done) => done(null, body));
-  app.get("/v1/signups/unsubscribe", unsubscribeRoute);
-  app.post("/v1/signups/unsubscribe", unsubscribeRoute);
 
   // In its own scope so the limiter covers the sync routes only. It also
   // slows anyone guessing tokens, since a 401 counts like any other answer.
@@ -261,6 +284,7 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     registerFeatures(scope, opts.db, features);
     if (opts.stripe) registerBilling(scope, opts.db, opts.stripe, features, opts.publicUrl ?? DEFAULT_PUBLIC_URL);
     if (opts.relay) registerRelay(scope, opts.db, features, opts.relay);
+    registerRunners(scope, opts.db, features, opts.runners);
   });
   registerDonations(app, opts.db, opts.donationRateLimit ?? { max: 20, windowMs: 60 * 60 * 1000 });
   registerFeedback(app, opts.db, opts.feedbackRateLimit ?? { max: 10, windowMs: 60 * 60 * 1000 }, opts.feedbackScreenshotLimit);

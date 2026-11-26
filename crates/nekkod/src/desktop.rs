@@ -63,6 +63,11 @@ async fn save_api(ctx: &Ctx, next: Value) -> Result<(), String> {
 }
 
 impl Desktop {
+    /// The network advert, which also names an open pairing lobby.
+    pub fn visibility(&self) -> &Arc<NetworkVisibility> {
+        &self.visibility
+    }
+
     pub fn new(native: &NativeConfig, data_dir: &Path) -> Arc<Self> {
         let app = AppPaths {
             is_packaged: native.is_packaged,
