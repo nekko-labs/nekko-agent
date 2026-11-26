@@ -13,8 +13,9 @@ import type { Db } from "./db.js";
  * cursors (#2751); unavailable until the service has its relay.
  * `cloud-relay`: Nekko Cloud Relay, the hosted relay as a Pro perk
  * (decision 0116); unavailable until the service has a ticket signing key.
+ * `ci-fleet`: CI runner presence and the Cloud picker (decision 0064).
  */
-export const FEATURES = ["billing", "library-cloud", "library-multiplayer", "cloud-relay"] as const;
+export const FEATURES = ["billing", "library-cloud", "library-multiplayer", "cloud-relay", "ci-fleet"] as const;
 export type Feature = (typeof FEATURES)[number];
 export type FeatureState = "off" | "team" | "on";
 const STATES: ReadonlySet<string> = new Set(["off", "team", "on"]);

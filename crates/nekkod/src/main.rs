@@ -306,6 +306,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         hub.clone(),
         cfg.github_api_url.clone(),
     );
+    #[cfg(unix)]
+    runner::picker_presence_loop(runners.clone(), cloud.clone());
     // What this computer tells the organizations it is shared with: its name, the
     // local models it can serve (the model library, never a cloud provider's models)
     // and its CI runners' coarse state.

@@ -177,6 +177,16 @@ For loopback testing, generate design tokens with the website build, then start 
 - `POST /v1/donations`, `DELETE /v1/donations/:id`: opt-in samples sealed to
   the offline research key. Unauthenticated, not request-logged, no sender
   columns; withdrawn with the device's delete token, expired after 180 days.
+- `/v1/runners/*`: **CI runner picker** (decision 0064, `spec/automation/ci-runners.md`), behind the
+  `ci-fleet` feature switch (404 while off for the caller). `PUT /v1/runners/presence` (Bearer `nk_`,
+  Pro or Enterprise, else 402) takes `{runners: [{label, repos: ["owner/name"], free: {macos, linux}}]}`
+  (at most 8 runners, 20 repos each, counts 0 to 16) and answers `{leaseSeconds: 90}`;
+  `DELETE /v1/runners/presence` withdraws on any plan. `POST /v1/runners/pick` takes a GitHub
+  Actions OIDC token (issuer `token.actions.githubusercontent.com`, audience `nekko-cloud`, RS256
+  against GitHub's published keys, cached an hour) and `{label, guest}`, and answers `{runsOn}`:
+  `["self-hosted", label]` (or `label-linux`) for a live runner serving the token's repository
+  with a VM free after holds, else null. A pick holds that VM 3 minutes. Nothing is stored: presence
+  and holds live in this process, so a restart sends jobs hosted until the next beat.
 - `/v1/machines`: **Nekko Cloud machines** (decision 0017, `spec/phone/nekko-cloud-machines.md`):
   a sandboxed machine per user that the phone pairs with like any computer.
   `GET` lists them; `POST {name?, region?, scope?}` (Pro and Enterprise, at most 3)
