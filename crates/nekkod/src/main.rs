@@ -404,13 +404,17 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         installs: installs.clone(),
         server: server.clone(),
         #[cfg(unix)]
-        runners: runner::Runners::start(
-            data_dir.clone(),
-            machine.clone(),
-            Box::new(read_settings()),
-            hub.clone(),
-            cfg.github_api_url.clone(),
-        ),
+        runners: {
+            let runners = runner::Runners::start(
+                data_dir.clone(),
+                machine.clone(),
+                Box::new(read_settings()),
+                hub.clone(),
+                cfg.github_api_url.clone(),
+            );
+            runner::picker_presence_loop(runners.clone(), cloud.clone());
+            runners
+        },
         resource_queue: Arc::new(resource_queue::ResourceQueue::new(data_dir.clone(), Box::new(read_settings()))),
         voice: voice.clone(),
         cloud: cloud.clone(),

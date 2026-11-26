@@ -17,6 +17,7 @@ import { registerFleet } from "./fleet.js";
 import { registerPrivacyCases } from "./privacy-cases.js";
 import { registerOrgs } from "./orgs.js";
 import { registerRelay, type RelayOptions } from "./relay.js";
+import { registerRunners, type RunnersOptions } from "./runners.js";
 import { registerShares } from "./shares.js";
 import { Presence, registerPresence } from "./presence.js";
 import type { RelayPresence } from "./relay-presence.js";
@@ -60,6 +61,8 @@ export interface ServerOptions {
   stripe?: Stripe;
   /** Nekko Cloud Relay tickets (decision 0116); without it the /v1/relay routes are absent. */
   relay?: RelayOptions;
+  /** CI runner presence and the Cloud picker (decision 0064); tests pass a clock and keys. */
+  runners?: RunnersOptions;
   /** Lower-case emails of Nekko team accounts, who switch unreleased features on. Defaults to DEFAULT_STAFF_EMAILS. */
   staffEmails?: string[];
   privacyReviewers?: string[];
@@ -118,7 +121,7 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
   const features: Features = {
     staff: new Set((opts.staffEmails ?? DEFAULT_STAFF_EMAILS).map((e) => e.trim().toLowerCase()).filter(Boolean)),
     // library-multiplayer joins once the service runs its relay (#2751).
-    available: new Set<Feature>([...(opts.stripe ? ["billing"] as const : []), "library-cloud", ...(opts.relay ? ["cloud-relay"] as const : [])]),
+    available: new Set<Feature>([...(opts.stripe ? ["billing"] as const : []), "library-cloud", "ci-fleet", ...(opts.relay ? ["cloud-relay"] as const : [])]),
   };
   const gate = accountGateFrom(opts.accountsAllowedDomains, opts.accountsAllowedEmails);
   if (gate) app.decorate("accountGate", gate);
@@ -261,6 +264,7 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     registerFeatures(scope, opts.db, features);
     if (opts.stripe) registerBilling(scope, opts.db, opts.stripe, features, opts.publicUrl ?? DEFAULT_PUBLIC_URL);
     if (opts.relay) registerRelay(scope, opts.db, features, opts.relay);
+    registerRunners(scope, opts.db, features, opts.runners);
   });
   registerDonations(app, opts.db, opts.donationRateLimit ?? { max: 20, windowMs: 60 * 60 * 1000 });
   registerFeedback(app, opts.db, opts.feedbackRateLimit ?? { max: 10, windowMs: 60 * 60 * 1000 }, opts.feedbackScreenshotLimit);
