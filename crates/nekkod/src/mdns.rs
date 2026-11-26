@@ -276,6 +276,9 @@ pub struct Advertisement {
     pub relay_url: Option<String>,
     /// SRV port: the local relay's when running, else 0.
     pub port: u16,
+    /// While *Make a link* is open: the pairing lobby's room and the relay it is on (CC8).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lobby: Option<(String, String)>,
 }
 
 /// `/\.local\.?$/i` removed.
@@ -404,7 +407,15 @@ pub fn records_for(ad: &Advertisement, ttl_scale: u32) -> Vec<Record> {
             kind: TYPE_TXT,
             ttl: TTL_OTHER * ttl_scale,
             unique: Some(true),
-            data: Data::Strings(txt_record(&ad.name, ad.relay_url.as_deref())),
+            data: Data::Strings({
+                let mut txt = txt_record(&ad.name, ad.relay_url.as_deref());
+                // A public room: the code both screens show is what keeps it safe (pair_lobby.rs).
+                if let Some((room, relay)) = &ad.lobby {
+                    txt.push(format!("pair={room}"));
+                    txt.push(format!("pairRelay={relay}"));
+                }
+                txt
+            }),
         },
     ];
     out.extend(ad.addresses.iter().map(|a| Record {
@@ -467,6 +478,51 @@ pub fn answers_for(ad: &Advertisement, questions: &[Question]) -> Vec<Record> {
         .collect()
 }
 
+// ------------------------------------------------------------------ what others say
+
+/// Computers on this network with a pairing lobby open: `{ name, lobby, relay }`.
+/// One PTR question from a throwaway port, so responders answer us directly
+/// (legacy unicast, RFC 6762 §6.7), then whatever arrives within `wait`.
+/// shortcut: asks on the default route's interface only, and the tailnet has no multicast; add per-interface sends if a multi-homed computer misses one.
+pub async fn browse(wait: Duration) -> Vec<Value> {
+    let Ok(socket) = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).await else { return Vec::new() };
+    let ask = Packet {
+        questions: vec![Question { name: SERVICE_TYPE.into(), kind: TYPE_PTR, unicast: true }],
+        ..Packet::default()
+    };
+    if socket.send_to(&encode_packet(&ask), SocketAddrV4::new(MDNS_GROUP, MDNS_PORT)).await.is_err() {
+        return Vec::new();
+    }
+    let mut found: Vec<Value> = Vec::new();
+    let mut buf = vec![0u8; 9000];
+    let end = tokio::time::Instant::now() + wait;
+    while let Ok(Ok((n, _))) = tokio::time::timeout_at(end, socket.recv_from(&mut buf)).await {
+        for txt in lobbies(&buf[..n]) {
+            if !found.iter().any(|f| f["lobby"] == txt["lobby"]) {
+                found.push(txt);
+            }
+        }
+    }
+    found
+}
+
+/// The lobbies a response names, from its TXT records.
+fn lobbies(msg: &[u8]) -> Vec<Value> {
+    let Some(p) = decode_packet(msg) else { return Vec::new() };
+    p.answers
+        .iter()
+        .filter(|r| r.kind == TYPE_TXT && r.name.to_ascii_lowercase().ends_with(SERVICE_TYPE))
+        .filter_map(|r| {
+            let Data::Strings(txt) = &r.data else { return None };
+            let get = |k: &str| txt.iter().find_map(|t| t.strip_prefix(&format!("{k}="))).map(str::to_string);
+            let (lobby, relay) = (get("pair")?, get("pairRelay")?);
+            let lobby_ok = lobby.len() == 32 && lobby.bytes().all(|b| b.is_ascii_hexdigit());
+            (lobby_ok && nekko_remote::route::relay_url_problem(&relay).is_none())
+                .then(|| json!({ "name": get("name").unwrap_or_default(), "lobby": lobby, "relay": relay }))
+        })
+        .collect()
+}
+
 // ------------------------------------------------------------------ the switch, the socket
 
 /// The relay to mention, when this computer runs one (PH4): `(url, port)`.
@@ -510,6 +566,8 @@ struct Live {
     current: Option<(u64, Advertisement)>,
     error: Option<String>,
     watching: bool,
+    /// A pairing lobby to name: advertised while it is open, even with the switch off.
+    lobby: Option<(String, String)>,
 }
 
 pub struct NetworkVisibility {
@@ -521,7 +579,28 @@ pub struct NetworkVisibility {
     generation: std::sync::atomic::AtomicU64,
 }
 
+impl Live {
+    fn on(&self) -> bool {
+        self.enabled || self.lobby.is_some()
+    }
+}
+
 impl NetworkVisibility {
+    /// Name a pairing lobby in the advert while it is open (`None` when it closes).
+    /// With the switch off this is the only time the computer is listed.
+    pub async fn set_lobby(self: &Arc<Self>, lobby: Option<(String, String)>) {
+        let off = {
+            let mut live = lock(&self.live);
+            live.lobby = lobby;
+            !live.on()
+        };
+        if off {
+            self.hush();
+        } else {
+            self.refresh().await;
+        }
+    }
+
     pub fn new(state_file: PathBuf, relay: RelayInfo) -> Arc<Self> {
         // Never switched on, or a file nobody can read: off.
         let enabled = std::fs::read_to_string(&state_file)
@@ -640,13 +719,14 @@ impl NetworkVisibility {
             addresses: lan_addresses(&interfaces()),
             port: if relay_url.is_some() { relay.map_or(0, |(_, p)| p) } else { 0 },
             relay_url,
+            lobby: lock(&self.live).lobby.clone(),
         }
     }
 
     /// Open the socket if needed and (re-)announce when what we say has changed.
     async fn refresh(self: &Arc<Self>) {
         let _one = self.refreshing.lock().await;
-        if !lock(&self.live).enabled {
+        if !lock(&self.live).on() {
             return;
         }
         if !nekko_net::allowed("network-visibility") {
@@ -671,7 +751,7 @@ impl NetworkVisibility {
                 Ok(Ok(socket)) => {
                     let socket = Arc::new(socket);
                     let mut live = lock(&self.live);
-                    if !live.enabled {
+                    if !live.on() {
                         return;
                     }
                     let stop = Arc::new(tokio::sync::Notify::new());
@@ -832,6 +912,7 @@ pub mod tests {
             addresses: v["addresses"].as_array().unwrap().iter().map(|a| a.as_str().unwrap().into()).collect(),
             relay_url: v["relayUrl"].as_str().map(str::to_string),
             port: v["port"].as_u64().unwrap() as u16,
+            lobby: None,
         }
     }
 
@@ -913,6 +994,31 @@ pub mod tests {
     }
 
     #[test]
+    fn a_lobby_in_the_advert_is_read_back_and_a_bad_one_is_not() {
+        let mut ad = Advertisement {
+            name: "gomi".into(),
+            host: "gomi".into(),
+            addresses: vec!["192.168.1.20".into()],
+            relay_url: None,
+            port: 0,
+            lobby: Some(("0123456789abcdef0123456789abcdef".into(), "wss://relay.example".into())),
+        };
+        let packet = |ad: &Advertisement| {
+            encode_packet(&Packet { response: true, answers: records_for(ad, 1), ..Packet::default() })
+        };
+        assert_eq!(
+            lobbies(&packet(&ad)),
+            vec![
+                json!({ "name": "gomi", "lobby": "0123456789abcdef0123456789abcdef", "relay": "wss://relay.example" })
+            ]
+        );
+        ad.lobby = Some(("short".into(), "wss://relay.example".into()));
+        assert!(lobbies(&packet(&ad)).is_empty(), "only a lobby id the engine could have made");
+        ad.lobby = None;
+        assert!(lobbies(&packet(&ad)).is_empty(), "no lobby, nothing to pair with");
+    }
+
+    #[test]
     fn a_published_record_round_trips() {
         let ad = Advertisement {
             name: "Studio".into(),
@@ -920,6 +1026,7 @@ pub mod tests {
             addresses: vec!["192.168.1.20".into()],
             relay_url: Some("ws://studio.tail1234.ts.net:4400".into()),
             port: 4400,
+            lobby: Some(("ab12".into(), "wss://relay.example".into())),
         };
         let answers = records_for(&ad, 1);
         let back =
