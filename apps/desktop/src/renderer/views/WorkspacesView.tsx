@@ -1,7 +1,12 @@
 import { SubagentList } from '../components/SubagentList.js';
 import { terminalPresentation } from '../components/terminalActivity.js';
 import { HoverTip } from '../components/HoverTip.js';
-import { CreateMenuRows } from '../components/CreateMenu.js';
+import { CreateMenuRows, CreateRow } from '../components/CreateMenu.js';
+import { NewChatGroupForm } from '../components/NewChatGroupForm.js';
+import { ChatGroupTagPickerFor } from '../components/ChatGroupTagControls.js';
+import { useChatGroupPrefs } from './useChatGroupPrefs.js';
+import { ChatGroupDot } from '../components/ChatGroupDot.js';
+import './chatGroups.css';
 import { confirmDeletion } from '../components/DeleteConfirmation.js';
 import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -18,7 +23,7 @@ import { localAgentStarts, onLocalAgentWorking } from '../workingAgents.js';
 import { StatusIcon, WorkspaceCard, agentStatusOfLane, chatRenameTitle, type AgentStatus } from '../components/WorkspaceCard.js';
 import { GroupActivity } from '../components/GroupActivity.js';
 import { ChatFinder } from '../components/ChatFinder.js';
-import { ArchiveIcon, CopyIcon, PlusIcon, SearchIcon, SlidersIcon, TerminalIcon } from '../icons.js';
+import { ArchiveIcon, CheckIcon, CopyIcon, PlusIcon, SearchIcon, SlidersIcon, TerminalIcon } from '../icons.js';
 import { FolderOpenIcon, GfBotsIcon, GfImageIcon, GfTerminalIcon } from '../gentleface-icons.js';
 import { SlideToggle, type SlideOption } from '../components/library/SlideToggle.js';
 import { SHORTCUTS } from '../shortcuts.js';
@@ -28,18 +33,23 @@ import { ModelPicker } from '../components/agent-console/ModelPicker.js';
 import { selectWorkspaceRows } from './workspaceSelection.js';
 import { sidebarWorkspaces, unopenedChats } from './unopenedChats.js';
 import { archivedDate, archivedInGroup } from './archivedChats.js';
-import { leftGroup, moveGroupBefore } from './groupDrag.js';
+import { claimDragOver, dragOverClaimed, leftGroup, moveGroupBefore } from './groupDrag.js';
 import { AgentPanelViewMenu } from '../components/AgentPanelViewMenu.js';
-import { endAgentDrag, startAgentDrag } from '../agentDrag.js';
-import { agentGroupRows } from './agentGroupRows.js';
+import { AGENT_DRAG_TYPE, endAgentDrag, isAgentDrag, startAgentDrag } from '../agentDrag.js';
+import { assignChatGroupPlan, buildChatGroupIndex, chatGroupColorValue, chatGroupLabel, clusterByChatGroup, createChatGroup, deleteChatGroupPlan, emptyChatGroups, pageChatGroupClusters, renameChatGroupPlan, saveChatGroups, type ChatGroup, type ChatGroupCluster, type ChatGroupColor } from './chatGroups.js';
 import { freshSessionPrs, prefetchSessionPrs } from './prefetchSessionPrs.js';
 import { isLiveState, onLiveStateTick } from '../liveStateTicker.js';
 import { CARD_ATTR, flyMovedCards, measureCards, type CardSpot } from './agentCardMotion.js';
 import { useShown } from '../simpleMode.js';
 import {
-  AGENT_PANEL_SHOWS, DATE_GROUPS, DRAFT_GROUP, NEEDS_INPUT_GROUP, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, groupActivityOf, readAgentPanelShows, readAgentPanelView, saveAgentPanelShows, saveAgentPanelView, statusGroupOf, statusWithSubagents, wakeSourcesOf,
+  AGENT_PANEL_SHOWS, DATE_GROUPS, activityAt, DRAFT_GROUP, NEEDS_INPUT_GROUP, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, groupActivityOf, readAgentPanelShows, readAgentPanelView, saveAgentPanelShows, saveAgentPanelView, statusGroupOf, statusWithSubagents, wakeSourcesOf,
   type AgentPanelShows, type AgentPanelView, type SortableCard,
 } from './agentPanelView.js';
+
+/** A chat group's thin border, in its colour: the one place the panel draws a border, at the user's request. */
+function groupBorder(color: string): React.CSSProperties {
+  return { border: `1px solid color-mix(in srgb, ${color} 55%, transparent)` };
+}
 
 /** Something being dragged in the sidebar (a project or a workspace). */
 type DragItem = { kind: 'project' | 'workspace'; id: string; ws: string | undefined };
@@ -55,8 +65,8 @@ const CHAT_KEY = 'chat:';
 const ARCHIVED_GROUP = '__archived';
 
 /** What a card sorts by: its chat, or its shell when it is a terminal. */
-function sortable(e: Entry): SortableCard {
-  const at = e.s?.updatedAt ?? e.t?.createdAt ?? 0;
+function sortable(e: Entry, status?: string): SortableCard {
+  const at = e.s ? activityAt(e.s, status) : e.t?.createdAt ?? 0;
   return { title: e.s?.title ?? (e.t ? terminalPresentation(e.t).title : ''), updatedAt: at, createdAt: e.s?.createdAt ?? e.t?.createdAt ?? at, order: e.s?.order ?? e.t?.order };
 }
 
@@ -256,8 +266,12 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   };
   const [selected, setSelected] = useState<string[]>([]);
   const anchor = useRef<string | null>(null);
-  const [menu, setMenu] = useState<{x: number; y: number; ids: string[]; model?: boolean} | null>(null);
-  const [archivedMenu, setArchivedMenu] = useState<{ x: number; y: number; id: string } | null>(null);
+  const [menu, setMenu] = useState<{x: number; y: number; ids: string[]; model?: boolean; group?: boolean} | null>(null);
+  const [archivedMenu, setArchivedMenu] = useState<{ x: number; y: number; id: string; group?: boolean } | null>(null);
+  // Chat groups the user made, which can have no chats yet; the known groups also include every chat's own.
+  const { defined: definedGroups, updateDefined: updateDefinedGroups } = useChatGroupPrefs();
+  const [groupMenu, setGroupMenu] = useState<{ x: number; y: number; group: ChatGroup } | null>(null);
+  const [namingGroup, setNamingGroup] = useState(false);
   const [copiedChatId, setCopiedChatId] = useState(false);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // The chat whose card title is a text field, from the pencil or the menu's Rename.
@@ -277,7 +291,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   const selectRow = (e: React.MouseEvent, id: string) => {
     if (!e.shiftKey && !e.ctrlKey && !e.metaKey) { setSelected([]); anchor.current = id; return false; }
     e.preventDefault(); e.stopPropagation();
-    const rows = groups.filter(g => !collapsed.has(g.key)).flatMap(g => visibleItems(g).flatMap(e => e.s ? [e.s.id] : []));
+    const rows = groups.filter(g => !collapsed.has(g.key)).flatMap(g => openRows(g).flatMap(e => e.s ? [e.s.id] : []));
     setSelected(prev => selectWorkspaceRows(prev, rows, id, anchor.current, e.shiftKey));
     if (!e.shiftKey) anchor.current = id;
     return true;
@@ -305,6 +319,66 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
       } catch(e) { useStore.getState().pushToast('error', id + ': ' + String(e)); }
     }));
     await refreshSessions(); setSelected([]);
+  };
+  // Put chats in a chat group (stored by its id), or take them out of theirs (null). One failure does not stop the rest.
+  const assignChatGroup = (ids: string[], group: ChatGroup | null) => {
+    const plan = assignChatGroupPlan(definedGroups, group);
+    if (plan.defined.length !== definedGroups.length) updateDefinedGroups(plan.defined);
+    setMenu(null); setArchivedMenu(null);
+    saveGroupOn(ids, plan.value);
+  };
+  const saveGroupOn = (ids: string[], chatGroup: string | null) => {
+    void saveChatGroups(ids, chatGroup, (id, patch) => window.nekko.setSessionOptions(id, patch),
+      (id, session) => window.dispatchEvent(new CustomEvent('nekko-session-brain', { detail: { id, session } }))).then((failed) => {
+      failed.forEach(({ id, reason }) => useStore.getState().pushToast('error', id + ': ' + String(reason)));
+      void refreshSessions();
+    });
+  };
+  const createGroup = (name: string | null, color: ChatGroupColor) => { const made = createChatGroup(definedGroups, { name, color }); if (made) updateDefinedGroups(made.defined); };
+  /** A group's colour as CSS. */
+  const groupColorOf = (group: ChatGroup) => chatGroupColorValue(group.color);
+  /** Edit group: the name and the colour are saved together, in one write of the prefs. */
+  const editGroup = (from: ChatGroup, typed: string | null, color: ChatGroupColor) => {
+    setGroupMenu(null);
+    const plan = renameChatGroupPlan(definedGroups, sessions, from, typed, undefined, color);
+    updateDefinedGroups(plan.defined);
+    if (plan.ids.length > 0) saveGroupOn(plan.ids, plan.value);
+  };
+  const deleteGroup = async (group: ChatGroup) => {
+    setGroupMenu(null);
+    const plan = deleteChatGroupPlan(definedGroups, sessions, group);
+    if (plan.ids.length > 0 && !await confirmDeletion(`Delete the group "${group.name ?? 'Untitled group'}"? Its ${plan.ids.length} chat${plan.ids.length === 1 ? '' : 's'} stay where they are.`)) return;
+    updateDefinedGroups(plan.defined);
+    if (plan.ids.length > 0) saveGroupOn(plan.ids, null);
+  };
+  /** Dropping a dragged chat (or its whole selection) on a chat group puts it there. */
+  const chatGroupDrop = (group: ChatGroup) => {
+    const target = 'chatgroup:' + group.key;
+    return {
+      onDragOver: (e: React.DragEvent) => {
+        if (!isAgentDrag(e)) return;
+        // No stopPropagation: the dragged chip follows the pointer from a
+        // document-level dragover listener (CommandWall), and stopping the event
+        // here froze the chip over the group. Claim it instead, so the project
+        // bucket around the group does not light up as well.
+        e.preventDefault();
+        claimDragOver(e);
+        e.dataTransfer.dropEffect = 'move';
+        if (dropTarget !== target) setDropTarget(target);
+      },
+      onDragLeave: (e: React.DragEvent<HTMLElement>) => { if (leftGroup(e.currentTarget, e.relatedTarget) && dropTarget === target) setDropTarget(null); },
+      onDrop: (e: React.DragEvent) => {
+        if (!isAgentDrag(e)) return;
+        e.preventDefault(); e.stopPropagation();
+        let dragged: { kind?: string; id?: string } = {};
+        try { dragged = JSON.parse(e.dataTransfer.getData(AGENT_DRAG_TYPE)); } catch { /* not ours */ }
+        endDrag(); endAgentDrag();
+        if (dragged.kind !== 'chat' || !dragged.id || !sessions.some((s) => s.id === dragged.id)) return;
+        const ids = selected.includes(dragged.id) ? selected.filter((id) => sessions.some((s) => s.id === id)) : [dragged.id];
+        assignChatGroup(ids, group);
+      },
+      active: dropTarget === target,
+    };
   };
 
   // Seeded from the app-wide fold of agent events, so a chat already working
@@ -344,6 +418,8 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     return () => window.clearInterval(timer);
   }, []);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  /** Chat group sub-headings folded away, per panel group, while the panel is mounted. */
+  const [collapsedClusters, setCollapsedClusters] = useState<Set<string>>(new Set());
   /** Groups whose archived chats are expanded under their active ones. */
   const archiveTipSessionId = useStore((s) => s.archiveTipSessionId);
   const computers = useStore((s) => s.computers);
@@ -403,6 +479,10 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   const newMenuPopRef = useRef<HTMLDivElement>(null);
   const newMenuButtonRef = useRef<HTMLButtonElement>(null);
   const newMenuTimer = useRef<number>(0);
+  // Typing a group's name keeps the menu open, whatever the pointer does.
+  const namingGroupRef = useRef(false);
+  namingGroupRef.current = namingGroup;
+  useEffect(() => { if (!newMenuOpen) setNamingGroup(false); }, [newMenuOpen]);
   const finderOpen = useStore((s) => s.chatFinderOpen);
   const finderButtonRef = useRef<HTMLButtonElement>(null);
   const closeFinder = useCallback(() => useStore.setState({ chatFinderOpen: false }), []);
@@ -426,7 +506,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     window.addEventListener('resize', place);
     window.addEventListener('scroll', place, true);
     return () => { window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true); };
-  }, [newMenuOpen]);
+  }, [newMenuOpen, namingGroup]);
 
   useEffect(() => { refreshTerminals(); }, [refreshTerminals]);
 
@@ -454,7 +534,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   };
   const closeNewMenuSoon = () => {
     window.clearTimeout(newMenuTimer.current);
-    newMenuTimer.current = window.setTimeout(() => setNewMenuOpen(false), 220);
+    newMenuTimer.current = window.setTimeout(() => { if (!namingGroupRef.current) setNewMenuOpen(false); }, 220);
   };
   const closeNewMenu = () => {
     window.clearTimeout(newMenuTimer.current);
@@ -539,7 +619,8 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
       ...terminals.filter((t) => !t.id.startsWith('agent_') && !t.agentSessionId && (buckets.some((b) => b.key === t.workspaceId) ? t.workspaceId : '__none') === key).map((t): Entry => ({ key: 'terminal:' + t.id, w: null, s: null, t })),
       ...savedChats.filter((s) => chatGroupOf(s) === key).map((s): Entry => ({ key: CHAT_KEY + s.id, w: null, s, t: null })),
     ]
-      .map((e) => ({ e, order: e.s?.order ?? e.t?.order, at: e.s ? -e.s.updatedAt : e.t?.createdAt ?? 0 }))
+      // Recency is the time the card shows (last reply), never the save time: filing a chat saves it.
+      .map((e) => ({ e, order: e.s?.order ?? e.t?.order, at: e.s ? -activityAt(e.s, chatStatus(e.s.id)) : e.t?.createdAt ?? 0 }))
       .sort(bySidebarOrder<{ order?: number; at: number }>((x) => x.at))
       .map((x) => x.e);
   const findEntry = (key: string): Entry | null =>
@@ -553,11 +634,17 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   const utilityKind = (e: Entry) => e.t ? 'terminal' : (e.s?.chatType === 'image' || e.s?.chatType === 'video') ? 'media' : null;
   const shown = (e: Entry) => !utilityKind(e) && (view.showAutomations || !e.s?.taskId);
   const shownArchived = (s: SessionSummary) => view.showAutomations || !s.taskId;
-  const order = (items: Entry[]) => (view.sortBy === 'manual' ? items : [...items].sort((a, b) => compareCards(view)(sortable(a), sortable(b))));
+  // Manual order only holds where drag-and-drop writes it (project grouping); every other view is newest first by the time the card shows.
+  const order = (items: Entry[]) => {
+    if (view.sortBy === 'manual' && canReorder(view)) return items;
+    const cmp = compareCards(view.sortBy === 'manual' ? { sortBy: 'updated', direction: 'desc' } : view);
+    return [...items].sort((a, b) => cmp(sortable(a, a.s ? chatStatus(a.s.id) : undefined), sortable(b, b.s ? chatStatus(b.s.id) : undefined)));
+  };
   const utilityEntries = buckets.flatMap((b) => bucketEntries(b.key));
   // Terminals and photo and video chats each have their own view in the switcher.
   const utilityGroup = (kind: 'terminal' | 'media', key: string, name: string): PanelGroup[] => {
-    const items = order(utilityEntries.filter((e) => utilityKind(e) === kind));
+    const own = utilityEntries.filter((e) => utilityKind(e) === kind);
+    const items = view.sortBy === 'manual' ? own : order(own);
     return items.length > 0 ? [{ key, name, items, archived: [], bare: true }] : [];
   };
   const agentGroups = (): PanelGroup[] => {
@@ -591,7 +678,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     }
     const groupOf = view.groupBy === 'status'
       ? (e: Entry) => statusGroupOf(e.s, e.s ? chatStatus(e.s.id) : undefined)
-      : (e: Entry) => { const c = sortable(e); return dateGroupOf(view.sortBy === 'created' ? c.createdAt : c.updatedAt, now); };
+      : (e: Entry) => { const c = sortable(e, e.s ? chatStatus(e.s.id) : undefined); return dateGroupOf(view.sortBy === 'created' ? c.createdAt : c.updatedAt, now); };
     const defs = view.groupBy === 'status' ? STATUS_GROUPS : DATE_GROUPS;
     return [
       ...defs.flatMap((d): PanelGroup[] => {
@@ -614,17 +701,76 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   /** The open agent's top-level row: its own card, its terminal, or the parent of the open subagent. */
   const holdsSelection = (e: Entry) =>
     e.s?.id === selectedId || e.t?.id === selectedId || !!(e.s && childrenOf.get(e.s.id)?.some((kid) => kid.id === selectedId));
-  const visibleItems = (g: PanelGroup) => agentGroupRows(g.items, expandedGroups.has(g.key), g.items.findIndex(holdsSelection));
+  // Chats of one chat group sit together inside each panel group. Cards dragged into
+  // order (project grouping, manual sort) are not clustered: the order is the user's.
+  const chatIndex = useMemo(() => buildChatGroupIndex(sessions, definedGroups), [sessions, definedGroups]);
+  /** What a card or archived row shows for a chat's group: the dot's colour and its accessible name. */
+  const dotLabel = (g: ChatGroup) => (g.name ? `Group: ${g.name}` : chatGroupLabel(g));
+  const emptyGroups = shows === 'agents' ? emptyChatGroups(definedGroups, sessions) : [];
+  const clusterCards = view.clusterChatGroups && !(reorderable && shows === 'agents');
+  // A card inside its group's box needs no dot: the coloured border already says
+  // which group it is in. Every grouped chat sits in a box whenever clustering is
+  // on, so the dot shows only where it is off (or in project manual order).
+  const cardGroupProps = (raw: string | null | undefined) => { const g = clusterCards ? null : chatIndex.resolve(raw); return g ? { chatGroupColor: groupColorOf(g), chatGroupLabel: dotLabel(g) } : {}; };
+  const archivedGroupProps = (raw: string | null | undefined) => { const g = view.clusterChatGroups ? null : chatIndex.resolve(raw); return g ? { groupColor: groupColorOf(g), groupLabel: dotLabel(g) } : {}; };
+  const ungrouped = <T,>(items: T[]): Array<ChatGroupCluster<T>> => [{ key: null, group: null, items, total: items.length }];
+  const itemClusters = (g: PanelGroup) => pageChatGroupClusters(
+    clusterCards ? clusterByChatGroup(g.items, (e) => e.s?.chatGroup, chatIndex.resolve) : ungrouped(g.items),
+    expandedGroups.has(g.key), holdsSelection);
+  const visibleItems = (g: PanelGroup) => itemClusters(g).flatMap((c) => c.items);
+  const clusterKeyOf = (groupKey: string, kind: 'a' | 'x', key: string) => `${groupKey}\u0000${kind}\u0000${key}`;
+  /** The cards on show that a fold has not hidden. */
+  const openRows = (g: PanelGroup) => itemClusters(g).filter((c) => c.key === null || !collapsedClusters.has(clusterKeyOf(g.key, 'a', c.key))).flatMap((c) => c.items);
   /** Archived rows on show: the open chat, else the one the archive tip points at, stays in reach. */
-  const visibleArchived = (g: PanelGroup) => {
-    const open = g.archived.findIndex((s) => s.id === selectedId);
-    const keep = open >= 0 || !showTips ? open : g.archived.findIndex((s) => s.id === archiveTipSessionId);
-    return agentGroupRows(g.archived, expandedArchived.has(g.key), keep);
+  const archivedClusters = (g: PanelGroup) => {
+    const open = g.archived.some((s) => s.id === selectedId);
+    const keepId = open ? selectedId : showTips ? archiveTipSessionId : null;
+    return pageChatGroupClusters(
+      view.clusterChatGroups ? clusterByChatGroup(g.archived, (s) => s.chatGroup, chatIndex.resolve) : ungrouped(g.archived),
+      expandedArchived.has(g.key), (s) => s.id === keepId);
   };
+  const toggleCluster = (key: string) =>
+    setCollapsedClusters((c) => { const n = new Set(c); n.has(key) ? n.delete(key) : n.add(key); return n; });
+  /** Render rows under their chat group sub-headings; rows with no group (all of them, when none has one) need none. */
+  const clusterRows = <T,>(groupKey: string, kind: 'a' | 'x', clusters: Array<ChatGroupCluster<T>>, renderRow: (row: T) => React.ReactNode) =>
+    clusters.map((c) => {
+      if (c.key === null) return <React.Fragment key="ungrouped">{c.items.map(renderRow)}</React.Fragment>;
+      const ck = clusterKeyOf(groupKey, kind, c.key);
+      const closed = collapsedClusters.has(ck);
+      const group = c.group!;
+      const drop = chatGroupDrop(group);
+      return (
+        <div key={c.key} data-chat-group-cluster={group.name ?? chatGroupLabel(group)} data-chat-group-id={group.id ?? undefined} className={`rounded-lg p-1 ${drop.active ? 'bg-accent-soft ring-2 ring-accent/60' : ''}`}
+          style={groupBorder(groupColorOf(group))}
+          onDragOver={drop.onDragOver} onDragLeave={drop.onDragLeave} onDrop={drop.onDrop}>
+          <button
+            type="button"
+            onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setGroupMenu({ x: e.clientX, y: e.clientY, group }); }}
+            className="flex w-full items-center gap-1 rounded-md px-2 py-1 text-left text-2xs font-medium text-ink-faint hover:bg-surface-2 hover:text-ink"
+            aria-expanded={!closed}
+            data-chat-group-heading
+            onClick={() => toggleCluster(ck)}
+          >
+            <svg
+              className={`h-2.5 w-2.5 shrink-0 transition-transform duration-200 ${closed ? '' : 'rotate-90'}`}
+              viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+            ><path d="M9 6l6 6-6 6" /></svg>
+            {/* The group's name and count take its colour; the count sits at the far end. */}
+            {group.name
+              ? <span className="min-w-0 truncate" style={{ color: groupColorOf(group) }} title={group.name} dir="auto">{group.name}</span>
+              : <ChatGroupDot color={groupColorOf(group)} name={chatGroupLabel(group)} label={chatGroupLabel(group)} />}
+            <span className="chat-group-count ms-auto shrink-0 rounded-full px-2 text-2xs font-semibold tabular-nums" style={{ '--chat-group-color': groupColorOf(group) } as React.CSSProperties} data-chat-group-count>{c.total}</span>
+          </button>
+          <div className={`collapse-wrap ${closed ? 'collapsed' : ''}`} data-collapsed={closed || undefined} inert={closed || undefined} aria-hidden={closed || undefined}>
+            <div className="min-h-0 space-y-1 overflow-hidden">{c.items.map(renderRow)}</div>
+          </div>
+        </div>
+      );
+    });
 
   // Hidden cards do not prefetch PR details. Summaries still supply group counts.
   const visiblePrIds = groups.filter((g) => !collapsed.has(g.key)).flatMap((g) =>
-    visibleItems(g).flatMap((e) => e.s && e.s.prUrls.length > 0 ? [e.s.id] : [])).join('\0');
+    openRows(g).flatMap((e) => e.s && e.s.prUrls.length > 0 ? [e.s.id] : [])).join('\0');
   const prReadsInFlight = useRef(new Map<string, Promise<void>>());
   const prReadAt = useRef(new Map<string, number>());
   // A card showing an open or draft PR re-reads it on the shared live-state tick
@@ -645,7 +791,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   // before this render commits, then fly the movers from there. Not when the
   // grouping itself changed: then every card moves and none of them is news.
   const listRef = useRef<HTMLDivElement>(null);
-  const layoutSig = view.groupBy + '|' + groups.map((g) => g.key + ':' + g.items.map((e) => e.key).join(',')).join('|');
+  const layoutSig = view.groupBy + '|' + groups.map((g) => g.key + ':' + g.items.map((e) => e.key + (e.s?.chatGroup ? '~' + e.s.chatGroup : '')).join(',')).join('|');
   const lastLayout = useRef(layoutSig);
   const cardsBefore = useRef<Map<string, CardSpot> | null>(null);
   if (lastLayout.current !== layoutSig) {
@@ -662,15 +808,22 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   const selectedGroup = groups.find((g) => g.items.some(holdsSelection) || g.archived.some((s) => s.id === selectedId));
   const selectedGroupKey = selectedGroup?.key;
   const selectedArchived = !!selectedGroup?.archived.some((s) => s.id === selectedId);
+  const selectedChatGroup = chatIndex.resolve(sessions.find((s) => s.id === selectedId)?.chatGroup)?.key ?? '';
   useEffect(() => {
     setSelected([]);
     if (!selectedGroupKey) return;
+    // The open chat's own chat group heading opens with it.
+    if (selectedChatGroup) setCollapsedClusters((previous) => {
+      const keys = (['a', 'x'] as const).map((kind) => `${selectedGroupKey}\u0000${kind}\u0000${selectedChatGroup}`).filter((k) => previous.has(k));
+      if (keys.length === 0) return previous;
+      const next = new Set(previous); keys.forEach((k) => next.delete(k)); return next;
+    });
     setCollapsed((previous) => {
       if (!previous.has(selectedGroupKey)) return previous;
       const next = new Set(previous); next.delete(selectedGroupKey); return next;
     });
     if (selectedArchived) setShowArchived((previous) => new Set(previous).add(selectedGroupKey));
-  }, [selectedId, selectedGroupKey, selectedArchived]);
+  }, [selectedId, selectedGroupKey, selectedArchived, selectedChatGroup]);
   useLayoutEffect(() => {
     const frame = requestAnimationFrame(() => activeRowRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' }));
     return () => cancelAnimationFrame(frame);
@@ -685,7 +838,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   };
   const endDrag = () => { setDrag(null); setDropTarget(null); };
   const overTarget = (e: React.DragEvent, key: string, accept: (d: DragItem) => boolean) => {
-    if (!drag || !accept(drag)) return;
+    if (!drag || !accept(drag) || dragOverClaimed(e)) return;
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
@@ -796,7 +949,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
               ref={newMenuPopRef}
               data-new-agent-menu
               className="create-menu card fixed z-[1000] w-max min-w-48 p-1 shadow-(--shadow-float)"
-              style={{ top: newMenuPos.top, left: newMenuPos.left }}
+              style={{ top: newMenuPos.top, left: newMenuPos.left, maxHeight: 'calc(100vh - 16px)', maxWidth: 'calc(100vw - 16px)', overflowY: 'auto' }}
               onMouseEnter={openNewMenu}
               onMouseLeave={closeNewMenuSoon}
             >
@@ -804,7 +957,12 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                 closeNewMenu();
                 const action = kind === 'chat' ? newChat() : kind === 'image' ? newImageChat() : kind === 'video' ? onCreate('video', activeProjectId()) : newTerminalWorkspace();
                 void Promise.resolve(action).catch((e: Error) => useStore.getState().pushToast('error', e.message));
-              }} />
+              }}>
+                {namingGroup
+                  ? <div className="px-2 py-2"><NewChatGroupForm onSubmit={(name, color) => { createGroup(name, color); closeNewMenu(); }} onCancel={() => setNamingGroup(false)} /></div>
+                  : <CreateRow label="New group" data-new-group-row="" onClick={() => { openNewMenu(); setNamingGroup(true); }}
+                      icon={<svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /><path d="M12 11v4M10 13h4" /></svg>} />}
+              </CreateMenuRows>
             </div>,
             document.body,
           )}
@@ -813,11 +971,40 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
       <div className="px-3 pb-2" data-agent-panel-shows>
         <SlideToggle label="Show windows" options={SHOWS_OPTIONS} value={shows} onChange={setShows} iconOnly className="agent-panel-shows" />
       </div>
-      <div ref={listRef} className="agent-panel-list min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-2 pb-3" data-agent-panel-list>
+      <div ref={listRef} className="agent-panel-list min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-2 pb-3" data-agent-panel-list
+        // A chat dragged across the list never shows the no-drop cursor in the
+        // gaps between groups and cards: the whole list accepts it, and a drop
+        // that no group takes just ends the drag. Inner targets (groups,
+        // projects) handle their own drops first.
+        onDragOver={(e) => { if (isAgentDrag(e) && !e.defaultPrevented) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; } }}
+        onDrop={(e) => { if (!isAgentDrag(e)) return; e.preventDefault(); endDrag(); endAgentDrag(); }}
+      >
         {shows !== 'files' && groups.length === 0 && (
           <p className="px-3 py-2 text-xs text-ink-faint" data-agent-panel-empty>{SHOWS_EMPTY[shows]}</p>
         )}
         {shows === 'files' && <SidebarFileBrowser folders={localFolders} openFiles={openFiles} activeFile={activeFile} onOpenFile={openFile} />}
+        {emptyGroups.map((group) => {
+          const drop = chatGroupDrop(group);
+          const name = group.name;
+          return (
+            <div
+              key={'empty:' + group.key}
+              data-chat-group-empty={name ?? chatGroupLabel(group)}
+              className={`mb-1 rounded-lg p-1 ${drop.active ? 'bg-accent-soft ring-2 ring-accent/60' : ''}`}
+              style={groupBorder(groupColorOf(group))}
+              onDragOver={drop.onDragOver} onDragLeave={drop.onDragLeave} onDrop={drop.onDrop}
+              onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setGroupMenu({ x: e.clientX, y: e.clientY, group }); }}
+            >
+              <div className="flex w-full items-center gap-1 px-2 py-1 text-2xs font-medium text-ink-faint">
+                <span className="h-2.5 w-2.5 shrink-0" aria-hidden />
+                {name
+                  ? <span className="min-w-0 truncate" style={{ color: groupColorOf(group) }} title={name} dir="auto">{name}</span>
+                  : <ChatGroupDot color={groupColorOf(group)} name={chatGroupLabel(group)} label={chatGroupLabel(group)} />}
+                <span className="ms-auto shrink-0 font-normal">Drag chats here</span>
+              </div>
+            </div>
+          );
+        })}
         {groups.map((b) => {
           const { items, archived } = b;
           const byProject = view.groupBy === 'project' && shows === 'agents';
@@ -828,7 +1015,8 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
           const activity = view.groupBy === 'status' ? groupActivityOf(b.key, items.map((e) => (e.s ? chatStatus(e.s.id) : undefined))) : null;
           const tipHere = showTips && archived.some((s) => s.id === archiveTipSessionId);
           const visible = visibleItems(b);
-          const archivedRows = visibleArchived(b);
+          const archivedShown = archivedClusters(b);
+          const archivedRows = archivedShown.flatMap((c) => c.items);
           const bucketActive = dropTarget === 'bucket:' + b.key;
           const groupGap = bucketActive && drag?.kind === 'project' && drag.id !== b.key;
           return (
@@ -901,7 +1089,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                   {items.length === 0 && !archivedGroup && !b.bare && (
                     <p className="px-4 py-1 text-2xs text-ink-faint"><span aria-hidden="true">–</span><span className="sr-only">No active agents</span></p>
                   )}
-                  {visible.map((entry) => {
+                  {clusterRows(b.key, 'a', itemClusters(b), (entry) => {
                     const { w, s } = entry;
                     const kids = s ? childrenOf.get(s.id) ?? [] : [];
                     return (
@@ -934,6 +1122,8 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                           session={s}
                           terminal={entry.t}
                           status={s ? chatStatus(s.id) : undefined}
+                          {...cardGroupProps(s?.chatGroup)}
+                          hideDoneGlyph={view.groupBy === 'status' && b.key === 'status:done'}
                           isActive={(s?.id ?? entry.t?.id) === selectedId}
                           now={now}
                           projects={settings?.workspaces ?? []}
@@ -1001,9 +1191,10 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                         {archivedGroup ? 'Your archived chat is here. Open Archived to find or restore it.' : 'Your archived chat is here. Open Show archived to find or restore it.'}
                         <button className="ml-2 text-accent" onClick={() => useStore.setState({ archiveTipSessionId: null })}>Dismiss</button>
                       </div>}
-                      {archivedOpen && !isCollapsed && archivedRows.map((s) => (
+                      {archivedOpen && !isCollapsed && clusterRows(b.key, 'x', archivedShown, (s) => (
                         <div key={s.id} ref={s.id === selectedId ? activeRowRef : undefined}><ArchivedRow
                           session={s}
+                          {...archivedGroupProps(s.chatGroup)}
                           now={now}
                           isActive={selectedId === s.id}
                           onOpen={() => { onOpenChat(s.id); setMobileNav(false); }}
@@ -1074,25 +1265,33 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
               </span>
             </div>
           : <div className="select-text break-all px-3 py-2 font-mono text-2xs text-ink-faint">{menu.ids.length} sessions selected</div>}
-        {menu.model ? <div className="h-72"><ModelPicker expanded open providers={useStore.getState().providers} providerId={null} modelId={null} models={[]} onOpenChange={() => {}} onProvider={() => {}} onModel={(pid, mid) => { const ids = menu.ids; setMenu(null); void Promise.allSettled(ids.map(async id => { const s = await window.nekko.setSessionOptions(id,{providerId:pid,modelId:mid,autoModel:mid===AUTO_MODEL_ID}); if (!s) throw new Error('Chat no longer exists'); window.dispatchEvent(new CustomEvent('nekko-session-brain', {detail:{id,session:s}})); })).then(results => { results.forEach((r,i) => { if(r.status==='rejected') useStore.getState().pushToast('error',ids[i]+': '+String(r.reason)); }); void refreshSessions(); }); }} /></div> : <>
+        {menu.group ? <ChatGroupTagPickerFor ids={menu.ids} onClose={() => setMenu(null)} />
+          : menu.model ? <div className="h-72"><ModelPicker expanded open providers={useStore.getState().providers} providerId={null} modelId={null} models={[]} onOpenChange={() => {}} onProvider={() => {}} onModel={(pid, mid) => { const ids = menu.ids; setMenu(null); void Promise.allSettled(ids.map(async id => { const s = await window.nekko.setSessionOptions(id,{providerId:pid,modelId:mid,autoModel:mid===AUTO_MODEL_ID}); if (!s) throw new Error('Chat no longer exists'); window.dispatchEvent(new CustomEvent('nekko-session-brain', {detail:{id,session:s}})); })).then(results => { results.forEach((r,i) => { if(r.status==='rejected') useStore.getState().pushToast('error',ids[i]+': '+String(r.reason)); }); void refreshSessions(); }); }} /></div> : <>
           <ContextAction onClick={() => { menu.ids.forEach(id => onOpenChat(id)); setMenu(null); }}>Open{menu.ids.length > 1 ? ' all' : ''}</ContextAction>
           <ContextAction disabled={menu.ids.length !== 1} onClick={() => { setRenamingId(menu.ids[0]); setMenu(null); }}>Rename</ContextAction>
           <ContextAction onClick={() => void runAction('archive',menu.ids)}>Archive</ContextAction>
           <ContextAction onClick={() => setMenu({...menu, model:true})}>Change model</ContextAction>
+          <ContextAction onClick={() => setMenu({...menu, group:true})}>Groups and Tags</ContextAction>
           <ContextAction disabled={!menu.ids.some(id => statuses.has(id))} onClick={() => void runAction('stop',menu.ids)}>Stop{menu.ids.length > 1 ? ' all' : ''}</ContextAction>
           <ContextAction disabled={menu.ids.every(id => statuses.has(id))} onClick={() => void runAction('continue',menu.ids)}>Continue{menu.ids.length > 1 ? ' all' : ''}</ContextAction>
           <ContextAction onClick={() => void runAction('delete',menu.ids)}>Delete permanently</ContextAction>
         </>}
       </ContextMenu>}
+      {groupMenu && <ContextMenu x={groupMenu.x} y={groupMenu.y} onClose={() => setGroupMenu(null)}>
+        <ChatGroupManageMenu key={groupMenu.group.key} name={groupMenu.group.name} color={groupMenu.group.color} onSave={(typed, color) => editGroup(groupMenu.group, typed, color)} onDelete={() => void deleteGroup(groupMenu.group)} />
+      </ContextMenu>}
       {/* An archived chat's menu: the reader's two ways out, without opening it.
           Delete still asks first, as it does from the reader. */}
       {archivedMenu && <ContextMenu x={archivedMenu.x} y={archivedMenu.y} onClose={() => setArchivedMenu(null)}>
+        {archivedMenu.group ? <ChatGroupTagPickerFor ids={[archivedMenu.id]} onClose={() => setArchivedMenu(null)} /> : <>
+        <ContextAction onClick={() => setArchivedMenu({ ...archivedMenu, group: true })}>Groups and Tags</ContextAction>
         <ContextAction onClick={() => { const id = archivedMenu.id; setArchivedMenu(null); void useStore.getState().restoreChat(id); }}>
           Restore chat
         </ContextAction>
         <ContextAction onClick={() => { const id = archivedMenu.id; setArchivedMenu(null); void useStore.getState().deleteChatForever(id); }}>
           <span className="text-(--danger)">Delete forever</span>
         </ContextAction>
+        </>}
       </ContextMenu>}
       {mobileNav && <div className="absolute inset-0 z-20 bg-black/40 md:hidden" onClick={() => setMobileNav(false)} />}
       <div className="md:hidden">
@@ -1158,15 +1357,27 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   );
 }
 
+
+/** The menu on a chat group's heading: edit it (its name, which may be left empty for an unnamed group, and its colour, in one form with Save) or delete it. */
+export function ChatGroupManageMenu({ name, color, onSave, onDelete }: { name: string | null; color: ChatGroupColor; onSave: (typed: string | null, color: ChatGroupColor) => void; onDelete: () => void }) {
+  const [editing, setEditing] = useState(false);
+  return editing
+    ? <div className="px-2 py-2"><NewChatGroupForm initialName={name ?? ''} initialColor={color} submitLabel="Save" onSubmit={onSave} onCancel={() => setEditing(false)} /></div>
+    : <>
+        <ContextAction onClick={() => setEditing(true)}>Edit group</ContextAction>
+        <ContextAction onClick={onDelete}>Delete</ContextAction>
+      </>;
+}
+
 /**
  * An archived chat in its group's "Show archived" list: muted and led by the
  * archive glyph (not a check: archived is not the same as done), dated by when
  * it was archived. Opening it reads it in the middle, read-only.
  */
-function ArchivedRow({
-  session: s, now, isActive, onOpen, onContextMenu,
+export function ArchivedRow({
+  session: s, groupColor, groupLabel, now, isActive, onOpen, onContextMenu,
 }: {
-  session: SessionSummary; now: number; isActive: boolean; onOpen: () => void; onContextMenu?: (e: React.MouseEvent) => void;
+  session: SessionSummary; /** The chat group's colour as CSS, for the dot before the title. */ groupColor?: string; /** The dot's accessible name. */ groupLabel?: string; now: number; isActive: boolean; onOpen: () => void; onContextMenu?: (e: React.MouseEvent) => void;
 }) {
   const at = s.archivedAt as number;
   return (
@@ -1180,6 +1391,7 @@ function ArchivedRow({
       <span className="inline-grid shrink-0 place-items-center text-ink-faint" aria-label="Archived" role="img">
         <ArchiveIcon still className="h-3 w-3" />
       </span>
+      {groupColor && groupLabel && <ChatGroupDot color={groupColor} name={groupLabel} label={groupLabel} />}
       <span className={`min-w-0 flex-1 truncate text-xs ${isActive ? 'text-ink-soft' : 'text-ink-faint'}`} dir="auto">{s.title || 'Untitled chat'}</span>
       <time
         className="shrink-0 text-2xs tabular-nums"

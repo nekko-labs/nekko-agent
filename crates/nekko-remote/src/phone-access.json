@@ -484,6 +484,7 @@
   "autoModel",
   "autoProviderSwitch",
   "autoQuality",
+  "chatGroup",
   "chatType",
   "cloudOnly",
   "disabledConnectors",

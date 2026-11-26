@@ -190,6 +190,8 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
             {hasComputers && <Choice toggle checked={view.showComputerIcons} onClick={() => set({ showComputerIcons: !view.showComputerIcons })}
               title="A computer's icon, when it has one">Computer icons</Choice>}
             <Divider />
+            <Choice toggle checked={view.clusterChatGroups} onClick={() => set({ clusterChatGroups: !view.clusterChatGroups })}
+              title="Keep chats of the same chat group together under a heading">Cluster by chat group</Choice>
             <Choice toggle checked={view.showAutomations} onClick={() => set({ showAutomations: !view.showAutomations })}
               title="Chats an automation started">Automations</Choice>
             <Choice toggle checked={view.showEmptyGroups} onClick={() => set({ showEmptyGroups: !view.showEmptyGroups })}

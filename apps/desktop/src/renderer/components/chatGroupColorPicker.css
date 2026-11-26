@@ -1,0 +1,11 @@
+/* The wheel opening under the swatch row: a fade and a short rise, like a popover's. */
+.chat-group-color-open {
+  animation: chat-group-color-open var(--dur-med) var(--ease-out);
+}
+@keyframes chat-group-color-open {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-group-color-open { animation: none; }
+}

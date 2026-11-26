@@ -1,0 +1,13 @@
+/*
+ * A chat group's count: the status headings' pill, in the group's own colour
+ * (`--chat-group-color`, a palette token or the user's hex). The pill is a soft
+ * wash of that colour and the figure the colour itself.
+ */
+.chat-group-count {
+  color: var(--chat-group-color);
+  background: color-mix(in srgb, var(--chat-group-color) 18%, transparent);
+}
+/* As with the status pill, the colour alone is too faint for small text on a pale pill. */
+[data-theme='light'] .chat-group-count {
+  color: color-mix(in srgb, var(--chat-group-color) 55%, var(--ink));
+}
