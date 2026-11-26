@@ -356,6 +356,8 @@ The runner itself is free in the open source app, with everything on one Mac: sa
 
 Cloud is never required for one Mac.
 
+**Fleet view** `[implemented 2026-11-26; engine and renderer tests, a hidden renderer capture; not yet seen with two real Macs or on phones]`. A Mac shared with an organization (Settings > Nekko Cloud > Fleet management, the per-org sharing switch, off by default) puts its runners in the descriptor it already seals for that org: per runner the label, the state (off, waiting, ready, running, draining, cleaning, error), the VMs busy with a job and the VMs it may run now. Repos, jobs, waiting reasons, networks and battery stay on the Mac, and the server cannot read the descriptor at all ([decision 0064](../../docs/decisions/0064-ci-runner-fleet-through-nekko-cloud.md), notes). A change of any of those republishes on the next heartbeat. Members see one line per runner under an online computer in Computers ("CI runner nekko-cloud-mac: running a job (1 of 2 VMs)"); an offline computer shows none, since its state is stale. A reader drops a runner with an unknown state or a count above 255, and keeps at most 8.
+
 **GitLab** `[implemented T215, unit-tested with scripted HTTP; never run against a live GitLab]`. A runner record holds a GitHub link or a GitLab link (never both); `runners.json` files written before T215 load unchanged, and GitLab records get ids `gl-<random>`. Instances are self-managed or gitlab.com, given as an https origin; no other scheme is accepted. Connect checks, in order, and stores nothing until all pass:
 
 - The instance's host name must resolve only to public addresses, judged like guest traffic (not this Mac's networks, a LAN, Tailscale or loopback), because the guest must reach it. No request is sent otherwise. No request carrying the token ever follows a redirect; a 3xx is an error that names the redirect host.
@@ -402,7 +404,7 @@ Asked for by Philip (2026-11-06): the slot's bar was unclear (it measured elapse
 - **P1, one Mac, GitHub, local only:** supervisor, the gate chain, the three priority modes, drain and grace, keep awake, the `nekko-vm` helper, VM lifecycle, scopes, caches, the security-update gate, the network filter, GitHub App connect, JIT configs, the audit log, the CI section with on/off, slots and memory, and the menu bar indicator. Total runner memory is a setting with a recommended value for the Mac.
 - **P2, more of one Mac:** Linux slots `[implemented 2026-11-05]`.
 - **P3, Buildkite and GitLab.** GitLab landed early as T215 (unverified against a live job); Buildkite is still deferred.
-- **P4, Nekko Cloud fleet:** presence, picker endpoint, JIT broker, fleet view. `[design proposed 2026-11-07, waiting on Philip]` [Design](../../reports/ci-runners-p4-design.md), [decision 0064](../../docs/decisions/0064-ci-runner-fleet-through-nekko-cloud.md).
+- **P4, Nekko Cloud fleet:** presence, picker endpoint, JIT broker, fleet view. `[design accepted 2026-11-26; fleet view implemented, picker endpoint, broker, notifications and phones in progress]` [Design](../../reports/ci-runners-p4-design.md), [decision 0064](../../docs/decisions/0064-ci-runner-fleet-through-nekko-cloud.md).
 - **P5, other hosts.** Asked for on 2026-11-11: Windows PCs running Windows and Linux x64 jobs on Hyper-V. `[proposed]` [Decision 0082](../../docs/decisions/0082-ci-runners-on-windows-use-hyper-v.md), issue [#2553](https://github.com/nekko-labs/nekko-agent/issues/2553). The [runner options](#runner-options) already list them.
 
 ## Open questions `[planned]`

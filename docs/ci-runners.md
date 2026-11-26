@@ -26,6 +26,15 @@ can also connect GitHub and set up this Mac. With no connected runners the panel
 shows a short setup hint. Runners are hidden when the connected service does not
 support them; a temporary service failure shows an error and retries.
 
+## See your other Macs
+
+With a Nekko Cloud Pro or Enterprise plan, share a Mac with your organization in
+**Settings > Nekko Cloud > Fleet management** (the switch is off until you turn it on). Every
+member then sees, under that Mac in **Computers**, one line per runner while it is online:
+"CI runner nekko-cloud-mac: running a job (1 of 2 VMs)", "ready", "waiting", "off" or "needs
+attention". Only the label, the state and the VM counts are shared, sealed so Nekko Cloud
+cannot read them; repos, jobs and why a runner waits stay on the Mac. One Mac needs none of this.
+
 ## What it does
 
 Nekko Agent registers this Mac as a GitHub Actions **self-hosted runner** for one repo or one
