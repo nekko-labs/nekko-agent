@@ -68,6 +68,7 @@ mod model_server;
 mod model_tunnel;
 mod native;
 mod oauth;
+mod pair_lobby;
 // Prompt integration for Orchestrate is separate from its read-only projection.
 #[allow(dead_code)]
 mod orchestrate_state;

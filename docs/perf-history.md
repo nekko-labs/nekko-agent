@@ -51,7 +51,7 @@ Conditions: release `nekkod` from this branch on an Apple M1 Max, behind the Loc
 | Text chat `session:get` body | 174727 B | 174727 B |
 | Text chat `session:get` time | 4.6 ms | 4.4 ms |
 
-Why: the daemon no longer reads every blob file and base64-encodes it when the caller asks for references ([decision 0123](decisions/0123-chat-pictures-load-on-demand.md)). The window's own numbers (heap, first paint) follow in the renderer PR. Source: this PR.
+Why: the daemon no longer reads every blob file and base64-encodes it when the caller asks for references ([decision 0125](decisions/0125-chat-pictures-load-on-demand.md)). The window's own numbers (heap, first paint) follow in the renderer PR. Source: this PR.
 ## Renderer code splitting: non-default tabs, QR and Remotion load after first paint (#3445, PR #3455, 2026-11-26)
 Area: renderer
 Result: improvement (startup); no effect on chat switching or keypress

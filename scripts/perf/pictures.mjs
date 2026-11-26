@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Pictures on demand, measured (docs/decisions/0123, spec/chat/chat-pictures-on-demand.md).
+ * Pictures on demand, measured (docs/decisions/0125, spec/chat/chat-pictures-on-demand.md).
  *
  * Seeds a scratch data dir with two synthetic chats, in the store's own format
  * (pictures beside the chat, `nekko-blob:` references in it):

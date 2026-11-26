@@ -17,4 +17,4 @@ Opening a chat should cost its text, not every screenshot an agent took. Picture
 
 ## Planned (renderer)
 
-- The window opts in, resolves pictures lazily with a bounded cache, and budgets its session cache by reference text. See [decision 0123](../../docs/decisions/0123-chat-pictures-load-on-demand.md).
+- The window opts in, resolves pictures lazily with a bounded cache, and budgets its session cache by reference text. See [decision 0125](../../docs/decisions/0125-chat-pictures-load-on-demand.md).

@@ -3,7 +3,7 @@ status: accepted
 date: 2026-11-26
 ---
 
-# 0123. The window gets a chat's pictures on demand, not inside `session:get`
+# 0125. The window gets a chat's pictures on demand, not inside `session:get`
 
 ## Context
 
