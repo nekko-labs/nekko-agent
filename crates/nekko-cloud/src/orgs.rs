@@ -1141,7 +1141,13 @@ mod tests {
         AccountRecord {
             epoch: 1,
             recovery_public: "rp".into(),
-            devices: vec![TrustedDevice { id: DEV.into(), public_key: host.into(), label: "Desk".into() }],
+            devices: vec![TrustedDevice {
+                id: DEV.into(),
+                public_key: host.into(),
+                label: "Desk".into(),
+                caps: vec![],
+            }],
+            compressed: false,
         }
     }
 
