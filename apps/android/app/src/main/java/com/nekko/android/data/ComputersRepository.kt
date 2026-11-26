@@ -2,13 +2,13 @@ package com.nekko.android.data
 
 import com.nekko.protocol.ConnectionLog
 import com.nekko.protocol.NetworkPath
+import com.nekko.protocol.RouteChoice
 import com.nekko.protocol.Tailnet
 import com.nekko.protocol.RelayHint
 import com.nekko.protocol.DenyReason
 import com.nekko.protocol.Activity
 import com.nekko.protocol.ActivityTracker
 import com.nekko.protocol.AgentEvent
-import com.nekko.protocol.Appearance
 import com.nekko.protocol.AppInfo
 import com.nekko.android.security.ChangeCalls
 import com.nekko.protocol.ChangeSigner
@@ -135,12 +135,20 @@ class ComputersRepository(
     private val helloTimeoutMs: Long = 8_000,
     /** Keep a link open to every paired computer, not only the active one. */
     private val stayConnected: Boolean = false,
+    /** The background queue saved chats are written on (#3413); null writes on the caller's thread (tests). */
+    private val io: com.nekko.protocol.BackgroundIO? = null,
 ) {
     /** The active computer's composers, kept until their prompt is sent (offline mode, the iPhone's drafts). */
     val drafts = DraftStore(offlineFiles, scope, draftDebounceMs)
 
     /** The last chats opened, to read while the computer is out of reach (OF-5); kept only while the setting is on. */
-    val transcripts = SavedTranscripts(now = now)
+    val transcripts = SavedTranscripts(io = io, now = now)
+
+    /** Hand the saves still waiting to the background queue now: the app is going to the background and may end. */
+    fun flushSaves() {
+        transcripts.flushNow()
+        chatListCache?.flush()
+    }
 
     /** *Keep recent chats to read offline*: on keeps them from now; off deletes every computer's copies. */
     fun setKeepTranscripts(on: Boolean) {
@@ -153,6 +161,8 @@ class ComputersRepository(
         _state.value.computers.forEach { c ->
             transcripts.use(f, c.id)
             transcripts.keepOnly(emptySet())
+            // The deletions run on the background queue: wait, so none is left behind when the setting is off.
+            transcripts.flush()
         }
         transcripts.use(null, _state.value.activeId)
     }
@@ -215,7 +225,7 @@ class ComputersRepository(
         try {
             val secret = StoredJson.decodeSecret(store.get(secretKey(computer.id))) ?: return
             val hostKey = secret.pin ?: return
-            val routes = RouteSupervisor.order(listOf(computer.relayUrl) + computer.alts)
+            val routes = RouteSupervisor.order(computer.routes)
             _checks.value = routes.map { RouteReport(it) }
             routes.forEachIndexed { i, url ->
                 val report = if (!routeAllowed(url)) {
@@ -278,9 +288,6 @@ class ComputersRepository(
         _connectionLog.value = log.entries
     }
 
-    /** The computer's theme alone, so the app's root only recomposes when it changes. */
-    val appearance: StateFlow<Appearance?> = _state.map { it.appearance }.distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, null)
 
     private val _events = MutableSharedFlow<AgentEvent>(extraBufferCapacity = 512)
     /** Every `agent:event` from the active computer. Chat screens filter by session. */
@@ -466,7 +473,6 @@ class ComputersRepository(
                 it.copy(
                     computers = next, activeId = activeId, summaries = emptyList(), providers = emptyList(),
                     models = emptyMap(), modelErrors = emptyMap(), workspaces = emptyList(), denied = if (wasActive) null else it.denied,
-                    appearance = if (next.isEmpty()) null else it.appearance,
                 )
             }
             if (wasActive) activeId else null
@@ -578,11 +584,6 @@ class ComputersRepository(
             launch {
                 c.events.collect { (channel, payload) ->
                     if (client !== c) return@collect
-                    if (channel == Events.APPEARANCE_UPDATED) {
-                        // The desktop's theme changed: follow it live.
-                        _state.update { it.copy(appearance = Appearance.from(payload)) }
-                        return@collect
-                    }
                     if (channel == TerminalChannels.EVENT) {
                         TerminalEvent.from(payload)?.let { _terminalEvents.emit(it) }
                         return@collect
@@ -590,12 +591,7 @@ class ComputersRepository(
                     if (channel != Events.AGENT_EVENT) return@collect
                     val e = AgentEvent.from(payload) ?: return@collect
                     outbox.onEvent(e)
-                    _state.update { s ->
-                        val attention = s.attention.next(e)
-                        val activity = ActivityTracker.next(s.activity, e).toMutableMap()
-                        attention.pending.keys.forEach { activity[it] = Activity.NEEDS_YOU }
-                        s.copy(activity = activity, attention = attention)
-                    }
+                    _state.update { s -> withAgentEvent(s, e) }
                     if (e is AgentEvent.ToolResultReady || e is AgentEvent.QuestionResolved || e is AgentEvent.Done || e is AgentEvent.Error) scheduleAttention()
                     _events.emit(e)
                     // Keep the list fresh when a turn ends anywhere (another device, a task).
@@ -611,7 +607,7 @@ class ComputersRepository(
     /** A connection to one paired computer, not yet dialed. */
     private suspend fun dial(computer: Computer, secret: ComputerSecret, hostKey: String): Remote {
         val config = RelayConfig(
-            relayUrl = computer.relayUrl,
+            relayUrl = computer.routes.first(),
             room = secret.room,
             key = secret.key,
             keyBytes = E2E.fromHex(secret.keyHex),
@@ -620,7 +616,7 @@ class ComputersRepository(
             deviceName = deviceName(),
             pairCode = secret.pair,
             platform = "android",
-            alts = computer.alts,
+            alts = computer.routes.drop(1),
             routeAllowed = routeAllowed,
             helloSigner = helloSigner,
         )
@@ -899,6 +895,25 @@ class ComputersRepository(
         } else {
             if (active) disconnect() else { dropLink(id); lock.withLock { syncFleet() } }
         }
+    }
+
+    /** The route choice for [id] (#3346). */
+    fun routeChoice(id: String): RouteChoice = _state.value.computers.firstOrNull { it.id == id }?.routeChoice ?: RouteChoice.AUTO
+
+    /**
+     * Choose which kinds of route this phone dials to reach [id], then reconnect it at once on the
+     * filtered routes (as the active computer, or as the fleet link beside it).
+     */
+    suspend fun setRouteChoice(id: String, choice: RouteChoice) {
+        lock.withLock {
+            val list = _state.value.computers
+            if (list.none { it.id == id && it.routeChoice != choice }) return
+            val updated = list.map { if (it.id == id) it.copy(routeChoice = choice) else it }
+            saveIndex(updated)
+            _state.update { it.copy(computers = updated) }
+        }
+        if (!connectionEnabled(id)) return
+        if (_state.value.activeId == id) connect(id) else { dropLink(id); lock.withLock { syncFleet() } }
     }
 
     /** Drop the live connection (the pairing stays). */
@@ -1185,20 +1200,20 @@ class ComputersRepository(
                 // Only the public projections: providers and settings carry secrets.
                 val providers = async { PublicProvider.list(c.call(Channels.PROVIDERS_LIST)) }
                 // Only public projections leave this block: settings carry secrets.
-                val settings = async { c.call(Channels.SETTINGS_GET).let { Triple(RemoteDefaults.from(it), Appearance.from(it), PcSettings.from(it)) } }
+                val settings = async { c.call(Channels.SETTINGS_GET).let { RemoteDefaults.from(it) to PcSettings.from(it) } }
                 val workspaces = async { orNull { WorkspaceFolder.list(c.call(Channels.WORKSPACE_LIST)) } ?: emptyList() }
                 val info = async { orNull { AppInfo.from(c.call(Channels.APP_INFO)) } }
                 // Apply pending independently of slower metadata reads.
                 val pending = async { refreshAttention(c, link) }
-                val (defaults, appearance, pcSettings) = settings.await()
+                val (defaults, pcSettings) = settings.await()
                 pending.await()
                 val raw = chats.await()
-                Refresh(SessionSummary.visible(raw), providers.await(), defaults, appearance, pcSettings, workspaces.await(), info.await(), SessionSummary.subagents(raw))
+                Refresh(SessionSummary.visible(raw), providers.await(), defaults, pcSettings, workspaces.await(), info.await(), SessionSummary.subagents(raw))
             }
             if (client !== c) return
             _state.update { s ->
                 s.copy(
-                    summaries = r.summaries, subagents = r.subagents ?: emptyMap(), providers = r.providers, defaults = r.defaults, appearance = r.appearance, pcSettings = r.pcSettings,
+                    summaries = r.summaries, subagents = r.subagents ?: emptyMap(), providers = r.providers, defaults = r.defaults, pcSettings = r.pcSettings,
                     workspaces = r.workspaces, summariesLoading = false, summariesLoaded = true, savedListAt = null,
                     imageGeneration = r.info?.imageGeneration == true,
                 )
@@ -1463,7 +1478,6 @@ class ComputersRepository(
         val summaries: List<SessionSummary>,
         val providers: List<PublicProvider>,
         val defaults: RemoteDefaults,
-        val appearance: Appearance,
         val pcSettings: PcSettings,
         val workspaces: List<WorkspaceFolder>,
         val info: AppInfo?,

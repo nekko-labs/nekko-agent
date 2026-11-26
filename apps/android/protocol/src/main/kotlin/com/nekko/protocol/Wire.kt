@@ -100,6 +100,8 @@ object Channels {
     const val CONTEXT_PREVIEW = "context:preview"
     /** A chat's durable `agent_watch`es ([AgentWatch]), for the watch rows' live chips. */
     const val SESSION_WATCHES = "session:watches"
+    /** Agent class: cancels one watch of one chat (a clip's Cancel); the chat's Stop ends them all. */
+    const val SESSION_CANCEL_WATCH = "session:cancelWatch"
     /** Agent class without a proof: unloading frees memory, and the next reply loads the model again. */
     const val MODEL_UNLOAD = "model:unload"
     const val MODEL_LOAD = "model:load"
@@ -152,7 +154,7 @@ object Channels {
         ENGINE_MODELS, CHAT_GENERATE_IMAGE, SESSION_PHOTO, SETTINGS_GET, SETTINGS_UPDATE, SESSION_DELETE, VOICE_STATUS, VOICE_TRANSCRIBE, PROVIDERS_LIST, MODELS_LIST, SESSIONS_SUMMARIES, SESSION_CREATE, SESSION_GET,
         SESSION_SET_OPTIONS, CHAT_SEND, CHAT_ABORT, CHAT_QUEUE, CHAT_PENDING, CHAT_ANSWER, TOOL_APPROVE,
         WORKSPACE_LIST, APP_INFO, ACTIVITY_STATE, MACHINE_SUMMARY, SKILLS_RUNNABLE, TOOLS_LIST, CHANGES_LIST, AUDIT_READ, MONITOR_SUMMARY,
-        SYSTEM_STATS, GPU_STATS, ENGINE_STATUS, CONTEXT_PREVIEW, SESSION_WATCHES, MODEL_UNLOAD,
+        SYSTEM_STATS, GPU_STATS, ENGINE_STATUS, CONTEXT_PREVIEW, SESSION_WATCHES, SESSION_CANCEL_WATCH, MODEL_UNLOAD,
         SECURITY_CHALLENGE, DEVICE_SIGN_OUT, REMOTE_STOP, APP_QUIT,
         FILES_LIST, FILES_SEARCH, FILES_READ, FILES_WRITE, WORKSPACE_ADD_BY_PATH, WORKSPACE_REMOVE, LOGS_LIST, LOGS_READ, ARTIFACT_READ, PREVIEW_FETCH,
         PROVIDERS_SEAL_KEY, PROVIDERS_SAVE_SEALED, PROVIDERS_SET_ENABLED,
@@ -165,8 +167,6 @@ object Channels {
 
 object Events {
     const val AGENT_EVENT = "agent:event"
-    /** The desktop's theme changed (`IpcEvents.appearanceUpdated`); payload is an [Appearance]. */
-    const val APPEARANCE_UPDATED = "appearance:updated"
 }
 
 /** `sendChat` errors unless the session names a concrete, enabled model. */
@@ -749,47 +749,32 @@ data class VoiceInstall(val installed: Boolean, val installing: Boolean) {
 /** `voice:transcribe`'s one argument: the WAV bytes as numbers 0..255, as the desktop sends them. */
 fun wavArg(wav: ByteArray): JsonArray = JsonArray(wav.map { JsonPrimitive(it.toInt() and 0xFF) })
 
-/**
- * The desktop's look, as `appearanceOf` (packages/shared/src/themes.ts) builds
- * it for the `appearance:updated` event, or read from `settings:get`. Same
- * rules on both paths: the mode (anything unknown is system), a preset id, and
- * accents as `#rrggbb`.
- */
-data class Appearance(
-    val theme: ThemeMode = ThemeMode.SYSTEM,
-    val preset: String? = null,
-    val accent: Long? = null,
-    val accent2: Long? = null,
+data class ModelInfo(
+    val id: String,
+    val providerId: String,
+    val name: String,
+    val loaded: Boolean,
+    /** Size on disk, when the provider says (local model servers, #2950). */
+    val sizeBytes: Long? = null,
+    /** The context window in tokens, when the provider says. */
+    val contextLength: Long? = null,
+    /** Family, quantization and the like, as text (`details` on the wire). */
+    val details: Map<String, String> = emptyMap(),
 ) {
-    enum class ThemeMode { SYSTEM, LIGHT, DARK }
+    /** "8B", from the details a model server or the Nekko engine gives. */
+    val parameters: String? get() = details["parameterSize"] ?: details["params"]
 
-    companion object {
-        fun from(e: JsonElement?): Appearance {
-            val o = e.obj() ?: return Appearance()
-            val theme = when (o.str("theme")) {
-                "light" -> ThemeMode.LIGHT
-                "dark" -> ThemeMode.DARK
-                else -> ThemeMode.SYSTEM
-            }
-            val preset = o.str("themePreset")?.takeIf { it.length in 1..32 && it.all { c -> c in 'a'..'z' || c in '0'..'9' || c == '-' } }
-            return Appearance(theme, preset, hex(o.str("accent")), hex(o.str("accent2")))
-        }
-
-        /** `#rrggbb` as an opaque ARGB value, else null. */
-        fun hex(v: String?): Long? {
-            if (v == null || v.length != 7 || v[0] != '#') return null
-            val rgb = v.substring(1).toLongOrNull(16) ?: return null
-            return 0xFF000000L or rgb
-        }
-    }
-}
-
-data class ModelInfo(val id: String, val providerId: String, val name: String, val loaded: Boolean) {
     companion object {
         fun list(e: JsonElement?): List<ModelInfo> = e.arr()?.mapNotNull { m ->
             val o = m.obj() ?: return@mapNotNull null
             val id = o.str("id") ?: return@mapNotNull null
-            ModelInfo(id, o.str("providerId") ?: "", o.str("name")?.ifBlank { null } ?: id, o.bool("loaded"))
+            val details = o["details"].obj().orEmpty().mapNotNull { (k, v) -> (v as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull?.let { k to it } }.toMap()
+            ModelInfo(
+                id, o.str("providerId") ?: "", o.str("name")?.ifBlank { null } ?: id, o.bool("loaded"),
+                sizeBytes = o.long("sizeBytes")?.takeIf { it > 0 },
+                contextLength = o.long("contextLength")?.takeIf { it > 0 },
+                details = details,
+            )
         } ?: emptyList()
     }
 }
@@ -846,7 +831,13 @@ val COMPUTER_ICONS = listOf(
 
 data class AskOption(val label: String, val description: String?)
 data class AskQuestion(val id: String, val header: String, val question: String, val options: List<AskOption>, val multiSelect: Boolean)
-data class AskRequest(val callId: String, val questions: List<AskQuestion>, val askedAt: Long) {
+data class AskRequest(
+    val callId: String,
+    val questions: List<AskQuestion>,
+    val askedAt: Long,
+    /** A paid cloud clip's choice (#3038): the same questions, drawn as one card with a total. */
+    val clip: ClipOffer? = null,
+) {
     companion object {
         fun from(e: JsonElement?): AskRequest? {
             val o = e.obj() ?: return null
@@ -862,7 +853,7 @@ data class AskRequest(val callId: String, val questions: List<AskQuestion>, val 
                     multiSelect = qo.bool("multiSelect"),
                 )
             } ?: emptyList()
-            return AskRequest(o.str("callId") ?: return null, qs, o.long("askedAt") ?: 0)
+            return AskRequest(o.str("callId") ?: return null, qs, o.long("askedAt") ?: 0, ClipOffer.from(o["clip"]))
         }
     }
 }

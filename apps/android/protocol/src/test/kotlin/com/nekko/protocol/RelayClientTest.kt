@@ -55,6 +55,8 @@ class RelayClientTest {
         var refuseNext: Pair<Int, String>? = null
         /** `host:port` of routes that don't work: true hangs (never opens), false refuses at once. */
         val unreachable = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+        /** `host:port` of routes the computer answers with `denied: route` (its per-device route choice, #3243). */
+        val routeDenied: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
         /** The computer's phone protocol version in its welcome (IO-32); null sends none. */
         var welcomeProtocol: Int? = null
         /** Challenge each connection and hold HELLOs and requests to it. */
@@ -69,7 +71,7 @@ class RelayClientTest {
         val rejected = CopyOnWriteArrayList<JsonObject>()
         var answer: (JsonObject) -> JsonObject? = { req -> buildJsonObject { put("type", "res"); put("id", req["id"]!!); put("result", JsonPrimitive("ok:${req["channel"]!!.jsonPrimitive.content}")) } }
 
-        inner class Conn(val listener: WsListener) : WsConnection {
+        inner class Conn(val listener: WsListener, val hostPort: String = "") : WsConnection {
             @Volatile var open = true
             val host = HostEnd(room, key, hostSigner)
             /** The challenge this connection must answer next, or null once answered. */
@@ -104,6 +106,7 @@ class RelayClientTest {
                         val id = frame["deviceId"]!!.jsonPrimitive.content
                         val pair = frame["pair"]?.jsonPrimitive?.content
                         val reply = when {
+                            id in known && hostPort in routeDenied -> "route"
                             id in known -> null
                             pair != null && pair == code -> { known += id; code = null; null }
                             pair != null -> "bad-code"
@@ -143,7 +146,7 @@ class RelayClientTest {
 
         override fun open(url: String, listener: WsListener): WsConnection {
             urls += url
-            val c = Conn(listener)
+            val c = Conn(listener, url.substringAfter("://").substringBefore('/'))
             when (unreachable[url.substringAfter("://").substringBefore('/')]) {
                 true -> return c
                 false -> { scope.launchSoon { c.drop(1006, "connection refused") }; return c }
@@ -171,7 +174,7 @@ class RelayClientTest {
             deviceId = id, deviceName = "Pixel", pairCode = pair,
             // Generous: the first test on a cold JVM also pays for crypto setup, and no test here
             // waits for these to expire, so they only bound how long a real failure takes.
-            handshakeTimeoutMs = handshakeTimeoutMs, requestTimeoutMs = 10_000, retryBaseMs = 20, retryMaxMs = 80, offlinePollMs = 40,
+            handshakeTimeoutMs = handshakeTimeoutMs, requestTimeoutMs = 10_000, retryBaseMs = 20, retryMaxMs = 80, retryJitter = 0.0, offlinePollMs = 40,
             challengeWaitMs = challengeWaitMs,
         ),
         transport, scope,
@@ -257,7 +260,7 @@ class RelayClientTest {
                 hostKey = fxObj("hostKey")["publicKey"]!!.jsonPrimitive.content,
                 deviceId = d["deviceId"]!!.jsonPrimitive.content, deviceName = d["name"]!!.jsonPrimitive.content,
                 platform = d["platform"]!!.jsonPrimitive.content,
-                handshakeTimeoutMs = 10_000, requestTimeoutMs = 10_000, retryBaseMs = 20, retryMaxMs = 80, offlinePollMs = 40,
+                handshakeTimeoutMs = 10_000, requestTimeoutMs = 10_000, retryBaseMs = 20, retryMaxMs = 80, retryJitter = 0.0, offlinePollMs = 40,
                 challengeWaitMs = challengeWaitMs,
                 helloSigner = signer,
                 fleetHello = fleet,
@@ -992,7 +995,7 @@ class RelayClientTest {
         val c = RelayClient(
             RelayConfig(
                 relayUrl = "wss://relay.test/", room = room, key = "k", keyBytes = key, hostKey = hostKey, deviceId = "dev-1", deviceName = "Pixel",
-                handshakeTimeoutMs = 2_000, requestTimeoutMs = 2_000, retryBaseMs = 60_000, retryMaxMs = 60_000,
+                handshakeTimeoutMs = 2_000, requestTimeoutMs = 2_000, retryBaseMs = 60_000, retryMaxMs = 60_000, retryJitter = 0.0,
             ),
             relay, scope,
         )
@@ -1048,7 +1051,7 @@ class RelayClientTest {
     private fun twoRoutes(relay: FakeRelay, prober: RouteProber? = null, dwellMs: Long = 50, allowed: (String) -> Boolean = { true }) = RelayClient(
         RelayConfig(
             relayUrl = tailnetRoute, room = room, key = "k", keyBytes = key, hostKey = hostKey, deviceId = "dev-1", deviceName = "Pixel",
-            handshakeTimeoutMs = 2_000, requestTimeoutMs = 5_000, retryBaseMs = 20, retryMaxMs = 80, offlinePollMs = 40,
+            handshakeTimeoutMs = 2_000, requestTimeoutMs = 5_000, retryBaseMs = 20, retryMaxMs = 80, retryJitter = 0.0, offlinePollMs = 40,
             alts = listOf(lanRoute),
             routeRules = RouteRules(openTimeoutMs = 100, probeIntervalMs = 20, failureCooldownMs = 100, minDwellMs = dwellMs, successesToReturn = 3),
             routeAllowed = allowed,
@@ -1094,6 +1097,29 @@ class RelayClientTest {
         assertEquals(tailnetRoute, c.await(RelayState.ONLINE).route)
         assertEquals(2, relay.urls.size)
         c.close()
+    }
+
+    @Test fun `denied route moves to the next route and stays there`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        relay.routeDenied += "192.168.1.20:4400"
+        val c = twoRoutes(relay)
+        c.connect()
+        assertEquals(tailnetRoute, c.await(RelayState.ONLINE).route)
+        assertEquals(2, relay.urls.size)
+        c.close()
+    }
+
+    @Test fun `denied route on the only route ends as denied route`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        relay.routeDenied += "192.168.1.20:4400"
+        relay.routeDenied += "studio.tail1234.ts.net:4400"
+        val c = twoRoutes(relay)
+        c.connect()
+        assertEquals(DenyReason.ROUTE, c.await(RelayState.DENIED).denied)
+        assertEquals(2, relay.urls.size)
+        delay(150)
+        assertEquals("no loop once every route is refused", 2, relay.urls.size)
+        try { c.call(Channels.APP_INFO); fail() } catch (e: RelayException) { assertTrue(e.message!!.contains("another route")) }
     }
 
     @Test fun `leaving the LAN moves to the tailnet, then back when it answers again`() = runBlocking {
@@ -1179,5 +1205,25 @@ class RelayClientTest {
         assertTrue(relay.urls.all { it.startsWith("$tailnetRoute/relay?") })
         assertTrue("nothing better to probe", prober.probes.isEmpty())
         c.close()
+    }
+
+    @Test
+    fun `reconnect backoff adds up to half again, at random, on top of 1 2 4 to the cap`() {
+        fun config(jitter: Double, source: Double) = RelayConfig(
+            relayUrl = "wss://relay.test", room = "r", key = "k", keyBytes = ByteArray(32), hostKey = "h",
+            deviceId = "d", deviceName = "n", jitterSource = { source }, retryJitter = jitter,
+        )
+        // No jitter drawn (0.0): the exact old schedule, capped at 30 s.
+        assertEquals(listOf(1_000L, 2_000L, 4_000L, 8_000L, 16_000L, 30_000L, 30_000L), (0..6).map { config(0.5, 0.0).retryDelayMs(it) })
+        // The largest draw (just under 1.0) adds just under half, never more.
+        assertEquals(listOf(1_499L, 2_999L, 5_999L), (0..2).map { config(0.5, 0.9999).retryDelayMs(it) })
+        assertEquals(44_998L, config(0.5, 0.9999).retryDelayMs(10))
+        // Switched off, the delay is exact whatever is drawn.
+        assertEquals(2_000L, config(0.0, 0.9999).retryDelayMs(1))
+        // Real draws land in [base, 1.5 base) and are not all the same.
+        val live = RelayConfig(relayUrl = "wss://relay.test", room = "r", key = "k", keyBytes = ByteArray(32), hostKey = "h", deviceId = "d", deviceName = "n")
+        val draws = (1..200).map { live.retryDelayMs(3) }
+        assertTrue(draws.all { it in 8_000L until 12_000L })
+        assertTrue(draws.toSet().size > 1)
     }
 }

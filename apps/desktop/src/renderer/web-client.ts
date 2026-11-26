@@ -51,6 +51,7 @@ function makeWebClient(): NekkoApi {
   const indexCbs = new Set<(s: IndexStatus) => void>();
   const terminalCbs = new Set<(e: TerminalEvent) => void>();
   const changesCbs = new Set<(e: { sessionId: string }) => void>();
+  const gitChangedCbs = new Set<(e: { path: string }) => void>();
   const tasksCbs = new Set<(t: import('@nekko-agent/shared').AutomationTask[]) => void>();
   const trainingCbs = new Set<(r: import('@nekko-agent/shared').TrainingRun[]) => void>();
   const workflowCbs = new Set<(s: import('@nekko-agent/shared').WorkflowsSnapshot) => void>();
@@ -76,6 +77,7 @@ function makeWebClient(): NekkoApi {
     else if (channel === IpcEvents.indexProgress) indexCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.terminalEvent) terminalCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.changesUpdated) changesCbs.forEach((cb) => cb(payload));
+    else if (channel === IpcEvents.gitChanged) gitChangedCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.tasksUpdated) tasksCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.backgroundUpdated) backgroundCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.simulatorsUpdated) simulatorsCbs.forEach((cb) => cb(payload));
@@ -441,6 +443,7 @@ function makeWebClient(): NekkoApi {
     syncRevoke: (deviceId) => call(IpcChannels.syncRevoke, deviceId),
     syncNow: () => call(IpcChannels.syncNow),
     syncSetEnabled: (on) => call(IpcChannels.syncSetEnabled, on),
+    syncSetKind: (kind, on) => call(IpcChannels.syncSetKind, kind, on),
     syncDeleteAll: () => call(IpcChannels.syncDeleteAll),
     librarySync: (files) => call(IpcChannels.librarySync, files),
     orgList: () => call(IpcChannels.orgList),
@@ -474,6 +477,7 @@ function makeWebClient(): NekkoApi {
     engineCatalog: (query, format) => call(IpcChannels.engineCatalog, query, format),
     engineCatalogModel: (id) => call(IpcChannels.engineCatalogModel, id),
     engineCatalogDetail: (id) => call(IpcChannels.engineCatalogDetail, id),
+    engineCatalogChecks: (id, file) => call(IpcChannels.engineCatalogChecks, id, file),
     engineFolders: () => call(IpcChannels.engineFolders),
     engineFoldersSave: (folders) => call(IpcChannels.engineFoldersSave, folders),
     engineDownloadModel: (modelId, quantLabel) => call(IpcChannels.engineDownloadModel, modelId, quantLabel),
@@ -553,7 +557,7 @@ function makeWebClient(): NekkoApi {
     openTerminalStream: (id, handlers) => openTerminalStream(id, handlers),
     listShells: () => call(IpcChannels.terminalShells),
     createTerminal: (opts) => call(IpcChannels.terminalCreate, opts),
-    terminalSnapshot: (id) => call(IpcChannels.terminalSnapshot, id),
+    terminalSnapshot: (id, opts) => (opts ? call(IpcChannels.terminalSnapshot, id, opts) : call(IpcChannels.terminalSnapshot, id)),
     updateTerminal: (id, patch) => call(IpcChannels.terminalUpdate, id, patch),
     writeTerminal: (id, data) => call(IpcChannels.terminalWrite, id, data),
     resizeTerminal: (id, cols, rows) => call(IpcChannels.terminalResize, id, cols, rows),
@@ -579,10 +583,10 @@ function makeWebClient(): NekkoApi {
   sandboxStatus: (id) => call(IpcChannels.sandboxStatus, id),
   sandboxDiff: (id) => call(IpcChannels.sandboxDiff, id),
   applySandboxDiff: (id, identity, diffId, paths) => call(IpcChannels.sandboxApplyDiff, id, identity, diffId, paths) as Promise<never>,
-  setSessionOptions: (id, patch) => setChatOptionsAndDefaults({
+  setSessionOptions: (id, patch, opts) => setChatOptionsAndDefaults({
     setSessionOptions: (id, patch) => call(IpcChannels.sessionSetOptions, id, patch),
     updateSettings: (patch) => call(IpcChannels.settingsUpdate, settingsPatchWithModeReset(patch)),
-  }, id, patch),
+  }, id, patch, opts),
     truncateSession: (id, messageId) => call(IpcChannels.sessionTruncate, id, messageId),
     clearSessions: (scope) => call(IpcChannels.sessionsClear, scope),
     purgeExpiredArchives: () => call(IpcChannels.sessionsPurgeArchived),
@@ -622,6 +626,7 @@ function makeWebClient(): NekkoApi {
     listRepos: (query) => call(IpcChannels.reposList, query ?? ''),
     cloneRepo: (repo, opts) => call(IpcChannels.reposClone, repo, opts ?? {}),
     setSandboxRepos: (id, repos) => call(IpcChannels.reposSetSandbox, id, repos),
+    suggestRepoFolder: (path) => call(IpcChannels.reposSuggestFolder, path),
     indexWorkspace: (id) => call(IpcChannels.workspaceIndex, id),
     getIndexStatus: (id) => call(IpcChannels.workspaceIndexStatus, id),
     searchWorkspace: (id, query) => call(IpcChannels.workspaceSearch, id, query),
@@ -655,6 +660,7 @@ function makeWebClient(): NekkoApi {
     acceptAllChanges: (sessionId) => call(IpcChannels.changeAcceptAll, sessionId),
 
     listSessionPrs: (sessionId, force) => call(IpcChannels.prSessionList, sessionId, force),
+    listSessionPrsMany: (sessionIds, force) => call(IpcChannels.prSessionListMany, sessionIds, force),
     getPrDiff: (url) => call(IpcChannels.prDiff, url),
     prAction: (url, action) => call(IpcChannels.prAction, url, action),
     continuePrStack: (sessionId, url) => call(IpcChannels.prContinueStack, sessionId, url),
@@ -787,7 +793,7 @@ function makeWebClient(): NekkoApi {
     getRemoteStatus: () => call(IpcChannels.remoteStatus),
     getMessagingStatus: () => call(IpcChannels.messagingStatus),
     getRemotePairing: () => call(IpcChannels.remotePairing),
-    startRemotePairing: () => call(IpcChannels.remotePair),
+    startRemotePairing: (route) => (route && route !== 'auto' ? call(IpcChannels.remotePair, null, { route }) : call(IpcChannels.remotePair)),
     startComputerPairing: () => call(IpcChannels.remotePairComputer),
     // Connected computers are the desktop app's: a server has no window to show them in.
     listComputers: async () => [],
@@ -809,6 +815,8 @@ function makeWebClient(): NekkoApi {
     renameRemoteDevice: (deviceId, name) => call(IpcChannels.remoteRename, deviceId, name),
     rotateRemoteSecret: () => call(IpcChannels.remoteRotate),
     setRemoteAccess: (deviceId, access) => call(IpcChannels.remoteSetAccess, deviceId, access),
+    setRemoteRoute: (deviceId, route) => call(IpcChannels.remoteSetRoute, deviceId, route),
+    setRemoteRelays: (urls) => call(IpcChannels.remoteSetRelays, urls),
     getRemoteActivity: (deviceId) => call(IpcChannels.remoteActivity, deviceId),
     // The web and self-hosted editions run on a server: the relay that ships beside
     // them is apps/relay-server itself, so there is nothing for this page to start.
@@ -851,6 +859,8 @@ function makeWebClient(): NekkoApi {
     getMcpStatus: () => call(IpcChannels.mcpStatus),
     detectHypergate: (port) => call(IpcChannels.mcpHypergate, port),
     connectHypergate: (port) => call(IpcChannels.mcpHypergateConnect, port),
+    checkHypergate: (port) => call(IpcChannels.mcpHypergateCheck, port),
+    startHypergate: (port) => call(IpcChannels.mcpHypergateStart, port),
     registerPushToken: (token, platform) => registerPush(token, platform),
     checkForUpdates: async () => {
       const info = (await call(IpcChannels.appInfo)) as AppInfo;
@@ -899,6 +909,10 @@ function makeWebClient(): NekkoApi {
     onChangesUpdated: (cb) => {
       changesCbs.add(cb);
       return () => changesCbs.delete(cb);
+    },
+    onGitChanged: (cb) => {
+      gitChangedCbs.add(cb);
+      return () => gitChangedCbs.delete(cb);
     },
     onTasksUpdated: (cb) => {
       tasksCbs.add(cb);

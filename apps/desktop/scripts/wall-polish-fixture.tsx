@@ -9,7 +9,7 @@ import { UpdateProvider } from '../src/renderer/components/UpdateBanner';
 import { ReplyStatus } from '../src/renderer/components/agent-console/ReplyStatus';
 import { Mascot, NekkoAvatar } from '../src/renderer/components/Mascot';
 import { DEFAULT_WALL_STATE } from '../src/renderer/commandWall';
-import { summarizeSession } from '@nekko-agent/shared';
+import { summarizeSession, type WorkspaceFolder } from '@nekko-agent/shared';
 import '../src/renderer/styles.css';
 
 // Synthetic records only. This fixture never connects to a host or daemon.
@@ -37,6 +37,9 @@ let records: any[] = [];
 // Optional: what each session is waiting on a person for (a question on the wall).
 let pendingFixture: Record<string, any> = {};
 let expiredFixture = false;
+let nextFolder: string | null = null;
+let blockedFolder: string | null = null;
+let connectedFolders: WorkspaceFolder[] = [];
 const claude = { id: 'claude-sub', kind: 'anthropic', baseUrl: 'https://api.anthropic.com', enabled: true, label: 'Claude subscription', auth: 'subscription', tokenKey: 'claude' };
 const calls: any[] = [];
 const bridge: any = {
@@ -53,13 +56,24 @@ const bridge: any = {
   // opts.expired: the Claude subscription's sign-in has expired.
   getLimitsProblem: async (key: string) => (expiredFixture && key === 'claude' ? { kind: 'auth_expired', at: Date.now() } : null),
   getLimits: async () => null,
-  // The Browsers view's served pages and a Files window's listing (#2824).
-  serversList: async () => ({ servers: [
-    { url: 'http://localhost:5173/', port: 5173, title: 'Shop admin', process: 'node', cwd: 'C:/fixture/shop/web' },
-    { url: 'http://localhost:4000/', port: 4000, title: 'Docs preview', process: 'node', cwd: 'C:/fixture/docs' },
-    { url: 'http://localhost:8000/', port: 8000, process: 'python', cwd: 'C:/temp' },
-  ] }),
+  getSettings: async () => ({ ...useStore.getState().settings, workspaces: connectedFolders }),
+  pickFolder: async () => { calls.push({ method: 'pickFolder' }); return nextFolder; },
+  addWorkspaceByPath: async (path: string) => {
+    calls.push({ method: 'addFolder', path });
+    if (!connectedFolders.some((f) => f.path === path)) connectedFolders = [...connectedFolders, { id: 'ws-added', name: 'additional', path, addedAt: at }];
+    return connectedFolders;
+  },
+  removeWorkspace: async (id: string) => {
+    calls.push({ method: 'removeFolder', id });
+    if (id === blockedFolder) throw new Error('Wait for chats using this folder to finish before revoking access.');
+    connectedFolders = connectedFolders.filter((f) => f.id !== id);
+    return connectedFolders;
+  },
+  // A folder's listing, for the Files view's trees and a Files window.
   listDir: async (dir: string) => ['src', 'public', 'package.json', 'README.md', 'vite.config.ts'].map((name) => ({ name, path: `${dir}/${name}`, dir: !name.includes('.') })),
+  // A file opened from the Files view (the sidebar file browser).
+  readFile: async (file: string) => ({ path: file, content: file.endsWith('.md') ? '# Shop\n\nThe storefront and its admin.\n\n## Run it\n\n    npm install\n    npm run dev\n' : '{\n  "name": "shop",\n  "private": true\n}\n', binary: false, truncated: false, size: 96 }),
+  listComments: async () => [],
 };
 Object.assign(window, { nekko: new Proxy(bridge, { get(target, key: string) { if (key in target) return target[key]; if (key.startsWith('on')) return () => () => {}; return () => Promise.resolve(null); } }) });
 
@@ -105,9 +119,11 @@ function Fixture() {
     const dock = opts.dockAll ? { ...DEFAULT_WALL_STATE.dock, show: true, side: 'right', monitorOrder: ['vitals', 'hardware', 'budget', 'utilization', 'automations'], panels: { vitals: true, automations: false, utilization: true, budget: true, hardware: true } }
       : opts.dock || opts.expired ? { ...DEFAULT_WALL_STATE.dock, show: true, panels: { vitals: false, automations: false, utilization: !!opts.expired, budget: !opts.expired, hardware: false } } : { ...DEFAULT_WALL_STATE.dock, show: false };
     useStore.setState({ view: 'command', providers: opts.expired ? [provider, claude] : [provider], models, activeProviderId: 'fixture', sessions: records.map(summarizeSession), terminals: [], workspaces: [], activeWorkspaceId: null, activeSessionId: null, activeProjectId: null, settings: { providers: opts.expired ? [provider, claude] : [provider], workspaceFolders: [], workspaces: opts.folders ? [{ id: 'ws-shop', name: 'shop', path: 'C:/fixture/shop', repo: { provider: 'github', fullName: 'acme/shop' } }, { id: 'ws-docs', name: 'docs', path: 'C:/fixture/docs' }, { id: 'ws-notes', name: 'notes', path: 'C:/fixture/notes' }] : opts.many ? [{ id: 'ws-a', name: 'nekko-agent', path: 'C:/fixture/a' }, { id: 'ws-b', name: 'mynichi', path: 'C:/fixture/b' }] : [], theme: 'dark', themePreset: opts.preset, experimental: {}, agent: {}, ui: {}, commandWall: { ...DEFAULT_WALL_STATE, zonesIntro: true, root, hero: opts.empty ? null : 'alpha', autoAdd: false, watermark: Date.now(), dock, ...(opts.focus ? { layout: { ...DEFAULT_WALL_STATE.layout, mode: 'focus' } } : {}) } }, activeSkillBySession: {}, prsBySession: {}, installedSkillDefs: [], contextPanelOpen: false, planRailOpen: !!opts.planOpen } as any);
+    connectedFolders = useStore.getState().settings?.workspaces ?? [];
+    nextFolder = blockedFolder = null;
     records.forEach(putCachedSession); setRoute('command'); setEpoch(e => e + 1);
   };
-  Object.assign(window, { integration: { reset, calls, route: setRoute, state: () => useStore.getState(), records: () => records } });
+  Object.assign(window, { integration: { reset, calls, route: setRoute, state: () => useStore.getState(), records: () => records, setFolderPicker: (path: string | null) => { nextFolder = path; }, blockFolder: (id: string | null) => { blockedFolder = id; } } });
   React.useEffect(reset, []);
   return <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }} className="bg-paper" key={epoch}>
     <UpdateProvider><TitleBar /></UpdateProvider>

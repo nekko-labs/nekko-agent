@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pricing · Nekko Agent</title>
-    <meta name="description" content="Nekko Agent is free and open source. Nekko Cloud Pro adds synced chats, cloud machines and organizations." />
+    <meta name="description" content="Nekko Agent is free and open source. Nekko Cloud Pro adds synced chats, cloud machines and your setup on every device." />
     <!-- Off the index until plans are on sale for everyone (#2724). -->
     <meta name="robots" content="noindex" />
     <link rel="canonical" href="https://nekkoagent.com/pricing" />
@@ -14,17 +14,122 @@
     <link rel="stylesheet" href="styles.css?v=10" />
     <link rel="stylesheet" href="fonts.css?v=1" />
     <style>
-      .legal { max-width: 960px; margin: 0 auto; padding: 120px 20px 80px; line-height: 1.65; }
-      .legal h1 { font-size: clamp(32px, 5vw, 48px); margin: 0 0 8px; }
-      .legal p, .legal li { color: var(--muted); }
-      .legal strong { color: var(--ink); }
-      .legal a { color: var(--accent); }
-      .plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin: 40px 0 24px; }
-      .plan h2 { font-size: 22px; margin: 0; color: var(--ink); }
-      .plan-price { font-size: 18px; font-weight: 600; color: var(--ink); margin: 4px 0 12px; }
-      .plan ul { padding-left: 1.1em; margin: 0; }
-      .plan-how { margin-top: 12px; font-size: 14px; }
-      .not-yet { margin: 40px 0; }
+      /* ---- Pricing page layout ---- */
+      .pr-page { max-width: 1080px; margin: 0 auto; padding: 120px 24px 80px; }
+
+      .pr-hero { text-align: center; padding-bottom: 32px; }
+      .pr-hero h1 { font-size: clamp(28px, 4.5vw, 48px); font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; margin: 0 0 12px; color: var(--ink); }
+      .pr-hero p { font-size: 16px; color: var(--muted); margin: 0 auto; max-width: 520px; }
+      .pr-banner { display: inline-block; margin-top: 20px; font-size: 13px; color: #1f6680; padding: 6px 16px; border-radius: 99px; background: rgba(31, 102, 128, 0.1); }
+      :root[data-theme='dark'] .pr-banner { color: #6bb8d4; background: rgba(107, 184, 212, 0.12); }
+
+      /* ---- Tier cards ---- */
+      .pr-tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 32px; }
+      @media (max-width: 680px) { .pr-tiers { grid-template-columns: 1fr; } }
+
+      .pr-tier {
+        position: relative; border-radius: 18px; padding: 22px;
+        background: var(--bg-2); border: 1px solid var(--line);
+        box-shadow: var(--shadow); display: flex; flex-direction: column;
+      }
+      .pr-tier-hl {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 1.5px var(--accent), 0 20px 40px -22px rgba(169, 101, 156, 0.6);
+      }
+      .pr-tier-hl::before {
+        content: 'Most people'; position: absolute; top: -11px; left: 22px;
+        font-size: 11px; font-weight: 600; padding: 2px 10px; border-radius: 99px;
+        background: var(--accent); color: #fff;
+      }
+      :root[data-theme='dark'] .pr-tier { background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.12); }
+      :root[data-theme='dark'] .pr-tier-hl { border-color: var(--accent); box-shadow: 0 0 0 1.5px var(--accent), 0 20px 40px -22px rgba(230, 208, 220, 0.4); }
+
+      .pr-tier h2 { font-size: 16px; font-weight: 600; margin: 0; color: var(--ink); letter-spacing: -0.01em; }
+      .pr-price { font-size: 32px; font-weight: 700; margin: 10px 0 2px; color: var(--ink); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+      .pr-price small { font-size: 14px; font-weight: 400; color: var(--muted); }
+      .pr-tagline { font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+      .pr-points { list-style: none; padding: 0; margin: 0 0 20px; display: flex; flex-direction: column; gap: 8px; }
+      .pr-points li { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: var(--muted); line-height: 1.4; }
+      .pr-points li svg { flex: none; margin-top: 2px; color: var(--ok); }
+      .pr-cta {
+        margin-top: auto; height: 36px; border-radius: 10px; display: grid; place-items: center;
+        font-size: 13px; font-weight: 500; text-decoration: none; cursor: pointer;
+        border: 0; font-family: var(--sans); background: rgba(22, 22, 28, 0.06); color: var(--ink);
+        transition: background 0.2s;
+      }
+      .pr-tier-hl .pr-cta { background: var(--accent); color: #fff; }
+      :root[data-theme='dark'] .pr-cta { background: rgba(255, 255, 255, 0.08); color: var(--ink); }
+      :root[data-theme='dark'] .pr-tier-hl .pr-cta { background: var(--accent); color: var(--bg); }
+      @media (hover: hover) {
+        .pr-cta:hover { background: rgba(22, 22, 28, 0.1); }
+        .pr-tier-hl .pr-cta:hover { filter: brightness(1.08); }
+        :root[data-theme='dark'] .pr-cta:hover { background: rgba(255, 255, 255, 0.14); }
+      }
+
+      /* ---- Full comparison toggle ---- */
+      .pr-compare { margin-top: 36px; }
+      .pr-toggle {
+        display: flex; align-items: center; gap: 8px; margin: 0 auto;
+        background: none; border: 0; font: 13px var(--sans); color: var(--muted);
+        cursor: pointer; padding: 4px 0;
+      }
+      .pr-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+      .pr-toggle svg { transition: transform 0.26s ease-out; }
+      .pr-toggle.open svg { transform: rotate(180deg); }
+      @media (prefers-reduced-motion: reduce) { .pr-toggle svg { transition: none; } }
+
+      .pr-fold { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.32s ease-out; }
+      .pr-fold.open { grid-template-rows: 1fr; }
+      .pr-fold > div { overflow: hidden; }
+      @media (prefers-reduced-motion: reduce) { .pr-fold { transition: none; } }
+
+      /* ---- Comparison table ---- */
+      .pr-table { margin-top: 16px; font-size: 13px; }
+      .pr-table-head,
+      .pr-table-row { display: grid; grid-template-columns: 1fr 100px 100px 110px; align-items: center; min-height: 36px; border-bottom: 1px solid var(--line); }
+      .pr-table-head { font-weight: 500; color: var(--muted); }
+      .pr-table-head span:not(:first-child),
+      .pr-table-row span:not(:first-child) { text-align: center; }
+      .pr-col-hl { background: rgba(169, 101, 156, 0.06); }
+      :root[data-theme='dark'] .pr-col-hl { background: rgba(230, 208, 220, 0.05); }
+      .pr-table-head .pr-col-hl { color: var(--accent); border-radius: 8px 8px 0 0; }
+      .pr-table-row span:not(:first-child),
+      .pr-table-head span:not(:first-child) { align-self: stretch; display: grid; place-items: center; }
+      .pr-table-group { display: grid; grid-template-columns: 1fr 100px 100px 110px; min-height: 40px; align-items: end; border-bottom: 1px solid var(--line); }
+      .pr-table-group span:first-child { font-weight: 500; color: var(--muted); padding-bottom: 6px; font-size: 13px; }
+      .pr-table-row span:first-child { padding-right: 12px; color: var(--ink); }
+      .pr-no { color: var(--muted); }
+      .pr-val { color: var(--muted); font-variant-numeric: tabular-nums; }
+      .pr-soon { margin-left: 6px; font-size: 11px; color: #1f6680; }
+      :root[data-theme='dark'] .pr-soon { color: #6bb8d4; }
+      .pr-table-row svg { color: var(--ok); }
+
+      @media (max-width: 600px) {
+        .pr-table-head, .pr-table-row, .pr-table-group { grid-template-columns: 1fr 72px 72px 80px; }
+        .pr-table { font-size: 12px; }
+      }
+
+      /* ---- Pay with ---- */
+      .pr-payline {
+        margin-top: 32px; display: flex; align-items: center; gap: 8px;
+        flex-wrap: wrap; justify-content: center;
+        font-size: 13px; color: var(--muted);
+      }
+      .pr-pay-chip {
+        padding: 4px 12px; border-radius: 99px;
+        background: rgba(22, 22, 28, 0.05); border: 1px solid var(--line);
+        font-size: 12px; color: var(--ink);
+      }
+      :root[data-theme='dark'] .pr-pay-chip { background: rgba(255, 255, 255, 0.07); }
+
+      /* ---- FAQ ---- */
+      .pr-faq { margin-top: 48px; display: grid; grid-template-columns: 1fr 1fr; gap: 24px 48px; }
+      @media (max-width: 600px) { .pr-faq { grid-template-columns: 1fr; } }
+      .pr-faq div b { display: block; margin-bottom: 6px; font-size: 14px; color: var(--ink); }
+      .pr-faq div span { font-size: 13px; color: var(--muted); line-height: 1.6; }
+
+      /* ---- stripe note ---- */
+      .pr-note { margin-top: 32px; text-align: center; }
     </style>
   </head>
   <body>
@@ -37,46 +142,105 @@
       </nav>
     </header>
 
-    <main class="legal">
-      <h1>Pricing</h1>
-      <p>Nekko Agent is free and open source, and everything it does on your computer stays free. Nekko Cloud is the optional paid part.</p>
+    <main>
+      <div class="pr-page">
 
-      <div class="not-yet" data-not-yet>
-        <p><strong>Nekko Cloud plans aren't on sale yet.</strong> During the beta, Nekko Agent is free. <a href="/beta">See what the beta includes</a>, or email <a href="mailto:hello@nekkoagent.com">hello@nekkoagent.com</a> if your team wants in early.</p>
-      </div>
-
-      <div data-plans hidden>
-        <div class="plans">
-          <section class="plan" aria-labelledby="plan-free">
-            <h2 id="plan-free">Free</h2>
-            <p class="plan-price">$0</p>
-            <ul>
-              <li>The whole app on your computer: Windows, macOS and Linux</li>
-              <li>Local models and your own provider accounts</li>
-              <li>Pair your phone over your own network</li>
-            </ul>
-          </section>
-          <section class="plan" aria-labelledby="plan-pro">
-            <h2 id="plan-pro">Pro</h2>
-            <p class="plan-price" data-pro-price></p>
-            <ul>
-              <li>Your chats on every device, end-to-end encrypted</li>
-              <li>Nekko Cloud machines your phone can use</li>
-              <li>Organizations: share your computers with a team</li>
-            </ul>
-            <p class="plan-how">Subscribe in the app: <strong>Settings &gt; Sync</strong>, then <strong>Upgrade</strong>. Cancel there any time.</p>
-          </section>
-          <section class="plan" aria-labelledby="plan-team">
-            <h2 id="plan-team">Team</h2>
-            <p class="plan-price">Talk to us</p>
-            <ul>
-              <li>Pro for everyone in your organization</li>
-              <li>One bill for the team</li>
-            </ul>
-            <p class="plan-how">Email <a href="mailto:hello@nekkoagent.com">hello@nekkoagent.com</a>.</p>
-          </section>
+        <div class="pr-hero">
+          <h1>Free on your computer.<br>Pro everywhere else.</h1>
+          <p>Nekko Agent is free and open source. Nekko Cloud brings your way of working to every device.</p>
+          <div class="pr-banner" data-not-yet>Nekko Cloud plans aren't on sale yet. During the beta, Nekko Agent is free.</div>
         </div>
-        <p class="micro">Payments are handled by Stripe. Nekko Labs never sees your card. Chats stay encrypted so Nekko Labs can't read them, on any plan.</p>
+
+        <div data-plans>
+          <!-- Tier cards. The JS replaces this from plan-catalog.json; the static
+               copy here is a no-JS fallback that keeps the same three plans. -->
+          <div class="pr-tiers" data-pricing-tiers>
+            <article class="pr-tier">
+              <h2>Free</h2>
+              <div class="pr-price">$0</div>
+              <div class="pr-tagline">Everything on your computer</div>
+              <ul class="pr-points">
+                <li><svg width="13" height="13" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.3l2.3 2.3 4.7-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>The whole app on your computer</span></li>
+                <li><svg width="13" height="13" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.3l2.3 2.3 4.7-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Local models and your own accounts</span></li>
+                <li><svg width="13" height="13" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.3l2.3 2.3 4.7-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Your phone on your own network</span></li>
+              </ul>
+              <a href="/#download" class="pr-cta">Download</a>
+            </article>
+            <article class="pr-tier pr-tier-hl">
+              <h2>Pro</h2>
+              <div class="pr-price" data-pro-price>Coming soon</div>
+              <div class="pr-tagline">Your way, on every device</div>
+              <ul class="pr-points">
+                <li><svg width="13" height="13" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.3l2.3 2.3 4.7-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Chats, Library and settings on every device</span></li>
+                <li><svg width="13" height="13" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.3l2.3 2.3 4.7-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Your computers as one fleet</span></li>
+                <li><svg width="13" height="13" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.3l2.3 2.3 4.7-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Nekko Cloud machines for your phone</span></li>
+              </ul>
+              <button class="pr-cta" disabled>Get Pro in the app</button>
+            </article>
+            <article class="pr-tier">
+              <h2>Enterprise</h2>
+              <div class="pr-price">Talk to us</div>
+              <div class="pr-tagline">Pro for your whole company</div>
+              <ul class="pr-points">
+                <li><svg width="13" height="13" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.3l2.3 2.3 4.7-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Pro for everyone, with seats</span></li>
+                <li><svg width="13" height="13" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.3l2.3 2.3 4.7-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Single sign-on and admin controls</span></li>
+                <li><svg width="13" height="13" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.3l2.3 2.3 4.7-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Audit log and one invoice</span></li>
+              </ul>
+              <a href="mailto:hello@nekkoagent.com" class="pr-cta">Email us</a>
+            </article>
+          </div>
+
+          <div class="pr-compare">
+            <button class="pr-toggle" aria-expanded="false" aria-controls="pr-fold" id="pr-toggle">
+              <span>Show the full comparison</span>
+              <svg width="13" height="13" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="pr-fold" id="pr-fold" role="region" aria-labelledby="pr-toggle">
+              <div>
+                <!-- Comparison table. The JS replaces this from plan-catalog.json. -->
+                <div class="pr-table" data-pricing-table>
+                  <div class="pr-table-head"><span></span><span>Free</span><span class="pr-col-hl">Pro</span><span>Enterprise</span></div>
+                  <div class="pr-table-group"><span>On your computer</span><span></span><span class="pr-col-hl"></span><span></span></div>
+                  <div class="pr-table-row"><span>Desktop app, Local Web UI and Docker</span><span><svg width="13" height="13" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.3l2.3 2.3 4.7-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="pr-col-hl"><svg width="13" height="13" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.3l2.3 2.3 4.7-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><svg width="13" height="13" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.3l2.3 2.3 4.7-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+                  <div class="pr-table-row"><span>Chats on every device, end-to-end encrypted</span><span class="pr-no">–</span><span class="pr-col-hl"><svg width="13" height="13" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.3l2.3 2.3 4.7-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><svg width="13" height="13" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.3l2.3 2.3 4.7-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+                  <div class="pr-table-row"><span>Encrypted storage</span><span class="pr-no">–</span><span class="pr-col-hl pr-val">5 GB</span><span class="pr-val">20 GB</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="pr-payline">
+            <span>Pay with</span>
+            <span class="pr-pay-chip">Cards</span>
+            <span class="pr-pay-chip">Apple Pay</span>
+            <span class="pr-pay-chip">Google Pay</span>
+            <span class="pr-pay-chip">Link</span>
+            <span class="pr-pay-chip">Bank debit</span>
+            <span>and local options, depending on where you are</span>
+          </div>
+
+          <div class="pr-faq">
+            <div>
+              <b>Is the app really free?</b>
+              <span>Yes. Everything Nekko Agent does on your computer is free and open source, for good.</span>
+            </div>
+            <div>
+              <b>Can Nekko Labs read my chats?</b>
+              <span>No. They're encrypted on your devices before they're uploaded, on every plan.</span>
+            </div>
+            <div>
+              <b>How do I pay?</b>
+              <span>In the app, through Stripe. Nekko Labs never sees your card. Cancel any time in Settings.</span>
+            </div>
+            <div>
+              <b>What about my company?</b>
+              <span>Enterprise adds seats, single sign-on and one invoice. Email <a href="mailto:hello@nekkoagent.com">hello@nekkoagent.com</a>.</span>
+            </div>
+          </div>
+
+          <p class="pr-note micro">Payments are handled by Stripe. Nekko Labs never sees your card. Chats stay encrypted so Nekko Labs can't read them, on any plan.</p>
+        </div>
+
       </div>
     </main>
 
@@ -89,10 +253,8 @@
       <a href="/status">Status</a>
       <a href="/privacy">Privacy</a>
     </footer>
-    <script src="pricing.js?v=1"></script>
-    <script>
-      window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
-    </script>
-    <script defer src="/_vercel/insights/script.js"></script>
+    <script src="pricing.js?v=2"></script>
+    <script src="/analytics-config.js?v=1" defer></script>
+    <script src="/analytics.js?v=4" defer></script>
   </body>
 </html>

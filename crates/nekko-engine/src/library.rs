@@ -14,6 +14,7 @@
 use crate::capacity::{self, FitRequest, Hardware, ModelFacts, PlanOptions};
 use crate::folders::{Candidate, companions_dir, companions_key, known_folder};
 use crate::gguf::{self, GgufMetadata};
+use crate::load_check::{EngineInUse, LoadCheck, engine_meets_min_build, load_check};
 use crate::num;
 use nekko_tools::nodefs;
 use nekko_tools::path::native as path;
@@ -60,7 +61,7 @@ pub fn model_modality(
     if !arch.is_empty() {
         if test(
             regex!(
-                r"^(sd\d?|sdxl|sd-?turbo|stable-?diffusion.*|flux.*|wuerstchen|pixart.*|ltxv.*|hidream.*|chroma.*|qwen-?image.*|z-?image.*|ovis-?image.*|wan\d.*|hunyuan.*(image|video).*|cogvideo.*)"
+                r"^(sd\d?|sdxl|sd[-_]?turbo|stable[-_]?diffusion.*|flux.*|wuerstchen|pixart.*|ltxv.*|hidream.*|chroma.*|qwen[-_]?image.*|z[-_]?image.*|ovis[-_]?image.*|wan\d.*|hunyuan.*(image|video).*|cogvideo.*)"
             ),
             arch,
         ) {
@@ -296,6 +297,54 @@ fn repo_from_typed_path(root: &str, p: &str) -> Option<String> {
     (i > 0).then(|| format!("{}/{}", String::from_utf16_lossy(&units[..i]), String::from_utf16_lossy(&units[i + 1..])))
 }
 
+/// A header name that says nothing about the model. llama.cpp's converter
+/// takes `general.name` from the source folder, so a checkout called `hf`
+/// yields "Hf". True when every word of the name is a generic folder word.
+fn is_generic_name(name: &str) -> bool {
+    const GENERIC: [&str; 8] = ["hf", "model", "models", "gguf", "main", "snapshot", "snapshots", "unknown"];
+    let lowered = name.to_lowercase();
+    let mut words = lowered.split(|c: char| !c.is_alphabetic()).filter(|w| !w.is_empty()).peekable();
+    words.peek().is_some() && words.all(|w| GENERIC.contains(&w))
+}
+
+fn is_lmstudio(root: &Root) -> bool {
+    root.provider.as_ref().and_then(Value::as_str) == Some("lmstudio")
+}
+
+/// LM Studio keeps `<root>/<publisher>/<repo>/<file>.gguf`, named after the
+/// Hugging Face repo it was fetched from. Only a row named after its file (the
+/// header had no usable name) takes it: a folder can be named for something
+/// else, and a real header name says better what the model is.
+fn lmstudio_repo(root: &Root, p: &str, shown: &str) -> Option<String> {
+    if !is_lmstudio(root) || shown != strip_gguf(&path::basename(p)) {
+        return None;
+    }
+    match rel_parts(&root.path, p).as_slice() {
+        [publisher, repo, _file] if !publisher.is_empty() && !repo.is_empty() => Some(format!("{publisher}/{repo}")),
+        _ => None,
+    }
+}
+
+/// Rows indexed before names were vetted keep a meaningless "Hf", and LM Studio
+/// rows may carry a folder repo over a real header name. Fix just those fields
+/// so presets and the rest stay put.
+fn refresh_naming(root: &Root, p: &str, stored: &mut Map<String, Value>) -> bool {
+    let mut changed = false;
+    if stored.get("name").and_then(Value::as_str).is_some_and(is_generic_name) {
+        stored.insert("name".into(), json!(strip_gguf(&path::basename(p))));
+        changed = true;
+    }
+    if is_lmstudio(root) {
+        let shown = stored.get("name").and_then(Value::as_str).unwrap_or_default().to_string();
+        let repo = lmstudio_repo(root, p, &shown).map(Value::String);
+        if stored.get("sourceRepo") != repo.as_ref() {
+            assign(stored, "sourceRepo", repo);
+            changed = true;
+        }
+    }
+    changed
+}
+
 fn put(m: &mut Map<String, Value>, k: &str, v: Option<Value>) {
     if let Some(v) = v {
         m.insert(k.into(), v);
@@ -355,6 +404,62 @@ fn add_kv_layout(stored: &mut Map<String, Value>, p: &str) -> bool {
     changed
 }
 
+/// Which header checks a stored row has been through. Bump it when a check is
+/// added (an unknown tensor type and a minimum engine build are the first):
+/// rows below it are read once more, and then carry the answer in the index.
+const HEADER_CHECKS: u64 = 1;
+
+/// A row described before the header checks existed (or before the latest one)
+/// gets their answers once, from its header, and is marked so it is not read
+/// again. A file whose header will not read is remembered for this run only, so
+/// the polled listing does not reopen it every time (as `add_kv_layout` does).
+/// `true` when the row changed.
+fn refresh_header_checks(stored: &mut Map<String, Value>, p: &str) -> bool {
+    let done = stored.get("headerChecks").and_then(Value::as_u64).is_some_and(|n| n >= HEADER_CHECKS);
+    if done || stored.get("readable") != Some(&Value::Bool(true)) {
+        return false;
+    }
+    type FileVersion = (String, u64, Option<SystemTime>);
+    static UNREAD: LazyLock<Mutex<HashSet<FileVersion>>> = LazyLock::new(Default::default);
+    let version = std::fs::metadata(p).ok().map(|m| (p.to_string(), m.len(), m.modified().ok()));
+    if let Some(v) = &version
+        && UNREAD.lock().is_ok_and(|s| s.contains(v))
+    {
+        return false;
+    }
+    let Some(meta) = gguf::read_metadata(p) else {
+        if let Some(v) = version
+            && let Ok(mut s) = UNREAD.lock()
+        {
+            s.insert(v);
+        }
+        return false;
+    };
+    put_header_checks(stored, &meta);
+    true
+}
+
+/// The header-derived facts the engine's load verdict reads, and the mark that says they were read.
+fn put_header_checks(row: &mut Map<String, Value>, meta: &GgufMetadata) {
+    assign(row, "unknownWeightType", meta.unknown_weight_type.map(|t| num(f64::from(t))));
+    assign(row, "minEngineBuild", meta.min_engine_build.map(|b| num(f64::from(b))));
+    row.insert("headerChecks".into(), num(HEADER_CHECKS as f64));
+}
+
+/// Rows indexed when an unknown `general.file_type` was shown as `type 143`:
+/// take the quant from the file name, or show none.
+fn refresh_quantization(p: &str, stored: &mut Map<String, Value>) -> bool {
+    let raw = stored.get("quantization").and_then(Value::as_str).is_some_and(|q| {
+        q.strip_prefix("type ").is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
+    });
+    if !raw {
+        return false;
+    }
+    let from_name = gguf::quant_from_file_name(strip_gguf(&path::basename(p)));
+    assign(stored, "quantization", from_name.map(Value::String));
+    true
+}
+
 /// Read one file's header into a library row (`describe`).
 fn describe(root: &Root, p: &str, name: Option<&str>, now: f64) -> Map<String, Value> {
     let meta = gguf::read_metadata(p);
@@ -373,7 +478,8 @@ fn describe_with(
         Some(n) => format!("{}/{n}", root.id_str()),
         None => id_for(root, p),
     };
-    let meta_name = meta.and_then(|m| m.name.as_deref()).map(nekko_js::trim).filter(|n| !n.is_empty());
+    let meta_name =
+        meta.and_then(|m| m.name.as_deref()).map(nekko_js::trim).filter(|n| !n.is_empty() && !is_generic_name(n));
     let shown =
         name.filter(|n| !n.is_empty()).or(meta_name).map_or_else(|| strip_gguf(&file).to_string(), str::to_string);
     let typed = root.managed
@@ -385,10 +491,14 @@ fn describe_with(
     m.insert("id".into(), json!(id));
     m.insert("name".into(), json!(shown));
     m.insert("file".into(), json!(p));
-    put(&mut m, "sourceRepo", if typed { repo_from_typed_path(&root.path, p).map(Value::String) } else { None });
+    let source_repo = if typed { repo_from_typed_path(&root.path, p) } else { lmstudio_repo(root, p, &shown) };
+    put(&mut m, "sourceRepo", source_repo.map(Value::String));
     m.insert("folderId".into(), root.id.clone());
     put(&mut m, "folderProvider", root.provider.clone());
-    put(&mut m, "quantization", meta.and_then(|m| m.quantization.clone()).map(Value::String));
+    // A header without a known `general.file_type` still has its file name's quant (`...-PTQ1_0`).
+    let quantization =
+        meta.and_then(|m| m.quantization.clone()).or_else(|| gguf::quant_from_file_name(strip_gguf(&file)));
+    put(&mut m, "quantization", quantization.filter(|_| meta.is_some()).map(Value::String));
     put(&mut m, "parameterSize", meta.and_then(|m| m.parameter_size.clone()).map(Value::String));
     put(&mut m, "architecture", meta.and_then(|m| m.architecture.clone()).map(Value::String));
     put(&mut m, "layers", meta.and_then(|m| m.layers).map(num));
@@ -399,6 +509,9 @@ fn describe_with(
     put(&mut m, "weightLayout", meta.and_then(|m| m.weight_layout).map(|w| w.to_value()));
     m.insert("hasChatTemplate".into(), json!(meta.is_some_and(|m| m.chat_template.is_some())));
     m.insert("readable".into(), json!(meta.is_some()));
+    if let Some(meta) = meta {
+        put_header_checks(&mut m, meta);
+    }
     m.insert("addedAt".into(), num(now));
     m
 }
@@ -487,8 +600,43 @@ pub struct MlxInfo {
     pub architecture: Option<String>,
     pub quantization: Option<String>,
     pub max_context: Option<Value>,
+    pub kv_bytes_per_token: Option<u64>,
     pub vision: bool,
     pub size: f64,
+}
+
+/// The payload of one cached token in a dense Llama MLX model. The stock
+/// mlx_lm server uses unquantized keys/values in the model's activation dtype.
+/// Other layouts (including hybrid attention and vision) aren't modeled here.
+fn mlx_kv_bytes_per_token(config: &Value) -> Option<u64> {
+    if config.get("model_type")?.as_str()? != "llama"
+        || ["vision_config", "text_config", "layer_types", "sliding_window", "use_sliding_window", "kv_quantization"]
+            .iter()
+            .any(|key| config.get(key).is_some_and(|v| !v.is_null() && v != &json!(false)))
+    {
+        return None;
+    }
+    let dtype = config.get("dtype").filter(|v| !v.is_null()).or_else(|| config.get("torch_dtype"))?;
+    if !matches!(dtype.as_str()?, "float16" | "bfloat16") {
+        return None;
+    }
+    let n = |key| config.get(key)?.as_u64().filter(|n| *n > 0);
+    let heads = n("num_attention_heads")?;
+    let kv_heads = n("num_key_value_heads")?;
+    if !heads.is_multiple_of(kv_heads) {
+        return None;
+    }
+    let dim = if config.get("head_dim").is_some_and(|v| !v.is_null()) {
+        n("head_dim")?
+    } else {
+        let hidden = n("hidden_size")?;
+        if !hidden.is_multiple_of(heads) {
+            return None;
+        }
+        hidden / heads
+    };
+    // Two tensors, two bytes per element. Don't let corrupt metadata overflow.
+    4u64.checked_mul(n("num_hidden_layers")?)?.checked_mul(kv_heads)?.checked_mul(dim)
 }
 
 /// Whether a directory is an MLX model, and what it is (`readMlxModel`): a
@@ -537,6 +685,7 @@ pub fn read_mlx_model(dir: &str) -> Option<MlxInfo> {
             None
         },
         max_context: max.filter(Value::is_number),
+        kv_bytes_per_token: mlx_kv_bytes_per_token(&config),
         vision: nekko_js::truthy(field(&config, "vision_config").as_ref()),
         size,
     })
@@ -687,9 +836,14 @@ pub fn list(cfg: &LibraryConfig) -> Result<Vec<Value>, String> {
                 }
             };
             dirty |= add_kv_layout(&mut stored, &p);
+            dirty |= refresh_header_checks(&mut stored, &p);
+            dirty |= refresh_naming(root, &p, &mut stored);
+            dirty |= refresh_quantization(&p, &mut stored);
             let id = claim(&mut stored, &mut seen_ids);
             index.models().insert(id, Value::Object(stored.clone()));
             let mut row = stored;
+            // Index bookkeeping, not a fact about the model.
+            row.shift_remove("headerChecks");
             row.insert("path".into(), json!(p));
             row.insert("sizeBytes".into(), num(size));
             row.insert("managed".into(), json!(root.managed));
@@ -738,6 +892,8 @@ pub fn list(cfg: &LibraryConfig) -> Result<Vec<Value>, String> {
             row.insert("modality".into(), json!(if info.vision { "vision" } else { "chat" }));
             row.insert("hasProjector".into(), json!(info.vision));
             row.insert("mlxRunnable".into(), json!(cfg.mlx_runnable));
+            // Live metadata: existing index rows get this without a rescan/migration.
+            put(&mut row, "mlxKvBytesPerToken", info.kv_bytes_per_token.map(|bytes| json!(bytes)));
             out.push(row);
         }
     }
@@ -811,6 +967,7 @@ pub fn import_file(cfg: &LibraryConfig, p: &str) -> Result<Value, String> {
     index.models().insert(id, Value::Object(stored.clone()));
     index.write(cfg)?;
     let mut model = stored.clone();
+    model.shift_remove("headerChecks");
     model.insert("path".into(), json!(p));
     model.insert("sizeBytes".into(), num(size));
     model.insert("managed".into(), json!(true));
@@ -829,6 +986,12 @@ fn is_companion_of(candidate: &str, primary: &str) -> bool {
     };
     (candidate.starts_with(stem) && test(regex!(r"(-\d{5}-of-\d{5}\.gguf|mmproj.*\.gguf)$"), candidate))
         || candidate == format!("{stem}.chat_template.jinja")
+}
+
+/// Windows refuses to delete a file another process has open: a sharing
+/// (32) or lock (33) violation. Other systems delete open files.
+fn in_use(e: &std::io::Error) -> bool {
+    cfg!(windows) && matches!(e.raw_os_error(), Some(32 | 33))
 }
 
 /// Delete the file and its row; shards and projectors go with it (`remove`).
@@ -853,7 +1016,16 @@ pub fn remove(cfg: &LibraryConfig, id: &str) -> Result<Value, String> {
             Ok(m) if m.is_dir() => {
                 return Err(format!("Path is a directory: rm returned EISDIR (is a directory) {p}"));
             }
-            Ok(_) => std::fs::remove_file(p).map_err(|e| e.to_string())?,
+            Ok(_) => match std::fs::remove_file(p) {
+                Ok(()) => {}
+                Err(e) if in_use(&e) => {
+                    return Ok(reply(
+                        false,
+                        format!("{name} is open in another app. Close what is using it, then delete it again."),
+                    ));
+                }
+                Err(e) => return Err(e.to_string()),
+            },
             Err(_) => {}
         }
     }
@@ -984,6 +1156,7 @@ pub fn model_facts_for(m: &Value) -> ModelFacts {
         ("maxContext", "maxContext"),
         ("kvLayout", "kvLayout"),
         ("weightLayout", "weightLayout"),
+        ("format", "format"),
     ] {
         put(&mut facts, to, m.get(from).cloned());
     }
@@ -1019,7 +1192,7 @@ pub fn gpu_fit_for(model: &Value, hw: &Hardware, overhead_floor: Option<f64>) ->
             |v| nekko_js::to_number(Some(v)),
         ),
         parallel_slots: field("parallelSlots").map_or(1.0, |v| nekko_js::to_number(Some(v))),
-        kv_cache_dtype: field("kvCacheDtype").map_or_else(|| "f16".to_string(), nekko_js::display),
+        kv_cache_dtype: crate::launch::effective_kv(preset.unwrap_or(&Value::Null)),
         gpu_layer_fraction: fraction,
     };
     let plan =
@@ -1033,19 +1206,44 @@ pub fn gpu_fit_for(model: &Value, hw: &Hardware, overhead_floor: Option<f64>) ->
     }
 }
 
-/// `engine:models`: the library with load state, the last failure and the
-/// GPU-fit verdict folded in. `hw` is `None` when no GPU probe answered.
+/// `gpu_fit_for` on the same card with nothing else holding it: every device's
+/// free memory is its total less the desktop reserve. `None` where that idea
+/// does not apply (unified memory, or no GPU).
+pub fn gpu_fit_idle_for(model: &Value, hw: &Hardware, overhead_floor: Option<f64>) -> Option<&'static str> {
+    if hw.unified || hw.devices.is_empty() {
+        return None;
+    }
+    let mut idle = hw.clone();
+    for d in &mut idle.devices {
+        d.free = (d.total - capacity::DESKTOP_GPU_RESERVE_BYTES).max(0.0);
+    }
+    Some(gpu_fit_for(model, &idle, overhead_floor))
+}
+
+/// `engine:models`: the library with load state, the last failure, what the
+/// engine in use makes of each file (`loadCheck`, see [`crate::load_check`]) and
+/// the GPU-fit verdict folded in. `hw` is `None` when no GPU probe answered.
+/// A file the engine cannot load gets no fit: where it would sit is moot.
 pub fn with_load_state(
     rows: Vec<Value>,
     loaded: &HashSet<String>,
     errors: &Map<String, Value>,
     hw: Option<&Hardware>,
     overhead_floor: Option<f64>,
+    engine: &EngineInUse,
 ) -> Vec<Value> {
     rows.into_iter()
         .map(|row| {
             let id = row.get("id").map(nekko_js::display).unwrap_or_default();
-            let fit = hw.map(|hw| gpu_fit_for(&row, hw, overhead_floor));
+            // The llama.cpp rules do not apply to an image or MLX model: the
+            // server's load gate skips them too, so the row must not claim them.
+            let llama = row.get("modality").and_then(Value::as_str) != Some("image")
+                && row.get("format").and_then(Value::as_str) != Some("mlx");
+            let check = llama.then(|| load_check(&row, engine)).flatten();
+            let meets_min = llama.then(|| engine_meets_min_build(&row, engine)).flatten();
+            let blocked = check.as_ref().is_some_and(LoadCheck::blocked);
+            let fit = hw.filter(|_| !blocked).map(|hw| gpu_fit_for(&row, hw, overhead_floor));
+            let idle = hw.filter(|_| fit == Some("partial")).and_then(|hw| gpu_fit_idle_for(&row, hw, overhead_floor));
             let mut m = match row {
                 Value::Object(m) => m,
                 _ => Map::new(),
@@ -1053,6 +1251,11 @@ pub fn with_load_state(
             m.insert("loaded".into(), json!(loaded.contains(&id)));
             assign(&mut m, "lastLoadError", errors.get(&id).filter(|e| !e.is_null()).cloned());
             assign(&mut m, "gpuFit", fit.map(|f| json!(f)));
+            // A partial fit may only be the card being busy: say whether it
+            // would fit with the card to itself.
+            assign(&mut m, "gpuFitIdle", idle.map(|f| json!(f)));
+            assign(&mut m, "loadCheck", check.map(|c| c.to_value()));
+            assign(&mut m, "engineMeetsMinBuild", meets_min.map(Value::Bool));
             Value::Object(m)
         })
         .collect()

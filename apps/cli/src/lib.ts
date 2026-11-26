@@ -38,7 +38,7 @@ import type {
   LoadResult,
 } from '@nekko-agent/shared';
 
-/** The data dir for the in-process (local) client. NEKKO_DATA_DIR wins, then ~/.nekko. */
+/** The data dir for the in-process (local) client. NEKKO_DATA_DIR wins, then ~/.nekko/nekko-agent. */
 export function dataDir(): string {
   return defaultUserDataDir();
 }

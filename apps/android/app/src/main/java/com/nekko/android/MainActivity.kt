@@ -60,8 +60,7 @@ class MainActivity : FragmentActivity() {
         }
         setContent {
             val choice by app.themePrefs.choice.collectAsStateWithLifecycle()
-            val computer by repo.appearance.collectAsStateWithLifecycle()
-            val look = ThemeResolver.resolve(choice, computer, isSystemInDarkTheme())
+            val look = ThemeResolver.resolve(choice, isSystemInDarkTheme())
             // The Spooky theme's October icon (#2118): switched when the app goes to the background.
             spookyTheme = look.preset?.id == SpookyIcon.PRESET
             // Status and navigation bar icons follow the app's theme, not only the phone's.

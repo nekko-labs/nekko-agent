@@ -15,7 +15,7 @@
 
 use crate::state::{LibraryFile, RemoteFile};
 use nekko_sync::{b64_decode, b64_encode};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 pub const LIBRARY: &str = "library";
 
@@ -43,11 +43,7 @@ fn bounded_thumb(t: &str) -> String {
                 !b.is_empty() && b.bytes().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'+' | b'/' | b'='))
             })
         });
-    if ok {
-        t.to_string()
-    } else {
-        String::new()
-    }
+    if ok { t.to_string() } else { String::new() }
 }
 
 /// The record's local id: this computer and the file's path on it.

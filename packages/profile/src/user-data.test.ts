@@ -1,12 +1,108 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'fs';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { migrateUserData } from './user-data.js';
+import { defaultUserDataDir, legacyUserDataDirs, migrateUserData, prepareUserDataRoot } from './user-data.js';
 const dirs: string[] = [];
-afterEach(async () => { for (const d of dirs.splice(0)) await rm(d,{ recursive:true, force:true }); });
+afterEach(async () => { vi.unstubAllEnvs(); for (const d of dirs.splice(0)) await rm(d,{ recursive:true, force:true }); });
 function fixture() { const dir = mkdtempSync(join(tmpdir(),'nekko-migration-')); dirs.push(dir); const source=join(dir,'old'), target=join(dir,'new'); mkdirSync(source); return {dir,source,target}; }
+function sharedFixture() {
+  const { dir: home } = fixture();
+  const shared = join(home, '.nekko');
+  const target = join(shared, 'nekko-agent');
+  mkdirSync(shared);
+  vi.stubEnv('HOME', home);
+  vi.stubEnv('USERPROFILE', home);
+  vi.stubEnv('NEKKO_DATA_DIR', undefined);
+  vi.stubEnv('NEKKO_MIGRATE_DATA', undefined);
+  vi.stubEnv('NEKKO_MIGRATE_FROM', undefined);
+  return { home, shared, target };
+}
+
+describe('shared Nekko directory', () => {
+  it('requires confirmation for the previous default and keeps an explicit override', () => {
+    const { home, target } = sharedFixture();
+    const source = join(home, '.nekko-agent');
+    mkdirSync(source);
+    writeFileSync(join(source, 'settings.json'), '{}');
+    expect(defaultUserDataDir()).toBe(target);
+    expect(legacyUserDataDirs()).toEqual([source]);
+    expect(() => prepareUserDataRoot()).toThrow('confirmed move');
+    expect(existsSync(join(target, 'settings.json'))).toBe(false);
+    vi.stubEnv('NEKKO_DATA_DIR', join(home, 'custom'));
+    expect(prepareUserDataRoot()).toBe(join(home, 'custom'));
+    vi.stubEnv('NEKKO_DATA_DIR', undefined);
+    vi.stubEnv('NEKKO_MIGRATE_DATA', '1');
+    expect(prepareUserDataRoot()).toBe(target);
+    expect(existsSync(join(target, 'settings.json'))).toBe(true);
+    expect(JSON.parse(readFileSync(join(target, 'keystore-scope.json'), 'utf8'))).toEqual({ path: source });
+  });
+
+  it('moves only Agent entries from the old shared parent and rewrites only owned paths', () => {
+    const { shared, target } = sharedFixture();
+    const oldSessions = join(shared, 'sessions');
+    const sibling = join(shared, 'another-product');
+    mkdirSync(oldSessions);
+    mkdirSync(sibling);
+    writeFileSync(join(sibling, 'settings.json'), '{"other":true}');
+    writeFileSync(join(oldSessions, 's_example.json'), '{"title":"existing chat"}');
+    writeFileSync(join(shared, 'settings.json'), JSON.stringify({ owned: oldSessions, borrowed: sibling, shared }));
+    migrateUserData(shared, target);
+    expect(JSON.parse(readFileSync(join(target, 'settings.json'), 'utf8'))).toEqual({ owned: join(target, 'sessions'), borrowed: sibling, shared });
+    expect(readFileSync(join(target, 'sessions', 's_example.json'), 'utf8')).toBe('{"title":"existing chat"}');
+    expect(readFileSync(join(sibling, 'settings.json'), 'utf8')).toBe('{"other":true}');
+    expect(existsSync(oldSessions)).toBe(false);
+    expect(legacyUserDataDirs()).toEqual([]);
+    expect(prepareUserDataRoot()).toBe(target);
+  });
+
+  it('refuses a live daemon even when it has no CLI link', () => {
+    const { source, target } = fixture();
+    writeFileSync(join(source, 'settings.json'), '{}');
+    writeFileSync(join(source, 'nekkod.lock'), String(process.ppid));
+    expect(() => migrateUserData(source, target)).toThrow('daemon may still be running');
+    expect(existsSync(join(source, 'settings.json'))).toBe(true);
+    expect(existsSync(target)).toBe(false);
+  });
+
+  it('sets aside browser data a first launch wrote into the new profile and moves the old profile in', () => {
+    const { source, target } = fixture();
+    for (const root of [source, target]) {
+      mkdirSync(join(root, 'desktop', 'library-thumbs'), { recursive: true });
+      writeFileSync(join(root, 'desktop', 'Preferences'), root);
+      writeFileSync(join(root, 'desktop', 'library-thumbs', 'a.webp'), root);
+    }
+    mkdirSync(join(target, 'desktop', 'Cache'));
+    mkdirSync(join(source, 'backups'));
+    writeFileSync(join(source, 'settings.json'), '{}');
+    migrateUserData(source, target);
+    expect(existsSync(join(target, 'settings.json'))).toBe(true);
+    expect(readFileSync(join(target, 'desktop', 'Preferences'), 'utf8')).toBe(source);
+    expect(readFileSync(join(target, 'desktop', 'library-thumbs', 'a.webp'), 'utf8')).toBe(source);
+    expect(existsSync(join(target, 'desktop', 'Cache'))).toBe(true);
+    const [aside] = readdirSync(join(target, 'backups'));
+    expect(aside).toMatch(/^desktop-before-move-/);
+    expect(readFileSync(join(target, 'backups', aside, 'Preferences'), 'utf8')).toBe(target);
+    expect(readFileSync(join(target, 'backups', aside, 'library-thumbs', 'a.webp'), 'utf8')).toBe(target);
+    expect(existsSync(join(source, 'desktop', 'Preferences'))).toBe(false);
+  });
+
+  it('keeps the original credential scope and browser data on a second move', () => {
+    const { dir, source, target } = fixture();
+    const original = join(dir, 'first');
+    writeFileSync(join(source, 'settings.json'), '{}');
+    writeFileSync(join(source, 'keystore-scope.json'), JSON.stringify({ path: original }));
+    for (const root of [source, target]) mkdirSync(join(root, 'desktop'), { recursive: true });
+    writeFileSync(join(source, 'desktop', 'Preferences'), 'user settings');
+    writeFileSync(join(target, 'desktop', 'Local State'), 'running');
+    migrateUserData(source, target);
+    expect(readFileSync(join(target, 'desktop', 'Preferences'), 'utf8')).toBe('user settings');
+    expect(readFileSync(join(target, 'desktop', 'Local State'), 'utf8')).toBe('running');
+    expect(JSON.parse(readFileSync(join(target, 'keystore-scope.json'), 'utf8'))).toEqual({ path: original });
+  });
+});
+
 describe('confirmed user-data migration', () => {
   it('moves data, rewrites owned paths and leaves borrowed paths and IDs alone', () => {
     const {source,target,dir}=fixture(); const borrowed=join(dir,'borrowed');

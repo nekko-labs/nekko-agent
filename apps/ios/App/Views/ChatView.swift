@@ -448,9 +448,14 @@ struct ChatView: View {
             }
             if let q = chat.responseQuestion {
                 // A new question starts with nothing picked.
-                QuestionCard(request: q) { answers in try await chat.answer(answers) }.id(q.callId)
+                if let offer = q.clip {
+                    ClipPickerCard(request: q, offer: offer) { answers in try await chat.answer(answers) }.id(q.callId)
+                } else {
+                    QuestionCard(request: q) { answers in try await chat.answer(answers) }.id(q.callId)
+                }
             }
             if !chat.queuedPrompts.isEmpty { QueueList(chat: chat) }
+            ClipChips(chat: chat)
             if prefs.shows("pr-status", pr: true) { PrChip(chat: chat).frame(maxWidth: .infinity, alignment: .leading) }
             // The phone's saved copy (OF-5): read-only until the computer answers.
             if let at = chat.savedAt {
@@ -888,7 +893,10 @@ struct BlockView: View {
             case AgentRows.subagentTool:
                 if let chat { SubagentRow(input: input, status: status, output: output, chat: chat) } else { ToolRow(label: label, status: status, output: output) }
             default:
-                ToolRow(label: label, status: status, output: output)
+                VStack(alignment: .leading, spacing: 4) {
+                    ToolRow(label: label, status: status, output: output)
+                    if let chat, let found = chat.toolPictures(callId: block.id, tool: name) { ToolPicturesRow(chat: chat, found: found) }
+                }
             }
         }
     }

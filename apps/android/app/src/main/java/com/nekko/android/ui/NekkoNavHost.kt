@@ -100,7 +100,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 object Routes {
     const val CHATS = "chats"
-    const val PHONE = "phone?chat={chat}"
+    const val PHONE = "phone?chat={chat}&open={open}"
     const val VOICE = "voice"
     const val CHAT = "chat/{id}"
     const val NEW = "new"
@@ -125,6 +125,10 @@ object Routes {
     fun chat(id: String) = "chat/${Uri.encode(id)}"
     /** This phone's chats, opened on [chat] when one is given (a row of the chat list, #2108). */
     fun phone(chat: String? = null) = if (chat == null) "phone" else "phone?chat=${Uri.encode(chat)}"
+    /** This phone's providers (Settings → Models on This phone, #2940); [add] opens Add provider on them. */
+    fun phoneProviders(add: Boolean = false) = "phone?open=${if (add) "add" else "providers"}"
+    /** One of this phone's providers, on its own page (#2939). */
+    fun phoneProvider(id: String) = "phone?open=${Uri.encode("provider:$id")}"
     fun pair(link: String? = null) = if (link == null) "pair" else "pair?link=${Uri.encode(link)}"
 }
 
@@ -171,7 +175,7 @@ fun NekkoNavHost(
             // Over whatever is open; Back from New chat returns there.
             DeepLink.Share, DeepLink.NewChat -> nav.navigate(Routes.NEW) { launchSingleTop = true }
             DeepLink.Talk -> nav.navigate(Routes.VOICE) { launchSingleTop = true }
-            is DeepLink.OpenRouterKey -> nav.navigate(Routes.phone()) { launchSingleTop = true }
+            is DeepLink.OpenRouterKey, DeepLink.ChatGptSignedIn -> nav.navigate(Routes.phone()) { launchSingleTop = true }
             DeepLink.Dashboard -> nav.navigate(Routes.CHATS) { popUpTo(Routes.CHATS) { inclusive = true }; launchSingleTop = true }
             null -> return@LaunchedEffect
         }
@@ -201,10 +205,14 @@ fun NekkoNavHost(
             }
             composable(
                 Routes.PHONE,
-                arguments = listOf(androidx.navigation.navArgument("chat") { type = androidx.navigation.NavType.StringType; nullable = true; defaultValue = null }),
+                arguments = listOf(
+                    androidx.navigation.navArgument("chat") { type = androidx.navigation.NavType.StringType; nullable = true; defaultValue = null },
+                    androidx.navigation.navArgument("open") { type = androidx.navigation.NavType.StringType; nullable = true; defaultValue = null },
+                ),
             ) { entry ->
                 val app = LocalContext.current.applicationContext as com.nekko.android.NekkoApp
-                com.nekko.android.phone.PhoneScreen(app.phoneChats, startChat = entry.arguments?.getString("chat")) { nav.popBackStack() }
+                val open = entry.arguments?.getString("open")
+                com.nekko.android.phone.PhoneScreen(app.phoneChats, startChat = entry.arguments?.getString("chat"), openProviders = open != null, addProvider = open == "add", startProvider = open?.removePrefix("provider:")?.takeIf { open.startsWith("provider:") }) { nav.popBackStack() }
             }
             composable(Routes.CHATS) {
                 Column(Modifier.fillMaxSize()) {
@@ -266,6 +274,8 @@ fun NekkoNavHost(
                 val shared by shareInbox.shared.collectAsStateWithLifecycle()
                 // Taken once, so a later New chat opens on the usual default.
                 val startPick = remember { freshPick.also { freshPick = null } }
+                val newChatApp = LocalContext.current.applicationContext as com.nekko.android.NekkoApp
+                val newChatPhone by newChatApp.phoneChats.state.collectAsStateWithLifecycle()
                 NewChatScreen(
                     repo = repo,
                     phonePick = phonePick,
@@ -285,6 +295,11 @@ fun NekkoNavHost(
                         shareInbox.handOff(id)
                         nav.onMain { navigate(Routes.chat(id)) { popUpTo(Routes.NEW) { inclusive = true } } }
                     },
+                    onThisPhone = { nav.navigate(Routes.phone()) { popUpTo(Routes.NEW) { inclusive = true } } },
+                    onFolders = { nav.navigate(Routes.FILES) },
+                    onConnectors = { nav.navigate(Routes.CONNECTORS) },
+                    connectors = newChatApp.connectors.state,
+                    phoneSent = newChatPhone.chats.any { chat -> chat.messages.any { it.role == "assistant" } },
                 )
             }
             composable(
@@ -305,20 +320,22 @@ fun NekkoNavHost(
                 )
             }
             composable(Routes.SETTINGS) {
-                val deps = remember(nav) {
-                    SettingsDeps(repo, themePrefs, phonePrefs, haptics, open = { route -> nav.navigate(route) { launchSingleTop = true } })
+                val phone = phoneChats()
+                val deps = remember(nav, phone) {
+                    SettingsDeps(repo, themePrefs, phonePrefs, haptics, open = { route -> nav.navigate(route) { launchSingleTop = true } }, phone = phone)
                 }
                 SettingsScreen(deps = deps, onBack = { nav.popBackStack() })
             }
             composable(Routes.CUSTOMIZE) {
                 // Customize (#2426): Settings is opened by going back to it when it is underneath.
-                val deps = remember(nav) {
+                val phone = phoneChats()
+                val deps = remember(nav, phone) {
                     SettingsDeps(repo, themePrefs, phonePrefs, haptics, open = { route ->
                         nav.navigate(route) {
                             if (route == Routes.SETTINGS) popUpTo(Routes.SETTINGS)
                             launchSingleTop = true
                         }
-                    })
+                    }, phone = phone)
                 }
                 com.nekko.android.ui.screens.CustomizeScreen(deps, phoneChats(), onBack = { nav.popBackStack() })
             }

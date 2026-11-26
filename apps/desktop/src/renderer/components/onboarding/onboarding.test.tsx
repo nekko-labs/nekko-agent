@@ -6,11 +6,12 @@ import { ONBOARDING_VERSION } from '@nekko-agent/shared';
 import { WizardShell } from './WizardShell.js';
 import { WelcomeStep } from './WelcomeStep.js';
 import { ProvidersStep } from './ProvidersStep.js';
+import { DictationStep } from './DictationStep.js';
 import { IntegrationsStep } from './IntegrationsStep.js';
 import { DoneStep } from './DoneStep.js';
 import { WorkTrackingStep } from './WorkTrackingStep.js';
 import { ProjectManagementToggles } from '../WorkTrackingToggles.js';
-import { ONBOARDING_STEPS, wizardTransition, type WizardState } from './onboardingMachine.js';
+import { ONBOARDING_STEPS, SKIPPABLE_STEP_IDS, wizardTransition, type WizardState } from './onboardingMachine.js';
 
 // The step components and the store read browser globals at import time;
 // node has none, so provide the minimum first (hoisted above module imports
@@ -79,6 +80,8 @@ const baseSettings = { providers: [] } as unknown as AppSettings;
 describe('shouldAutoOpenOnboarding', () => {
   it('opens on a genuinely fresh install and not once setup is done', () => {
     expect(shouldAutoOpenOnboarding(baseSettings)).toBe(true);
+    // nekkod saves the built-in engine's provider at every launch, so a fresh install has it.
+    expect(shouldAutoOpenOnboarding({ ...baseSettings, providers: [{ id: 'nekko-engine', kind: 'llamacpp' }] as AppSettings['providers'] })).toBe(true);
     expect(
       shouldAutoOpenOnboarding({
         ...baseSettings,
@@ -133,9 +136,31 @@ describe('WizardShell', () => {
     expect(last).not.toContain('>Skip step<');
     expect(last).toContain('>Skip setup<');
   });
+
+  it('keeps the language picker in the header, before Skip setup, on every step', () => {
+    for (const index of [0, 1, 2]) {
+      const html = shell(index);
+      expect(html.match(/id="setup-language"/g)).toHaveLength(1);
+      // Header order: progress dots, then the picker, then Skip setup, all above the step body.
+      const picker = html.indexOf('id="setup-language"');
+      expect(html.indexOf('aria-label="Setup progress"')).toBeLessThan(picker);
+      expect(picker).toBeLessThan(html.indexOf('>Skip setup<'));
+      expect(html.indexOf('>Skip setup<')).toBeLessThan(html.indexOf('step body'));
+    }
+  });
 });
 
 describe('onboarding step content', () => {
+  it('offers local dictation separately and lets the user skip straight to integrations', () => {
+    const index = at('dictation');
+    expect(index).toBe(at('providers') + 1);
+    expect(SKIPPABLE_STEP_IDS.has('dictation')).toBe(true);
+    expect(renderToStaticMarkup(<DictationStep />)).toContain('aria-label="Speech engines"');
+    expect(renderToStaticMarkup(<IntegrationsStep />)).not.toContain('aria-label="Speech engines"');
+    expect(wizardTransition({ index, steps: {} }, { type: 'skipStep' }).state)
+      .toEqual({ index: at('integrations'), steps: { dictation: 'skipped' } });
+  });
+
   it('greets as Nekko, with the mascot drawn but hidden from screen readers', () => {
     const html = renderToStaticMarkup(<WelcomeStep />);
     expect(html).toContain('Hi, I&#x27;m Nekko.');

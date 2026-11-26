@@ -85,6 +85,7 @@ export const IpcChannels = {
   engineCatalog: 'engine:catalog',
   engineCatalogModel: 'engine:catalogModel',
   engineCatalogDetail: 'engine:catalogDetail',
+  engineCatalogChecks: 'engine:catalogChecks',
   engineDownloadModel: 'engine:downloadModel',
   engineDownloadCompanions: 'engine:downloadCompanions',
   engineImageCompanions: 'engine:imageCompanions',
@@ -237,6 +238,7 @@ export const IpcChannels = {
   reposList: 'repos:list',
   reposClone: 'repos:clone',
   reposSetSandbox: 'repos:setSandbox',
+  reposSuggestFolder: 'repos:suggestFolder',
   workspaceRemove: 'workspace:remove',
   workspaceIndex: 'workspace:index',
   workspaceIndexStatus: 'workspace:indexStatus',
@@ -278,6 +280,8 @@ export const IpcChannels = {
   changeAcceptAll: 'changes:acceptAll',
 
   prSessionList: 'pr:sessionList',
+  /** `pr:sessionList` for several chats at once: `{ [chatId]: PrInfo[] }`. */
+  prSessionListMany: 'pr:sessionListMany',
   prDiff: 'pr:diff',
   prAction: 'pr:action',
   prContinueStack: 'pr:continueStack',
@@ -441,6 +445,10 @@ export const IpcChannels = {
   // IO-33: a paired phone's Read and Change switches, and its Change activity. Never phone-callable.
   remoteSetAccess: 'remote:setAccess',
   remoteActivity: 'remote:activity',
+  /** Decision 0116: limit a paired device to Nekko Cloud Relay or to direct routes, or allow both. */
+  remoteSetRoute: 'remote:setRoute',
+  /** Decision 0116: the relays this computer is also reachable through (Nekko Cloud Relay beside Tailscale). */
+  remoteSetRelays: 'remote:setRelays',
   // Desktop only: the relay this computer can run on its Tailscale address.
   localRelayStatus: 'localRelay:status',
   localRelayStart: 'localRelay:start',
@@ -478,6 +486,8 @@ export const IpcChannels = {
   mcpStatus: 'mcp:status',
   mcpHypergate: 'mcp:hypergate',
   mcpHypergateConnect: 'mcp:hypergate:connect',
+  mcpHypergateCheck: 'mcp:hypergate:check',
+  mcpHypergateStart: 'mcp:hypergate:start',
   // Narrow capability-driven service controls for paired devices.
   serviceStatus: 'service:status',
   serviceRestart: 'service:restart',
@@ -514,6 +524,7 @@ export const IpcChannels = {
   syncRevoke: 'sync:revoke',
   syncNow: 'sync:now',
   syncSetEnabled: 'sync:setEnabled',
+  syncSetKind: 'sync:setKind',
   syncDeleteAll: 'sync:deleteAll',
   // The files Library lists on this computer, for Library sync (crates/nekko-cloud, #2748).
   librarySync: 'library:sync',
@@ -563,6 +574,8 @@ export const IpcEvents = {
   /** A terminal's remote viewers changed (`TerminalViewersEvent`). */
   terminalViewers: 'terminal:viewers',
   changesUpdated: 'changes:updated',
+  /** A git change the daemon made (stage, commit, push, switch, PR create) invalidated its cached status of `{ path }`. */
+  gitChanged: 'git:changed',
   tasksUpdated: 'tasks:updated',
   /** `BackgroundState` changed: a background turn started, ended, paused or resumed. */
   backgroundUpdated: 'background:updated',
@@ -660,8 +673,8 @@ export interface NekkoApi {
   connectionsEvents(id: string, limit?: number): Promise<import('./connections.js').ConnectionEvent[]>;
   /** Forget every logged event. */
   connectionsClear(): Promise<import('./connections.js').ConnectionsStatus>;
-  /** Opt-in reports: queue a UI event (`screen_viewed`, `feature_used`, `error`); ignored while reports are off. */
-  telemetryCapture(event: 'screen_viewed' | 'click' | 'feature_used' | 'app_opened' | 'app_closed' | 'error', props: Record<string, string | number | boolean>): Promise<null>;
+  /** Opt-in reports: queue a UI event (`screen_viewed`, `feature_used`, `feedback_opened`, `error`); ignored while reports are off. */
+  telemetryCapture(event: 'screen_viewed' | 'click' | 'feature_used' | 'feedback_opened' | 'app_opened' | 'app_closed' | 'error', props: Record<string, string | number | boolean>): Promise<null>;
   /** Whether reports are on, whether this build has a project to send to, and how many events wait. */
   telemetryStatus(): Promise<{ enabled: boolean; configured: boolean; queued: number }>;
   /** Send feedback: the app facts the sheet may share (app, version, OS, CPU type; nothing identifying). */
@@ -681,6 +694,8 @@ export interface NekkoApi {
   syncRevoke(deviceId: string): Promise<import('./cloud.js').CloudStatus>;
   syncNow(): Promise<import('./cloud.js').CloudStatus>;
   syncSetEnabled(on: boolean): Promise<import('./cloud.js').CloudStatus>;
+  /** Turn one kind of record (Chats, Library) on or off for this computer's sync (#3089). */
+  syncSetKind(kind: import('./cloud.js').SyncKind, on: boolean): Promise<import('./cloud.js').CloudStatus>;
   syncDeleteAll(): Promise<import('./cloud.js').CloudStatus>;
   /**
    * Tell the engine which files Library lists here, so they sync to Nekko Cloud
@@ -690,7 +705,7 @@ export interface NekkoApi {
   librarySync(files: import('./cloud.js').LibrarySyncFile[]): Promise<import('./cloud.js').CloudStatus>;
   /** Organizations you belong to and invites waiting for you. */
   orgList(): Promise<import('./cloud.js').OrgList>;
-  /** Create an organization (needs an unlocked account on Pro or Team); this device creates its key. */
+  /** Create an organization (needs an unlocked account on Pro or Enterprise); this device creates its key. */
   orgCreate(name: string): Promise<import('./cloud.js').Org>;
   orgGet(orgId: string): Promise<import('./cloud.js').OrgDetail>;
   orgInvite(orgId: string, email: string, role?: 'admin' | 'member'): Promise<unknown>;
@@ -806,7 +821,7 @@ export interface NekkoApi {
   ): Promise<import('./engine.js').EngineSettings>;
   /** The local model library, with load state and the planner's residency verdict folded in. */
   engineModels(): Promise<
-    Array<import('./engine.js').LocalModel & { loaded: boolean; gpuFit?: import('./engine.js').GpuFit }>
+    Array<import('./engine.js').LocalModel & { loaded: boolean; gpuFit?: import('./engine.js').GpuFit; gpuFitIdle?: import('./engine.js').GpuFit }>
   >;
   /** Adopt a GGUF that lives elsewhere on disk, without copying it. */
   engineImportModel(
@@ -823,6 +838,13 @@ export interface NekkoApi {
   engineCatalogModel(id: string): Promise<import('./engine.js').CatalogModel | null>;
   /** The same, plus the model card, for a model's own page. */
   engineCatalogDetail(id: string): Promise<import('./engine.js').CatalogModelDetail | null>;
+  /**
+   * What the engine in use makes of each build of a repo, keyed by file: the
+   * library rows' `loadCheck`, for builds not yet downloaded. Without `file` it
+   * answers from headers already known and fetches nothing; with it, that one
+   * build's header is read first (a few MB, once ever per file content).
+   */
+  engineCatalogChecks(id: string, file?: string): Promise<Record<string, import('./engine.js').ModelLoadCheck>>;
   /** Where the library looks for models, and what a scan found in each folder. */
   engineFolders(): Promise<import('./engine.js').ModelFolderReport>;
   /** Replace the folder list. The folder downloads land in is not part of it. */
@@ -1050,7 +1072,9 @@ export interface NekkoApi {
   specPath(sessionId: string): Promise<string | null>;
   setSessionOptions(
     id: string,
-    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'memory' | 'guidance' | 'toolApproach' | 'offline' | 'cloudOnly' | 'incognito' | 'syncOff' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'chatType' | 'imageParams' | 'archivedAt' | 'privacy' | 'turnFailure' | 'allowedMcpTools' | 'knownRecipients'>>,
+    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'memory' | 'guidance' | 'toolApproach' | 'orchestrate' | 'offline' | 'cloudOnly' | 'incognito' | 'syncOff' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'chatType' | 'imageParams' | 'archivedAt' | 'privacy' | 'turnFailure' | 'allowedMcpTools' | 'knownRecipients'>>,
+    /** `chatOnly` leaves the new-chat defaults alone, for a change the app made rather than the user. */
+    opts?: { chatOnly?: boolean },
   ): Promise<Session | null>;
   truncateSession(id: string, messageId: string): Promise<Session | null>;
   /** Delete chats within a window; returns how many were removed. */
@@ -1107,6 +1131,12 @@ export interface NekkoApi {
   cloneRepo(repo: Pick<import('./workspace.js').RemoteRepo, 'provider' | 'fullName' | 'cloneUrl' | 'webUrl'>, opts?: { sessionId?: string }): Promise<import('./workspace.js').RepoCloneResult>;
   /** A sandbox chat's sandbox repositories, before the sandbox is set up (#2561). */
   setSandboxRepos(sessionId: string, repos: import('./chat.js').SandboxRepo[]): Promise<Session>;
+  /**
+   * After `path` is added: the folder to offer as the repositories folder (it,
+   * or its parent, holds several repositories), or null. Null once a
+   * repositories folder is chosen or the offer was made.
+   */
+  suggestRepoFolder(path: string): Promise<{ suggested: string } | null>;
   indexWorkspace(id: string): Promise<IndexStatus>;
   getIndexStatus(id: string): Promise<IndexStatus | null>;
   searchWorkspace(id: string, query: string): Promise<SearchHit[]>;
@@ -1191,6 +1221,8 @@ export interface NekkoApi {
 
   /** Live PR state for every GitHub PR URL referenced in a chat's transcript. */
   listSessionPrs(sessionId: string, force?: boolean): Promise<import('./pr.js').PrInfo[]>;
+  /** [`listSessionPrs`] for several of this computer's chats in one call (a board of cards), keyed by chat id. At most 64 chats. */
+  listSessionPrsMany(sessionIds: string[], force?: boolean): Promise<Record<string, import('./pr.js').PrInfo[]>>;
   /** A PR's changed files + patches (for the diff pane). */
   getPrDiff(url: string): Promise<import('./pr.js').PrDiff>;
   /** Approve / decline / merge / reopen a PR. Always user-initiated. */
@@ -1385,7 +1417,7 @@ export interface NekkoApi {
   getMessagingStatus(): Promise<import('./messaging.js').MessagingStatus>;
   getRemotePairing(): Promise<import('./remote.js').RemotePairing | null>;
   /** Mint a short-lived single-use pairing code for enrolling a new device. */
-  startRemotePairing(): Promise<import('./remote.js').PairingGrant>;
+  startRemotePairing(route?: import('./remote.js').DeviceRoute): Promise<import('./remote.js').PairingGrant>;
   /** A pairing code that enrolls a computer, not a phone. */
   startComputerPairing(): Promise<import('./remote.js').PairingGrant>;
   listComputers(): Promise<import('./computers.js').ComputerStatus[]>;
@@ -1422,6 +1454,10 @@ export interface NekkoApi {
   rotateRemoteSecret(): Promise<import('./remote.js').RemoteStatus>;
   /** Turn a paired phone's Read or Change access on or off (IO-33). Returns every device. */
   setRemoteAccess(deviceId: string, access: { read?: boolean; change?: boolean }): Promise<import('./remote.js').RemoteDevice[]>;
+  /** Decision 0116: how a paired device may reach this computer. */
+  setRemoteRoute?(deviceId: string, route: import('./remote.js').DeviceRoute): Promise<import('./remote.js').RemoteDevice[]>;
+  /** Decision 0116: the relays this computer is also reachable through, besides the main one. */
+  setRemoteRelays?(urls: string[]): Promise<import('./remote.js').RemoteStatus>;
   /** A paired phone's Change actions, oldest first, allowed or refused (IO-33). */
   getRemoteActivity(deviceId: string): Promise<import('./phone-access.js').PhoneActivityEntry[]>;
   /**
@@ -1498,6 +1534,10 @@ export interface NekkoApi {
   detectHypergate(port?: number): Promise<import('./mcp.js').HypergateInfo | null>;
   /** Connect to a local Hypergate daemon: claim a token, save the entry, bring its tools online. */
   connectHypergate(port?: number): Promise<import('./mcp.js').HypergateInfo | null>;
+  /** Whether Hypergate is on this computer, and the running daemon's info if it answers. */
+  checkHypergate(port?: number): Promise<import('./mcp.js').HypergateCheck>;
+  /** Start an installed Hypergate and wait for it to answer; null if it did not come up. */
+  startHypergate(port?: number): Promise<import('./mcp.js').HypergateInfo | null>;
   /** Register this device's push token with the relay (mobile/relay only; no-op elsewhere). */
   registerPushToken(token: string, platform: 'ios' | 'android'): Promise<void>;
   /** Check for a newer version (desktop: GitHub feed; web: server version). */
@@ -1544,6 +1584,8 @@ export interface NekkoApi {
   ): Promise<import('./terminal.js').TerminalStream | null>;
   /** Fires when a session's tracked file changes shift (after an agent edit/accept). */
   onChangesUpdated(cb: (e: { sessionId: string }) => void): () => void;
+  /** The daemon changed a folder's git state (see `IpcEvents.gitChanged`): re-read what shows it. */
+  onGitChanged(cb: (e: { path: string }) => void): () => void;
   /** Fires when the automation-task list changes (created/updated/fired/deleted). */
   onTasksUpdated(cb: (tasks: AutomationTask[]) => void): () => void;
   onBackgroundUpdated(cb: (state: import('./background.js').BackgroundState) => void): () => void;

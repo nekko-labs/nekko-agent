@@ -17,8 +17,13 @@ use std::sync::{Arc, OnceLock};
 
 pub use nekko_remote::CHANNELS;
 
+/// Where Nekko Cloud Relay tickets for a room come from (decision 0116): the
+/// signed-in Nekko Cloud account, installed once the daemon has one.
+pub type RelayTickets = Arc<dyn Fn(String) -> nekko_remote::Access + Send + Sync>;
+
 pub struct Remote {
     svc: Arc<RemoteService>,
+    tickets: Arc<OnceLock<RelayTickets>>,
     dispatch: Arc<OnceLock<PhoneDispatcher>>,
     /// The router itself, for the chat list the phone's Live Activity card shows.
     router: Arc<OnceLock<Dispatcher>>,
@@ -44,7 +49,9 @@ impl Remote {
         let security: Arc<dyn nekko_remote::step_up::SecurityStore> =
             Arc::new(nekko_remote::step_up::SecurityFile::in_dir(&dir));
         let events = hub.clone();
+        let tickets: Arc<OnceLock<RelayTickets>> = Arc::default();
         let link = HubLink {
+            tickets: tickets.clone(),
             rt: tokio::runtime::Handle::current(),
             hub,
             dispatch: dispatch.clone(),
@@ -53,7 +60,12 @@ impl Remote {
         };
         let svc =
             RemoteService::new(&dir, nekko_remote::hello::os_random(), nekko_remote::system_clock(), Box::new(link));
-        Self { svc, dispatch, router, terminals, security, hub: events }
+        Self { svc, tickets, dispatch, router, terminals, security, hub: events }
+    }
+
+    /// Let the relay agent ask the Nekko Cloud account for Nekko Cloud Relay tickets.
+    pub fn set_relay_tickets(&self, tickets: RelayTickets) {
+        let _ = self.tickets.set(tickets);
     }
 
     /// `security.json`'s store, shared with Settings → Security (security.rs).
@@ -115,6 +127,8 @@ impl Remote {
 
 /// Connects the agent to a relay, with the hub's events and the router.
 struct HubLink {
+    /// Nekko Cloud Relay tickets, once the daemon has a Nekko Cloud account.
+    tickets: Arc<OnceLock<RelayTickets>>,
     rt: tokio::runtime::Handle,
     hub: Hub,
     dispatch: Arc<OnceLock<PhoneDispatcher>>,
@@ -171,11 +185,24 @@ impl Link for HubLink {
             Some(run) => run("sessions:summaries".into(), Value::Array(Vec::new())),
             None => Box::pin(std::future::ready(Err("the daemon is still starting".to_string()))),
         });
+        // Nekko Cloud Relay: a ticket from this computer's Nekko Cloud account,
+        // asked for before every dial (decision 0116). A Nekko Cloud machine
+        // keeps presenting the token it was started with (decision 0017).
+        let machine_access = std::env::var("NEKKO_RELAY_ACCESS").ok().filter(|a| !a.is_empty());
+        let access: Option<nekko_remote::Access> =
+            (machine_access.is_none() && nekko_remote::route::is_cloud_relay(relay_url)).then(|| {
+                let (cell, room) = (self.tickets.clone(), room.to_string());
+                let access: nekko_remote::Access = Arc::new(move || match cell.get() {
+                    Some(tickets) => tickets(room.clone())(),
+                    None => Box::pin(std::future::ready(Err("Nekko Cloud is still starting.".to_string()))),
+                });
+                access
+            });
         Arc::new(RelayAgent::spawn(
             &self.rt,
             Spawn {
-                // A Nekko Cloud machine presents its access token to the relay's enrolment gate (decision 0017).
-                url: nekko_remote::agent_url(relay_url, room, key, std::env::var("NEKKO_RELAY_ACCESS").ok().as_deref()),
+                url: nekko_remote::agent_url(relay_url, room, key, machine_access.as_deref()),
+                access,
                 secret: key.to_string(),
                 room: room.to_string(),
                 host_key,
@@ -224,9 +251,15 @@ fn relayed(text: &str) -> Option<(String, Value)> {
         return None;
     }
     let mut v: Value = serde_json::from_str(text).ok()?;
-    let payload = v.get_mut("payload").map(Value::take).unwrap_or(Value::Null);
+    let mut payload = v.get_mut("payload").map(Value::take).unwrap_or(Value::Null);
     if payload.get("relayOnly") == Some(&Value::Bool(true)) {
         return None;
+    }
+    // The window applies a `session_meta`'s changed fields; a phone reads the chat again, as it always did.
+    if let Some(obj) = payload.as_object_mut()
+        && obj.get("type").and_then(Value::as_str) == Some("session_meta")
+    {
+        obj.remove("summary");
     }
     Some((channel.to_string(), payload))
 }
@@ -310,5 +343,11 @@ mod tests {
         assert!(relayed(r#"{"channel":"downloads:updated","payload":[]}"#).is_none());
         assert!(relayed(r#"{"channel":"limits:updated","payload":{"relayOnly":true}}"#).is_none());
         assert!(relayed("not json").is_none());
+        // The window's changed fields are not sent to a phone.
+        let (_, meta) = relayed(
+            r#"{"channel":"agent:event","payload":{"type":"session_meta","sessionId":"s","summary":{"title":"T"}}}"#,
+        )
+        .unwrap();
+        assert_eq!(meta, serde_json::json!({ "type": "session_meta", "sessionId": "s" }));
     }
 }

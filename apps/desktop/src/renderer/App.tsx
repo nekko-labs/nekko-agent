@@ -1,13 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { navOrder, moveNav, sidebarViewVisible } from './nav-order.js';
 import { useStore, viewEnabled, type View } from './store.js';
+import { useModelCatalogVersion } from './modelCatalog.js';
 import { startLiveRuns } from './liveRuns.js';
 import { startSessionSummaryRefresh } from './sessionSummaryRefresh.js';
 import { startAgentSubscription } from './agentSubscription.js';
 import { startDesktopNotifications } from './notifications.js';
 import { startCompactionStatus } from './compactionStatus.js';
-import { useT } from './i18n.js';
+import { useT, type MessageKey } from './i18n.js';
 import { SHORTCUTS } from './shortcuts.js';
 import { loadStartup } from './startupLoad.js';
 import { hasAppChrome } from './chrome.js';
@@ -16,6 +17,7 @@ import { ErrorBoundary } from './components/ErrorBoundary.js';
 import { BrandMark } from './components/BrandMark.js';
 import { RailBackdrop } from './components/RailBackdrop.js';
 import { AboutNekko } from './components/AboutNekko.js';
+import { WhatsNewSheet } from './components/WhatsNewSheet.js';
 import { FeedbackSheet, openFeedback } from './components/FeedbackSheet.js';
 import { FeedbackIcon } from './icons.js';
 import { AutumnBackground } from './components/AutumnBackground.js';
@@ -33,18 +35,12 @@ import { UpdateBanner } from './components/UpdateBanner.js';
 import { AppNotices } from './components/AppNotices.js';
 import { RelayPairing } from './components/RelayPairing.js';
 import { DeepLinkListener } from './components/DeepLink.js';
-import { DesignBoardView } from './views/DesignBoardView.js';
-import { ArtifactsView } from './views/ArtifactsView.js';
 import { CustomizeExperience } from './components/CustomizeExperience.js';
-import { SkillsView } from './views/SkillsView.js';
-import { TrainingView } from './views/TrainingView.js';
-import { WorkflowsView } from './views/WorkflowsView.js';
 import { CommandCenterView } from './views/CommandCenterView.js';
-import { ModelsWorkspace } from './views/ModelsWorkspace.js';
-import { ConnectorsView } from './views/ConnectorsView.js';
-import { MemoryView } from './views/MemoryView.js';
-import { SettingsView } from './views/SettingsView.js';
-import { OnboardingView } from './views/OnboardingView.js';
+import {
+  ArtifactsView, ConnectorsView, DesignBoardView, MemoryView, ModelsWorkspace, OnboardingView,
+  SettingsView, SkillsView, TrainingView, WorkflowsView, prefetchViews,
+} from './lazyViews.js';
 import { ClaudePlanSheet } from './components/claude/ClaudeAgent.js';
 import {
   ArtifactsColorIcon,
@@ -62,7 +58,7 @@ import {
 // The nav rail's Agents cat is a plain silhouette: no eyes, so it reads as an icon beside the others rather than a face.
 const AgentCatIcon = (_p: { className?: string }) => <NekkoAvatar size={22} stationary eyes={false} />;
 
-const NAV: Array<{ view: View; labelKey: string; Icon: (p: { className?: string }) => React.JSX.Element }> = [
+const NAV: Array<{ view: View; labelKey: MessageKey; Icon: (p: { className?: string }) => React.JSX.Element }> = [
   { view: 'command', labelKey: 'nav.command', Icon: AgentCatIcon },
   { view: 'artifacts', labelKey: 'nav.artifacts', Icon: ArtifactsColorIcon },
   { view: 'skills', labelKey: 'nav.skills', Icon: SkillsColorIcon },
@@ -122,6 +118,8 @@ export function App() {
   // pane is a view of this; without it, switching workspaces unmounted the only
   // listener and the run's output went nowhere until the next event arrived.
   useEffect(() => startLiveRuns(), []);
+  // The other views load after first paint, one idle slice each, so a tab switch never waits on a fetch.
+  useEffect(() => prefetchViews(), []);
   useEffect(() => {
     const { refreshComputers, refreshSessions: refreshChats } = useStore.getState();
     void refreshComputers();
@@ -157,12 +155,15 @@ export function App() {
     return () => window.clearInterval(t);
   }, [sweepReady, autoArchiveSetting]);
 
-  // A background catalog check (Settings → Updates) can land a new provider
-  // model list mid-session: re-list so pickers show it immediately.
-  useEffect(
-    () => window.nekko.onModelsUpdated((e) => void useStore.getState().reloadModels(e.providerId)),
-    [],
-  );
+  // A background catalog check (Settings → Updates), a finished download or a
+  // provider change can land a new model list mid-session: re-list so pickers
+  // show it immediately (modelCatalog.ts).
+  const modelCatalog = useModelCatalogVersion();
+  useEffect(() => {
+    if (!modelCatalog) return;
+    const { activeProviderId, reloadModels } = useStore.getState();
+    if (activeProviderId) void reloadModels(activeProviderId).catch(() => {});
+  }, [modelCatalog]);
 
   useEffect(() => {
     // Restore the saved provider/model before catalog loading chooses a fallback.
@@ -269,6 +270,7 @@ export function App() {
       {/* The window's own title bar, in the desktop shell only. */}
       <ErrorBoundary label="Title bar"><TitleBar /></ErrorBoundary>
       <ErrorBoundary label="About"><AboutNekko /></ErrorBoundary>
+      <ErrorBoundary label="What's new"><WhatsNewSheet /></ErrorBoundary>
       <ErrorBoundary label="Feedback"><FeedbackSheet /></ErrorBoundary>
 
       {!settingsLoaded ? (
@@ -330,7 +332,7 @@ export function App() {
             {/* Not a destination: it opens the Send feedback sheet over the current view,
                 so a divider sets it apart below the last destination. */}
             <div className="rail-divider" aria-hidden="true" />
-            <button className="nav-item rail-feedback" aria-label={t('nav.feedback')} title={t('nav.feedback')} onClick={openFeedback} data-testid="rail-feedback">
+            <button className="nav-item rail-feedback" aria-label={t('nav.feedback')} title={t('nav.feedback')} onClick={() => openFeedback('rail')} data-testid="rail-feedback">
               <span className="grid h-10 w-10 shrink-0 place-items-center text-ink-faint"><FeedbackIcon className="h-[18px] w-[18px]" /></span>
               <span className="rail-label text-sm font-medium">{t('nav.feedback')}</span>
             </button>
@@ -353,6 +355,8 @@ export function App() {
           )}
           {/* Keyed on the wizard too: setup writes wall prefs (the Monitors panel) the open view loaded before it. */}
           <ErrorBoundary key={`${view === 'modelserver' ? 'models' : view}${onboardingOpen ? ':setup' : ''}`} label={t(`nav.${view}`)}>
+          {/* No fallback: a view that is not loaded yet shows the empty main area for a frame, never a spinner. */}
+          <Suspense fallback={null}>
           {view === 'command' && <CommandCenterView />}
           {view === 'artifacts' && <ArtifactsView />}
           {view === 'skills' && <SettingsDestination><SkillsView /></SettingsDestination>}
@@ -363,12 +367,13 @@ export function App() {
           {view === 'connectors' && <SettingsDestination><ConnectorsView /></SettingsDestination>}
           {view === 'memory' && <MemoryView />}
           {view === 'settings' && <SettingsView />}
+          </Suspense>
           </ErrorBoundary>
         </main>
 
         {/* First-run setup wizard: covers nav + main but leaves the window's
             title bar (and its OS buttons) reachable above it. */}
-        {onboardingOpen && <ErrorBoundary label="Setup"><OnboardingView /></ErrorBoundary>}
+        {onboardingOpen && <ErrorBoundary label="Setup"><Suspense fallback={null}><OnboardingView /></Suspense></ErrorBoundary>}
       </div>
 
       {/* Phone bottom tab bar: the remote-control surface. The long tail of

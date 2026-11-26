@@ -1,7 +1,9 @@
 import { terminalPresentation } from './terminalActivity.js';
 import { computerIdOf } from '@nekko-agent/shared';
 import { ComputerChip } from './ComputerChip.js';
+import { syncedComputer } from '../syncedComputers.js';
 import { terminalExcerpt } from './terminalExcerpt.js';
+import { startExcerptPoll } from './terminalExcerptPoll.js';
 import { HOME, applyWallDrop, heldSize, sameTarget, wallDropTargetAt, type Rect, type WallDropTarget } from '../wallDrag.js';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -81,18 +83,33 @@ export function browserLabel(url: string): string {
   try { const u = new URL(url); return u.host || 'Browser'; } catch { return 'Browser'; }
 }
 
+/** A card shows two lines: the last 8 KB of output holds them. */
+const EXCERPT_BYTES = 8 * 1024;
+
+/**
+ * A card's last lines of a terminal. Reads only the tail of the output
+ * (`EXCERPT_BYTES`, not the whole scrollback), and only while the card is on
+ * screen, the window is shown and the terminal runs: a card scrolled away or
+ * hidden, or a terminal that exited, makes no request at all.
+ */
 export function TerminalExcerpt({ terminalId }: { terminalId: string }) {
   const [text, setText] = useState('Reading terminal output…');
+  const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     let disposed = false;
-    const refresh = () => { void window.nekko.terminalSnapshot(terminalId).then(snap => {
-      if (!disposed) setText(terminalExcerpt(snap?.buffer ?? ''));
-    }).catch(() => { if (!disposed) setText('Terminal output unavailable'); }); };
-    refresh();
-    const timer = setInterval(refresh, 3000);
-    return () => { disposed = true; clearInterval(timer); };
+    return (() => {
+      const stop = startExcerptPoll({
+        element: ref.current,
+        read: () => window.nekko.terminalSnapshot(terminalId, { maxBytes: EXCERPT_BYTES }).then((snap) => {
+          if (!disposed) setText(terminalExcerpt(snap?.buffer ?? ''));
+          return !snap || snap.info.running === false;
+        }, () => { if (!disposed) setText('Terminal output unavailable'); return false; }),
+        onExit: (exited) => window.nekko.onTerminalEvent((e) => { if (e.type === 'exit' && e.terminalId === terminalId) exited(); }),
+      });
+      return () => { disposed = true; stop(); };
+    })();
   }, [terminalId]);
-  return <span className="font-mono whitespace-pre-wrap">{text}</span>;
+  return <span ref={ref} className="font-mono whitespace-pre-wrap">{text}</span>;
 }
 
 /**
@@ -145,7 +162,7 @@ function CompanionResizer({ sessionId }: { sessionId: string }) {
 
 function CompanionBody({ pane }: { pane: WbPane }) {
   switch (pane.kind) {
-    case 'file': return <FilePane path={pane.refId} />;
+    case 'file': return <FilePane path={pane.refId} onMoved={(to) => useStore.getState().retargetPane(pane.id, to)} />;
     case 'files': return <ExplorerPane paneId={pane.id} root={pane.refId} />;
     case 'browser': return <BrowserPane url={pane.refId} />;
     case 'diff': return <DiffPane sessionId={pane.refId} />;
@@ -161,7 +178,7 @@ import { CREATE_OPTIONS } from './CreateMenu.js';
 import type { AgentWindowSelection } from './AgentWindowPicker.js';
 import { AgentLogsDrawer } from './AgentLogsDrawer.js';
 import { layoutWithLogsDrawer, overlayLogsDrawer, useWallLogs } from '../wallLogs.js';
-import { BoltIcon, ChatIcon, CloseIcon, ExternalIcon, FolderIcon, GlobeIcon, LayoutIcon, PlusIcon, TerminalIcon } from '../icons.js';
+import { BoltIcon, ChatIcon, CloseIcon, ExternalIcon, FileIcon, FolderIcon, GlobeIcon, LayoutIcon, PlusIcon, TerminalIcon } from '../icons.js';
 import { COMPANION_DEFAULT, clampCompanion, readCompanionWidth, saveCompanionWidth, shareFromPointer } from './companionWidth.js';
 import './commandWallLayouts.css';
 import { PaneVisibleContext } from '../paneVisibility.js';
@@ -798,6 +815,7 @@ export function CommandWall({
     if (pane.kind === 'terminal') { const t = terminalById.get(pane.refId); return t ? terminalPresentation(t).title : 'Terminal'; }
     if (pane.kind === 'zone') return pane.zone ?? 'Zone';
     if (pane.kind === 'files') return folderLabel(pane.refId);
+    if (pane.kind === 'file') return folderLabel(pane.refId);
     if (pane.kind === 'browser') return browserLabel(pane.refId);
     return pane.kind === 'automations' ? 'Automations' : 'Insights';
   };
@@ -807,6 +825,7 @@ export function CommandWall({
     if (kind === 'automations') return <BoltIcon className={cls} />;
     if (kind === 'insights') return <LayoutIcon className={cls} />;
     if (kind === 'files') return <FolderIcon className={cls} />;
+    if (kind === 'file') return <FileIcon className={cls} />;
     if (kind === 'browser') return <GlobeIcon className={cls} />;
     return <ChatIcon className={cls} />;
   };
@@ -816,6 +835,8 @@ export function CommandWall({
     const terminal = pane.kind === 'terminal' ? terminalById.get(pane.refId) : undefined;
     const project = projects.find((p) => p.id === (session?.workspaceId ?? terminal?.workspaceId));
     const computer = computers.find((c) => c.id === computerIdOf(session?.id));
+    // Another computer's chat synced here names that computer too (#3143).
+    const synced = !computer && session?.home ? syncedComputer(session.home, computers) : null;
     let status: { label: string; tone: string; live?: boolean } | null = null;
     let needsYou = false;
     let agentStatus: AgentStatus | undefined;
@@ -939,6 +960,7 @@ export function CommandWall({
               {/* The project only when there is more than one to tell apart:
                   on a one-project wall it is the same word on every strip. */}
               {computer && <ComputerChip computer={computer} dim={computer.state !== 'online'} />}
+              {synced && <ComputerChip computer={synced} />}
               {project && projects.length > 1 && !density && <span className="chip hidden shrink-0 text-2xs sm:inline">{project.name}</span>}
             </>
           }
@@ -946,7 +968,7 @@ export function CommandWall({
           ringColor={flashing ? 'color-mix(in srgb, var(--accent) 60%, var(--line))' : undefined}
           stripStyle={needsYou ? { background: 'color-mix(in srgb, var(--warning) 10%, transparent)' } : undefined}
           addable={WALL_ADDABLE}
-          closeTitle={pane.kind === 'chat' ? 'Stop agent and watchers, then remove from the wall (chat is kept)' : 'Remove from the wall'}
+          closeTitle={pane.kind === 'chat' ? 'Close this agent (stops it; the chat stays in the Agents panel, not archived)' : 'Remove from the wall'}
           // Focus shows one window, so there is nowhere to move it to.
           locked={!tiled}
           onPickUp={pickable ? (e) => pickUp(e, pane, title) : undefined}
@@ -969,6 +991,7 @@ export function CommandWall({
             : pane.kind === 'terminal' ? <TerminalPane key={pane.refId} terminalId={pane.refId} />
             : pane.kind === 'files' ? <ExplorerPane key={pane.refId} paneId={pane.id} root={pane.refId} named />
             : pane.kind === 'browser' ? <BrowserPane key={pane.refId} url={pane.refId} />
+            : pane.kind === 'file' ? <FilePane key={pane.refId} path={pane.refId} onMoved={(to) => useStore.getState().retargetPane(pane.id, to)} />
             : null}
            </div>
             {pane.kind === 'chat' && showCompanions && companions.length > 0 && <CompanionResizer sessionId={pane.refId} />}

@@ -100,6 +100,7 @@ import {
   TITLEBAR_HEIGHT,
   TITLEBAR_OVERLAY_CHANNEL,
   type TitleBarOverlayTheme,
+  SYSTEM_LANGUAGES_ARG,
 } from '../windowChrome.js';
 
 if (process.env.ELECTRON_RUN_AS_NODE) {
@@ -220,7 +221,7 @@ function installMacAppMenu(): void {
     // and zoom past Settings' text size; the page steps that setting itself.
     { label: 'View', submenu: [{ role: 'reload' }, { role: 'forceReload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
     { role: 'windowMenu' },
-    { role: 'help', submenu: [{ label: 'Send Feedback…', click: send('nekko-agent://feedback') }] },
+    { role: 'help', submenu: [{ label: 'Send Feedback…', click: send('nekko-agent://feedback?from=menu') }] },
   ]));
 }
 
@@ -272,8 +273,10 @@ function newAppWindow(bounds: { x?: number; y?: number; width: number; height: n
       nodeIntegration: false,
       // Enable <webview> for the in-app browser pane (BrowserPane).
       webviewTag: true,
-      // Tells the preload which screen this window fills (multi-monitor).
-      ...(displayId ? { additionalArguments: [`${DISPLAY_ARG}${displayId}`] } : {}),
+      additionalArguments: [
+        `${SYSTEM_LANGUAGES_ARG}${app.getPreferredSystemLanguages().join(',')}`,
+        ...(displayId ? [`${DISPLAY_ARG}${displayId}`] : []),
+      ],
     },
   });
 }
@@ -635,9 +638,6 @@ const isPrimary = claimSingleInstance();
 if (!isPrimary) app.quit();
 
 app.whenReady().then(async () => {
-  registerArtifactPreview((sender) => applicationWindows.has(sender.id));
-  const isPreviewServedUrl = registerHtmlPreview((sender) => applicationWindows.has(sender.id));
-  registerLibraryThumbnails((sender) => applicationWindows.has(sender.id), isPreviewServedUrl);
   if (!isPrimary) return;
   // No File/Edit/View/Window bar: it cost a whole strip of chrome above the UI
   // to duplicate shortcuts the app already owns. macOS keeps its menu — there
@@ -657,11 +657,11 @@ app.whenReady().then(async () => {
     if (brandEnv('DATA_DIR')) throw e;
     const sources = [...new Set([...legacyUserDataDirs(undefined, app.getPath('appData')), ...(existsSync(join(devSource, 'settings.json')) ? [devSource] : [])])];
     if (!sources.length) { dialog.showErrorBox('Data migration needs attention', (e as Error).message); app.quit(); return; }
-    const choice = dialog.showMessageBoxSync({ type: 'question', title: 'Move Nekko Agent data', message: 'Choose the profile to move into ~/.nekko-agent', detail: `Close all other Nekko Agent desktop, web and CLI instances first. Settings, sessions and managed model files will move to ${dataDir}. Borrowed model folders are unchanged. Other profiles are not merged or deleted.`, buttons: ['Cancel', ...sources.map(p => `Move ${p}`)], defaultId: 0, cancelId: 0, noLink: true });
+    const choice = dialog.showMessageBoxSync({ type: 'question', title: 'Move Nekko Agent data', message: `Choose the profile to move into ${dataDir}`, detail: `Close all other Nekko Agent desktop, web and CLI instances first. Settings, sessions and managed model files will move to ${dataDir}. Borrowed model folders are unchanged. Other profiles are not merged or deleted.`, buttons: ['Cancel', ...sources.map(p => `Move ${p}`)], defaultId: 0, cancelId: 0, noLink: true });
     if (choice === 0) { app.quit(); return; }
     try {
       const source = sources[choice - 1];
-      migrateUserData(source, dataDir, source.endsWith('nekko-agent') ? join(source, '..') : undefined);
+      migrateUserData(source, dataDir, source === devSource || source === join(app.getPath('appData'), 'Nekko Agent', 'nekko-agent') ? join(source, '..') : undefined);
     }
     catch (failure) { dialog.showErrorBox('Data migration stopped', (failure as Error).message); app.quit(); return; }
   }
@@ -676,6 +676,10 @@ app.whenReady().then(async () => {
     },
     tell: (title, detail, error) => { dialog.showMessageBoxSync({ type: error ? 'warning' : 'info', title: 'Nekko Agent', message: title, detail, buttons: ['OK'] }); },
   });
+  // After the move above: these write into the browser profile (library-thumbs), which must not exist before an older profile moves in.
+  registerArtifactPreview((sender) => applicationWindows.has(sender.id));
+  const isPreviewServedUrl = registerHtmlPreview((sender) => applicationWindows.has(sender.id));
+  registerLibraryThumbnails((sender) => applicationWindows.has(sender.id), isPreviewServedUrl);
   // Main's console, teed to `<dataDir>/logs/app.log` (appLog.ts); nekkod serves it as `logs:read('app')`.
   startAppLog(dataDir);
   // The engine runs in its own processes (see engine-process.ts); the window
@@ -755,7 +759,7 @@ app.whenReady().then(async () => {
       engine,
       showUi: showWindow,
       newChat: () => deliverLink('nekko-agent://chat/new'),
-      feedback: () => deliverLink('nekko-agent://feedback'),
+      feedback: () => deliverLink('nekko-agent://feedback?from=tray'),
       serviceStarted: () => { for (const win of BrowserWindow.getAllWindows()) win.webContents.reload(); },
       quit: () => app.quit(),
       onError: message => dialog.showErrorBox('Nekko Agent', message),

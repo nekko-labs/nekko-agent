@@ -1,8 +1,8 @@
 import Foundation
 import NekkoProtocol
 
-/// What the connection strip says about one paired computer, or about Tailscale
-/// on this iPhone: a dot, at most one word, and (behind a tap) one line and its fixes.
+/// What the connection strip says about one paired computer: a dot, at most one
+/// word, and (behind a tap) one line and its fixes.
 /// Replaces the connection, fleet and protocol banners on the chat list.
 public struct ConnectionNote: Equatable, Sendable, Identifiable {
     public enum Tone: Equatable, Sendable {
@@ -27,9 +27,8 @@ public struct ConnectionNote: Equatable, Sendable, Identifiable {
         case details
     }
 
-    /// The computer's id, or `ConnectionNote.tailscaleId`.
+    /// The computer's id.
     public let id: String
-    /// The computer's name, or nil for the Tailscale item.
     public let name: String?
     public let tone: Tone
     /// The one word beside the name when something is wrong ("offline").
@@ -44,10 +43,7 @@ public struct ConnectionNote: Equatable, Sendable, Identifiable {
     /// Offer the safety exits (SK-8) beside the actions: the active computer only.
     public let more: Bool
 
-    public static let tailscaleId = "tailscale"
-
     public var opens: Bool { line != nil }
-    public var isTailscale: Bool { id == Self.tailscaleId }
 }
 
 /// One paired computer's connection, as the strip needs it.
@@ -70,41 +66,33 @@ public struct ConnectionFacts: Equatable, Sendable {
     public var exitAt: Int64?
     /// Prompts written here that go when the computer is back.
     public var waiting: Int
+    /// This phone may also reach the computer without Tailscale (a Nekko Cloud Relay or
+    /// other internet route it is allowed to use, decision 0116), so Tailscale being
+    /// off is not what keeps it away. The per-computer route choice is already applied.
+    public var offTailnet: Bool
 
     public init(id: String, name: String, route: RelayRoute = .internet, relayHost: String = "", state: RelayState,
                 detail: String? = nil, denied: DenyReason? = nil, active: Bool = false, disabled: Bool = false,
-                protocolCheck: ProtocolCheck = .same, exit: SafetyExit.Kind? = nil, exitAt: Int64? = nil, waiting: Int = 0) {
+                protocolCheck: ProtocolCheck = .same, exit: SafetyExit.Kind? = nil, exitAt: Int64? = nil, waiting: Int = 0,
+                offTailnet: Bool = false) {
         self.id = id; self.name = name; self.route = route; self.relayHost = relayHost; self.state = state
         self.detail = detail; self.denied = denied; self.active = active; self.disabled = disabled
         self.protocolCheck = protocolCheck; self.exit = exit; self.exitAt = exitAt; self.waiting = waiting
+        self.offTailnet = offTailnet
     }
+
+    /// Only Tailscale reaches this computer: when Tailscale is off, it is the thing to fix.
+    public var tailnetOnly: Bool { route == .tailscale && !offTailnet }
 }
 
 public enum ConnectionNotes {
-    /// The strip's items: Tailscale first when it is what keeps computers away, then every computer in order.
+    /// The strip's items: every computer in order, each saying its own problem.
+    /// A computer only Tailscale reaches says "Tailscale off" itself when Tailscale is off on this phone;
+    /// one this phone may also reach through Nekko Cloud Relay is never blamed on Tailscale.
     /// `time` formats a safety exit's moment (the app passes the locale's short time).
     public static func make(_ computers: [ConnectionFacts], tailscaleOn: Bool,
                             time: (Int64) -> String = { _ in "" }) -> [ConnectionNote] {
-        let blocked = computers.filter { !$0.disabled && TailscaleApp.shouldOffer(route: $0.route, tailscaleOn: tailscaleOn, state: $0.state) }
-        var out: [ConnectionNote] = []
-        if !blocked.isEmpty {
-            let names = joined(blocked.map(\.name))
-            let waiting = blocked.reduce(0) { $0 + $1.waiting }
-            out.append(ConnectionNote(id: ConnectionNote.tailscaleId, name: nil, tone: .warning, word: "Tailscale off", wordTone: .warning,
-                                      line: "Turn on Tailscale to reach \(names).", tail: waitingTail(waiting),
-                                      actions: [.openTailscale] + (blocked.contains(where: \.active) ? [.details] : []), more: false))
-        }
-        let blockedIds = Set(blocked.map(\.id))
-        for c in computers {
-            out.append(blockedIds.contains(c.id) ? quiet(c, .waiting) : note(c, time: time))
-        }
-        return out
-    }
-
-    /// "Studio", "Studio and Gomi", "Studio, Gomi and Laptop".
-    static func joined(_ names: [String]) -> String {
-        guard names.count > 1 else { return names.first ?? "" }
-        return names.dropLast().joined(separator: ", ") + " and " + names[names.count - 1]
+        computers.map { note($0, tailscaleOn: tailscaleOn, time: time) }
     }
 
     /// Only the items that have something to say: Files, Monitors.
@@ -124,7 +112,7 @@ public enum ConnectionNotes {
         return parts.isEmpty ? nil : parts.joined(separator: " ")
     }
 
-    static func note(_ c: ConnectionFacts, time: (Int64) -> String) -> ConnectionNote {
+    static func note(_ c: ConnectionFacts, tailscaleOn: Bool = true, time: (Int64) -> String) -> ConnectionNote {
         let name = c.name
         func problem(_ tone: ConnectionNote.Tone, _ word: String, _ line: String, _ fix: String?, _ actions: [ConnectionNote.Action]) -> ConnectionNote {
             ConnectionNote(id: c.id, name: name, tone: tone, word: word, wordTone: tone, line: line, tail: tail(fix, c),
@@ -142,6 +130,10 @@ public enum ConnectionNotes {
                 return problem(.warning, "quit", "You quit Nekko Agent on \(name)\(at.isEmpty ? "" : " at \(at)").",
                                "Open it there; this phone keeps trying.", [])
             }
+        }
+        // Only Tailscale reaches it and Tailscale is off here: that is the fix, not a vague "no answer".
+        if !c.offTailnet, TailscaleApp.shouldOffer(route: c.route, tailscaleOn: tailscaleOn, state: c.state) {
+            return problem(.warning, "Tailscale off", "Turn on Tailscale to reach \(name).", nil, [.openTailscale])
         }
         if c.detail == RelayStatus.badPairingKey || (c.state == .denied && (c.denied == .badKey || c.denied == .badCode)) {
             return problem(.danger, "key changed", "The pairing key no longer matches \(name).", "Pair again with a fresh code.", [.pairAgain])
@@ -168,7 +160,7 @@ public enum ConnectionNotes {
             }
             // Still dialing for the first time: nothing to say until it fails.
             guard c.detail != nil else { return quiet(c, .waiting) }
-            if c.route == .tailscale {
+            if c.tailnetOnly {
                 return problem(.warning, "no answer", "\(name) doesn’t answer on your tailnet.",
                                "Is it awake and signed in to the same tailnet?", [.retry, .openTailscale])
             }
@@ -179,6 +171,9 @@ public enum ConnectionNotes {
             switch c.denied {
             case .updateRequired?:
                 return problem(.danger, "update", "\(name) no longer accepts this app.", "Update it from the App Store.", [])
+            case .route?:
+                return problem(.warning, "refused", "\(name) only lets this iPhone in through another route.",
+                               "Pair again, or change it on \(name).", [.pairAgain])
             case .revoked?, .kicked?:
                 return problem(.danger, "refused", "\(name) removed this iPhone.", nil, [.pairAgain])
             default:
@@ -201,7 +196,8 @@ extension ComputersStore {
                                    denied: active ? denied : peer?.denied,
                                    active: active, disabled: c.connectionDisabled == true,
                                    protocolCheck: active ? protocolCheck : .same,
-                                   exit: exit?.kind, exitAt: exit?.at, waiting: active ? outbox.count : 0)
+                                   exit: exit?.kind, exitAt: exit?.at, waiting: active ? outbox.count : 0,
+                                   offTailnet: c.reachableOffTailnet)
         }
     }
 }

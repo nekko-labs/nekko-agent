@@ -1,6 +1,6 @@
 [package]
 name = "nekko-cloud"
-description = "Nekko Cloud for the engine daemon: sign-in through Supabase Auth, the device token, and end-to-end encrypted chat sync (Pro and Team) on top of nekko-sync. The server only ever receives ciphertext."
+description = "Nekko Cloud for the engine daemon: sign-in through Supabase Auth, the device token, and end-to-end encrypted chat sync (Pro and Enterprise) on top of nekko-sync. The server only ever receives ciphertext."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -24,6 +24,8 @@ serde.workspace = true
 serde_json.workspace = true
 sha2 = "0.10"
 tokio.workspace = true
+# The Nekko Cloud Relay account channel (src/relay_channel.rs, decision 0116).
+tokio-tungstenite = { workspace = true, features = ["native-tls"] }
 zeroize = "1"
 
 [dev-dependencies]
@@ -31,4 +33,3 @@ zeroize = "1"
 nekko-remote = { path = "../nekko-remote" }
 p256 = { version = "0.13", default-features = false, features = ["ecdh", "ecdsa", "std"] }
 tempfile = "3"
-tokio-tungstenite.workspace = true

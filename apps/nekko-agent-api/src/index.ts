@@ -10,7 +10,10 @@ import { resendMailer } from "./confirmations.js";
 import { purgeFeedbackScreenshots, purgeSignups } from "./retention.js";
 import { purgeLibraryHistory } from "./shares.js";
 import { Stripe } from "./billing.js";
+import { parseSigningKey } from "./relay.js";
 import { buildServer, DEFAULT_ORIGINS } from "./server.js";
+import { RelayPresence } from "./relay-presence.js";
+import { budgetForMachine, MemoryGate, memoryReport } from "./memory-gate.js";
 import { supabaseAdminDeleter, supabaseVerifier } from "./supabase.js";
 
 const url = process.env.DATABASE_URL;
@@ -35,14 +38,17 @@ const failed = (job: string) => (e: unknown) => {
 // Migrations run on every start; they are idempotent and take an advisory lock.
 const applied = await migrate(db);
 if (applied.length) console.log(`migrations applied: ${applied.join(", ")}`);
-await expireDonations(db);
+// Everything after migrate is background work: the service listens first, so a restart is
+// not held up by purge jobs (a restart has a short health-check grace). Their first runs go
+// one after the other at the end of startup, not all at once on the small connection pool.
+const startupJobs: (() => Promise<unknown>)[] = [() => expireDonations(db).catch(failed("expiring donations"))];
 setInterval(() => expireDonations(db).catch(failed("expiring donations")), 24 * 60 * 60 * 1000).unref();
 
 // Library history (#2750): replaced revisions, old share versions and deleted shares go after 30 days.
 const purgeLibrary = () => purgeLibraryHistory(db)
   .then((n) => { if (n.revisions || n.versions || n.shares) console.log(`library history purged: ${n.revisions} revisions, ${n.versions} share versions, ${n.shares} shares`); })
   .catch(failed("purging library history"));
-await purgeLibrary();
+startupJobs.push(purgeLibrary);
 setInterval(purgeLibrary, 6 * 60 * 60 * 1000).unref();
 
 // Signup retention (privacy policy): unconfirmed after 30 days and
@@ -51,14 +57,14 @@ setInterval(purgeLibrary, 6 * 60 * 60 * 1000).unref();
 const purge = () => purgeSignups(db)
   .then((n) => { if (n.unconfirmed || n.unsubscribed) console.log(`signups purged: ${n.unconfirmed} unconfirmed, ${n.unsubscribed} unsubscribed`); })
   .catch(failed("purging signups"));
-await purge();
+startupJobs.push(purge);
 setInterval(purge, 6 * 60 * 60 * 1000).unref();
 
 // Send feedback screenshots are deleted 90 days after their note arrived.
 const purgeScreenshots = () => purgeFeedbackScreenshots(db)
   .then((n) => { if (n) console.log(`feedback screenshots purged: ${n}`); })
   .catch(failed("purging feedback screenshots"));
-await purgeScreenshots();
+startupJobs.push(purgeScreenshots);
 setInterval(purgeScreenshots, 6 * 60 * 60 * 1000).unref();
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
@@ -91,25 +97,46 @@ const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const deleteAuthUser = supabaseUrl && serviceRoleKey ? supabaseAdminDeleter(supabaseUrl, serviceRoleKey) : undefined;
 if (!deleteAuthUser) console.warn("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set: deleted accounts' Supabase users wait in pending_auth_deletions.");
 const retryAuth = () => retryAuthDeletions(db, deleteAuthUser).catch(failed("Supabase user deletion retry"));
-await retryAuth();
+startupJobs.push(retryAuth);
 setInterval(retryAuth, 60 * 60 * 1000).unref();
 // Organizations are limited to these accounts while they are proven (comma-separated emails); unset allows everyone.
 const orgsAllowedEmails = (process.env.NEKKO_ORGS_ALLOWED_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
-// Plans and billing (issue #2724); Team is "talk to us" until seats exist. Even when configured, nothing shows until a team account switches billing on.
+// Plans and billing (issue #2724); Enterprise (plan `team`) is "talk to us" until seats exist. Even when configured, nothing shows until a team account switches billing on.
 const stripeKey = process.env.STRIPE_SECRET_KEY;
 const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 const stripe = stripeKey && stripeWebhookSecret
   ? new Stripe({ secretKey: stripeKey, webhookSecret: stripeWebhookSecret, prices: { pro: process.env.STRIPE_PRICE_PRO || undefined } })
   : undefined;
 if (!stripe) console.warn("STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET not set: billing is off (the /v1/billing routes are absent).");
+// Nekko Cloud Relay (decision 0116): tickets signed with this Ed25519 key; the relay is started with its public half.
+const relaySigningKey = process.env.NEKKO_RELAY_SIGNING_KEY;
+const relay = relaySigningKey
+  ? { signingKey: parseSigningKey(relaySigningKey), url: process.env.NEKKO_RELAY_URL ?? "wss://nekko-agent-relay.fly.dev" }
+  : undefined;
+// Nothing derived from the signing key is logged; the README shows how to get its public half for the relay.
+if (relay) console.log("relay tickets: on");
+else console.warn("NEKKO_RELAY_SIGNING_KEY not set: Nekko Cloud Relay is off (the /v1/relay routes are absent).");
 // Nekko team accounts (comma-separated); unset uses the four team addresses in features.ts.
 const staffEmails = process.env.NEKKO_STAFF_EMAILS ? process.env.NEKKO_STAFF_EMAILS.split(",") : undefined;
 // Invite-only (#2932): when either is set, only accounts with a proven email in them may sign in or keep using a token.
 const accountsAllowedDomains = parseList(process.env.NEKKO_ACCOUNTS_ALLOWED_DOMAINS);
 const accountsAllowedEmails = parseList(process.env.NEKKO_ACCOUNTS_ALLOWED_EMAILS);
 if (!accountsAllowedDomains.length && !accountsAllowedEmails.length) console.warn("NEKKO_ACCOUNTS_ALLOWED_DOMAINS / _EMAILS not set: any account with a proven email may sign in.");
-const app = buildServer({ db, accountsAllowedDomains, accountsAllowedEmails, stripe, staffEmails, fleetEnabled: process.env.NEKKO_FLEET_ENABLED === "1", orgsEnabled: process.env.NEKKO_ORGS_ENABLED === "1", orgsAllowedEmails, allowedOrigins, logger: true, signIn, machines, mailer, publicUrl: process.env.PUBLIC_URL || undefined, deleteAuthUser, alert });
+// Memory (README "Memory"): the heap cap comes from start.sh, the request budget from the machine.
+const memoryGate = new MemoryGate({ budgetBytes: budgetForMachine() });
+const memory = memoryReport(memoryGate.budgetBytes);
+console.log(memory.line);
+if (memory.warning) {
+  console.warn(memory.warning);
+  alert(memory.warning);
+}
+const relayPresence = RelayPresence.fromEnv();
+if (relayPresence) console.log("fleet presence from the relay: on");
+const app = buildServer({ db, memoryGate, relayPresence, relay, accountsAllowedDomains, accountsAllowedEmails, stripe, staffEmails, privacyReviewers: parseList(process.env.NEKKO_PRIVACY_REVIEWER_SUBJECTS), fleetEnabled: process.env.NEKKO_FLEET_ENABLED === "1", orgsEnabled: process.env.NEKKO_ORGS_ENABLED === "1", orgsAllowedEmails, allowedOrigins, logger: true, signIn, machines, mailer, publicUrl: process.env.PUBLIC_URL || undefined, deleteAuthUser, alert });
 await app.listen({ host: "0.0.0.0", port: Number(process.env.PORT ?? 4320) });
+void (async () => {
+  for (const job of startupJobs) await job();
+})();
 
 for (const signal of ["SIGTERM", "SIGINT"] as const) {
   process.once(signal, async () => {

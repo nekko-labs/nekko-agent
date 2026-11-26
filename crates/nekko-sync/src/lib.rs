@@ -1,4 +1,4 @@
-//! End-to-end encrypted chat sync with Nekko Cloud (Pro and Team plans).
+//! End-to-end encrypted chat sync with Nekko Cloud (Pro and Enterprise plans).
 //!
 //! Nekko Cloud stores a user's synced chats, but it can never read them: every
 //! record is sealed on the user's own devices with a key the server never

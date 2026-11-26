@@ -41,12 +41,9 @@ pub fn valid_name(name: &str) -> bool {
     hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()) && TYPES.iter().any(|(_, e)| *e == ext)
 }
 
-/// `nekko-blob:<name>` for a data URL, its bytes written to `dir` if they are
-/// not there yet; `None` when it stays inline.
-fn store(dir: &Path, url: &str) -> Option<String> {
-    if url.len() < MIN_BYTES {
-        return None;
-    }
+/// The blob name (`<sha256>.<ext>`) and bytes of a data URL, whatever its size, or `None` when it
+/// would not come back byte for byte (an unknown type, parameters, non-canonical base64).
+pub fn encode(url: &str) -> Option<(String, Vec<u8>)> {
     let rest = url.strip_prefix("data:")?;
     let (mime, payload) = rest.split_once(";base64,")?;
     let ext = TYPES.iter().find(|(m, _)| *m == mime)?.1;
@@ -55,13 +52,35 @@ fn store(dir: &Path, url: &str) -> Option<String> {
     if STANDARD.encode(&bytes) != payload {
         return None;
     }
-    let name = format!("{:x}.{ext}", Sha256::digest(&bytes));
+    Some((format!("{:x}.{ext}", Sha256::digest(&bytes)), bytes))
+}
+
+/// Whether `bytes` are the picture `name` stands for: a valid name whose hash is theirs.
+pub fn matches(name: &str, bytes: &[u8]) -> bool {
+    valid_name(name)
+        && name
+            .split_once('.')
+            .is_some_and(|(hash, _)| hash.eq_ignore_ascii_case(&format!("{:x}", Sha256::digest(bytes))))
+}
+
+/// `nekko-blob:<name>` for a data URL, its bytes written to `dir` if they are
+/// not there yet; `None` when it stays inline.
+fn store(dir: &Path, url: &str) -> Option<String> {
+    if url.len() < MIN_BYTES {
+        return None;
+    }
+    let (name, bytes) = encode(url)?;
     let path = dir.join(&name);
     if !path.is_file() {
         std::fs::create_dir_all(dir).ok()?;
         crate::write::write_atomic_bytes(&path, &bytes).ok()?;
     }
     Some(format!("{REF}{name}"))
+}
+
+/// [`store`] for a caller outside this module (a live event's picture).
+pub(crate) fn store_inline(dir: &Path, url: &str) -> Option<String> {
+    store(dir, url)
 }
 
 /// The data URL a reference stands for, or `None` when it is not one or its file is gone.
@@ -122,10 +141,16 @@ fn map_message(msg: &Value, f: &impl Fn(&str) -> Option<String>) -> Option<Value
 
 /// Put the data URLs back into a chat read from disk.
 pub fn restore(chat: &mut Value, dir: &Path) {
-    let Some(messages) = chat.get_mut("messages").and_then(Value::as_array_mut) else { return };
     let load = |s: &str| if s.starts_with(REF) { load(dir, s) } else { None };
+    map_pictures(chat, load);
+}
+
+/// Change each picture of a chat's messages (their `images` and `toolResult.images`) that `f`
+/// returns a replacement for. These are the pictures the store keeps beside the chat.
+pub fn map_pictures(chat: &mut Value, f: impl Fn(&str) -> Option<String>) {
+    let Some(messages) = chat.get_mut("messages").and_then(Value::as_array_mut) else { return };
     for msg in messages.iter_mut() {
-        if let Some(m) = map_message(msg, &load) {
+        if let Some(m) = map_message(msg, &f) {
             *msg = m;
         }
     }
@@ -244,6 +269,17 @@ mod tests {
         let text = serde_json::to_string(&MovedChat { fields: &fields, messages: Some(&messages), dir: &dir }).unwrap();
         assert!(!text.contains(REF));
         assert!(!dir.exists());
+    }
+
+    #[test]
+    fn a_picture_is_named_by_its_bytes_whatever_its_size() {
+        let (name, bytes) = encode(&png(10)).unwrap();
+        assert!(valid_name(&name) && name.ends_with(".png"));
+        assert!(matches(&name, &bytes));
+        assert!(!matches(&name, b"other bytes"));
+        assert!(!matches("nope.png", &bytes));
+        assert_eq!(encode(&png(10).replace("image/png", "image/tiff")), None);
+        assert_eq!(encode("data:image/png;base64,AB=C"), None);
     }
 
     #[test]

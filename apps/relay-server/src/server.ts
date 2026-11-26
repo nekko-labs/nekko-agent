@@ -13,6 +13,7 @@ import {
   type CardState,
   type PushSender,
 } from './push.js';
+import { checkTicket, MAX_TICKET_SECONDS, type Ticket } from './ticket.js';
 
 /**
  * Nekko Agent relay v2, the piece that lets a paired phone reach a local agent
@@ -62,7 +63,32 @@ import {
  *
  * Hardening: pairing-key hashes compared in constant time, frame-size cap, a
  * per-connection token-bucket rate limit, client + room caps, and an optional
- * agent-enrollment gate (NEKKO_RELAY_AUTHZ_URL) for managed/paid hosting.
+ * agent-enrollment gate for managed/paid hosting: a Nekko Cloud Relay ticket
+ * (NEKKO_RELAY_TICKET_KEY, decision 0116) checked here with no call out, or
+ * NEKKO_RELAY_AUTHZ_URL for other hosts.
+ *
+ * Nekko Cloud Relay tickets: an agent presents `access=nkr1.…`, signed by the
+ * Cloud API for this one room. The agent renews it before it expires with
+ * { type:'access', access } (answered { type:'access-ok', expiresAt } or
+ * { type:'access-denied' }); a ticket left to expire closes the agent 4003.
+ *
+ * The account channel (`/account`, Nekko Cloud Relay only): every signed-in
+ * device of one account (computers and phones) holds one socket, so they learn
+ * about each other at once instead of polling the Cloud API. It is
+ * content-free: the relay knows an opaque account id and device ids, nothing
+ * else. Frames:
+ *   - { type:'auth', access, kind } first (an `account` ticket; kind
+ *     'computer' | 'phone'), answered { type:'ready', expiresAt, devices }
+ *     with every device online now.
+ *   - { type:'presence', dev, kind, online } when a device comes or goes
+ *     (its first socket opens, its last one closes).
+ *   - { type:'nudge', topic, rev? } from a device goes to the account's
+ *     other devices as { type:'nudge', topic, rev?, from }: "sync has
+ *     something new", "my routes changed", never what.
+ *   - { type:'signal', to, data } carries an opaque string (sealed by the
+ *     devices, up to 16 KB) to one device of the same account as
+ *     { type:'signal', from, data }.
+ *   - { type:'access', access } renews, as for agents.
  */
 
 const sha256 = (s: string) => createHash('sha256').update(s).digest();
@@ -119,7 +145,27 @@ interface Room {
   activities: Map<string, Map<string, { token: string; app?: string; at: number }>>;
   /** The Live Activity card per device (`register-card`). */
   cards: Map<string, CardRegistration>;
+  /** The agent's Nekko Cloud Relay ticket: the account it belongs to, when it runs out, and the timer that closes it then. */
+  access?: { acct: string; exp: number; timer: ReturnType<typeof setTimeout> };
 }
+
+/** One socket on the account channel. */
+interface Member {
+  socket: any;
+  dev: string;
+  kind: DeviceKind;
+  exp: number;
+  timer: ReturnType<typeof setTimeout>;
+}
+type DeviceKind = 'computer' | 'phone';
+/** What a nudge may be about. Content-free: the topic says where to look, never what changed. */
+export const NUDGE_TOPICS = new Set(['sync', 'fleet', 'library', 'settings', 'orgs', 'routes']);
+/** Sockets one account may hold on the account channel. */
+export const MAX_ACCOUNT_SOCKETS = 64;
+/** A signal's opaque payload, at most. */
+export const MAX_SIGNAL_BYTES = 16 * 1024;
+/** How long a socket may wait before it authenticates. */
+const AUTH_WAIT_MS = 10_000;
 
 interface PushRegistration {
   token: string;
@@ -182,14 +228,33 @@ export interface RelayOptions {
    * token, expecting `{ ok: true }`. Clients are unaffected (room-key authed).
    */
   authzUrl?: string;
+  /** Nekko Cloud Relay (decision 0116): the Cloud API's Ed25519 public key; agents and the account channel present tickets it signed. */
+  ticketKey?: import('node:crypto').KeyObject;
   allowUnauthenticated?: boolean;
   pushSender?: PushSender;
+  /**
+   * Liveness: every room and account socket is pinged every `pingMs` (default 25 s) and
+   * terminated once it has sent nothing (no pong, no frame) for `deadlineMs` (default 55 s),
+   * so a half-open socket goes offline (`agent-offline`, presence `online:false`) as on a clean close.
+   */
+  liveness?: { pingMs?: number; deadlineMs?: number };
+  /**
+   * Internal presence (`GET /presence?acct=<hash>&acct=...`, `authorization: Bearer <secret>`):
+   * which devices of the named accounts are online. Off (404) when unset.
+   */
+  presenceSecret?: string;
 }
+
+/** Default liveness timings, in ms. A silent socket is gone after at most deadline plus a fifth of the ping interval. */
+export const PING_MS = 25_000;
+export const DEADLINE_MS = 55_000;
+/** Most accounts one /presence call may ask about. */
+export const MAX_PRESENCE_ACCOUNTS = 100;
 
 /** Sites allowed to read /healthz from a browser: the website's status page. */
 export const STATUS_PAGE_ORIGINS = new Set(['https://nekkoagent.com', 'https://www.nekkoagent.com']);
 
-export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; rooms: Map<string, Room> } {
+export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; rooms: Map<string, Room>; accounts: Map<string, Map<any, Member>> } {
   const limits: RelayLimits = { ...DEFAULT_LIMITS, ...opts.limits };
   const pushSender = opts.pushSender ?? createPushSender();
   const authzUrl = opts.authzUrl;
@@ -273,7 +338,24 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
     [...r.welcomed].some(([cid, id]) => id === deviceId && r.clients.has(cid)) ||
     (!r.gated && r.clients.has(r.pushOwners.get(deviceId) ?? ''));
 
-  const authorizeAgent = async (access: string | undefined): Promise<boolean> => {
+  /** A Nekko Cloud Relay ticket good for `scope` (and for agents, this room); else null. */
+  const ticketFor = (access: unknown, scope: Ticket['scope'], code?: string): Ticket | null => {
+    if (!opts.ticketKey || typeof access !== 'string') return null;
+    const t = checkTicket(opts.ticketKey, access);
+    if (!t || t.scope !== scope) return null;
+    if (scope === 'agent' && (typeof code !== 'string' || t.room !== code.toLowerCase())) return null;
+    return t;
+  };
+  /** Fire `fn` when a ticket runs out: never later than the longest a ticket may run, whatever it says. */
+  const atExpiry = (exp: number, fn: () => void) => {
+    let wait = exp * 1000 - Date.now();
+    if (!(wait > 0)) wait = 0;
+    if (wait > MAX_TICKET_SECONDS * 1000) wait = MAX_TICKET_SECONDS * 1000;
+    return setTimeout(fn, wait);
+  };
+
+  const authorizeAgent = async (access: string | undefined, code: string): Promise<boolean | Ticket> => {
+    if (opts.ticketKey && access?.startsWith('nkr1.')) return ticketFor(access, 'agent', code) ?? false;
     if (!authzUrl) return allowUnauthenticated;
     if (!access) return false;
     const key = sha256(access).toString('hex');
@@ -297,8 +379,47 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
   const app = Fastify();
   app.register(websocket, { options: { maxPayload: limits.maxFrameBytes } });
 
+  // Liveness: a half-open socket (a sleeping laptop, a dropped network) never closes by itself.
+  const pingMs = opts.liveness?.pingMs ?? PING_MS;
+  const deadlineMs = opts.liveness?.deadlineMs ?? DEADLINE_MS;
+  const beating = new Map<any, { seen: number; pinged: number }>();
+  const sweep = setInterval(() => {
+    const now = Date.now();
+    for (const [socket, b] of beating) {
+      if (now - b.seen > deadlineMs) {
+        beating.delete(socket);
+        try {
+          socket.terminate();
+        } catch {
+          /* already gone */
+        }
+      } else if (now - b.pinged >= pingMs) {
+        b.pinged = now;
+        try {
+          socket.ping();
+        } catch {
+          /* closing */
+        }
+      }
+    }
+  }, Math.max(5, Math.floor(pingMs / 5)));
+  sweep.unref();
+  app.addHook('onClose', async () => clearInterval(sweep));
+  /** Watch a socket: any pong or frame shows it is alive. Dropped when it closes. */
+  const watch = (socket: any) => {
+    const b = { seen: Date.now(), pinged: Date.now() };
+    beating.set(socket, b);
+    const alive = () => {
+      b.seen = Date.now();
+    };
+    socket.on('pong', alive);
+    socket.on('message', alive);
+    socket.on('close', () => beating.delete(socket));
+  };
+
   app.register(async () => {
     app.get('/relay', { websocket: true }, async (socket: any, req) => {
+      watch(socket);
       const q = req.query as Record<string, string>;
       const code = q.room;
       const role = q.role; // 'agent' | 'client'
@@ -319,13 +440,27 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
       const bucket: Bucket = { tokens: limits.rateBurst, last: Date.now() };
 
       if (role === 'agent') {
-        if (!(await authorizeAgent(q.access))) {
+        // A repeated query parameter arrives as an array: only a single string is a ticket or token.
+        const access = typeof q.access === 'string' ? q.access : undefined;
+        const granted = await authorizeAgent(access, code);
+        if (!granted) {
           socket.close(
             4003,
-            authzUrl
+            opts.ticketKey && access?.startsWith('nkr1.')
+              ? 'Nekko Cloud Relay ticket refused'
+              : authzUrl
               ? 'relay access denied by NEKKO_RELAY_AUTHZ_URL'
+              : opts.ticketKey
+              ? 'Nekko Cloud Relay needs a ticket: sign in to Nekko Cloud on a plan that includes it'
               : 'unauthenticated enrollment disabled; set NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1 or configure NEKKO_RELAY_AUTHZ_URL',
           );
+          cleanup(code);
+          return;
+        }
+        const ticket = typeof granted === 'object' ? granted : null;
+        // A room held under one account's ticket is that account's while its agent is on.
+        if (ticket && r.agent && r.access && r.access.acct !== ticket.acct) {
+          socket.close(4003, 'room in use');
           cleanup(code);
           return;
         }
@@ -339,6 +474,12 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
         if (q.proto) r.gated = true;
         if (r.agent) r.agent.close(1000, 'replaced by a newer agent');
         r.agent = socket;
+        if (r.access) clearTimeout(r.access.timer);
+        r.access = undefined;
+        const expire = () => {
+          if (r.agent === socket) socket.close(4003, 'Nekko Cloud Relay ticket expired');
+        };
+        if (ticket) r.access = { acct: ticket.acct, exp: ticket.exp, timer: atExpiry(ticket.exp, expire) };
         r.attentionKnown = false;
         r.attention.clear();
         for (const [cid, c] of r.clients) {
@@ -355,6 +496,18 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
           const ctrl = controlFrame(s);
           if (!ctrl) return; // v2 agents always speak routing envelopes
           switch (ctrl.type) {
+            case 'access': {
+              // Renewing the ticket this agent connected with: same account, same room.
+              const next = r.access ? ticketFor(ctrl.access, 'agent', code) : null;
+              if (!next || !r.access || next.acct !== r.access.acct) {
+                safeSend(socket, { type: 'access-denied' });
+                return;
+              }
+              clearTimeout(r.access.timer);
+              r.access = { acct: next.acct, exp: next.exp, timer: atExpiry(next.exp, expire) };
+              safeSend(socket, { type: 'access-ok', expiresAt: new Date(next.exp * 1000).toISOString() });
+              return;
+            }
             case 'd': {
               const c = r.clients.get(String(ctrl.cid));
               if (c && typeof ctrl.data === 'string') {
@@ -504,6 +657,8 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
         socket.on('close', () => {
           // A replaced agent's late close says nothing: its successor is online.
           if (r.agent === socket) {
+            if (r.access) clearTimeout(r.access.timer);
+            r.access = undefined;
             r.agent = null;
             r.attentionKnown = false;
             for (const c of r.clients.values()) safeSend(c, { type: 'agent-offline' });
@@ -639,16 +794,139 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
     });
   });
 
+  // The account channel (decision 0116). Only a relay with a ticket key has one.
+  const accounts = new Map<string, Map<any, Member>>();
+  const online = (members: Map<any, Member>, dev: string) => [...members.values()].some((m) => m.dev === dev);
+  const roster = (members: Map<any, Member>) => {
+    const seen = new Map<string, DeviceKind>();
+    for (const m of members.values()) if (!seen.has(m.dev)) seen.set(m.dev, m.kind);
+    return [...seen].map(([dev, kind]) => ({ dev, kind }));
+  };
+  if (opts.ticketKey) {
+    app.register(async () => {
+      app.get('/account', { websocket: true }, (socket: any) => {
+        watch(socket);
+        const bucket: Bucket = { tokens: limits.rateBurst, last: Date.now() };
+        let me: Member | null = null;
+        let acct = '';
+        const waiting = setTimeout(() => {
+          if (!me) socket.close(4003, 'authenticate first');
+        }, AUTH_WAIT_MS);
+        const members = () => accounts.get(acct);
+        const others = (fn: (m: Member) => void) => {
+          for (const m of members()?.values() ?? []) if (m !== me && m.dev !== me?.dev) fn(m);
+        };
+        socket.on('message', (data: Buffer) => {
+          if (!allow(bucket, limits)) return;
+          const ctrl = controlFrame(data.toString());
+          if (!ctrl) return;
+          if (!me) {
+            const t = ctrl.type === 'auth' ? ticketFor(ctrl.access, 'account') : null;
+            if (!t) {
+              socket.close(4003, 'Nekko Cloud Relay ticket refused');
+              return;
+            }
+            const kind: DeviceKind = ctrl.kind === 'phone' ? 'phone' : 'computer';
+            let group = accounts.get(t.acct);
+            if (!group) {
+              if (accounts.size >= limits.maxRooms) {
+                socket.close(1013, 'relay full');
+                return;
+              }
+              group = new Map();
+              accounts.set(t.acct, group);
+            }
+            if (group.size >= MAX_ACCOUNT_SOCKETS) {
+              socket.close(1013, 'too many devices');
+              return;
+            }
+            clearTimeout(waiting);
+            acct = t.acct;
+            const first = !online(group, t.dev);
+            me = { socket, dev: t.dev, kind, exp: t.exp, timer: atExpiry(t.exp, () => socket.close(4003, 'Nekko Cloud Relay ticket expired')) };
+            group.set(socket, me);
+            safeSend(socket, { type: 'ready', dev: me.dev, expiresAt: new Date(t.exp * 1000).toISOString(), devices: roster(group) });
+            if (first) others((m) => safeSend(m.socket, { type: 'presence', dev: me!.dev, kind, online: true }));
+            return;
+          }
+          switch (ctrl.type) {
+            case 'access': {
+              const t = ticketFor(ctrl.access, 'account');
+              if (!t || t.acct !== acct || t.dev !== me.dev) {
+                safeSend(socket, { type: 'access-denied' });
+                return;
+              }
+              clearTimeout(me.timer);
+              me.exp = t.exp;
+              me.timer = atExpiry(t.exp, () => socket.close(4003, 'Nekko Cloud Relay ticket expired'));
+              safeSend(socket, { type: 'access-ok', expiresAt: new Date(t.exp * 1000).toISOString() });
+              return;
+            }
+            case 'nudge': {
+              if (typeof ctrl.topic !== 'string' || !NUDGE_TOPICS.has(ctrl.topic)) return;
+              const rev = Number.isSafeInteger(ctrl.rev) && ctrl.rev >= 0 ? { rev: ctrl.rev } : {};
+              others((m) => safeSend(m.socket, { type: 'nudge', topic: ctrl.topic, ...rev, from: me!.dev }));
+              return;
+            }
+            case 'signal': {
+              if (typeof ctrl.to !== 'string' || typeof ctrl.data !== 'string' || Buffer.byteLength(ctrl.data) > MAX_SIGNAL_BYTES) return;
+              if (ctrl.to === me.dev) return;
+              for (const m of members()?.values() ?? []) if (m.dev === ctrl.to) safeSend(m.socket, { type: 'signal', from: me.dev, data: ctrl.data });
+              return;
+            }
+            default:
+              return;
+          }
+        });
+        socket.on('close', () => {
+          clearTimeout(waiting);
+          if (!me) return;
+          clearTimeout(me.timer);
+          const group = members();
+          group?.delete(socket);
+          if (group && !online(group, me.dev)) others((m) => safeSend(m.socket, { type: 'presence', dev: me!.dev, kind: me!.kind, online: false }));
+          if (group?.size === 0) accounts.delete(acct);
+        });
+      });
+    });
+  }
+
+  // Internal presence, for the Cloud API only: who of these accounts is online. Content-free:
+  // device ids only, from the same map the account channel already keeps. Off without a secret.
+  const presenceSecret = opts.presenceSecret;
+  if (presenceSecret) {
+    const want = sha256(presenceSecret);
+    app.get('/presence', async (req, reply) => {
+      reply.header('cache-control', 'no-store');
+      const auth = req.headers.authorization;
+      const given = typeof auth === 'string' && auth.startsWith('Bearer ') ? auth.slice(7) : '';
+      // Digests of equal length, so the compare takes the same time whatever was sent.
+      if (!hashEq(sha256(given), want)) return reply.code(401).send({ error: 'unauthorized' });
+      const raw = (req.query as Record<string, unknown>).acct;
+      const asked = raw === undefined ? [] : Array.isArray(raw) ? raw : [raw];
+      if (asked.length > MAX_PRESENCE_ACCOUNTS) return reply.code(400).send({ error: `at most ${MAX_PRESENCE_ACCOUNTS} acct` });
+      const online: Record<string, string[]> = {};
+      for (const acct of asked) {
+        if (typeof acct !== 'string' || acct.length === 0 || acct.length > 128) return reply.code(400).send({ error: 'bad acct' });
+        const group = accounts.get(acct);
+        if (!group) continue;
+        const devs = roster(group).map((d) => d.dev);
+        if (devs.length) online[acct] = devs;
+      }
+      return { online };
+    });
+  }
+
   // The website's status page (nekkoagent.com/status) reads this from the
   // visitor's browser, so the website may read the answer.
   app.get('/healthz', async (req, reply) => {
     if (req.headers.origin && STATUS_PAGE_ORIGINS.has(req.headers.origin)) {
       reply.header('access-control-allow-origin', req.headers.origin).header('vary', 'Origin');
     }
-    return { ok: true, rooms: rooms.size };
+    return { ok: true, rooms: rooms.size, ...(opts.ticketKey ? { accounts: accounts.size } : {}) };
   });
 
-  return { app, rooms };
+  return { app, rooms, accounts };
 }
 
 function safeSend(socket: any, obj: unknown) {

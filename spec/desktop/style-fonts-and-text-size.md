@@ -35,7 +35,7 @@ User intent: make text bigger or smaller from anywhere in the app with the usual
 
 ## Your own fonts
 
-- The fonts folder is `fonts` in the data directory (`~/.nekko-agent/fonts`). The daemon creates it on first look (`fonts:list`).
+- The fonts folder is `fonts` in the data directory (`~/.nekko/nekko-agent/fonts`). The daemon creates it on first look (`fonts:list`).
 - **Open fonts folder** opens it in the file manager; **Reload fonts** reads it again; **How to add fonts** opens [the docs page](../../docs/fonts-and-text.md). The folder path is shown beside the buttons.
 - Each `.ttf`, `.otf`, `.woff` or `.woff2` file is one family named after the file. Up to 64 files, each up to 16 MB; other files are ignored.
 

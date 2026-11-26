@@ -23,14 +23,13 @@ data class Names(val names: List<String>)
 private fun msg(@StringRes res: Int, vararg args: Any): Msg = Msg.Res(res, args.toList())
 
 /**
- * What the connection row says about one paired computer, or about Tailscale on this phone:
+ * What the connection row says about one paired computer, 
  * a dot, at most one word, and (behind a tap) one line and its fixes. The iPhone's `ConnectionNote`
  * (spec/phone/iphone-connection-strip.md); replaces the connection, fleet and protocol banners.
  */
 data class ConnectionNote(
-    /** The computer's id, or [TAILSCALE_ID]. */
+    /** The computer's id. */
     val id: String,
-    /** The computer's name, or null for the Tailscale item. */
     val name: String?,
     val tone: Tone,
     /** The one word beside the name when something is wrong. */
@@ -68,11 +67,6 @@ data class ConnectionNote(
     }
 
     val opens: Boolean get() = line != null
-    val isTailscale: Boolean get() = id == TAILSCALE_ID
-
-    companion object {
-        const val TAILSCALE_ID = "tailscale"
-    }
 }
 
 /** A safety exit this phone used on a computer (SK-8). */
@@ -100,27 +94,24 @@ data class ConnectionFacts(
     val waiting: Int = 0,
     /** The relay address can never work from a phone (localhost, public ws://). */
     val addressProblem: RelayHint.Problem? = null,
-)
+    /**
+     * The phone also has a route to this computer that doesn't need Tailscale (Nekko Cloud Relay or
+     * another internet relay, decision 0116), so Tailscale being off is not what keeps it away.
+     */
+    val offTailnet: Boolean = false,
+) {
+    /** Only Tailscale reaches this computer: when Tailscale is off, it is the thing to fix. */
+    val tailnetOnly: Boolean get() = route == RelayRoute.TAILSCALE && !offTailnet
+}
 
 object ConnectionNotes {
-    /** The row's items: Tailscale first when it is what keeps computers away, then every computer in order. */
-    fun make(computers: List<ConnectionFacts>, tailscaleOn: Boolean, time: (Long) -> String = { "" }): List<ConnectionNote> {
-        val blocked = computers.filter { !it.disabled && shouldOfferTailscale(it.route, tailscaleOn, it.state) }
-        val out = mutableListOf<ConnectionNote>()
-        if (blocked.isNotEmpty()) {
-            out += ConnectionNote(
-                id = ConnectionNote.TAILSCALE_ID, name = null, tone = ConnectionNote.Tone.WARNING,
-                word = msg(R.string.conn_word_tailscale_off), wordTone = ConnectionNote.Tone.WARNING,
-                line = msg(R.string.conn_tailscale_line, Names(blocked.map { it.name })),
-                tail = listOfNotNull(waitingTail(blocked.sumOf { it.waiting })),
-                actions = listOf(ConnectionNote.Action.OPEN_TAILSCALE) + if (blocked.any { it.active }) listOf(ConnectionNote.Action.DETAILS) else emptyList(),
-                more = false,
-            )
-        }
-        val blockedIds = blocked.map { it.id }.toSet()
-        for (c in computers) out += if (c.id in blockedIds) quiet(c, ConnectionNote.Tone.WAITING) else note(c, time)
-        return out
-    }
+    /**
+     * The row's items, one per computer in order. A computer only Tailscale reaches (by its routes, or because
+     * the phone's route choice is Tailscale only) says "Tailscale off" itself when that is what blocks it; there
+     * is no page-wide Tailscale item (#3346). A computer with an off-tailnet route is never blamed on Tailscale.
+     */
+    fun make(computers: List<ConnectionFacts>, tailscaleOn: Boolean, time: (Long) -> String = { "" }): List<ConnectionNote> =
+        computers.map { note(it, time, tailscaleOn) }
 
     /** Offer *Open Tailscale* when the computer is on the tailnet, Tailscale is off on this phone and the phone is trying to reach it. */
     fun shouldOfferTailscale(route: RelayRoute, tailscaleOn: Boolean, state: RelayState): Boolean =
@@ -138,7 +129,7 @@ object ConnectionNotes {
         else -> msg(R.string.conn_waits_other, n)
     }
 
-    fun note(c: ConnectionFacts, time: (Long) -> String): ConnectionNote {
+    fun note(c: ConnectionFacts, time: (Long) -> String, tailscaleOn: Boolean = true): ConnectionNote {
         val name = c.name
         fun problem(tone: ConnectionNote.Tone, word: Msg, line: Msg, fix: Msg?, actions: List<ConnectionNote.Action>) = ConnectionNote(
             id = c.id, name = name, tone = tone, word = word, wordTone = tone, line = line,
@@ -147,6 +138,13 @@ object ConnectionNotes {
             more = c.active,
         )
         if (c.disabled) return quiet(c, ConnectionNote.Tone.OFF)
+        // Only Tailscale reaches it and Tailscale is off on this phone: that computer's own problem, with the fix beside it.
+        if (!c.offTailnet && shouldOfferTailscale(c.route, tailscaleOn, c.state)) {
+            return problem(
+                ConnectionNote.Tone.WARNING, msg(R.string.conn_word_tailscale_off), msg(R.string.conn_tailscale_line, name),
+                null, listOf(ConnectionNote.Action.OPEN_TAILSCALE),
+            )
+        }
         // This phone ended the connection itself (SK-8): say so, not "offline".
         if (c.exit != null && c.state != RelayState.ONLINE) {
             val at = c.exitAt?.let(time).orEmpty()
@@ -191,7 +189,7 @@ object ConnectionNotes {
                 )
                 // Still dialing for the first time: nothing to say until it fails.
                 c.detail == null -> quiet(c, ConnectionNote.Tone.WAITING)
-                c.route == RelayRoute.TAILSCALE -> problem(
+                c.tailnetOnly -> problem(
                     ConnectionNote.Tone.WARNING, msg(R.string.conn_word_no_answer), msg(R.string.conn_no_answer_tailnet_line, name),
                     msg(R.string.conn_no_answer_tailnet_fix), listOf(ConnectionNote.Action.RETRY, ConnectionNote.Action.OPEN_TAILSCALE),
                 )
@@ -209,6 +207,10 @@ object ConnectionNotes {
                     ConnectionNote.Tone.DANGER, msg(R.string.conn_word_update), msg(R.string.conn_update_required_line, name),
                     msg(R.string.conn_update_required_fix), emptyList(),
                 )
+                DenyReason.ROUTE -> problem(
+                    ConnectionNote.Tone.WARNING, msg(R.string.conn_word_refused), msg(R.string.conn_route_line, name),
+                    msg(R.string.conn_route_fix, name), listOf(ConnectionNote.Action.PAIR_AGAIN),
+                )
                 DenyReason.REVOKED, DenyReason.KICKED -> problem(
                     ConnectionNote.Tone.DANGER, msg(R.string.conn_word_refused), msg(R.string.conn_removed_line, name), null, listOf(ConnectionNote.Action.PAIR_AGAIN),
                 )
@@ -219,11 +221,18 @@ object ConnectionNotes {
         }
     }
 
+    /**
+     * One of a computer's routes needs no tailnet: Nekko Cloud Relay or another internet relay (decision 0116).
+     * A LAN address doesn't count: it is no use away from home, where Tailscale would be the fix.
+     */
+    fun reachableOffTailnet(routes: List<String>): Boolean = routes.any { RelayRoute.of(it) == RelayRoute.INTERNET }
+
     /** Every paired computer's connection, in the app's order, for the row. [waiting] is the active computer's outbox. */
     fun facts(s: ComputersState, waiting: Int, debug: Boolean): List<ConnectionFacts> = s.computers.map { c ->
         val active = c.id == s.activeId
         val peer = s.peers[c.id]
         val url = if (active) s.route ?: c.relayUrl else c.relayUrl
+        // What this phone may dial: the route choice's kinds, so `direct` is never off the tailnet and `cloud` always is.
         val stopAt = s.remoteStoppedAt.takeIf { active }
         val quitAt = s.remoteQuitAt.takeIf { active }
         // The later of this phone's two safety exits.
@@ -242,6 +251,7 @@ object ConnectionNotes {
             exit = exit?.first, exitAt = exit?.second,
             waiting = if (active) waiting else 0,
             addressProblem = RelayHint.problem(url, debug),
+            offTailnet = reachableOffTailnet(c.routes),
         )
     }
 }

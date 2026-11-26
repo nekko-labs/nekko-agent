@@ -177,6 +177,7 @@ async fn a_sandbox_chat_turn_runs_in_the_daemon_and_its_container() {
         let system = requests[0]["messages"][0]["content"].as_str().unwrap().to_string();
         assert!(system.contains("folder-0"), "{system}");
         assert!(!system.contains(&*rig.workspace.to_string_lossy()), "no host path: {system}");
+        assert!(!system.contains("~/.nekko"), "no host shared directory grant: {system}");
         assert!(!system.contains("Always run the tests."), "no host guidelines: {system}");
         assert!(system.contains("isolated container on copied folders"), "{system}");
 
@@ -237,6 +238,20 @@ async fn repositories_reuse_a_local_clone_ask_for_a_folder_or_stay_in_the_sandbo
     assert_eq!(reused["path"], clone.to_string_lossy().as_ref(), "{reused}");
     let saved = reused["workspaces"].as_array().unwrap();
     assert!(saved.iter().any(|w| w["repo"]["fullName"] == "me/app"), "{reused}");
+
+    // ~/code holds several repositories: offered once as the repositories
+    // folder, and suggested when a clone needs one.
+    std::fs::create_dir_all(home.join("code").join("site").join(".git")).unwrap();
+    let code = home.join("code").to_string_lossy().to_string();
+    let (status, offer) = post(rig.d.port, "repos:suggestFolder", json!([clone.to_string_lossy()]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{offer}");
+    assert_eq!(offer["suggested"], code.as_str(), "{offer}");
+    let (_, asked) = post(rig.d.port, "repos:clone", json!([pick("me/other")]), Some(TOKEN)).await;
+    assert_eq!(asked["suggested"], code.as_str(), "{asked}");
+    let (status, _) = post(rig.d.port, "settings:update", json!([{ "repoCloneDirOffered": true }]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (_, offer) = post(rig.d.port, "repos:suggestFolder", json!([clone.to_string_lossy()]), Some(TOKEN)).await;
+    assert!(offer.is_null(), "asked once: {offer}");
 
     // A sandbox chat: recorded for its sandbox, nothing on this computer.
     let (status, boxed) =

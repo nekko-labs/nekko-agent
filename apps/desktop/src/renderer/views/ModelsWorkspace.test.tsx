@@ -38,7 +38,7 @@ describe('Models workspace', () => {
   });
   it('lists the local sections in page order under Local model server', () => {
     const ids = MODELS_SECTIONS.map((s) => s.id);
-    expect(ids).toEqual(['cloud', 'local', 'library', 'connections']);
+    expect(ids).toEqual(['cloud', 'local', 'system', 'library', 'connections']);
     expect(MODELS_SECTIONS.filter((s) => 'parent' in s).every((s) => s.parent === 'local')).toBe(true);
   });
   it('spies the section at the top of the page, and the last one at the end', () => {

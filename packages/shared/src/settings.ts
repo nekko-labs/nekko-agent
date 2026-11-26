@@ -94,7 +94,7 @@ export interface MonitorsDock {
   /** Independent minimization state for each monitor. */
   minimized: Record<MonitorKey, boolean>;
 }
-export const DEFAULT_WALL_LAYOUT: WallLayout = { mode: 'grid', cols: 3, rows: 2, fixedGrid: false };
+export const DEFAULT_WALL_LAYOUT: WallLayout = { mode: 'focus', cols: 3, rows: 2, fixedGrid: false };
 export const DEFAULT_MONITORS_DOCK: MonitorsDock = {
   side: 'right', show: true, simpleShow: false,
   // The hardware monitor leads; a Vitals panel was here until 2026-10-13 and an
@@ -139,7 +139,8 @@ export interface CommandWallSetting {
  * The background refresh checks under Settings → Updates, one toggle each.
  * These are metadata refreshes only: a check may swap a provider's model list
  * or the skills shelf, never downloads or installs anything (app updates keep
- * their own download/install flow).
+ * their own download/install flow). `whatsNew` is not a check: it is whether
+ * the What's new sheet opens by itself after an update.
  */
 export interface UpdateCheckSettings {
   /** New app versions (desktop: GitHub releases; web: server version). */
@@ -148,19 +149,22 @@ export interface UpdateCheckSettings {
   modelLists?: boolean;
   /** Refresh the skills marketplace catalog. */
   skills?: boolean;
+  /** Open the What's new sheet once on the first launch on a newer line ("Show after updates"). */
+  whatsNew?: boolean;
 }
 
 /**
  * Resolve the effective per-check flags. `app` falls back to the legacy
  * `autoUpdate` field so existing installs keep their choice; `modelLists`
  * defaults on since it only queries providers the user already configured;
- * `skills` defaults off (opt-in network refresh).
+ * `skills` defaults off (opt-in network refresh); `whatsNew` defaults on.
  */
 export function updateChecks(s: AppSettings): Required<UpdateCheckSettings> {
   return {
     app: s.updates?.app ?? s.autoUpdate ?? false,
     modelLists: s.updates?.modelLists ?? true,
     skills: s.updates?.skills ?? false,
+    whatsNew: s.updates?.whatsNew ?? true,
   };
 }
 
@@ -234,6 +238,8 @@ export interface AppSettings {
     auto?: boolean;
     models?: Record<string, import('./context.js').PromptProfileName | 'auto'>;
     providers?: Record<string, import('./context.js').PromptProfileName | 'auto'>;
+    /** Additive system guidance for the exact `<providerId>::<modelId>` route. */
+    modelInstructions?: Record<string, string>;
   };
   /** Server-side instructions applied to every user turn. Empty disables them. */
   turnWrapper?: string;
@@ -282,6 +288,8 @@ export interface AppSettings {
   defaultWorkspaceIds?: string[];
   /** Where repositories added to a chat's environment are cloned. Unset: `~/nekko-repos`. */
   repoCloneDir?: string;
+  /** The one-time offer to use the folder holding the user's repositories as `repoCloneDir` was made (answered either way). */
+  repoCloneDirOffered?: boolean;
   connectors: ConnectorConfig[];
   defaultProviderId?: string;
   defaultModelId?: string;
@@ -395,7 +403,7 @@ export interface AppSettings {
   /**
    * Tokens one response from a local model server may generate before it is cut
    * off. Cloud providers are not capped.
-   * Undefined = MAX_OUTPUT_TOKENS_DEFAULT. See MAX_OUTPUT_TOKENS_RANGE.
+   * Undefined or 0 = no limit (the default). See MAX_OUTPUT_TOKENS_RANGE.
    */
   maxOutputTokens?: number;
   /**
@@ -504,19 +512,21 @@ export interface AppSettings {
 }
 
 /**
- * Tokens one model response may generate. Generous enough for a long answer or
- * a big file edit, low enough that a model which collapses into a loop stops on
- * its own within seconds rather than streaming until its context window fills.
- * Sent to local providers as their native output cap; cloud providers run to their own limits.
+ * Tokens one model response may generate, 0 meaning no limit (the default).
+ * A fixed default cut thinking models off mid-plan: their thinking counts
+ * against the cap, so a long plan used it all and the turn ended with no
+ * answer. A model that collapses into a loop is still stopped by the
+ * repetition guard. When the user sets a cap it is sent to local providers as
+ * their native output cap; cloud providers run to their own limits.
  */
-export const MAX_OUTPUT_TOKENS_DEFAULT = 8_192;
+export const MAX_OUTPUT_TOKENS_DEFAULT = 0;
 
 /** Bounds for the per-response output cap (Settings → Agent loop). */
 export const MAX_OUTPUT_TOKENS_RANGE = { min: 256, max: 200_000 } as const;
 
-/** Clamp a user-entered output cap, falling back to the default. */
+/** Clamp a user-entered output cap; unset, 0, blank or invalid means no limit (0). */
 export function clampMaxOutputTokens(n: number | undefined): number {
-  if (n == null || !Number.isFinite(n)) return MAX_OUTPUT_TOKENS_DEFAULT;
+  if (n == null || !Number.isFinite(n) || n <= 0) return MAX_OUTPUT_TOKENS_DEFAULT;
   return Math.min(MAX_OUTPUT_TOKENS_RANGE.max, Math.max(MAX_OUTPUT_TOKENS_RANGE.min, Math.round(n)));
 }
 

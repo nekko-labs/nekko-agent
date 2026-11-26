@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Translated from values/strings_new_chat.xml (scripts/translations.py fill). -->
+<resources>
+    <string name="newchat_runs_on">%1$s で実行</string>
+    <string name="newchat_checklist_title">これがあると Nekko はもっと活躍できます</string>
+    <string name="newchat_checklist_count">%1$d / %2$d</string>
+    <string name="newchat_checklist_close">チェックリストを閉じる</string>
+    <string name="newchat_checklist_hidden">チェックリストを非表示にしました。</string>
+    <string name="newchat_undo">取り消す</string>
+    <string name="newchat_close">閉じる</string>
+    <string name="newchat_connect">接続</string>
+    <string name="newchat_done_named">完了、%1$s</string>
+    <string name="newchat_note">Nekko はまだファイルやツールを使えません。</string>
+    <string name="newchat_item_computer">コンピュータをペアリング</string>
+    <string name="newchat_item_computer_detail">Nekko がツールとファイルを使えるように</string>
+    <string name="newchat_item_folder">フォルダを追加</string>
+    <string name="newchat_item_folder_detail">Nekko が作業するプロジェクト</string>
+    <string name="newchat_item_folder_waiting">コンピュータをペアリングした後</string>
+    <string name="newchat_item_git">Gitプロバイダを接続</string>
+    <string name="newchat_item_git_detail">GitHub、GitLab、Bitbucket</string>
+    <string name="newchat_item_tasks">タスク管理ツールを接続</string>
+    <string name="newchat_item_tasks_detail">Linear、Jira、Floop など</string>
+    <string name="newchat_this_phone_detail">独自のモデル</string>
+    <string name="limit_reached">%1$sの上限に達しました</string>
+    <string name="limit_used">%2$sの上限の %1$d%%</string>
+    <string name="limit_resets">%1$s · %2$s にリセット</string>
+    <string name="limit_switch_model">モデルを切り替える</string>
+    <string name="model_dated_one">日付付きバージョン 1 件</string>
+    <string name="model_dated_many">日付付きバージョン %1$d 件</string>
+    <string name="model_dated_hide">日付付きバージョンを隠す</string>
+</resources>

@@ -2,7 +2,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { authenticate, type Caller, SYNC_PLANS } from "./auth.js";
 import type { Db } from "./db.js";
 import { FLEET_LEASE_SECONDS, MAX_DESCRIPTOR_BYTES } from "./fleet.js";
-import { bytes, currentKeyId, keyed } from "./sync.js";
+import { LEASE_MS, Presence } from "./presence.js";
+import { b64url, bytes, currentKeyId, keyed } from "./sync.js";
 
 /**
  * Organizations own a shared computer fleet (docs/decisions/0086). The server
@@ -54,8 +55,6 @@ interface ComputerRow {
   revision: string;
   descriptor: Buffer;
   seen_at: Date;
-  expires_at: Date;
-  online: boolean;
 }
 
 const ORG_SELECT = `select o.id, o.name, m.role, o.key_id, o.created_at,
@@ -90,6 +89,7 @@ interface RouteOptions {
 }
 
 export function registerOrgs(app: FastifyInstance, db: Db, opts: OrgsOptions = {}): void {
+  const presence = app.presence;
   const allowed = new Set((opts.allowedEmails ?? []).map((e) => e.trim().toLowerCase()).filter(Boolean));
 
   async function emailOf(tx: Db, userId: string): Promise<string> {
@@ -175,6 +175,7 @@ export function registerOrgs(app: FastifyInstance, db: Db, opts: OrgsOptions = {
     if (count.rows[0].n >= MAX_ORGS_PER_USER) return reply.code(409).send({ error: "org-limit" });
     const created = await tx.query<{ id: string }>("insert into orgs (name, created_by) values ($1, $2) returning id", [name, caller.userId]);
     await tx.query("insert into org_members (org_id, user_id, role) values ($1, $2, 'owner')", [created.rows[0].id, caller.userId]);
+    await tx.query("insert into org_activity(org_id,actor,action) values ($1,$2,$3)", [created.rows[0].id, caller.userId, "Organization created"]);
     return reply.code(201).send(await orgFor(tx, created.rows[0].id, caller.userId));
   }));
 
@@ -208,6 +209,7 @@ export function registerOrgs(app: FastifyInstance, db: Db, opts: OrgsOptions = {
     if (m.role === "member") return forbidden(reply);
     const name = cleanName(((req.body ?? {}) as Record<string, unknown>).name);
     if (!name) return reply.code(400).send({ error: "bad-name" });
+    await tx.query("insert into org_activity(org_id,actor,action) values ($1,$2,$3)", [orgId, caller.userId, "Organization renamed"]);
     await tx.query("update orgs set name = $2 where id = $1", [orgId, name]);
     return orgFor(tx, orgId, caller.userId);
   }));
@@ -217,6 +219,7 @@ export function registerOrgs(app: FastifyInstance, db: Db, opts: OrgsOptions = {
     if (!m) return notFound(reply);
     if (m.role !== "owner") return forbidden(reply);
     await tx.query("delete from orgs where id = $1", [orgId]);
+    presence.forgetOrg(orgId);
     return reply.code(204).send();
   }));
 
@@ -248,6 +251,7 @@ export function registerOrgs(app: FastifyInstance, db: Db, opts: OrgsOptions = {
       "insert into org_invites (org_id, email, role, invited_by) values ($1, $2, $3, $4) returning id, created_at, expires_at",
       [orgId, email, role, caller.userId],
     );
+    await tx.query("insert into org_activity(org_id,actor,action) values ($1,$2,$3)", [orgId, caller.userId, "Invitation created"]);
     return reply.code(201).send({ id: rows[0].id, email, role, createdAt: rows[0].created_at, expiresAt: rows[0].expires_at });
   }));
 
@@ -258,6 +262,7 @@ export function registerOrgs(app: FastifyInstance, db: Db, opts: OrgsOptions = {
     const { inviteId } = req.params as { inviteId: string };
     if (!UUID.test(inviteId)) return notFound(reply);
     const { rows } = await tx.query("delete from org_invites where id = $1 and org_id = $2 and accepted_at is null returning id", [inviteId, orgId]);
+    if (rows.length) await tx.query("insert into org_activity(org_id,actor,action) values ($1,$2,$3)", [orgId, caller.userId, "Invitation revoked"]);
     return rows.length ? reply.code(204).send() : notFound(reply);
   }));
 
@@ -284,6 +289,7 @@ export function registerOrgs(app: FastifyInstance, db: Db, opts: OrgsOptions = {
       if (size.rows[0].n >= MAX_ORG_MEMBERS) return reply.code(409).send({ error: "org-full" });
       await tx.query("insert into org_members (org_id, user_id, role) values ($1, $2, $3)", [orgId, caller.userId, rows[0].role]);
     }
+    await tx.query("insert into org_activity(org_id,actor,action) values ($1,$2,$3)", [orgId, caller.userId, "Invitation accepted"]);
     await tx.query("update org_invites set accepted_at = now() where id = $1", [inviteId]);
     return orgFor(tx, orgId, caller.userId);
   }));
@@ -307,7 +313,16 @@ export function registerOrgs(app: FastifyInstance, db: Db, opts: OrgsOptions = {
     }
     await tx.query("delete from org_fleet_computers where org_id = $1 and user_id = $2", [orgId, userId]);
     await tx.query("delete from org_members where org_id = $1 and user_id = $2", [orgId, userId]);
+    presence.forgetMember(orgId, userId);
+    await tx.query("insert into org_activity(org_id,actor,action) values ($1,$2,$3)", [orgId, caller.userId, "Membership ended"]);
     return { rotateKey: true };
+  }));
+
+  app.get("/v1/orgs/:orgId/activity", async (req, reply) => handle(req, reply, { gate: "none", lock: "none" }, async (tx, caller, orgId) => {
+    const m = await membership(tx, orgId, caller.userId);
+    if (!m) return notFound(reply);
+    if (m.role === "member") return forbidden(reply);
+    return { events: (await tx.query("select a.action,a.at,u.email as actor from org_activity a left join users u on u.id=a.actor where org_id=$1 order by a.id desc limit 100", [orgId])).rows };
   }));
 
   // ------------------------------------------------------------- org key
@@ -325,6 +340,7 @@ export function registerOrgs(app: FastifyInstance, db: Db, opts: OrgsOptions = {
     if (!(await unlocked(tx, caller, reply))) return;
     if (body.keyId !== m.keyId + 1) return reply.code(409).send({ error: "org-key-epoch", currentKeyId: m.keyId });
     await tx.query("update orgs set key_id = $2 where id = $1", [orgId, body.keyId]);
+    presence.forgetOrg(orgId);
     return { keyId: body.keyId };
   }));
 
@@ -337,9 +353,7 @@ export function registerOrgs(app: FastifyInstance, db: Db, opts: OrgsOptions = {
     if (!m) return notFound(reply);
     if (!(await unlocked(tx, caller, reply))) return;
     const { rows } = await tx.query<ComputerRow>(
-      `select f.device_id, f.user_id, f.org_key_id, f.revision, f.descriptor, f.seen_at,
-              f.seen_at + make_interval(secs => ${FLEET_LEASE_SECONDS}) as expires_at,
-              f.seen_at > now() - make_interval(secs => ${FLEET_LEASE_SECONDS}) as online
+      `select f.device_id, f.user_id, f.org_key_id, f.revision, f.descriptor, f.seen_at
          from org_fleet_computers f
          join orgs o on o.id = f.org_id and o.key_id = f.org_key_id
          join org_members pm on pm.org_id = f.org_id and pm.user_id = f.user_id
@@ -353,19 +367,27 @@ export function registerOrgs(app: FastifyInstance, db: Db, opts: OrgsOptions = {
         order by f.device_id limit ${MAX_ORG_COMPUTERS}`,
       [orgId],
     );
+    const atRelay = rows.length && app.relayPresence ? await app.relayPresence.lookup(rows.map((r) => r.user_id)) : () => false;
     return {
       orgKeyId: m.keyId,
-      computers: rows.map((r) => ({
-        deviceId: r.device_id,
-        userId: r.user_id,
-        orgKeyId: r.org_key_id,
-        revision: Number(r.revision),
-        descriptor: Buffer.from(r.descriptor).toString("base64url"),
-        seenAt: r.seen_at,
-        expiresAt: r.expires_at,
-        online: r.online,
-        you: r.device_id === caller.deviceId,
-      })),
+      // Online comes from the lease kept in memory (presence.ts) or the relay when configured
+      // (relay-presence.ts, one question per read for the members' accounts); seen_at is the stored last-seen.
+      computers: rows.map((r) => {
+        const live = presence.state(Presence.key(orgId, r.device_id), r.seen_at);
+        const viaRelay = !live.online && atRelay(r.user_id, r.device_id);
+        const now = presence.clock();
+        return {
+          deviceId: r.device_id,
+          userId: r.user_id,
+          orgKeyId: r.org_key_id,
+          revision: Number(r.revision),
+          descriptor: b64url(r.descriptor),
+          seenAt: viaRelay ? new Date(now) : live.seenAt,
+          expiresAt: viaRelay ? new Date(now + LEASE_MS) : live.expiresAt,
+          online: live.online || viaRelay,
+          you: r.device_id === caller.deviceId,
+        };
+      }),
     };
   }));
 
@@ -399,23 +421,65 @@ export function registerOrgs(app: FastifyInstance, db: Db, opts: OrgsOptions = {
            revision = excluded.revision, descriptor = excluded.descriptor, seen_at = now(), withdrawn = false`,
         [orgId, caller.deviceId, caller.userId, caller.tokenId, m.keyId, body.revision, descriptor],
       );
+      // Publishing wrote seen_at and ran every check: it counts as the first beat.
+      if (caller.deviceId) presence.beat(Presence.key(orgId, caller.deviceId), orgId, { userId: caller.userId, deviceId: caller.deviceId, tokenId: caller.tokenId, keyId: m.keyId }, { validated: true, wrote: true });
       return reply.code(rows.length ? 200 : 201).send({ deviceId: caller.deviceId, orgKeyId: m.keyId, revision: body.revision, leaseSeconds: FLEET_LEASE_SECONDS });
     }));
 
-  app.post("/v1/orgs/:orgId/fleet/self/heartbeat", async (req, reply) =>
-    handle(req, reply, { gate: "allowlist", write: true, lock: "org" }, async (tx, caller, orgId) => {
+  // A beat renews the lease kept in memory (presence.ts). The database row is written only when the
+  // computer comes online or the stored time is an hour old, and the checks a beat repeats (the row,
+  // the membership, the key epoch) are trusted for five minutes after one beat has run them in full.
+  // Every beat still authenticates: a revoked or expired sign-in stops at once.
+  app.post("/v1/orgs/:orgId/fleet/self/heartbeat", async (req, reply) => {
+    const orgId = String((req.params as Record<string, unknown> | undefined)?.orgId ?? "");
+    const caller = await authenticate(db, req);
+    if (!caller) return reply.header("cache-control", "no-store").code(401).send({ error: "unauthenticated" });
+    if (!UUID.test(orgId)) return reply.header("cache-control", "no-store").code(404).send({ error: "not-found" });
+    const rowKey = caller.deviceId ? Presence.key(orgId, caller.deviceId) : null;
+    const known = rowKey ? presence.trusted(rowKey, caller) : null;
+    // The allowlist was part of what the full beat checked; the plan is read fresh on every beat.
+    if (known && rowKey && SYNC_PLANS.has(caller.plan)) {
+      reply.header("cache-control", "no-store");
+      if (presence.writeDue(rowKey)) {
+        const { rows } = await db.query(
+          `update org_fleet_computers set seen_at = now()
+            where org_id = $1 and user_id = $2 and device_id = $3 and token_id = $4 and org_key_id = $5 and not withdrawn
+            returning device_id`,
+          [orgId, caller.userId, caller.deviceId, caller.tokenId, known.keyId],
+        );
+        if (!rows.length) {
+          presence.forget(rowKey);
+          return reply.code(409).send({ error: "publish-required" });
+        }
+        presence.beat(rowKey, orgId, known, { validated: false, wrote: true });
+      } else {
+        presence.beat(rowKey, orgId, known, { validated: false, wrote: false });
+      }
+      return { leaseSeconds: FLEET_LEASE_SECONDS };
+    }
+    const verified = { keyId: null as number | null };
+    const due = { write: true };
+    const out = await handle(req, reply, { gate: "allowlist", write: true, lock: "org" }, async (tx, caller, orgId) => {
       const m = await membership(tx, orgId, caller.userId);
       if (!m) return notFound(reply);
       if (!(await unlocked(tx, caller, reply))) return;
+      // Revalidating does not have to write: seen_at is refreshed only when it is due.
+      due.write = !rowKey || presence.writeDue(rowKey);
       const { rows } = await tx.query(
-        `update org_fleet_computers set seen_at = now()
+        `${due.write ? "update org_fleet_computers set seen_at = now()" : "select device_id from org_fleet_computers"}
           where org_id = $1 and user_id = $2 and device_id = $3 and token_id = $4 and org_key_id = $5 and not withdrawn
-          returning device_id`,
+          ${due.write ? "returning device_id" : ""}`,
         [orgId, caller.userId, caller.deviceId, caller.tokenId, m.keyId],
       );
       if (!rows.length) return reply.code(409).send({ error: "publish-required" });
+      verified.keyId = m.keyId;
       return { leaseSeconds: FLEET_LEASE_SECONDS };
-    }));
+    });
+    if (verified.keyId !== null && rowKey && caller.deviceId) {
+      presence.beat(rowKey, orgId, { userId: caller.userId, deviceId: caller.deviceId, tokenId: caller.tokenId, keyId: verified.keyId }, { validated: true, wrote: due.write });
+    }
+    return out;
+  });
 
   // Withdrawing one's own advertisement needs no paid plan, no unlocked keys
   // and is not held back by the allowlist. The revision guard stays so a stale
@@ -428,6 +492,7 @@ export function registerOrgs(app: FastifyInstance, db: Db, opts: OrgsOptions = {
         where org_id = $1 and user_id = $2 and device_id = $3 and not withdrawn`,
       [orgId, caller.userId, caller.deviceId],
     );
+    presence.forget(Presence.key(orgId, caller.deviceId));
     return reply.code(204).send();
   }));
 }

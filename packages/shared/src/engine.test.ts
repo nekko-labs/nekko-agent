@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { modelModality, unsupportedLoadReason } from './engine.js';
+import { cannotLoadReason, modelModality, needsNewerEngine, unsupportedLoadReason } from './engine.js';
 
 /**
  * What a GGUF is for, before anyone tries to serve it.
@@ -14,6 +14,9 @@ describe('modelModality', () => {
     expect(modelModality({ architecture: 'sd3' })).toBe('image');
     expect(modelModality({ architecture: 'flux' })).toBe('image');
     expect(modelModality({ architecture: 'sdxl' })).toBe('image');
+    // GGUF writes these with an underscore (QuantStack's Qwen Image is `qwen_image`).
+    expect(modelModality({ architecture: 'qwen_image' })).toBe('image');
+    expect(modelModality({ architecture: 'z_image' })).toBe('image');
   });
 
   it('reads speech architectures as audio', () => {
@@ -77,5 +80,30 @@ describe('unsupportedLoadReason', () => {
       /image-generation/,
     );
     expect(unsupportedLoadReason({ name: 'Qwen3' })).toBeUndefined();
+  });
+});
+
+describe('needsNewerEngine', () => {
+  it('is true only for a block an engine update fixes', () => {
+    expect(needsNewerEngine({ loadCheck: { level: 'blocked', cause: 'engineAge', reason: 'x' } })).toBe(true);
+    expect(needsNewerEngine({ loadCheck: { level: 'blocked', cause: 'weightFormat', reason: 'x' } })).toBe(false);
+    expect(needsNewerEngine({ loadCheck: { level: 'warning', cause: 'engineAge', reason: 'x' } })).toBe(false);
+    expect(needsNewerEngine({ loadCheck: { level: 'blocked', reason: 'x' } })).toBe(false);
+    expect(needsNewerEngine({})).toBe(false);
+  });
+});
+
+describe('cannotLoadReason', () => {
+  const blocked = { level: 'blocked', reason: 'Needs a newer engine.' } as const;
+  const warning = { level: 'warning', reason: 'It may not load.' } as const;
+
+  it('adds what the engine in use refuses to what no engine can run', () => {
+    expect(cannotLoadReason({ name: 'Qwen3', loadCheck: blocked })).toBe('Needs a newer engine.');
+    expect(cannotLoadReason({ modality: 'draft', name: 'EAGLE', loadCheck: blocked })).toMatch(/draft/i);
+  });
+
+  it('lets a warning through, since the engine gets to try', () => {
+    expect(cannotLoadReason({ name: 'Qwen3', loadCheck: warning })).toBeUndefined();
+    expect(cannotLoadReason({ name: 'Qwen3' })).toBeUndefined();
   });
 });

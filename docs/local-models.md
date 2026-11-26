@@ -83,6 +83,19 @@ offered **Switch to CUDA** on the Model server card. Every other build
 for your machine stays in the list if you disagree. If you already have a `llama-server`,
 point at it instead: Nekko Agent will run it and never update or remove it.
 
+**Keeping the engine current.** Each version of Nekko Agent is built and tested against one llama.cpp release. If the engine Nekko Agent downloaded for you is older than that release and far behind (about a month of releases: the pin moves several times a day, so a few days behind is not worth a download), or a model in your library cannot run without a newer engine, the Model server card says so ("A newer engine (b12470) is available. Yours is b11224." or "2 models in your library need a newer engine.") and offers **Update**. The **Update engine** button on a model's own row works either way. Update downloads the current release of the same build you already have, stops the server while the new files swap in, and leaves your models alone; switch the server back on when it finishes. Nothing is downloaded until you press it. If the engine is broken, **Repair engine** comes first, and **Switch to CUDA** does the update as part of switching. An engine you pointed Nekko Agent at yourself, or one found on your PATH, is never checked or updated.
+
+**Models the engine cannot run.** Two things in a model file can depend on which llama.cpp you use, and the Models page says so on the row instead of showing a GPU fit:
+
+- *A weight format llama.cpp does not know.* Some publishers (PrismML's 1-bit `PTQ1_0` Ternary Bonsai, for one) ship files made for a modified build of llama.cpp. The engine Nekko Agent downloads is stock llama.cpp and refuses them, so the row says **Can't run here**, and loading is refused before anything starts. A weight type only just past what this llama.cpp knows may simply be newer than the engine, so that is a warning instead: the load is tried, and the engine update on the Model server card is the fix if it fails. If you point Nekko Agent at your own `llama-server`, the file is not refused: the row carries a warning that the file needs a modified build, the load is tried, and llama.cpp's own error is shown if it fails.
+- *An engine too old for the file.* Files with PrismML's `prism.hadamard` header need llama.cpp b11556 or newer. An older engine loads them without any error and produces garbage, so Nekko Agent marks the file **Needs a newer engine**, refuses the load and tells you to update the engine from the Model server card. If you pointed Nekko Agent at your own `llama-server`, you only get a warning, whether its version reads older or cannot be read: a modified build (such as PrismML's) can run these files whatever its version number says.
+
+When a file has both problems and you use the engine Nekko Agent installed, the weight format is the reason shown, since updating would not help. The same check applies whether you load from the Models page, on start, from the phone or from the CLI.
+
+*A build that runs, in the same repo.* When a file is refused for its weight format and Nekko Agent knows the Hugging Face repo it came from, its row looks in that repo for a build of the same model the engine can run (a standard llama.cpp quantization such as `Q2_0` or `Q4_K_M`, the smallest one that is not full precision) and offers it: "A build that runs here is in the same repo: Q2_0, 7.1 GB." with a **Download** button. This is the ordinary Hugging Face download, so the projector comes with it and the file joins the same model on the Models page. The offer only appears when the repo really lists a file with this file's exact name; a folder name alone is not trusted. When the engine is also older than the file's maker asks for (b11556 for Ternary Bonsai), the row says to update the engine first and has an **Update engine** button; the downloaded file would otherwise be refused as **Needs a newer engine**. It uses the model details Nekko Agent already fetches when you open a model, so it makes no extra requests and nothing is fetched in the background.
+
+*The list of builds says the same.* Under a model's details, the **Variants** list shows each build of the repo with what the engine makes of it: **Can't run here** for a build in a format it cannot run, **Needs a newer engine** for one that needs a newer engine, in place of the size-based fit, and such a build is never the suggested one. To know a build's format before you download it, Nekko Agent reads the first few MB of that one build, when you click its row or press its **Download** (and a Download of a build the engine cannot run is stopped, with the reason). Opening the page reads nothing, and a build you have not opened keeps its size-based fit. What a build's header says is kept in the app's data folder (`catalog/gguf-headers`), one small file per Hugging Face file hash, so each file is read once, ever, however often you come back.
+
 **No Visual Studio, ever.** The Windows builds of llama.cpp and stable-diffusion.cpp, and
 Nekko's own engine daemon, need the Microsoft Visual C++ Runtime (`MSVCP140.dll`,
 `VCRUNTIME140.dll`), not Visual Studio. The installer carries those DLLs beside the daemon
@@ -90,18 +103,23 @@ Nekko's own engine daemon, need the Microsoft Visual C++ Runtime (`MSVCP140.dll`
 the engine before it starts. If an engine still dies for a missing DLL, the error says so
 and links Microsoft's 25 MB redistributable.
 
-**Best for this machine.** The Models page opens on a pick per task (chat, coding, a
+**System models** is a separate section above the local library, even before you download a chat model. It holds the on-device speech engines for dictation. Selecting a speech engine here does not change your default chat model.
+
+**On this machine, or Find new models.** Under **Models**, the switch picks between the models you have and getting a new one from Hugging Face. Each installed row shows what it does, the parameter count when known, the disk size, and whether it fits on your GPU. A failed load shows a warning and its explanation. Use the **star** to put a model in your chat picker’s favorites, or the **check** to make a chat or vision model the default for new chats. The **trash** deletes files managed by Nekko that the engine can remove; files borrowed from another app stay untouched. When a family has more than one variant, choose the family and use the controls on the exact variant. Select a model for GPU and context details. Models currently in memory appear above the library under **Loaded models**. The agent server (for the CLI and MCP) is in **Settings > Server**.
+
+**Best for this machine.** Find new models opens on a pick per task (chat, coding, a
 small fast model for routing, embeddings, vision) made for this machine's GPU and memory.
-Each pick says what it costs before you download it: the memory it takes out of what the
-machine has for models, the download size, and the speed to expect at the start of a
-conversation. A speed with no `~` was measured with that file on that kind of hardware, a
+Each pick says what it costs before you download it: its parameters, the memory it takes out
+of what the machine has for models (a bar shows the weights and the context separately), the
+download size, how much context fits in what is left, and the speed to expect at the start
+of a conversation. **Quants** lists every build of that model with the same figures, so you
+can trade a little quality for a longer context, or the other way round. A speed with no `~` was measured with that file on that kind of hardware, a
 `~` speed is estimated from the hardware's memory bandwidth, and "rough" means the estimate
 was calibrated on a different kind of GPU. Once you have used a model, "here" marks the speed
 your own replies ran at (the median of the last 20), which then also decides whether it is fast
 enough to stay the pick. A GPU we have no figures for gets no speed rather than a guess. When nothing fits that is fast enough for a task, the pick is the fastest
 that fits and says so. The list comes with the app and works offline; **Check this
-machine again** re-reads the hardware after a change. Once you have models the block folds
-to one line. When a new GPU, or a newer version of the list, puts a better model within reach
+machine again** re-reads the hardware after a change. When a new GPU, or a newer version of the list, puts a better model within reach
 than the one you have for a task, a card above it says so ("A better coding model now fits
 your 16 GB GPU") with the model it would replace; **Not now** puts it away until the next
 change.
@@ -134,6 +152,17 @@ that says so.
 
 A paused background automation keeps no request open, so its model counts as idle: it
 goes on the idle timer, or sooner when a chat of yours needs the room.
+
+**From the Local models monitor.** The **Local models** monitor in the Monitors panel lists
+what is in memory, picture models included, each with **Unload** and **Settings**, and
+**Unload all** when more than one is loaded. Below that it offers up to four **Starred** and
+three **Recent** models that are not loaded, each with **Load** and **Settings**. Star a model
+with the star beside its name, here or in the model picker. Recent is the models this app
+saw in memory and the models your local chats used, newest first. **Load** uses the model's
+saved settings, or the recommended ones when it has none, and starts the engine if it is
+stopped.
+
+**Reading the VRAM bar.** In the model library, the bar starts with the model and adds the extra memory for minimum, recommended and maximum context. A plain tail is memory left after maximum context; a striped tail is memory the load would need beyond what is available. Hover a band or focus its label for the numbers.
 
 **Configuring a load.** A model's drawer leads with a **memory meter**: graphics memory
 (VRAM) and system memory (RAM) as two bars, each split into other apps, this model (its

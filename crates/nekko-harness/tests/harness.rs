@@ -405,6 +405,44 @@ fn a_background_sub_agent_ends_at_its_notification_not_its_call() {
     );
 }
 
+#[test]
+fn a_send_message_that_wakes_a_sub_agent_resumes_it_under_its_own_call() {
+    let mut m = Mapper::new("s");
+    let send = |id: &str| {
+        json!({ "type": "assistant", "parent_tool_use_id": null, "message": { "id": format!("m{id}"), "content": [
+            { "type": "tool_use", "id": id, "name": "SendMessage", "input": { "to": "a1", "summary": "s", "message": "Carry on." } }] } })
+    };
+    let result = |id: &str, output: &str| {
+        json!({ "type": "user", "parent_tool_use_id": null, "message": { "content": [
+            { "type": "tool_result", "tool_use_id": id, "content": output }] } })
+    };
+    let resumed = |items: Vec<Mapped>| {
+        items.into_iter().find_map(|m| match m {
+            Mapped::Subagent(s @ Subagent::Resumed { .. }) => Some(s),
+            _ => None,
+        })
+    };
+    m.map(&send("toolu_send"));
+    let woke = r#"{"success":true,"message":"Resuming agent a1","resumedAgentId":"a1"}"#;
+    assert_eq!(
+        resumed(m.map(&result("toolu_send", woke))),
+        Some(Subagent::Resumed { call_id: "toolu_send".into(), agent_id: "a1".into(), message: "Carry on.".into() })
+    );
+    // A message to one still running wakes nothing.
+    m.map(&send("toolu_queued"));
+    assert_eq!(resumed(m.map(&result("toolu_queued", r#"{"success":true,"message":"Message queued"}"#))), None);
+    // Its lines and its notification come under the `SendMessage` call.
+    let line =
+        json!({ "type": "assistant", "parent_tool_use_id": "toolu_send", "message": { "id": "x", "content": [] } });
+    assert!(matches!(&m.map(&line)[..], [Mapped::Subagent(Subagent::Line { call_id, .. })] if call_id == "toolu_send"));
+    let note =
+        json!({ "type": "system", "subtype": "task_notification", "tool_use_id": "toolu_send", "status": "completed" });
+    assert_eq!(
+        m.map(&note),
+        [Mapped::Subagent(Subagent::Ended { call_id: "toolu_send".into(), outcome: Outcome::Completed })]
+    );
+}
+
 // ---- run_turn over a scripted Claude Code ----
 
 enum Step {

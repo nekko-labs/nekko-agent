@@ -3,12 +3,12 @@
 const screens = { placement: 'empty-first', displays: [{ id: '1', label: '1', bounds: { x: 0, y: 0, width: 1728, height: 1117 }, main: true, primary: true, enabled: true, self: true, scaleFactor: 2 }] };
 const current = async () => screens;
 const displays = { displayId: null, list: current, toggle: current, setPlacement: current, toggleDesktop: current, setSpacesMode: current, go: async () => 'ok', report: () => {}, claim: async () => 'main', onChange: () => () => {}, onPlaced: () => () => {} };
-(window as any).nekkoChrome = { platform: 'darwin', titleBarHeight: 38, setTitleBarOverlay: () => {}, serviceControl: async () => ({}), reportNotificationVisibility: () => {}, displays };
+(window as any).nekkoChrome = { platform: 'darwin', systemLanguages: new URLSearchParams(location.search).get('system') === 'es' ? ['it-IT', 'es-MX', 'en-US'] : ['en-US'], titleBarHeight: 38, setTitleBarOverlay: () => {}, serviceControl: async () => ({}), reportNotificationVisibility: () => {}, displays };
 const settings: any = { providers: [], workspaceFolders: [], workspaces: [], theme: 'system', mascotEnabled: true, experimental: {}, agent: {} };
 const joined: unknown[] = [];
 const bridge: any = {
   getAppInfo: async () => ({ version: '0.0.0-fixture', platform: 'darwin' }),
-  getSettings: async () => settings,
+  getSettings: async () => ({ ...settings }),
   updateSettings: async (p: any) => ({ ...Object.assign(settings, p) }),
   updatesJoin: async (...args: unknown[]) => { joined.push(args); return { ok: true }; },
   listProviders: async () => [], probeProviders: async () => [], listConnectors: async () => [], listRunners: async () => [], listSessionSummaries: async () => [], listModels: async () => [], listTerminals: async () => [],
@@ -21,6 +21,9 @@ Object.assign(window, { nekko: new Proxy(bridge, { get(t, k: string) { if (k in 
   await import('@fontsource-variable/geist');
   await import('@fontsource-variable/geist-mono');
   await import('../src/renderer/styles.css');
+  const localization = await import('../src/renderer/i18n') as { syncDocumentLanguage?: () => void };
+  localization.syncDocumentLanguage?.();
   createRoot(document.getElementById('root')!).render(React.createElement(UpdateProvider, null, React.createElement(App)));
-  (window as any).onboardingFixture = { settings, joined, simple: () => ({ mode: localStorage.getItem('nekko.chatMode'), choices: localStorage.getItem('nekko.simpleChoices') }) };
+  const { openSettingsGroup } = await import('../src/renderer/settingsIndex');
+  (window as any).onboardingFixture = { settings, joined, openSettings: () => openSettingsGroup('general'), simple: () => ({ mode: localStorage.getItem('nekko.chatMode'), choices: localStorage.getItem('nekko.simpleChoices') }) };
 })();

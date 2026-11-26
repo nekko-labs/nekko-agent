@@ -10,7 +10,7 @@ describe('View options', () => {
     const html = renderToStaticMarkup(<WallViewMenu wall={DEFAULT_WALL_STATE} setWall={() => {}} />);
     expect(html).toContain('class="wall-view-trigger"');
     expect(html).toContain('class="wall-view-icon"');
-    expect(html).toContain('View: Multi-agent');
+    expect(html).toContain('View: Single agent');
     expect(html).not.toContain('btn-outline');
     expect(html).toContain('aria-haspopup="dialog"');
   });
@@ -20,14 +20,14 @@ describe('View options', () => {
     expect(html).toContain('One chat at a time');
     expect(html).toContain('Chats side by side');
     expect(html.match(/class="wall-view-preview"/g)).toHaveLength(2);
-    expect(html.match(/type="radio"/g)).toHaveLength(4);
+    expect(html.match(/type="radio"/g)).toHaveLength(2);
     expect(html).toContain('role="switch"');
   });
-  it('offers native Simple/Detailed radios and a settings customization button', () => {
+  it('offers a Detailed interface switch, a link to the Simple example and a settings customization button', () => {
     const html = renderToStaticMarkup(<WallViewOptions wall={DEFAULT_WALL_STATE} setWall={() => {}} />);
-    expect(html.match(/name="view-interface-detail"/g)).toHaveLength(2);
-    expect(html).toContain('Simple');
-    expect(html).toContain('Detailed');
+    expect(html).toMatch(/<input[^>]*role="switch"[^>]*data-view-interface-detail/);
+    expect(html).toContain('Detailed interface');
+    expect(html).toContain('Want to see the difference? <button type="button" class="text-accent hover:underline">See the example in settings</button>');
     expect(html).toContain('view-customize');
     expect(html).not.toContain('mode-seg');
   });

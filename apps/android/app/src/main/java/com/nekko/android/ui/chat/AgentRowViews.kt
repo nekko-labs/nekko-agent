@@ -238,6 +238,8 @@ fun ToolRow(b: Block.Tool) {
             Text(b.label, style = Nekko.mono, color = p.inkSoft, maxLines = if (open) Int.MAX_VALUE else 1, overflow = TextOverflow.Ellipsis, modifier = m)
         }
         if (open && hasOutput) OutputWell(b.output.orEmpty())
+        // The pictures an agent made, under the step that made them (#2973).
+        if (b.pictures > 0 && b.resultMessageId != null) ToolPictures(b.resultMessageId!!, b.pictures)
     }
 }
 

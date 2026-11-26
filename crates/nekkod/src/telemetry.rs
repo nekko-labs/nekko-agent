@@ -3,12 +3,12 @@
 //!
 //! What a report may hold, and nothing else:
 //! - a random install id (a new one each time it is turned on), the app
-//!   version, edition, OS, OS version and CPU type, and the local hour and
-//!   weekday the event happened (never the time zone);
+//!   version, edition, OS, OS version and CPU type, the UTC occurrence time,
+//!   and the local hour and weekday it happened (never the time zone);
 //! - the machine at start ([`hardware`]): CPU model and cores, RAM, GPU name
 //!   and VRAM, rounded to whole gigabytes;
 //! - which features, models and modes get used ([`EVENTS`]), with the few
-//!   properties each allows;
+//!   properties each allows; a non-incognito turn's chat is only an install-scoped pseudonym;
 //! - errors and crashes, with every string scrubbed ([`scrub`]): secrets,
 //!   emails, phone numbers, card numbers, IP addresses and the user's name are
 //!   replaced, and file paths are cut to their last part. An error carries
@@ -18,14 +18,76 @@
 //!   which could echo a prompt.
 //!
 //! Never chat text, prompts, file contents, folder names, model output or
-//! account names. PostHog is told not to look up the IP's location and not to
+//! account names. The one account-derived fact: an engine signed in to Nekko
+//! Cloud with a Nekko team account marks its events `internal: true`, so the
+//! team's own use can be filtered out ([`mark_internal`]). PostHog is told not to look up the IP's location and not to
 //! build a person profile. Everything goes through Settings > Connections as
 //! `telemetry`, so All connections off stops it and its log shows every send.
 
 use crate::routes::Ctx;
 use serde_json::{Map, Value, json};
+use sha2::{Digest, Sha256};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
+
+const CHAT_PSEUDONYM_DOMAIN: &[u8] = b"nekko-turn-chat-v1\0";
+const LOCAL_MODEL_FILE_EXTENSIONS: &[&str] = &[".gguf", ".safetensors", ".bin", ".pt", ".pth", ".ckpt"];
+
+/// A stable pseudonym for one chat only inside one opt-in install identity.
+/// The raw chat id never enters an event, and a new install id makes a new
+/// pseudonym for the same synced chat.
+fn chat_pseudonym(install_id: &str, session_id: &str) -> String {
+    let mut hash = Sha256::new();
+    hash.update(CHAT_PSEUDONYM_DOMAIN);
+    hash.update(install_id.as_bytes());
+    hash.update([0]);
+    hash.update(session_id.as_bytes());
+    format!("{:x}", hash.finalize())
+}
+
+fn path_shaped_model_id(id: &str) -> bool {
+    let id = id.trim();
+    let lower = id.to_ascii_lowercase();
+    id.starts_with('/')
+        || id.starts_with('\\')
+        || (id.as_bytes().first().is_some_and(u8::is_ascii_alphabetic) && id.as_bytes().get(1) == Some(&b':'))
+        || lower.starts_with("file:")
+        || id.contains('\\')
+        || id.split('/').any(|part| part == "." || part == "..")
+        || LOCAL_MODEL_FILE_EXTENSIONS.iter().any(|extension| lower.ends_with(extension))
+}
+
+/// Safe model attribution for the concrete route known at admission.
+///
+/// A Claude Agent alias becomes the exact id passed to `claude --model`; an
+/// empty id passes no flag, so Claude Code chooses later. The managed Local
+/// Model Server's ids and `sourceRepo` values are path-derived today, so neither
+/// is model attribution. Other explicit API ids pass through unless path-shaped.
+/// Missing reasons are fixed categories for aggregate charts, never guesses.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ModelAttribution {
+    pub model: Option<String>,
+    pub missing_reason: Option<&'static str>,
+}
+
+pub(crate) fn model_attribution(kind: &str, route_model_id: &str, managed_local: bool) -> ModelAttribution {
+    let route_model_id = route_model_id.trim();
+    if route_model_id.is_empty() {
+        return ModelAttribution {
+            model: None,
+            missing_reason: Some(if kind == "claude-code" { "provider_default" } else { "unavailable" }),
+        };
+    }
+    if managed_local || path_shaped_model_id(route_model_id) {
+        return ModelAttribution { model: None, missing_reason: Some("withheld_path") };
+    }
+    let model = if kind == "claude-code" {
+        nekko_agent::providers::claude_code::concrete_model_id(route_model_id)
+    } else {
+        route_model_id.to_string()
+    };
+    ModelAttribution { model: Some(model), missing_reason: None }
+}
 
 pub const CHANNELS: &[&str] = &["telemetry:capture", "telemetry:status"];
 
@@ -55,10 +117,13 @@ const EVENTS: &[(&str, &[&str])] = &[
         &[
             "provider",
             "local",
+            "actor",
+            "chat_pseudonym",
             "offline",
             "mode",
             "sandbox",
             "model",
+            "model_missing_reason",
             "permission",
             "subagent",
             "running_agents",
@@ -71,6 +136,9 @@ const EVENTS: &[(&str, &[&str])] = &[
     ("screen_viewed", &["screen"]),
     ("click", &["screen", "control"]),
     ("feature_used", &["feature"]),
+    // The Send feedback sheet opened, and which way in (`rail`, `palette`,
+    // `about`, `menu`, `tray`, `link`). Never what the note says.
+    ("feedback_opened", &["source"]),
     ("error", &["source", "message", "stack"]),
 ];
 
@@ -83,6 +151,9 @@ struct State {
     install_id: String,
     facts: Map<String, Value>,
     queue: Vec<Value>,
+    /// Signed in to Nekko Cloud with a team account (decision 0092): every
+    /// event sent carries `internal: true`.
+    internal: bool,
 }
 
 fn cell() -> &'static Mutex<State> {
@@ -114,10 +185,26 @@ pub fn configure(settings: &Value) {
     }
 }
 
-/// Queue an event if reports are on and `event` is one of [`EVENTS`]; other
-/// properties are dropped and every string is scrubbed.
+/// Queue an event if reports are on and `event` is one of [`EVENTS`]. Other
+/// properties are dropped and source strings are scrubbed. The engine-derived
+/// chat pseudonym is accepted only in its fixed lowercase-hex shape.
 pub fn capture(event: &str, props: &Value) {
     push(event, props, state());
+}
+
+/// Queue a turn event. A non-incognito chat gets a pseudonym derived from the
+/// currently enabled install identity; an incognito turn passes no session id.
+/// The raw session id is used only as hash input and never enters the event.
+pub fn capture_turn(session_id: Option<&str>, props: &Value) {
+    let s = state();
+    if !s.enabled {
+        return;
+    }
+    let mut props = props.as_object().cloned().unwrap_or_default();
+    if let Some(session_id) = session_id {
+        props.insert("chat_pseudonym".into(), json!(chat_pseudonym(&s.install_id, session_id)));
+    }
+    push("turn_started", &Value::Object(props), s);
 }
 
 fn push(event: &str, props: &Value, mut s: std::sync::MutexGuard<'static, State>) {
@@ -128,6 +215,18 @@ fn push(event: &str, props: &Value, mut s: std::sync::MutexGuard<'static, State>
     let mut p = s.facts.clone();
     for k in allowed.iter() {
         let v = match &props[*k] {
+            Value::String(text)
+                if event == "turn_started"
+                    && *k == "chat_pseudonym"
+                    && text.len() == 64
+                    && text.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)) =>
+            {
+                json!(text)
+            }
+            Value::String(text) if event == "turn_started" && *k == "model_missing_reason" => match text.as_str() {
+                "provider_default" | "withheld_path" | "unavailable" => json!(text),
+                _ => continue,
+            },
             Value::String(text) if event == "error" && *k == "message" => json!(error_message(text)),
             Value::String(text) if event == "error" && *k == "stack" => json!(error_stack(text)),
             Value::String(text) => json!(scrub(&text.chars().take(STRING_MAX).collect::<String>())),
@@ -137,15 +236,17 @@ fn push(event: &str, props: &Value, mut s: std::sync::MutexGuard<'static, State>
         p.insert((*k).into(), v);
     }
     // Time-of-day use: the local hour and weekday only, never the zone.
-    let now = chrono::Local::now();
-    p.insert("local_hour".into(), json!(chrono::Timelike::hour(&now)));
-    p.insert("weekday".into(), json!(now.format("%a").to_string()));
+    let occurred_at = chrono::Utc::now();
+    let local = occurred_at.with_timezone(&chrono::Local);
+    p.insert("local_hour".into(), json!(chrono::Timelike::hour(&local)));
+    p.insert("weekday".into(), json!(local.format("%a").to_string()));
     p.insert("$process_person_profile".into(), json!(false));
     p.insert("$geoip_disable".into(), json!(true));
     let ev = json!({
         "event": event,
         "distinct_id": s.install_id,
-        "timestamp": chrono::Utc::now().to_rfc3339(),
+        // The occurrence time, set as the event is queued, never its later flush time.
+        "timestamp": occurred_at.to_rfc3339(),
         "properties": p,
     });
     s.queue.push(ev);
@@ -232,6 +333,22 @@ pub fn hardware(profile: &Value) -> Value {
     })
 }
 
+/// Whether this engine is signed in to Nekko Cloud with a team account.
+pub fn set_internal(on: bool) {
+    state().internal = on;
+}
+
+/// Mark each event as the Nekko team's own use (`internal: true`), so the
+/// PostHog project's internal-user filter leaves it out. Nobody else's
+/// reports carry the property.
+fn mark_internal(batch: &mut [Value]) {
+    for ev in batch {
+        if let Some(p) = ev["properties"].as_object_mut() {
+            p.insert("internal".into(), json!(true));
+        }
+    }
+}
+
 /// Send what is queued. Kept for the next try when the send fails.
 async fn flush() {
     let key = key();
@@ -240,7 +357,11 @@ async fn flush() {
         if !s.enabled || key.is_empty() || s.queue.is_empty() {
             return;
         }
-        std::mem::take(&mut s.queue)
+        let mut batch = std::mem::take(&mut s.queue);
+        if s.internal {
+            mark_internal(&mut batch);
+        }
+        batch
     };
     let client = reqwest::Client::builder().timeout(Duration::from_secs(20)).build().unwrap_or_default();
     let rb = client.post(format!("{}/batch/", host())).json(&json!({ "api_key": key, "batch": batch }));
@@ -284,16 +405,25 @@ pub fn start(ctx: Ctx) {
         let settings = ctx.settings.clone();
         let mut changes = settings.store.subscribe();
         configure(&changes.borrow_and_update());
-        let profile = serde_json::to_value(ctx.machine.profile(false).await).unwrap_or(Value::Null);
-        capture("app_started", &hardware(&profile));
+        // Once per run, as soon as reports are on: at start, or when they are
+        // turned on later (onboarding's step comes after the engine starts).
+        let mut started = false;
         let mut tick = tokio::time::interval(FLUSH_EVERY);
         loop {
+            if !started && state().enabled {
+                started = true;
+                let profile = serde_json::to_value(ctx.machine.profile(false).await).unwrap_or(Value::Null);
+                capture("app_started", &hardware(&profile));
+            }
             tokio::select! {
                 changed = changes.changed() => {
                     if changed.is_err() { break }
                     configure(&changes.borrow_and_update());
                 }
-                _ = tick.tick() => flush().await,
+                _ = tick.tick() => {
+                    set_internal(ctx.cloud.is_staff());
+                    flush().await
+                }
             }
         }
     });
@@ -360,6 +490,41 @@ mod tests {
     }
 
     #[test]
+    fn turn_identity_and_model_attribution_are_private_and_observed() {
+        let first = chat_pseudonym("install-a", "chat-secret");
+        assert_eq!(first.len(), 64);
+        assert_eq!(first, chat_pseudonym("install-a", "chat-secret"));
+        assert_ne!(first, chat_pseudonym("install-a", "another-chat"));
+        assert_ne!(first, chat_pseudonym("install-b", "chat-secret"));
+        assert!(!first.contains("chat-secret"));
+
+        let expect = |kind, id, managed, model: Option<&str>, missing_reason| {
+            assert_eq!(
+                model_attribution(kind, id, managed),
+                ModelAttribution { model: model.map(str::to_string), missing_reason }
+            );
+        };
+        expect("openrouter", "openai/gpt-5", false, Some("openai/gpt-5"), None);
+        expect("chatgpt", "gpt-5.3-codex", false, Some("gpt-5.3-codex"), None);
+        expect("chatgpt", "", false, None, Some("unavailable"));
+        let concrete = nekko_agent::providers::claude_code::concrete_model_id("opus");
+        assert_ne!(concrete, "opus");
+        expect("claude-code", "opus", false, Some(&concrete), None);
+        expect("claude-code", "  ", false, None, Some("provider_default"));
+
+        // The managed library's ids and sourceRepo are path-derived; neither is
+        // an authoritative model id. An external llama.cpp server's explicit
+        // API id is authoritative unless it is itself path-shaped.
+        expect("llamacpp", "chat/Qwen_Qwen3-8B-GGUF/model.gguf", true, None, Some("withheld_path"));
+        expect("llamacpp", "qwen3.5:9b", false, Some("qwen3.5:9b"), None);
+        for path in
+            ["/Users/a/private/model.gguf", r"C:\Users\a\private\model.gguf", "file:///tmp/model", "folder/model.gguf"]
+        {
+            expect("lmstudio", path, false, None, Some("withheld_path"));
+        }
+    }
+
+    #[test]
     fn hardware_keeps_models_and_whole_gigabytes_only() {
         let profile = json!({ "format": 1, "probedAt": 5, "hostname": "philips-mac", "cpu": { "model": "Apple M4 Max", "cores": 16 },
             "ramBytes": 137438953472.0, "unified": true, "backends": ["metal", "cpu"],
@@ -384,6 +549,38 @@ mod tests {
 
         configure(&json!({ "telemetry": { "enabled": true, "installId": "i-1" } }));
         capture("made_up", &json!({}));
+
+        let before = chrono::Utc::now();
+        capture_turn(
+            Some("chat-secret"),
+            &json!({ "provider": "openrouter", "model": "openai/gpt-5", "actor": "user", "session_id": "chat-secret" }),
+        );
+        let after = chrono::Utc::now();
+        let turn = state().queue.pop().expect("turn queued");
+        let turn_text = serde_json::to_string(&turn).unwrap();
+        let occurred_at = chrono::DateTime::parse_from_rfc3339(turn["timestamp"].as_str().unwrap())
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        assert!(occurred_at >= before && occurred_at <= after, "{turn}");
+        assert_eq!(turn["properties"]["chat_pseudonym"], chat_pseudonym("i-1", "chat-secret"));
+        assert_eq!(turn["properties"]["actor"], "user");
+        assert_eq!(turn["properties"]["model"], "openai/gpt-5");
+        assert!(turn["properties"].get("session_id").is_none());
+        assert!(!turn_text.contains("chat-secret"), "{turn_text}");
+
+        capture_turn(
+            None,
+            &json!({ "provider": "claude-code", "model_missing_reason": "provider_default", "offline": true }),
+        );
+        let incognito = state().queue.pop().expect("incognito turn queued");
+        assert!(incognito["properties"].get("chat_pseudonym").is_none());
+        assert_eq!(incognito["properties"]["model_missing_reason"], "provider_default");
+        assert_eq!(incognito["properties"]["offline"], true);
+
+        capture_turn(None, &json!({ "provider": "chatgpt", "model_missing_reason": "invented" }));
+        let invalid = state().queue.pop().expect("turn queued");
+        assert!(invalid["properties"].get("model_missing_reason").is_none());
+
         capture("screen_viewed", &json!({ "screen": "settings", "path": "/Users/a/secret", "chat": "hello" }));
         let q = state().queue.clone();
         assert_eq!(q.len(), 1);
@@ -404,11 +601,26 @@ mod tests {
         assert_eq!(e["properties"]["message"], "Error: boom");
         assert_eq!(e["properties"]["stack"], "f (b.js:1:2)");
 
+        capture("feedback_opened", &json!({ "source": "rail", "message": "my note" }));
+        let f = state().queue.pop().unwrap();
+        assert_eq!(f["event"], "feedback_opened");
+        assert_eq!(f["properties"]["source"], "rail");
+        assert!(f["properties"].get("message").is_none(), "only the way in, never the note");
+
         for _ in 0..QUEUE_MAX + 10 {
             capture("feature_used", &json!({ "feature": "x" }));
         }
         assert_eq!(state().queue.len(), QUEUE_MAX);
         configure(&json!({ "telemetry": { "enabled": false, "installId": "i-1" } }));
         assert!(state().queue.is_empty(), "turning it off forgets what was queued");
+    }
+
+    #[test]
+    fn team_events_are_marked_internal_and_nobody_elses_are() {
+        let ev = |props: Value| json!({ "event": "click", "distinct_id": "i-1", "properties": props });
+        let mut batch = vec![ev(json!({ "screen": "chat" })), ev(json!({}))];
+        mark_internal(&mut batch);
+        assert!(batch.iter().all(|e| e["properties"]["internal"] == true));
+        assert_eq!(batch[0]["properties"]["screen"], "chat");
     }
 }

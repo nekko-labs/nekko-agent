@@ -1,9 +1,11 @@
+import { useVisibleInterval } from '../visibleInterval.js';
 import { monitorPickup } from './monitorPickup.js';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { AutomationTask, EngineStatus, GpuStats, LocalModel, MonitorKind, ProviderConfig, RuntimeStatus, SessionSummary, SubscriptionLimits, SystemStats, UsageSlice, UsageSummary } from '@nekko-agent/shared';
-import { formatTemperature, temperatureTone, RUNTIME_CAPABILITIES, MODEL_PRICING, MODEL_COMPARISON_TIERS, MODEL_PRICING_SOURCE, MODEL_PRICING_CHECKED_AT, getModelPrice, DEFAULT_LOCAL_COST_BENCHMARK, describeLimitsProblem, formatUSD, gpuMemoryLabel, isLocalProvider, limitsKeyFor, oauthProviderOffered } from '@nekko-agent/shared';
+import { formatTemperature, temperatureTone, RUNTIME_CAPABILITIES, MODEL_PRICING, MODEL_COMPARISON_TIERS, MODEL_PRICING_SOURCE, MODEL_PRICING_CHECKED_AT, getModelPrice, DEFAULT_LOCAL_COST_BENCHMARK, describeLimitsProblem, formatUSD, gpuMemoryLabel, isLocalProvider, MODALITY_LABELS, limitsKeyFor, oauthProviderOffered } from '@nekko-agent/shared';
 import { MONITORS, normalizeMonitorOrder, placeMonitor, reorderMonitor, type CommandWallState, type MonitorKey } from '../commandWall.js';
 import { useStore } from '../store.js';
+import { stableSelector } from '../selectStable.js';
 import { useProviderLimitsPortfolio } from '../useLimits.js';
 import { accountEmailOf, useAccountEmails } from '../accountEmails.js';
 import { BUDGET_RANGE_LABEL, attributionRange, budgetRange, localRuntimeMetrics, utilizationProviders } from './monitorMetrics.js';
@@ -12,8 +14,10 @@ import { RangeToggles } from './RangeToggles.js';
 import type { InsightRange } from '../insightRanges.js';
 import { MonitorComputerSwitch, useMonitors, useResourceSample, useWatchedComputer } from './ResourceMonitor.js';
 import { BackgroundChip, useBackgroundState } from './BackgroundChip.js';
-import { ServerIcon, MoneyIcon, SlidersIcon, CubeIcon, PanelIcon } from '../icons.js';
-import { GfBarChartHorizontalIcon, GfBoltIcon, GfCloseIcon, GfMinusIcon } from '../gentleface-icons.js';
+import { ServerIcon, MoneyIcon, SlidersIcon, CubeIcon, PanelIcon, StarIcon } from '../icons.js';
+import { ENGINE_PROVIDER_ID, loadLocalModel, localModelShortcuts, noteLocalModelsUsed, readRecentLocalModels } from './engine/localModelShortcuts.js';
+import { nextFavoriteModels } from './agent-console/modelPickerInteractions.js';
+import { GfBarChartHorizontalIcon, GfBeachIcon, GfBoltIcon, GfCloseIcon, GfMinusIcon, GfPlayCircleIcon, SettingsIcon } from '../gentleface-icons.js';
 import { ProviderMark, providerMarkKind } from './providers/ProviderMark.js';
 import { formatBytes, formatTokens, placementLabel, placementTitle } from './runtimes/verdict.js';
 import { HoverTip } from './HoverTip.js';
@@ -44,6 +48,11 @@ export interface MonitorsDockProps {
 
 const DEFAULT_DOCK_WIDTH = 248;
 const MIN_DOCK_WIDTH = 220;
+/** A top or bottom dock is as tall as its monitors, up to this; dragging its edge changes the ceiling. */
+const DEFAULT_DOCK_HEIGHT = 360;
+const MIN_DOCK_HEIGHT = 120;
+/** The wall keeps at least this much height beside a top or bottom dock. */
+const WALL_MIN_HEIGHT = 240;
 
 /**
  * The dock's show/hide button: an icon (the agent panel's pill, mirrored), with
@@ -151,6 +160,30 @@ export function MonitorsDock(props: MonitorsDockProps) {
   const size = (value: number) => { const next = Math.max(MIN_DOCK_WIDTH, Math.min(600, value)); setWidth(Math.abs(next - DEFAULT_DOCK_WIDTH) <= 20 ? DEFAULT_DOCK_WIDTH : next); };
   const [collapsing, setCollapsing] = useState<MonitorKey | null>(null);
   const dockRef = useRef<HTMLElement>(null);
+  // Docked above or below the wall, the dock's inner edge drags its height the
+  // same way: written straight onto the dock while dragging, committed on release.
+  const [height, setHeight] = useState(DEFAULT_DOCK_HEIGHT);
+  const [heightMax, setHeightMax] = useState(DEFAULT_DOCK_HEIGHT);
+  const heightDrag = useRef<{ y: number; height: number; max: number; last?: number } | null>(null);
+  /** The tallest the dock can usefully be: all of its monitors showing, and the wall keeping its room. */
+  const measureHeightMax = () => {
+    const node = dockRef.current;
+    if (!node) return DEFAULT_DOCK_HEIGHT;
+    // In a row, each monitor clips its own body, so the list itself rarely
+    // overflows: the most any one of them hides is how much taller the dock can go.
+    const list = monitorsRef.current;
+    const hidden = Math.max(0, list ? list.scrollHeight - list.clientHeight : 0, ...[...list?.querySelectorAll<HTMLElement>('[data-monitor]') ?? []].map((m) => m.scrollHeight - m.clientHeight));
+    const content = node.getBoundingClientRect().height + hidden;
+    const room = (node.parentElement?.clientHeight ?? 1000) - WALL_MIN_HEIGHT;
+    const max = Math.max(MIN_DOCK_HEIGHT, Math.min(Math.ceil(content), room));
+    setHeightMax(max);
+    return max;
+  };
+  const fitHeight = (value: number, max: number) => {
+    const next = Math.max(MIN_DOCK_HEIGHT, Math.min(max, value));
+    return Math.abs(next - DEFAULT_DOCK_HEIGHT) <= 20 ? DEFAULT_DOCK_HEIGHT : next;
+  };
+  const heightSign = dock.side === 'top' ? 1 : -1;
   const focusMonitor = useRef<{ key: MonitorKey; minimized: boolean } | null>(null);
   const minimizeTransition = useRef(dockMinimizeTransition());
   useEffect(() => () => minimizeTransition.current.cancel(), []);
@@ -225,7 +258,7 @@ export function MonitorsDock(props: MonitorsDockProps) {
   return (
     <>
     {collapsed}
-    <aside data-panel-open={dock.show} inert={!dock.show} aria-hidden={!dock.show} ref={dockRef} className="monitors-dock" style={{ '--dock-width': `${width}px` } as React.CSSProperties} data-dock-side={dock.side} aria-label="Monitors">
+    <aside data-panel-open={dock.show} inert={!dock.show} aria-hidden={!dock.show} ref={dockRef} className="monitors-dock" style={{ '--dock-width': `${width}px`, '--dock-height': `${height}px` } as React.CSSProperties} data-dock-side={dock.side} aria-label="Monitors">
       {(dock.side === 'left' || dock.side === 'right') && <div className="monitors-dock__resize" role="separator" tabIndex={0} aria-label="Resize monitors" aria-orientation="vertical" aria-valuemin={MIN_DOCK_WIDTH} aria-valuemax={600} aria-valuenow={width} title="Drag to resize monitors; double-click to reset"
         onPointerDown={(e) => { drag.current = { x: e.clientX, width, room: (e.currentTarget.parentElement?.parentElement?.clientWidth ?? 1000) - 240 }; e.currentTarget.setPointerCapture(e.pointerId); }}
         onPointerMove={(e) => {
@@ -238,6 +271,26 @@ export function MonitorsDock(props: MonitorsDockProps) {
         onPointerUp={() => { const last = drag.current?.last; drag.current = null; if (last != null) setWidth(last); }} onPointerCancel={() => { drag.current = null; }} onDoubleClick={() => setWidth(DEFAULT_DOCK_WIDTH)}
         onKeyDown={(e) => { if (e.key === 'Home') { e.preventDefault(); setWidth(DEFAULT_DOCK_WIDTH); } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); size(width + (e.key === 'ArrowRight' ? 24 : -24) * (dock.side === 'left' ? 1 : -1)); } }}>
         {/* The agent list's grip: a thin line that shows on hover and focus. */}
+        <span aria-hidden className="pane-grip monitors-dock__grip" />
+      </div>}
+      {(dock.side === 'top' || dock.side === 'bottom') && <div className="monitors-dock__resize" role="separator" tabIndex={0} aria-label="Resize monitors" aria-orientation="horizontal" aria-valuemin={MIN_DOCK_HEIGHT} aria-valuemax={Math.max(heightMax, height)} aria-valuenow={height} title="Drag to resize monitors; double-click to reset"
+        onFocus={measureHeightMax}
+        onPointerDown={(e) => { heightDrag.current = { y: e.clientY, height: dockRef.current?.getBoundingClientRect().height ?? height, max: measureHeightMax() }; e.currentTarget.setPointerCapture(e.pointerId); }}
+        onPointerMove={(e) => {
+          const d = heightDrag.current;
+          if (!d) return;
+          d.last = fitHeight(d.height + (e.clientY - d.y) * heightSign, d.max);
+          dockRef.current?.style.setProperty('--dock-height', `${d.last}px`);
+        }}
+        onPointerUp={() => { const last = heightDrag.current?.last; heightDrag.current = null; if (last != null) setHeight(last); }} onPointerCancel={() => { heightDrag.current = null; dockRef.current?.style.setProperty('--dock-height', `${height}px`); }} onDoubleClick={() => setHeight(DEFAULT_DOCK_HEIGHT)}
+        onKeyDown={(e) => {
+          if (e.key === 'Home') { e.preventDefault(); setHeight(DEFAULT_DOCK_HEIGHT); }
+          else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            const shown = Math.min(height, dockRef.current?.getBoundingClientRect().height ?? height);
+            setHeight(fitHeight(shown + (e.key === 'ArrowDown' ? 24 : -24) * heightSign, measureHeightMax()));
+          }
+        }}>
         <span aria-hidden className="pane-grip monitors-dock__grip" />
       </div>}
       <header className="monitors-dock__toolbar">
@@ -680,44 +733,45 @@ export function hardwareRows(monitors: Record<MonitorKind, boolean>, system: Sys
 
 const TEMP_COLOR = { ok: 'var(--ink-faint)', warn: 'var(--warning)', hot: 'var(--danger)' } as const;
 
-/** The built-in Model Server's provider id (`PROVIDER_ID` in EngineSection). */
-const ENGINE_PROVIDER_ID = 'nekko-engine';
-
 /** How often the Local models monitor re-reads the engine, matching the chat's model dock. */
 const LOCAL_MODELS_POLL_MS = 6000;
 
 /**
- * What the local engine holds in memory and where each model runs, with a jump
- * to that model's own settings on Model Server. Read-only by design: GPU offload,
- * context and KV cache are load-time settings with a reload behind them, and they
- * belong on the page that explains what changing them costs.
+ * What the local engine holds in memory and where each model runs, with
+ * Unload on every model (picture models included: one fills the GPU) and a
+ * jump to its own settings on Model Server. Below that, a few starred and
+ * recent models with Load and Settings, so the next one is a click away.
+ * GPU offload, context and KV cache themselves stay on Model Server, which
+ * explains what changing them costs.
  */
+const engineChats = stableSelector((s: { sessions?: SessionSummary[] }) => (s.sessions ?? []).filter((c) => c.providerId === ENGINE_PROVIDER_ID && c.modelId));
+
 export function LocalModels({ initial }: { initial?: { status: EngineStatus | null; models: LocalModel[] } } = {}) {
   const computer = useWatchedComputer();
+  const favorites = useStore((s) => s.settings?.favoriteModels);
+  const chats = useStore(engineChats);
+  const [busy, setBusy] = useState<string | null>(null);
   const [status, setStatus] = useState<EngineStatus | null>(initial?.status ?? null);
   const [models, setModels] = useState<LocalModel[]>(initial?.models ?? []);
   const [read, setRead] = useState(Boolean(initial));
   // Bumped after a change on a watched computer, to read it again at once.
   const [tick, setTick] = useState(0);
   useEffect(() => {
-    let live = true;
     if (!initial && tick === 0) setRead(false);
-    const refresh = async () => {
-      // A connected computer answers with its phone view: `installed` instead of the path, and no names.
-      const [s, m] = computer
-        ? [await window.nekko.computerEngineStatus(computer).catch(() => null) as EngineStatus | null, []]
-        : await Promise.all([
-          window.nekko.engineStatus().catch(() => null),
-          window.nekko.engineModels().catch(() => []),
-        ]);
-      if (!live) return;
-      setStatus(s); setModels(Array.isArray(m) ? m : []); setRead(true);
-    };
-    void refresh();
-    const t = setInterval(refresh, LOCAL_MODELS_POLL_MS);
-    return () => { live = false; clearInterval(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [computer, tick]);
+  // Paused while the dock is hidden or the window is minimised; reads at once when it comes back.
+  useVisibleInterval(async (live) => {
+    // A connected computer answers with its phone view: `installed` instead of the path, and no names.
+    const [s, m] = computer
+      ? [await window.nekko.computerEngineStatus(computer).catch(() => null) as EngineStatus | null, []]
+      : await Promise.all([
+        window.nekko.engineStatus().catch(() => null),
+        window.nekko.engineModels().catch(() => []),
+      ]);
+    if (!live()) return;
+    setStatus(s); setModels(Array.isArray(m) ? m : []); setRead(true);
+  }, LOCAL_MODELS_POLL_MS, { immediate: true, deps: [computer, tick] });
   useEffect(() => setTick(0), [computer]);
   const store = useStore.getState;
   const names = new Map(models.map((m) => [m.id, m.name]));
@@ -731,21 +785,71 @@ export function LocalModels({ initial }: { initial?: { status: EngineStatus | nu
   const resident = status?.resident ?? [];
   const installed = Boolean((status as { installed?: boolean } | null)?.installed ?? status?.install?.binPath);
   const openServer = () => store().setView('modelserver');
+  const library = new Map(models.map((m) => [m.id, m]));
+  // What this computer holds counts as used, so it is in Recent once it unloads.
+  useEffect(() => {
+    if (computer || !status?.running || !status.resident.length) return;
+    noteLocalModelsUsed(status.resident.map((r) => ({ id: r.id, at: r.lastUsedAt ?? Date.now() })));
+  }, [computer, status]);
+  const act = async (id: string, verb: string, run: () => Promise<{ ok: boolean; message?: string }>) => {
+    setBusy(id);
+    const res = await run().catch((e: Error) => ({ ok: false, message: e.message }));
+    setBusy(null);
+    if (!res.ok) store().pushToast('error', res.message || `Couldn't ${verb} it.`);
+    setTick((n) => n + 1);
+  };
+  const unload = (id: string) => act(id, 'unload', () => window.nekko.unloadModel(ENGINE_PROVIDER_ID, id));
+  const unloadAll = () => act('*', 'unload them', async () => {
+    const results = await Promise.all(resident.map((r) => window.nekko.unloadModel(ENGINE_PROVIDER_ID, r.id).catch((e: Error) => ({ ok: false, message: e.message }))));
+    return results.find((r) => !r.ok) ?? { ok: true };
+  });
+  const load = (m: LocalModel) => {
+    noteLocalModelsUsed([{ id: m.id, at: Date.now() }]);
+    return act(m.id, 'load', () => loadLocalModel(ENGINE_PROVIDER_ID, m));
+  };
+  const toggleStar = async (id: string) => {
+    await window.nekko.updateSettings({ favoriteModels: nextFavoriteModels(favorites, `${ENGINE_PROVIDER_ID}::${id}`) }).catch(() => null);
+    void store().refreshSettings(false);
+  };
+  const starredSet = new Set(favorites ?? []);
+  const star = (id: string, name: string) => {
+    const on = starredSet.has(`${ENGINE_PROVIDER_ID}::${id}`);
+    return <button type="button" className="monitors-dock__star" data-local-model-star={id} aria-pressed={on} aria-label={on ? `Unstar ${name}` : `Star ${name}`} title={on ? 'Starred: offered here when it is not loaded' : 'Star it to keep it offered here'} onClick={() => void toggleStar(id)}><StarIcon className="h-3 w-3" filled={on} /></button>;
+  };
+  const kind = (m: LocalModel | undefined) => m?.modality && m.modality !== 'chat' ? MODALITY_LABELS[m.modality] : null;
+  const shortcuts: { starred: LocalModel[]; recent: LocalModel[] } = computer || !installed ? { starred: [], recent: [] } : localModelShortcuts({ models, resident: resident.map((r) => r.id), favorites, seen: readRecentLocalModels(), chats: chats ?? [] });
+  // A cog with a tooltip: the row's name already says whose settings they are.
+  const settingsButton = (id: string, name: string, modality: LocalModel['modality'] | undefined) =>
+    <button type="button" className="monitors-dock__icon-action" data-local-model-settings={id} aria-label={`Open ${name} settings`} title={modality === 'image' ? 'Picture settings' : 'Settings: GPU offload, context and memory'} onClick={() => store().openLocalModelSettings(id)}><SettingsIcon className="monitors-dock__icon" /></button>;
+  const shortcutRow = (m: LocalModel) => <div className="monitors-dock__local-model" key={m.id} data-local-model-shortcut={m.id}>
+    <div className="monitors-dock__metric-row">
+      {star(m.id, m.name)}
+      <strong className="monitors-dock__provider-name" title={m.name}>{m.name}</strong>
+      {settingsButton(m.id, m.name, m.modality)}
+      {busy === m.id
+        ? <span className="monitors-dock__busy" role="status">Loading…</span>
+        : <button type="button" className="monitors-dock__icon-action" data-local-model-load={m.id} aria-label={`Load ${m.name}`} title="Load" onClick={() => void load(m)}><GfPlayCircleIcon className="monitors-dock__icon" /></button>}
+    </div>
+    <p className="monitors-dock__note">{[kind(m), m.parameterSize, m.quantization, formatBytes(m.sizeBytes)].filter(Boolean).join(' · ')}</p>
+  </div>;
   if (!read) return <div className="monitors-dock__metrics monitors-dock__local-models"><p className="monitors-dock__note">{computer ? 'Reading that computer\'s engine…' : 'Reading the local engine…'}</p></div>;
   return <div className="monitors-dock__metrics monitors-dock__local-models">
+    {installed && <p className="monitors-dock__local-group-label">Running</p>}
     {!installed ? <p>No local engine installed.</p>
-      : !status?.running ? <p>The model server is stopped.</p>
-      : resident.length === 0 ? <p>No local model is loaded.</p>
+      : !status?.running ? <p className="monitors-dock__note">The model server is stopped.</p>
+      : resident.length === 0 ? <p className="monitors-dock__local-idle" data-local-models-idle data-icon-hover><GfBeachIcon className="monitors-dock__icon" />No models are currently loaded.</p>
       : resident.map((r) => {
         const split = r.loadedOn === 'gpu+cpu' || r.loadedOn === 'cpu';
+        const model = library.get(r.id);
         const name = names.get(r.id) ?? r.id;
         const bytes = r.vramBytes ?? r.sizeBytes;
-        const rest = [r.contextLength ? `${formatTokens(r.contextLength)} context` : null, bytes ? formatBytes(bytes) : null].filter((x): x is string => Boolean(x));
+        const rest = [kind(model), r.contextLength ? `${formatTokens(r.contextLength)} context` : null, bytes ? formatBytes(bytes) : null].filter((x): x is string => Boolean(x));
         return <div className="monitors-dock__local-model" key={r.id} data-local-model={r.id}>
           <div className="monitors-dock__metric-row">
+            {!computer && model && star(r.id, name)}
             <strong className="monitors-dock__provider-name" title={name}>{name}</strong>
-            {!computer && <button type="button" className="monitors-dock__text-button" data-local-model-settings={r.id} title={`Open ${name}'s GPU offload, context and memory settings`} aria-label={`Open ${name} settings`} onClick={() => store().openLocalModelSettings(r.id)}>Settings</button>}
-            {computer && <button type="button" className="monitors-dock__text-button" data-local-model-unload={r.id} aria-label={`Unload ${name}`} onClick={() => change('model:unload', [ENGINE_PROVIDER_ID, r.id])}>Unload</button>}
+            {!computer && settingsButton(r.id, name, model?.modality)}
+            <button type="button" className="monitors-dock__text-button" data-local-model-unload={r.id} aria-label={`Unload ${name}`} disabled={busy === r.id || busy === '*'} onClick={() => computer ? change('model:unload', [ENGINE_PROVIDER_ID, r.id]) : void unload(r.id)}>{busy === r.id ? 'Unloading…' : 'Unload'}</button>
           </div>
           <p className="monitors-dock__note">
             {r.loadedOn && <span title={placementTitle(r)} style={split ? { color: 'var(--warning)' } : undefined}>{placementLabel(r)}</span>}
@@ -754,6 +858,9 @@ export function LocalModels({ initial }: { initial?: { status: EngineStatus | nu
           </p>
         </div>;
       })}
+    {!computer && status?.running && resident.length > 1 && <button type="button" className="monitors-dock__text-button" data-local-models-unload-all disabled={busy !== null} onClick={() => void unloadAll()}>{busy === '*' ? 'Unloading…' : 'Unload all'}</button>}
+    {shortcuts.starred.length > 0 && <div className="monitors-dock__local-group" data-local-models-group="starred"><p className="monitors-dock__local-group-label">Starred</p>{shortcuts.starred.map(shortcutRow)}</div>}
+    {shortcuts.recent.length > 0 && <div className="monitors-dock__local-group" data-local-models-group="recent"><p className="monitors-dock__local-group-label">Recent</p>{shortcuts.recent.map(shortcutRow)}</div>}
     {computer && installed && status?.running && server && <ComputerModelServer id={computer} server={server} resident={resident.map((r) => r.id)} change={change} />}
     {/* The Model Server page and a model's settings are this computer's. */}
     {!computer && <button type="button" className="monitors-dock__text-button" onClick={openServer}>{installed ? 'Open Model Server' : 'Set up a local model'}</button>}

@@ -77,10 +77,6 @@ app.whenReady().then(async () => {
       for (let i=0;i<15;i++) { await sleep(40); await capture(); }
       await check('enable opens secondary screen', "viewCalls.some(c=>c[0]==='toggle'&&c[1]==='2'&&c[2]===true) && document.querySelector('.screens-enable input').checked");
       await shot('view-expanded');
-      await click('[name="screens-placement"]');
-      await check('main first placement saved', "viewCalls.some(c=>c[0]==='placement'&&c[1]==='main-first')");
-      await run("document.querySelectorAll('[name=screens-placement]')[1].click()");
-      await check('balanced placement saved', "screensFixture.state.placement === 'empty-first'");
       await run("document.querySelector('.screens-enable input').click()");
       for (let i=0;i<15;i++) { await sleep(40); await capture(); }
       require('./evidence-gif.cjs')(path.join(out,'screens-reveal.gif'),frames,4);
@@ -89,11 +85,10 @@ app.whenReady().then(async () => {
       await click('.screens-enable input'); await escape(); await click('[data-wall-view-toggle]');
       await check('screen preference survives reopening', "document.querySelector('.screens-enable input').checked");
       await click('.screens-enable input');
-      await run("document.querySelectorAll('[name=view-interface-detail]')[1].click()"); await sleep(100);
-      await run("document.querySelector('[name=view-interface-detail]').click()");
-      await check('Simple radio persists', "localStorage.getItem('nekko.chatMode') === 'simple' && document.querySelector('[name=view-interface-detail]').checked");
-      await run("document.querySelectorAll('[name=view-interface-detail]')[1].click()");
-      await check('Detailed radio selected', "document.querySelectorAll('[name=view-interface-detail]')[1].checked");
+      await run("const s=document.querySelector('[data-view-interface-detail]'); if (s.checked) s.click()"); await sleep(100);
+      await check('Simple persists', "localStorage.getItem('nekko.chatMode') === 'simple' && !document.querySelector('[data-view-interface-detail]').checked");
+      await run("document.querySelector('[data-view-interface-detail]').click()");
+      await check('Detailed switch on', "document.querySelector('[data-view-interface-detail]').checked");
       await escape(); await click('[aria-label="Agent panel view options"]'); await click('[data-view-menu-row="show"]');
       await check('experience controls removed from panel', "!document.querySelector('[data-agent-view-menu] .mode-seg') && !document.querySelector('[data-view-menu-row=details]')");
       for (const key of ['showModel','showContext','showPullRequests','showGit','showSubagents','showWindows','showUpdated']) {

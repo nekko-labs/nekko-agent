@@ -8,7 +8,28 @@ import '../src/renderer/styles.css';
 // cancels every non-file request.
 const IP = '100.114.173.86';
 const NAME = 'gomi.tailfd6474.ts.net';
-const scenarios: Record<string, { relay: any; remote: any }> = {
+const TAILNET = `ws://${NAME}:4400`;
+const CLOUD = 'wss://nekko-agent-relay.fly.dev';
+const PRO = { signedIn: true, account: { email: 'owner@example.com', plan: 'pro', canSync: true, features: { cloudRelay: true } } };
+const tailnetUp = { available: true, running: true, enabled: true, port: 4400, tailnetIp: IP, tailnetName: NAME, url: TAILNET };
+const phones = [
+  { id: 'd1', name: 'iPhone', platform: 'ios', createdAt: Date.now() - 864e5, lastSeenAt: Date.now() - 6e4, route: 'cloud' },
+  { id: 'd2', name: 'iPad', platform: 'ios', createdAt: Date.now() - 864e5 * 9, lastSeenAt: Date.now() - 864e5 * 2 },
+];
+const scenarios: Record<string, { relay: any; remote: any; cloud?: any }> = {
+  // Decision 0116 / #3346: tick Tailscale and/or Nekko Cloud Relay.
+  'pro-off': { remote: { enabled: false }, relay: tailnetUp, cloud: PRO },
+  'pro-both': {
+    remote: {
+      enabled: true, online: true, relayUrl: TAILNET, alsoRelays: [CLOUD], room: 'fixture-room', connected: ['d1'], devices: phones,
+      relays: [{ url: TAILNET, via: 'direct', online: true }, { url: CLOUD, via: 'cloud', online: true }],
+    },
+    relay: tailnetUp, cloud: PRO,
+  },
+  'pro-cloud-only': {
+    remote: { enabled: true, online: true, relayUrl: CLOUD, room: 'fixture-room', connected: ['d1'], devices: phones, relays: [{ url: CLOUD, via: 'cloud', online: true }] },
+    relay: tailnetUp, cloud: PRO,
+  },
   'tailnet-idle': {
     remote: { enabled: false },
     relay: { available: true, running: false, enabled: false, port: 4400, tailnetIp: IP, tailnetName: NAME, url: `ws://${NAME}:4400` },
@@ -34,6 +55,18 @@ const calls: string[] = [];
 let current = scenarios['tailnet-idle'];
 const bridge: any = {
   getRemoteStatus: async () => current.remote,
+  cloudStatus: async () => current.cloud ?? { signedIn: false },
+  securityStatus: async () => ({ enabled: true }),
+  setRemoteRelays: async (urls: string[]) => {
+    calls.push('remote:setRelays ' + urls.join(' '));
+    current = { ...current, remote: { ...current.remote, alsoRelays: urls } };
+    return current.remote;
+  },
+  setRemoteRoute: async (id: string, route: string) => {
+    calls.push(`remote:setRoute ${id} ${route}`);
+    current = { ...current, remote: { ...current.remote, devices: current.remote.devices.map((d: any) => (d.id === id ? { ...d, route } : d)) } };
+    return current.remote.devices;
+  },
   localRelayStatus: async () => current.relay,
   localRelayStart: async () => {
     calls.push('localRelay:start');
@@ -43,7 +76,8 @@ const bridge: any = {
   localRelayStop: async () => current.relay,
   enableRemote: async (url: string) => {
     calls.push('remote:enable ' + url);
-    return { enabled: true, relayUrl: url, room: 'fixture-room', online: true, devices: [] };
+    current = { ...current, remote: { ...current.remote, enabled: true, relayUrl: url, room: 'fixture-room', online: true, devices: current.remote.devices ?? [] } };
+    return current.remote;
   },
   disableRemote: async () => {
     calls.push('remote:disable');

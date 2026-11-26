@@ -50,7 +50,9 @@ enum class DenyReason(val wire: String) {
     UNKNOWN_DEVICE("unknown-device"), REVOKED("revoked"), BAD_CODE("bad-code"), INVALID("invalid"),
     KICKED("kicked"), BAD_KEY("bad-key"),
     /** The computer's owner turned off phones that speak an older protocol than it does. */
-    UPDATE_REQUIRED("update-required");
+    UPDATE_REQUIRED("update-required"),
+    /** The computer only lets this phone in through another route (its per-device route choice, #3243). */
+    ROUTE("route");
 
     companion object {
         fun parse(s: String?) = entries.firstOrNull { it.wire == s } ?: INVALID
@@ -155,6 +157,13 @@ class RelayConfig(
     /** Backoff knobs; tests shrink them. */
     val retryBaseMs: Long = 1_000,
     val retryMaxMs: Long = 30_000,
+    /**
+     * Up to this fraction is added to each backoff delay, at random, so phones and computers that
+     * lost the relay together do not all redial in the same instant (the iPhone's `retryJitter`).
+     */
+    val retryJitter: Double = 0.5,
+    /** A number in 0 until 1 for the jitter; tests fix it. */
+    val jitterSource: () -> Double = { kotlin.random.Random.nextDouble() },
     val offlinePollMs: Long = 15_000,
     /** Other addresses of the same relay (the pairing link's `alt` routes). */
     val alts: List<String> = emptyList(),
@@ -175,6 +184,15 @@ class RelayConfig(
 ) {
     /** The relay address first, then the alternates. */
     val routes: List<String> get() = listOf(relayUrl) + alts
+
+    /**
+     * The wait before redial number [attempt] (0 is the first): 1 s, 2 s, 4 s … capped at [retryMaxMs],
+     * then 0 to [retryJitter] more of it.
+     */
+    fun retryDelayMs(attempt: Int): Long {
+        val base = minOf(retryMaxMs, retryBaseMs shl minOf(attempt, 20))
+        return base + (base * maxOf(0.0, retryJitter) * jitterSource().coerceIn(0.0, 1.0)).toLong()
+    }
 }
 
 /**
@@ -444,8 +462,13 @@ class RelayClient(
         if (!isReady()) throw RelayException(if (state == RelayState.DENIED) deniedMessage() else "Not connected.")
     }
 
-    private fun deniedMessage() =
-        if (_status.value.denied == DenyReason.UPDATE_REQUIRED) UPDATE_MESSAGE else "This phone is no longer paired."
+    private fun deniedMessage() = deniedText(_status.value.denied)
+
+    private fun deniedText(reason: DenyReason?) = when (reason) {
+        DenyReason.UPDATE_REQUIRED -> UPDATE_MESSAGE
+        DenyReason.ROUTE -> "This computer only lets this phone in through another route."
+        else -> "This phone is no longer paired."
+    }
 
     private fun isReady() = synchronized(lock) { welcomed && conn != null }
 
@@ -767,6 +790,22 @@ class RelayClient(
     }
 
     private fun deny(reason: DenyReason) {
+        if (reason == DenyReason.ROUTE) {
+            // This route is refused, not the phone: try the next route this phone may dial.
+            var old: WsConnection? = null
+            val moved = synchronized(lock) {
+                if (stopped) return
+                val m = routes.refused(now())
+                if (m) { old = conn; conn = null; retryJob?.cancel(); retryJob = null }
+                m
+            }
+            if (moved) {
+                runCatching { old?.close(1000, "route refused") }
+                failPending("connection lost")
+                dial("route refused")
+                return
+            }
+        }
         val c: WsConnection?
         synchronized(lock) {
             endHandshakeLocked()
@@ -776,7 +815,7 @@ class RelayClient(
             stopProbesLocked()
             c = conn; conn = null
         }
-        failPending(if (reason == DenyReason.UPDATE_REQUIRED) UPDATE_MESSAGE else "This phone is no longer paired.")
+        failPending(deniedText(reason))
         runCatching { c?.close(1000, "denied") }
         setStatus(RelayStatus(RelayState.DENIED, reason.wire, reason))
     }
@@ -785,9 +824,8 @@ class RelayClient(
         val delayMs: Long
         synchronized(lock) {
             if (stopped) return
-            // 1s, 2s, 4s … capped; an offline computer is polled at a fixed pace.
-            delayMs = if (offline) config.offlinePollMs
-            else minOf(config.retryMaxMs, config.retryBaseMs shl minOf(retry++, 20))
+            // 1s, 2s, 4s … capped, plus jitter; an offline computer is polled at a fixed pace.
+            delayMs = if (offline) config.offlinePollMs else config.retryDelayMs(retry++)
             retryJob?.cancel()
             retryJob = scope.launch {
                 delay(delayMs)

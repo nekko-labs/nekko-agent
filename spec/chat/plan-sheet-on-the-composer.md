@@ -157,3 +157,15 @@ Issue: [#2089](https://github.com/nekko-labs/nekko-agent/issues/2089).
 - **Scope.** Desktop and Local Web UI. The phone apps' plan sheets are unchanged.
 
 Verification: `PlanSheet.test.tsx` (issue glyphs and colours, the Agents label leading the cards), the `nekko-workspace` unit test for the issue read (gh and REST shapes, not-planned), and hidden, off-screen Electron captures (`plan-chip-status-sandbox.cjs`: the three issue states, the PR glyph on an open PR with failing CI, the label left of the first card, folded and open). Not checked against a live GitHub read in the app or in a packaged build.
+
+## Compact title rows and inline chip overflow (#3123)
+
+Status: implemented in the shared desktop / Local Web UI renderer; verification is recorded in the linked PR. Native iOS and Android presentation is unchanged.
+
+- **Intent.** Keep plans easy to scan: remove row subtext, put related chips to the right of the task title, and reveal only the overflow on demand.
+- **One title line.** All step statuses use the same compact row. Notes and verification details no longer render as subtext, even when expanded. Saved plan metadata is unchanged. A reported check keeps its status, device, freshness and detail on the leading mark tooltip; safe evidence links still open from that mark.
+- **Whole chips that fit.** Chips follow the title in their existing ownership and order (task, sub-agent, PR, CI, file/preview). Fit uses actual chip widths, gaps, the available row width and space for the count control, not a fixed number of chips. The title keeps priority and truncates with its full text available in the tooltip. The folded current-task summary uses the same inline treatment.
+- **Overflow disclosure.** A +N chip counts only the chips that do not fit. Clicking it or using Enter/Space reveals those chips beneath that row; the count changes to minus N to fold them back. Other rows stay closed, regardless of their status. Hovering reveals nothing. The disclosure exposes aria-expanded and aria-controls, and clipped measurement chips are inert and hidden from assistive technology. Resizing and changing chip labels recompute fit. Expanded chips wrap within the row at narrow widths, including folded/unfolded or split-pane web layouts.
+- **Unchanged boundaries.** No new reads, network requests, tool behavior or permissions. Existing chip navigation/actions, evidence validation, progress counts, original step order, pass labels, and bottom sub-agent cards remain. Native phone parity is outside this shared-renderer change.
+
+Supersedes the note/detail line and default per-step disclosure rules above. Acceptance: no row subtext; chips inline when space permits; accurate overflow count including individual CI chips; isolated per-row expansion with keyboard and mouse; no horizontal overflow; remeasure after resizing; safe evidence and chip actions remain reachable. Focused unit tests and a hidden, isolated Electron journey cover this scope. Packaged builds, live providers and native phone apps are not covered by the synthetic fixture.

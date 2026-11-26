@@ -6,6 +6,7 @@ import { issueToken } from "./auth.js";
 import type { Db } from "./db.js";
 import { MAX_DESCRIPTOR_BYTES, MAX_FLEET_COMPUTERS } from "./fleet.js";
 import { migrate } from "./migrate.js";
+import { Presence } from "./presence.js";
 import { buildServer } from "./server.js";
 import { pgliteDb } from "./test-db.js";
 
@@ -15,10 +16,13 @@ const proof = (k: number): string => vectors.epochProofs.find((p: { keyId: numbe
 const sealed = () => Buffer.concat([Buffer.from([1]), randomBytes(304)]).toString("base64url");
 let db: Db;
 let app: ReturnType<typeof buildServer>;
+/** The presence clock: tests move it instead of editing seen_at. */
+let skew = 0;
 beforeEach(async () => {
   db = pgliteDb(new PGlite());
   await migrate(db, undefined, { lock: false });
-  app = buildServer({ db, allowedOrigins: [], fleetEnabled: true });
+  skew = 0;
+  app = buildServer({ db, allowedOrigins: [], fleetEnabled: true, presence: new Presence(() => Date.now() + skew) });
 });
 afterEach(async () => { await app.close(); await db.close(); });
 
@@ -99,7 +103,7 @@ describe("account fleet discovery (not pairing or execution)", () => {
     const a = await account();
     expect((await call(a.token, "POST", "/v1/fleet/self/heartbeat")).json()).toEqual({ error: "publish-required" });
     await publish(a.token);
-    await db.query("update fleet_computers set seen_at = now() - interval '91 seconds'");
+    skew += 91_000;
     expect((await list(a.token))[0].online).toBe(false);
     expect((await call(a.token, "POST", "/v1/fleet/self/heartbeat")).statusCode).toBe(200);
     expect((await list(a.token))[0]).toMatchObject({ online: true, revision: 1 });

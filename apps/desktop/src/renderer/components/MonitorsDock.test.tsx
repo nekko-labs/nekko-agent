@@ -3,7 +3,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_WALL_STATE } from '../commandWall.js';
 import { cssRule, stylesheet } from '../tests/css.js';
-vi.mock('../store.js', () => ({ useStore: (select: (s: unknown) => unknown) => select({ settings: {} }) }));
+const storeState = vi.hoisted(() => ({ value: { settings: {} } as Record<string, unknown> }));
+vi.mock('../store.js', () => ({ useStore: (select: (s: unknown) => unknown) => select(storeState.value) }));
 vi.mock('../simpleMode.js', async (original) => ({ ...(await original<object>()), useShown: () => true }));
 const quota = vi.hoisted(() => ({ byToken: {} as Record<string, any>, answered: new Set<string>(), nextRefreshAt: null as number | null }));
 vi.mock('../useLimits.js', () => ({ useProviderLimitsPortfolio: () => quota }));
@@ -185,6 +186,29 @@ describe('wall dock presentation', () => {
     expect(html).toContain('Unavailable');
     expect(html).not.toContain('>Minimize</button>');
   });
+  it('resizes a side dock across and a top or bottom dock up and down, from the edge facing the wall', () => {
+    const props = { setState: vi.fn(), tasks: [], running: new Set<string>(), now: 0, sessions: [], providers: [], usage: null, onOpenChat: vi.fn(), onOpenModels: vi.fn() };
+    const at = (side: 'left' | 'right' | 'top' | 'bottom') => renderToStaticMarkup(<MonitorsDock {...props} state={{ ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, side } }} />);
+    for (const side of ['left', 'right'] as const) {
+      const html = at(side);
+      expect(html.match(/aria-label="Resize monitors"/g)).toHaveLength(1);
+      expect(html).toMatch(/aria-label="Resize monitors" aria-orientation="vertical"/);
+    }
+    for (const side of ['top', 'bottom'] as const) {
+      const html = at(side);
+      expect(html.match(/aria-label="Resize monitors"/g)).toHaveLength(1);
+      expect(html).toMatch(/aria-label="Resize monitors" aria-orientation="horizontal" aria-valuemin="120" aria-valuemax="360" aria-valuenow="360"/);
+      expect(html).toContain('--dock-height:360px');
+    }
+    const css = stylesheet('components/monitorsDock.css');
+    // The dragged height is the dock's ceiling: it stays as tall as its monitors below it.
+    expect(cssRule(css, '.monitors-dock[data-dock-side="top"]')['max-height']).toBe('var(--dock-height,360px)');
+    const edge = '.monitors-dock:is([data-dock-side="top"],[data-dock-side="bottom"]) .monitors-dock__resize';
+    expect(cssRule(css, edge)).toMatchObject({ bottom: '-9px', height: '10px', cursor: 'row-resize' });
+    expect(cssRule(css, '.monitors-dock[data-dock-side="bottom"] .monitors-dock__resize')).toMatchObject({ top: '-9px', bottom: 'auto' });
+    // The grip sits past the dock's edge, so an open top or bottom dock does not clip it.
+    expect(cssRule(css, '.monitors-dock:is([data-dock-side="top"],[data-dock-side="bottom"])[data-panel-open="true"]')['clip-path']).toBe('inset(-10px)');
+  });
   it('replaces a minimized panel with a restore icon in the top row', () => {
     const html = render(true);
     expect(html).toContain('aria-label="Minimized monitors"');
@@ -253,12 +277,62 @@ describe('Local models monitor', () => {
     expect(html).toContain('data-local-model-settings="ghost"');
   });
   it('says plainly when nothing is loaded, the server is stopped, or there is no engine', () => {
-    expect(renderToStaticMarkup(<LocalModels initial={{ status: status(), models }} />)).toContain('No local model is loaded.');
+    const idle = renderToStaticMarkup(<LocalModels initial={{ status: status(), models }} />);
+    expect(idle).toContain('>Running</p>');
+    expect(idle).toContain('No models are currently loaded.');
+    expect(idle).toContain('data-gf-icon="beach"');
     expect(renderToStaticMarkup(<LocalModels initial={{ status: status({ running: false }), models }} />)).toContain('The model server is stopped.');
     const none = renderToStaticMarkup(<LocalModels initial={{ status: status({ install: { available: [] } }), models }} />);
     expect(none).toContain('No local engine installed.');
     expect(none).toContain('Set up a local model');
     expect(none).not.toContain('data-local-model-settings');
+    expect(none).not.toContain('>Running</p>');
+  });
+  it('offers Unload on every loaded model, picture models included, and Unload all for more than one', () => {
+    const pictures = [...models, { id: 'flux', name: 'FLUX.1 schnell', path: '/m/flux.gguf', sizeBytes: 7 * GB, modality: 'image' }] as any;
+    const one = renderToStaticMarkup(<LocalModels initial={{ status: status({ resident: [{ id: 'flux', loadedOn: 'gpu', vramBytes: 9 * GB }] }), models: pictures }} />);
+    expect(one).toContain('data-local-model-unload="flux"');
+    expect(one).toContain('aria-label="Unload FLUX.1 schnell"');
+    expect(one).toContain('image gen');
+    expect(one).toContain('title="Picture settings"');
+    expect(one).not.toContain('Unload all');
+    const two = renderToStaticMarkup(<LocalModels initial={{ status: status({ resident: [{ id: 'flux' }, { id: 'qwen' }] }), models: pictures }} />);
+    expect(two).toContain('data-local-model-unload="qwen"');
+    expect(two).toContain('data-local-models-unload-all');
+  });
+  it('draws Settings and Load as Gentleface icons named by their tooltip', () => {
+    storeState.value = { settings: { favoriteModels: ['nekko-engine::gemma'] } };
+    try {
+      const html = renderToStaticMarkup(<LocalModels initial={{ status: status(), models }} />);
+      const row = html.slice(html.indexOf('data-local-model-shortcut="gemma"'));
+      expect(row).toMatch(/data-local-model-settings="gemma"[^>]*title="Settings: GPU offload, context and memory"[^>]*><span data-gf-icon="settings"/);
+      expect(row).toMatch(/data-local-model-load="gemma"[^>]*title="Load"[^>]*><span data-gf-icon="play-circle"/);
+      expect(row).not.toContain('>Load</button>');
+      expect(row).not.toContain('>Settings</button>');
+    } finally { storeState.value = { settings: {} }; }
+  });
+  it('lists starred then recent models that are not loaded, each with Settings and Load', () => {
+    const more = [...models, { id: 'phi', name: 'Phi 4', path: '/m/phi.gguf', sizeBytes: 2 * GB }] as any;
+    storeState.value = {
+      settings: { favoriteModels: ['nekko-engine::gemma', 'nekko-engine::qwen', 'openai::gpt-5'] },
+      sessions: [{ providerId: 'nekko-engine', modelId: 'phi', updatedAt: 10 }, { providerId: 'nekko-engine', modelId: 'gemma', updatedAt: 20 }],
+    };
+    try {
+      const html = renderToStaticMarkup(<LocalModels initial={{ status: status({ resident: [{ id: 'qwen' }] }), models: more }} />);
+      const starred = html.slice(html.indexOf('data-local-models-group="starred"'), html.indexOf('data-local-models-group="recent"'));
+      expect(starred).toContain('data-local-model-load="gemma"');
+      expect(starred).toContain('data-local-model-settings="gemma"');
+      expect(starred).toContain('aria-label="Unstar Gemma 3 27B"');
+      // Loaded already: it has its own row with Unload, not a Load shortcut.
+      expect(html).not.toContain('data-local-model-load="qwen"');
+      expect(html).toContain('aria-label="Unstar Qwen3 8B"');
+      const recent = html.slice(html.indexOf('data-local-models-group="recent"'));
+      expect(recent).toContain('data-local-model-load="phi"');
+      expect(recent).toContain('aria-label="Star Phi 4"');
+      expect(recent).not.toContain('data-local-model-load="gemma"');
+      // Offered while the server is stopped too: Load starts it.
+      expect(renderToStaticMarkup(<LocalModels initial={{ status: status({ running: false }), models: more }} />)).toContain('data-local-model-load="gemma"');
+    } finally { storeState.value = { settings: {} }; }
   });
 });
 

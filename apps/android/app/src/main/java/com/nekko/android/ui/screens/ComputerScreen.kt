@@ -83,7 +83,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import com.nekko.android.computer.MachineController
 import com.nekko.android.data.Computer
 import com.nekko.android.data.ComputersRepository
@@ -131,9 +134,10 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
         )
     }
     val m by machine.state.collectAsStateWithLifecycle()
-    DisposableEffect(machine) {
-        machine.start()
-        onDispose { machine.stop() }
+    // The 30 s read runs while the screen is on show, not while the app sits in the background.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(machine, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { machine.poll() }
     }
     // Back online, or this computer just became the one in use: read it again.
     LaunchedEffect(s.conn, s.activeId) { if (s.conn == RelayState.ONLINE && s.activeId == computerId) machine.refresh() }
@@ -292,6 +296,10 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
                 summary?.version?.let { v -> Fact("Nekko Agent", listOfNotNull(v, summary.edition).joinToString(" · ")) }
             }
             Text(stringResource(R.string.computer_connect_footer), style = MaterialTheme.typography.bodySmall, color = p.inkFaint, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+            // Which kinds of route this phone dials to reach it (#3346); changing it reconnects at once.
+            com.nekko.android.ui.settings.RouteChoiceGroup(c.name, listOf(c.relayUrl) + c.alts, c.routeChoice) { next ->
+                scope.launch { repo.setRouteChoice(c.id, next) }
+            }
             // Nekko Agent's service: status, updates, restart (#2059). Live only while this computer is the active one.
             ServiceSection(repo, c.id, c.name)
             Spacer(Modifier.size(32.dp))

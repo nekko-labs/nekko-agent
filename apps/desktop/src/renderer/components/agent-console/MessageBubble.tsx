@@ -11,6 +11,7 @@ import { isWatchWake } from '../../agentWatches.js';
 import { WatchWakeRow } from './WatchRow.js';
 import { DoneRow } from './TurnStatsLine.js';
 import { ClaudeCodeSpeaker, useClaudeCodeReply } from './ClaudeCodeResponse.js';
+import { missingPicture, PictureNotHere } from './PictureNotHere.js';
 
 /**
  * One message. Memoized: a transcript row re-renders only when its message (or
@@ -80,9 +81,12 @@ export const MessageBubble = memo(function MessageBubble({
           {/* The pictures ride along with the edit: Save & send re-sends them. */}
           {message.images?.length ? (
             <div className="mb-1 flex flex-wrap justify-end gap-2" title="These images are sent again with your edit">
-              {message.images.map((image, i) => (
-                <img key={`${image.slice(0, 24)}-${i}`} src={image} alt={`Attached image ${i + 1}`} className="h-12 w-12 rounded-md object-cover" />
-              ))}
+              {message.images.map((image, i) => {
+                const missing = missingPicture(image);
+                return missing
+                  ? <PictureNotHere key={`missing-${i}`} why={missing} className="h-12 w-12 rounded-md" />
+                  : <img key={`${image.slice(0, 24)}-${i}`} src={image} alt={`Attached image ${i + 1}`} className="h-12 w-12 rounded-md object-cover" />;
+              })}
             </div>
           ) : null}
           <textarea className="input max-h-48 min-h-[60px] resize-none text-sm" value={draft} autoFocus onChange={(e) => setDraft(e.target.value)} />
@@ -158,17 +162,22 @@ export const MessageBubble = memo(function MessageBubble({
         ) : null}
         {isUser && message.images?.length ? (
           <div className="mb-2 flex flex-wrap gap-2">
-            {message.images.map((image, i) => (
-              <img
-                key={`${image.slice(0, 24)}-${i}`}
-                src={image}
-                alt={`Attached image ${i + 1}`}
-                className="h-[104px] w-[104px] cursor-pointer rounded-lg object-cover"
-                onClick={() => onImageClick?.(image)}
-                onContextMenu={(e) => onImageContextMenu?.(e, image)}
-                title="Click to preview · right-click to copy or save"
-              />
-            ))}
+            {message.images.map((image, i) => {
+              // A synced chat's picture still on its way, or left out by an older sync (#3298).
+              const missing = missingPicture(image);
+              if (missing) return <PictureNotHere key={`missing-${i}`} why={missing} className="h-[104px] w-[104px] rounded-lg" />;
+              return (
+                <img
+                  key={`${image.slice(0, 24)}-${i}`}
+                  src={image}
+                  alt={`Attached image ${i + 1}`}
+                  className="h-[104px] w-[104px] cursor-pointer rounded-lg object-cover"
+                  onClick={() => onImageClick?.(image)}
+                  onContextMenu={(e) => onImageContextMenu?.(e, image)}
+                  title="Click to preview · right-click to copy or save"
+                />
+              );
+            })}
           </div>
         ) : null}
         {!isUser && message.reasoning && (
@@ -243,7 +252,10 @@ function GeneratedImages({ message, entering, onImageClick, onImageContextMenu, 
   const model = g?.modelId.split('/').pop();
   return (
     <div className={`${entering ? 'fade-in ' : ''}flex flex-col items-start gap-2`}>
-      {message.images!.map((image, i) => (
+      {message.images!.map((image, i) => missingPicture(image) ? (
+        <PictureNotHere key={`${message.id}-${i}`} why={missingPicture(image)!} className="w-full max-w-[512px] rounded-xl"
+          style={{ aspectRatio: g ? `${g.width} / ${g.height}` : '1 / 1' }} />
+      ) : (
         <img
           key={`${message.id}-${i}`}
           src={image}
@@ -255,7 +267,7 @@ function GeneratedImages({ message, entering, onImageClick, onImageContextMenu, 
           title="Click to preview · right-click to copy or save"
         />
       ))}
-      {onEditImage && g && !g.video && message.images!.map((image, i) => (
+      {onEditImage && g && !g.video && message.images!.map((image, i) => missingPicture(image) ? null : (
         <button key={`edit-${message.id}-${i}`} type="button" className="btn btn-ghost py-0.5 text-xs" onClick={() => onEditImage(image)} data-edit-image
           title="Attach this picture to the composer, then describe what to change">
           Edit{message.images!.length > 1 ? ` picture ${i + 1}` : ''}

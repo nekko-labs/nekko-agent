@@ -55,8 +55,8 @@ app.whenReady().then(async () => {
     for (let i = 0; i < 100 && !(await run('!!window.layoutFixture')); i++) await sleep(100);
     await run(`(()=>{const h=document.documentElement;const off=()=>h.removeAttribute('data-app-inactive');off();new MutationObserver(off).observe(h,{attributes:true,attributeFilter:['data-app-inactive']})})()`);
     await sleep(900);
-    // A Claude Agent chat (provider kind claude-code) that was left on code mode.
-    await run(`layoutFixture.composerSeed = (r) => { delete layoutFixture.settings.themePreset; r.providerId = 'cc'; r.toolApproach = 'code'; }; 0`);
+    // A chat that never picked a model, so it runs on the saved default (Claude Code), left on code mode.
+    await run(`layoutFixture.composerSeed = (r) => { delete layoutFixture.settings.themePreset; delete r.providerId; delete r.modelId; layoutFixture.settings.defaultProviderId = 'cc'; layoutFixture.settings.defaultModelId = 'sonnet'; r.toolApproach = 'code'; window.__chatRecord = r; }; 0`);
     const TOOLS = ['read_file', 'write_file', 'edit_file', 'list_dir', 'glob', 'grep', 'bash', 'web_fetch', 'web_search'].map(name => ({ name, description: name.replace(/_/g, ' ') }));
     await run(`layoutFixture.bridge.listTools = async () => ${js(TOOLS)}; 0`);
     await run(`layoutFixture.showFolderComposer(false, true, 'full', '')`);
@@ -84,10 +84,12 @@ app.whenReady().then(async () => {
     if (before) {
       check('code mode radio checked and enabled', !!code && code.checked === 'true' && !code.disabled);
       check('Tools row says code mode', /code mode/.test(st.toolsRowMeta ?? ''));
+      check('the stored toolApproach is still code', await run('window.__chatRecord.toolApproach') === 'code');
     } else {
       check('both radios disabled, Tool list checked', !!code && !!list && code.disabled && list.disabled && list.checked === 'true' && code.checked === 'false');
       check('claude-agent lock note shown', st.lock?.kind === 'claude-agent' && /Claude Agent chats run Claude Code's own tools/.test(st.lock.text));
       check('Tools row no longer says code mode', !/code mode/.test(st.toolsRowMeta ?? ''));
+      check('the stored toolApproach went back to list', await run('window.__chatRecord.toolApproach') === 'list');
     }
     await shot('2-tools-flyout-open', crop([await rectOf('.mode-panel'), await rectOf('.mode-fly')], 12));
     await shot('2b-tools-flyout-crop', crop([await rectOf('.mode-fly')], 12));

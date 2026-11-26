@@ -27,6 +27,8 @@ class MiscTest {
         // An empty call id is a plain chat link.
         assertEquals(DeepLink.Chat("s1"), DeepLink.from("nekko-agent://chat/s1?alwaysAllow=", "nekko-agent", "chat", listOf("s1"), ""))
         assertEquals(DeepLink.NewChat, DeepLink.from("nekko-agent://new", "nekko-agent", "new", emptyList()))
+        // ChatGPT's sign-in page sending the browser back (#3244): the code already came to the listener.
+        assertEquals(DeepLink.ChatGptSignedIn, DeepLink.from("nekko-agent://chatgpt-signed-in", "nekko-agent", "chatgpt-signed-in", emptyList()))
         assertNull(DeepLink.from("https://example.com", "https", "example.com", emptyList()))
     }
 

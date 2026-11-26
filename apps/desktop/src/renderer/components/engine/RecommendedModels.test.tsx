@@ -8,8 +8,8 @@ import { hardwareText, isDownloaded, nudgeTitle, speedText } from './recommendat
 import fixture from './recommendations.fixture.json';
 
 const recs = fixture as unknown as Record<'m5max' | 'rtx4060' | 'cpu' | 'laptop' | 'rtx4080upgrade', Recommendations>;
-const list = (r: Recommendations, models: { path: string }[] = [], open = true) =>
-  renderToStaticMarkup(<RecommendationList recs={r} models={models} open={open} onDownload={vi.fn()} onRecheck={vi.fn()} />);
+const list = (r: Recommendations, models: { path: string }[] = []) =>
+  renderToStaticMarkup(<RecommendationList recs={r} models={models} onDownload={vi.fn()} onRecheck={vi.fn()} />);
 const task = (r: Recommendations, id: string) => r.tasks.find(t => t.task === id)!;
 
 describe('the recommendations block', () => {
@@ -20,18 +20,40 @@ describe('the recommendations block', () => {
     for (const t of ['chat', 'code', 'router', 'embedding', 'vision']) expect(html).toContain(`data-recommendation="${t}"`);
     expect(html.match(/>Download</g)).toHaveLength(5);
     expect(html).toContain('Qwen3 Coder Next');
-    expect(html).toContain('46.5 GB of 96.0 GB');
+    expect(html).toContain('46.5 GB</span> of 96.0 GB at 32k context');
     expect(html).toContain('~117 tok/s');
-    expect(html).toContain('<details');
-    expect(html).toContain(' open=""');
+    // Open, not folded behind a summary: it leads Find new models.
+    expect(html).not.toContain('<details');
+  });
+
+  it('says the parameters, the memory split and the context that fits', () => {
+    const html = list(recs.rtx4060);
+    expect(html).toContain('9B parameters · Q4_K_M');
+    expect(html.match(/role="meter"/g)?.length).toBeGreaterThanOrEqual(5);
+    const chat = task(recs.rtx4060, 'chat').pick!;
+    expect(chat.fitContextTokens).toBeGreaterThanOrEqual(chat.contextTokens);
+    expect(html).toMatch(/data-context-fit="true">Context: (Up to \d+k|All of it) fits in this GPU · \d+k max/);
+    expect(html).toContain('weights');
+    expect(html).toContain('context and working memory');
+  });
+
+  it('keeps every quant behind Quants, with what each needs', () => {
+    const html = list(recs.rtx4060);
+    expect(html).toContain('data-quants-toggle');
+    expect(html).toContain('aria-expanded="false"');
+    // Closed: the table mounts on open.
+    expect(html).not.toContain('data-quant-table');
+    const chat = task(recs.rtx4060, 'chat').pick!;
+    expect(chat.quants?.some(q => q.quant === chat.quant)).toBe(true);
+    const bigger = chat.quants!.filter(q => q.downloadBytes > chat.downloadBytes);
+    for (const q of bigger) expect(q.fitContextTokens).toBeLessThanOrEqual(chat.fitContextTokens!);
   });
 
   it('marks what is already on disk instead of offering it again', () => {
     const chat = task(recs.m5max, 'chat').pick!;
-    const html = list(recs.m5max, [{ path: `/Users/me/.nekko-agent/models/chat/unsloth/Qwen3.8-27B-GGUF/${chat.files[0]}` }], false);
+    const html = list(recs.m5max, [{ path: `/Users/me/.nekko-agent/models/chat/unsloth/Qwen3.8-27B-GGUF/${chat.files[0]}` }]);
     expect(html).toContain('Downloaded');
     expect(html.match(/>Download</g)).toHaveLength(4);
-    expect(html).not.toContain(' open=""');
   });
 
   it('says when a speed is rough, and when nothing is fast enough', () => {

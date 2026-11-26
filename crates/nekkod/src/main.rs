@@ -68,6 +68,9 @@ mod model_server;
 mod model_tunnel;
 mod native;
 mod oauth;
+// Prompt integration for Orchestrate is separate from its read-only projection.
+#[allow(dead_code)]
+mod orchestrate_state;
 mod outward;
 mod pr_autowatch;
 mod pr_checkouts;
@@ -207,6 +210,11 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let engine = Arc::new(engine::Engine::new());
     let data_dir = std::path::PathBuf::from(&cfg.data_dir);
     let sessions = Arc::new(nekko_store::SessionStore::new(&cfg.data_dir));
+    {
+        // `session_meta` events carry the chat's changed fields (title, plan, updatedAt, ...).
+        let sessions = sessions.clone();
+        hub.set_meta_fields(Arc::new(move |id| sessions.meta_event_fields(id)));
+    }
     let mcp: Arc<mcp::Mcp> = Arc::default();
     let changes = Arc::new(nekko_tools::ChangeTracker::persistent(sessions.clone()));
     {
@@ -240,7 +248,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let compactions = compaction::Compactions::new();
     let sandboxes = sandbox::Sandboxes::new(data_dir.clone());
     let admission = admission::Admission::new(compactions.clone(), cfg.allow_browser_control);
-    let catalog = catalog::new(&settings, cfg.hugging_face_url.clone());
+    let catalog = catalog::new(&settings, cfg.hugging_face_url.clone(), &data_dir);
     let automation = Arc::new(automation::Automation::new(sessions.clone(), settings.clone(), hub.clone()));
     let remote = Arc::new(remote::Remote::new(data_dir.clone(), hub.clone()));
     let computers = computers::Computers::new(data_dir.clone(), hub.clone());
@@ -435,6 +443,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     };
     let _ = running.set(ctx.turns.clone());
     cloud.start(std::time::Duration::from_secs(60));
+    // Presence and sync nudges through Nekko Cloud Relay, for accounts whose plan includes it (decision 0116).
+    cloud.start_relay_channel(nekko_remote::route::cloud_relay_url());
     routes::forward_terminal_events(&ctx);
     ctx.turns.set_background(background::Background::new(
         ctx.machine.clone(),

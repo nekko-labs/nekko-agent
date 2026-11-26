@@ -83,6 +83,20 @@ export interface EngineInstall {
    * opt-in step up, never taken without the user asking.
    */
   upgrade?: { buildId: string; message: string };
+  /**
+   * The managed llama.cpp build is older than the release this version of the
+   * app pins. `buildId` is the build already installed, so installing it again
+   * keeps the backend and brings the version up to `pinned`. Never set for an
+   * engine the user pointed at or one found on PATH, or when the installed
+   * version is missing or not a `b<number>` tag.
+   *
+   * `notify` is true only when the engine is at least 1,000 builds (about a
+   * month) behind the pin. The pin moves several times a day, so being a little
+   * behind is normal: the Model server card says so only when `notify` is set or
+   * a model in the library needs a newer engine. The Update button on such a
+   * model's row uses `buildId` whatever `notify` says.
+   */
+  outdated?: { buildId: string; installed: string; pinned: string; message: string; notify: boolean };
   /** Builds offered for this machine, best first. */
   available: EngineBuild[];
   /** The build we would install if asked, from the hardware probe. */
@@ -185,7 +199,18 @@ export interface EngineSettings {
    * someone stops using should be switchable off without being retyped later.
    */
   modelFolders?: ModelFolder[];
+  /**
+   * Overload protection: a load that pushes free graphics memory or system
+   * memory under `overloadReserveMB` is stopped and its memory released, so
+   * the machine does not freeze. On unless turned off.
+   */
+  overloadGuard?: boolean;
+  /** How much overload protection keeps free, in MB. 500 when unset. */
+  overloadReserveMB?: number;
 }
+
+/** Overload protection's reserve when the settings name none. */
+export const OVERLOAD_RESERVE_MB_DEFAULT = 500;
 
 export const DEFAULT_ENGINE_SETTINGS: EngineSettings = {
   port: ENGINE_PORT_DEFAULT,
@@ -215,6 +240,20 @@ export interface LoadingModel {
   phase: 'queued' | 'loading';
   startedAt: number;
   progress?: number;
+  /** The graphics memory it is filling, when a GPU probe answers and part of it goes there. */
+  vram?: LoadingVram;
+}
+
+/**
+ * Graphics memory during a load, in bytes: the card's total, what was free
+ * when the load began, what is free now, and what the load is expected to
+ * take (the planner's estimate: weights, cache and overhead on the GPU).
+ */
+export interface LoadingVram {
+  totalBytes: number;
+  beforeBytes: number;
+  freeBytes: number;
+  needBytes: number;
 }
 
 /** Everything the engine card needs in one read. */
@@ -281,6 +320,21 @@ export interface CatalogQuant {
   extraFiles?: string[];
   /** Short note for the picker, e.g. "best balance of size and quality". */
   note?: string;
+  /**
+   * The release this build belongs to, when the repo publishes several of one
+   * model (`v2.1`); absent on the release its file names leave unmarked and on
+   * every build of a repo with one release. `label` carries it too
+   * (`v2.1 Q8_0`), so no two builds of a repo share a label.
+   */
+  variant?: string;
+  /** The quantization alone (`Q8_0`), set when `variant` is. */
+  quant?: string;
+  /**
+   * Stock llama.cpp knows this quantization (the engine's own list), so the
+   * managed engine can run it. Only on what the daemon's catalog answers give an
+   * app (`engine:catalogModel`, `engine:catalogDetail`); absent elsewhere.
+   */
+  stock?: boolean;
   /**
    * `mlx`: the whole repo is one model folder (an MLX checkpoint), and
    * `file` plus `extraFiles` are every file it needs. Absent means GGUF.
@@ -404,7 +458,7 @@ export const MODALITY_LABELS: Record<ModelModality, string> = {
  * serve them no matter which flags accompany the file.
  */
 const IMAGE_GEN_ARCHS =
-  /^(sd\d?|sdxl|sd-?turbo|stable-?diffusion.*|flux.*|wuerstchen|pixart.*|ltxv.*|hidream.*|chroma.*|qwen-?image.*|z-?image.*|ovis-?image.*|wan\d.*|hunyuan.*(image|video).*|cogvideo.*)/i;
+  /^(sd\d?|sdxl|sd[-_]?turbo|stable[-_]?diffusion.*|flux.*|wuerstchen|pixart.*|ltxv.*|hidream.*|chroma.*|qwen[-_]?image.*|z[-_]?image.*|ovis[-_]?image.*|wan\d.*|hunyuan.*(image|video).*|cogvideo.*)/i;
 
 /** Speech-recognition and audio weights; these need a speech engine, not an LLM server. */
 const AUDIO_ARCHS = /^(whisper.*|parakeet.*|moonshine.*|sense-?voice.*|wav2vec.*|hubert.*|seamless.*|zipformer.*)/i;
@@ -441,7 +495,9 @@ export function modelModality(model: {
   hasProjector?: boolean;
   readable?: boolean;
 }): ModelModality {
-  const arch = model.architecture ?? '';
+  // An architecture is a short GGUF key; capping it, as the name is below,
+  // keeps VISION_ARCHS linear however long a header's string is.
+  const arch = (model.architecture ?? '').slice(0, 256);
   if (arch) {
     if (IMAGE_GEN_ARCHS.test(arch)) return 'image';
     if (AUDIO_ARCHS.test(arch)) return 'audio';
@@ -502,6 +558,36 @@ export function unsupportedLoadReason(model: {
   }
 }
 
+/**
+ * What the engine in use makes of a model (the engine's `load_check`): the
+ * verdict that depends on which llama.cpp this is, as the model server's load
+ * gate gives it. `blocked` is refused on every path that loads (the button,
+ * loads on start, the phone, the CLI); `warning` is let through, and llama.cpp
+ * has the last word. Apps show it and never work it out themselves.
+ */
+export interface ModelLoadCheck {
+  level: 'blocked' | 'warning';
+  /** Which rule found it: no engine update helps a weight format; one does help an engine too old for the file. */
+  cause?: 'weightFormat' | 'engineAge';
+  reason: string;
+}
+
+/** Blocked only because the engine is older than the file needs: updating the engine fixes it. */
+export function needsNewerEngine(model: { loadCheck?: ModelLoadCheck }): boolean {
+  return model.loadCheck?.level === 'blocked' && model.loadCheck.cause === 'engineAge';
+}
+
+/**
+ * Why this model cannot be loaded here, from either source: what no engine can
+ * do (`unsupportedLoadReason`) or what the engine in use cannot (a `blocked`
+ * `loadCheck`). Undefined when it can be loaded, with or without a warning.
+ */
+export function cannotLoadReason(
+  model: Parameters<typeof unsupportedLoadReason>[0] & { loadCheck?: ModelLoadCheck },
+): string | undefined {
+  return unsupportedLoadReason(model) ?? (model.loadCheck?.level === 'blocked' ? model.loadCheck.reason : undefined);
+}
+
 /** A model on disk (a GGUF file, or an MLX model folder), with whatever it told us. */
 export interface LocalModel {
   /** `<owner>/<repo>/<file>` for a downloaded model; the file name for an imported one. */
@@ -513,6 +599,8 @@ export interface LocalModel {
   format?: 'gguf' | 'mlx';
   /** For an MLX model: whether this machine can run it (Apple Silicon). */
   mlxRunnable?: boolean;
+  /** Cache payload per token for a supported dense MLX config, not total runtime memory. */
+  mlxKvBytesPerToken?: number;
   sizeBytes: number;
   quantization?: string;
   parameterSize?: string;
@@ -523,6 +611,25 @@ export interface LocalModel {
   readable?: boolean;
   /** A vision model's projector was found beside the weights or in the companions dir. */
   hasProjector?: boolean;
+  /**
+   * A tensor type past llama.cpp's own (a fork's format, such as PrismML's 1-bit
+   * type 143), from the header. Stock llama.cpp refuses such a file; `loadCheck`
+   * is what the engine in use makes of it.
+   */
+  unknownWeightType?: number;
+  /** The oldest llama.cpp build that reads this file correctly, from header keys it carries. */
+  minEngineBuild?: number;
+  /**
+   * What the engine in use makes of this file, when anything: filled in by the
+   * server with each listing, since it depends on the engine, not the file.
+   */
+  loadCheck?: ModelLoadCheck;
+  /**
+   * Whether the engine in use is new enough for `minEngineBuild`, when both are
+   * known. `loadCheck` names only the weight format when that also blocks a
+   * managed engine, so this is how the row learns the engine is too old as well.
+   */
+  engineMeetsMinBuild?: boolean;
   /**
    * The last load attempt's reason for failing, kept until a load succeeds.
    * Runtime state, filled in by the server rather than stored in the index.

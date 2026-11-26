@@ -11,7 +11,7 @@ area: brand
 
 ## The theme
 
-- **Where it is.** Settings → Customize → Appearance (and the onboarding theme step) lists **Winter** under **Seasonal**, next to Spooky. Its preset id is `winter` (`THEME_PRESETS` in `packages/shared/src/themes.ts`).
+- **Where it is.** Settings → Appearance → Theme (and the onboarding theme step) lists **Winter** under **Seasonal**, next to Spooky. Its preset id is `winter` (`THEME_PRESETS` in `packages/shared/src/themes.ts`).
 - **Dark: a snowy night.** Midnight-blue ground and windows (`--paper` `#0a111d`, `--win` `#0f1828`, surfaces `#111b2b` / `#1a2638`, line `#233249`), cool near-white ink, an **ice-blue** accent (`#8fd3fe`) and an **aurora-mint** partner (`#9ef0c9`). Primary buttons take midnight text on the pale accent. Every text pairing meets WCAG AA (`contrast.test.ts`).
 - **Light.** Like Spooky, the core light surfaces with deeper accents that stay readable on them: ice `#0a6694` and pine `#13795b` (`LIGHT_ACCENTS` in `themeMode.ts`).
 - **Phones.** The iPhone and Android catalogs are written from the shared one, so both list Winter and apply its colours and, in dark mode, its surfaces.
@@ -46,7 +46,7 @@ Dates and hours are the computer's local time. The rules live in `apps/desktop/s
 
 ## Native phone decorations (issue #2479)
 
-- Both native apps resolve decorations from the same preset as the palette, including Match my computer. Winter shows ten large, faint flakes in the desktop's eight designs; each fall picks a new design, column and size, and each flake's slow speed (48 to 96 seconds per fall) and spin are random per launch. The shapes and the random rule (`WinterFlakes`) are the same on both phones. There is no cat flake (removed 2026-11-12). Positions scale to compact, unfolded and landscape windows rather than assuming a phone width.
+- Both native apps resolve decorations from the same preset as the palette (on the iPhone, Match my computer too; Android dropped that choice on 2026-11-26). Winter shows ten large, faint flakes in the desktop's eight designs; each fall picks a new design, column and size, and each flake's slow speed (48 to 96 seconds per fall) and spin are random per launch. The shapes and the random rule (`WinterFlakes`) are the same on both phones. There is no cat flake (removed 2026-11-12). Positions scale to compact, unfolded and landscape windows rather than assuming a phone width.
 - The chat/list toolbar mascot wears Winter's cat-ear knitted beanie or Spooky's wizard hat. The hat follows the mascot's existing working and greeting movement without changing its 44-point touch target, greeting action or accessibility Refresh action. Other themes have no hat. Greeting illustrations, launch screens and brand marks remain undressed.
 - Phone hats use the native palette tokens: a muted berry crown, contrasting folded brim and snowflake for Winter; a dark crown and accent brim for Spooky. They are native adaptations, not new image dependencies.
 - Snow and hats have no pointer handlers or accessible copy. Reduced motion holds snow still (a fixed composition for that launch). The snow clock stops while iOS is inactive or Android is stopped. Leaving Winter removes its snow and replaces/removes the hat immediately.

@@ -76,7 +76,7 @@ export interface LiveRun {
   retrying?: { attempt: number; maxAttempts: number; delayMs: number; reason: string; at: number };
 }
 
-import { foldSubagentActivity, startSubagentActivity, stopSubagentActivity, resetSubagentActivity, resetSubagentActivityFor } from './subagentActivity.js';
+import { foldSubagentActivity, startSubagentActivity, stopSubagentActivity, resetSubagentActivity, resetSubagentActivityFor, seedSubagentWaits, subagentActivitySignature } from './subagentActivity.js';
 
 const runs = new Map<string, LiveRun>();
 /**
@@ -106,7 +106,7 @@ export function clampLive(s: string): string {
 }
 /** Per-session subscriber sets, so a pane only wakes for its own chat. */
 const listeners = new Map<string, Set<() => void>>();
-/** Subscribers that want to know about *any* change (the sub-agent rail). */
+/** Subscribers that want to know when the set of runs or a sub-agent's status changes (the sub-agent rail). */
 const globalListeners = new Set<() => void>();
 
 /**
@@ -115,6 +115,13 @@ const globalListeners = new Set<() => void>();
  * each repaint and the map below caches the current object per session.
  */
 let version = 0;
+/** What `version` last counted: the running chats and every sub-agent's status and waits. */
+let structure = '';
+
+/** The running chats plus every sub-agent's status and waits, as one string. */
+function structureSignature(): string {
+  return `${[...runs.keys()].sort().join(',')}#${subagentActivitySignature()}`;
+}
 
 function emptyRun(sessionId: string, now: number): LiveRun {
   return {
@@ -207,6 +214,15 @@ export function reconcileRunning(running: readonly string[], askedAt: number): s
   return ended;
 }
 
+/**
+ * A call failed because the engine went away mid-call (the engine socket's
+ * wording, preload/engine-socket.ts). A turn it was running is ended by
+ * `reconcileRunning` once the engine is back, not by the caller.
+ */
+export function engineLost(message: string): boolean {
+  return /the engine (?:restarted|stopped responding) before it answered/.test(message);
+}
+
 /** Hear a run `reconcileRunning` ended because the engine no longer has it. */
 export function onRunOrphaned(fn: (sessionId: string) => void): () => void {
   orphanListeners.add(fn);
@@ -234,8 +250,15 @@ function markDirty(sessionId: string): void {
     frame = null;
     const wake = [...dirty];
     dirty.clear();
-    version++;
     for (const id of wake) for (const fn of listeners.get(id) ?? []) fn();
+    // The global version moves only when a run starts or ends or a sub-agent's
+    // status or wait changes. Streamed tokens do not: they have their own
+    // per-chat subscription, and waking every rail on every frame of every chat
+    // re-rendered them all at frame rate.
+    const next = structureSignature();
+    if (next === structure) return;
+    structure = next;
+    version++;
     for (const fn of globalListeners) fn();
   });
 }
@@ -413,6 +436,12 @@ export function applyReplay(replay: AgentReplay): void {
 export function startLiveRuns(): () => void {
   const offEvents = window.nekko.onAgentEvent((e: AgentEvent) => applyEvent(e));
   const offReplay = window.nekko.onAgentReplay?.((r) => applyReplay(r));
+  // Waits already open at launch: their events went out before this window
+  // listened, and a sub-agent's must still show on its parent chat (#3270).
+  window.nekko.pendingInput?.().then((pending) => {
+    seedSubagentWaits(pending);
+    for (const id of Object.keys(pending)) markDirty(id);
+  }).catch(() => {});
   // Only while something runs: an idle app asks the engine nothing.
   const reconcile = setInterval(() => {
     if (!runs.size) return;
@@ -491,11 +520,12 @@ export function useLiveRun(sessionId: string, paused = false): LiveRun | undefin
     (fn: () => void) => (paused ? () => {} : subscribeTo(sessionId, fn)),
     [sessionId, paused],
   );
-  return useSyncExternalStore(subscribe, () => runs.get(sessionId));
+  return useSyncExternalStore(subscribe, () => runs.get(sessionId), () => runs.get(sessionId));
 }
 
 /**
- * Subscribe to the set of running sessions, as a version counter.
+ * Subscribe to the set of running sessions, as a version counter. It moves
+ * when a run starts or ends or a sub-agent's status changes, not per token.
  *
  * The sub-agent rail needs to repaint when any of several children moves, and
  * the children change as they are spawned; watching the counter is simpler than
@@ -527,6 +557,7 @@ export function describeRun(sessionId: string): string {
 
 /** Reset everything. Tests only. */
 export function __resetLiveRuns(): void {
+  structure = '';
   resetSubagentActivity();
   runs.clear();
   finished.clear();

@@ -14,8 +14,53 @@ pub const CUDA_FASTER: &str = "Roughly 15-20% faster";
 pub fn release_pin(runtime: &str) -> (&'static str, &'static str) {
     match runtime {
         "diffusion" => ("leejet/stable-diffusion.cpp", "master-1091-b9d7176"),
-        _ => ("ggml-org/llama.cpp", "b12318"),
+        _ => ("ggml-org/llama.cpp", "b12535"),
     }
+}
+
+/// The pinned release's tag when `installed` is an older llama.cpp build.
+///
+/// llama.cpp tags are `b` and a build number that only grows (`b11224` is older
+/// than `b12436`), so the numbers compare. A tag that is not exactly that, or a
+/// runtime other than llama.cpp, is never called out of date: not knowing is
+/// not a reason to ask someone to download several hundred MB.
+///
+/// stable-diffusion.cpp is left out on purpose. Its `master-N-sha` numbers do
+/// rise with time (checked against all 628 such releases: no reset, only
+/// publish-order jitter of a step or two), but the image runtime is optional,
+/// nothing in the app needs a minimum of it, and its card has no update path.
+pub fn outdated_llama(runtime: &str, installed: &str) -> Option<&'static str> {
+    if runtime != "llama" {
+        return None;
+    }
+    let (_, pinned) = release_pin(runtime);
+    (llama_build_number(installed)? < llama_build_number(pinned)?).then_some(pinned)
+}
+
+/// How many llama.cpp builds behind the pin an engine must be before the Model
+/// server card says so on its own. The pin moves three or four times a day (24
+/// automated bumps in six days, b12242 to b12464, about 37 builds a day) and
+/// nothing updates the managed engine, so nearly every user is a little behind
+/// after nearly every app update and the update is several hundred MB. 1,000
+/// builds is about a month: an engine that old is worth a notice. A nearer one
+/// is still `outdated` (a file that needs a newer build offers the Update), it
+/// just does not `notify`.
+pub const FAR_BEHIND_BUILDS: u64 = 1000;
+
+/// Whether `installed` is at least [`FAR_BEHIND_BUILDS`] behind the pinned llama.cpp
+/// release. Never for a tag that is not exactly `b<number>`, nor another runtime.
+pub fn far_behind_llama(runtime: &str, installed: &str) -> bool {
+    let Some(pinned) = outdated_llama(runtime, installed) else { return false };
+    match (llama_build_number(installed), llama_build_number(pinned)) {
+        (Some(have), Some(pin)) => pin - have >= FAR_BEHIND_BUILDS,
+        _ => false,
+    }
+}
+
+/// The number in a llama.cpp release tag: `b11224` is 11224. `None` for anything
+/// that is not exactly `b` and digits (a fork's version string, a bare commit).
+pub fn llama_build_number(tag: &str) -> Option<u64> {
+    tag.strip_prefix('b').filter(|n| !n.is_empty() && n.bytes().all(|c| c.is_ascii_digit()))?.parse().ok()
 }
 
 /// `nvidia-smi`'s arguments for the CUDA check (`CUDA_QUERY`).

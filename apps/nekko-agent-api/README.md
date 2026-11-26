@@ -21,6 +21,18 @@ What lives here:
 Planned: serve this service on `api.nekkoagent.com` (today it answers on its Fly
 hostname).
 
+## Management console pilot
+
+The website serves `/console`. Sign-in respects the account gate; the browser keeps its bearer in memory only and revokes it on sign-out. Billing happens at Stripe. Keep the pilot unlinked until live identity and billing have been exercised.
+
+Set `NEKKO_PRIVACY_REVIEWER_SUBJECTS` to comma-separated verified Supabase subject IDs only after assigning a human to monitor the queue. Unset, the case APIs are absent and customers are directed to email. Organization roles and the feature-switch staff list do not grant review access. Removing a subject takes effect on service restart. Cases store type, status, times and actor IDs, not export contents, documents or free text. History is removed with the account; org activity is removed with the org. No legal hold or certified retention guarantee is implied.
+
+- GET/POST `/v1/privacy/cases`: one's latest 100 cases or submit an export or erasure request. One open case per type.
+- GET `/v1/staff/privacy/cases`: oldest 100 open cases. PATCH `/v1/staff/privacy/cases/:id` to reviewing then closed. Transitions are transactional. Verify identity, fulfill separately and notify the requester before recording closure. Review never exports data or deletes an account.
+- GET `/v1/orgs/:orgId/activity`: owner/admin only, latest 100 recorded organization, membership and invitation changes. No historical backfill.
+
+For loopback testing, generate design tokens with the website build, then start `npm run dev:local` in this package with `DEV_WEB_CONSOLE=1` and open http://127.0.0.1:4330/console. Uses in-memory Postgres and fake codes. Never deploy the local development identity provider.
+
 ## Endpoints
 
 - `POST /v1/signups` with JSON `{ email, name?, list?, source?, utm?, marketing?, policyVersion?, website? }`.
@@ -51,7 +63,7 @@ hostname).
   emailed), and any row marked `unsubscribed`, are deleted in one
   transaction; confirmed, invited and joined rows are never touched.
   Links point at `PUBLIC_URL` (default `https://nekko-agent-api.fly.dev`).
-- `/v1/sync/*`: end-to-end encrypted sync for Pro and Team (see
+- `/v1/sync/*`: end-to-end encrypted sync for Pro and Enterprise (plan `team`) (see
   [docs/SYNC-ENCRYPTION.md](../../docs/SYNC-ENCRYPTION.md)). Bearer `nk_` tokens
   (stored as SHA-256); the service stores only ciphertext, opaque ids and
   revisions and never holds a key that opens them. Writes need `users.plan` in
@@ -64,8 +76,8 @@ hostname).
   account sign-in alone is insufficient. `GET` lists this account's encrypted
   descriptors and 90-second presence leases; `PUT /self` publishes only the
   caller's computer with `{keyId, revision, descriptor}`; `POST /self/heartbeat`
-  renews its lease; `DELETE /self` withdraws it. Publishing/heartbeats need
-  Pro/Team; reads and withdrawal remain available after downgrade. Descriptors
+  renews its lease (held in memory, `src/presence.ts`; the database's last-seen is written when the computer comes online and hourly); `DELETE /self` withdraws it. Publishing/heartbeats need
+  Pro/Enterprise; reads and withdrawal remain available after downgrade. Descriptors
   are capped at 16 KiB, with at most 100 retained advertisements per account.
   Sign-out, expiry, revocation and key rotation invalidate discovery. Desktop
   enrollment, descriptor crypto, phone connections and local-model execution
@@ -82,7 +94,7 @@ hostname).
   `Member {userId, email, role, addedAt, you}`, `Invite {id, email, role, createdAt, expiresAt}`,
   `FleetComputer {deviceId, userId, orgKeyId, revision, descriptor, seenAt, expiresAt, online, you}`.
   - `GET /v1/orgs` -> `{orgs, invites}` (invites addressed to the caller's email:
-    `{id, orgId, orgName, role, invitedBy, expiresAt}`). `POST /v1/orgs {name}` (Pro/Team,
+    `{id, orgId, orgName, role, invitedBy, expiresAt}`). `POST /v1/orgs {name}` (Pro/Enterprise,
     201, caller becomes owner; 409 `org-limit` at 20 orgs). `GET /v1/orgs/:orgId`
     -> `Org & {members, invites}` (invites for owner/admin only). `PATCH` rename
     (owner/admin), `DELETE` (owner, 204). A non-member gets 404 `not-found` on every
@@ -101,7 +113,7 @@ hostname).
     device; answers `{keyId}`. Older-epoch computers stay stored but are hidden
     until republished.
   - Org fleet: `GET /v1/orgs/:orgId/fleet` -> `{orgKeyId, computers}`;
-    `PUT /v1/orgs/:orgId/fleet/self {orgKeyId, revision, descriptor}` (Pro/Team; 201
+    `PUT /v1/orgs/:orgId/fleet/self {orgKeyId, revision, descriptor}` (Pro/Enterprise; 201
     first time, 200 after; 400 `bad-descriptor`, 409 `org-key-epoch` / `revision` /
     `fleet-full`); `POST .../fleet/self/heartbeat` (409 `publish-required`);
     `DELETE .../fleet/self` (204, any plan, no unlock, needs a device token). Reads,
@@ -136,7 +148,7 @@ hostname).
   browser back to. `POST /v1/billing/webhook`: Stripe's signed events (raw body,
   five-minute window); on `checkout.session.completed` and `customer.subscription.*`
   the service asks Stripe for the customer's subscriptions and sets `users.plan`
-  from them (active, trialing or past due keep the plan). Team is "talk to us" until
+  from them (active, trialing or past due keep the plan). Enterprise (plan `team`) is "talk to us" until
   seats exist, so only `STRIPE_PRICE_PRO` is read.
 - `DELETE /v1/account` (Bearer `nk_` token): deletes the account for good
   (decision 0043). Destroys every cloud machine it had on Fly first (502
@@ -154,7 +166,7 @@ hostname).
   columns; withdrawn with the device's delete token, expired after 180 days.
 - `/v1/machines`: **Nekko Cloud machines** (decision 0017, `spec/phone/nekko-cloud-machines.md`):
   a sandboxed machine per user that the phone pairs with like any computer.
-  `GET` lists them; `POST {name?, region?, scope?}` (Pro and Team, at most 3)
+  `GET` lists them; `POST {name?, region?, scope?}` (Pro and Enterprise, at most 3)
   mints a relay room, a pairing key and a one-time pairing code, starts the
   machine on Fly with them in its environment, and answers the pairing link
   once (only the key's hash is stored, so this service can never open the
@@ -299,7 +311,39 @@ Comma-separated, case-insensitive; with either set, only an account whose **prov
 
 `npm run dev:local` honors the same variables.
 
-Setting a plan by hand (Team, or before billing is on): `update users set plan = 'pro' where lower(email) = lower('…');`
+Setting a plan by hand (Enterprise, stored as `team`, or before billing is on): `update users set plan = 'pro' where lower(email) = lower('…');`
+
+## Nekko Cloud Relay
+
+Off until the service has a signing key, and hidden even then until a team account
+turns the `cloud-relay` switch on (decision 0116). Pro and Team accounts then get
+relay tickets from `POST /v1/relay/ticket`; Free gets 402.
+
+```bash
+# An Ed25519 key pair; the private key goes only into Fly secrets.
+openssl genpkey -algorithm ed25519 -out relay-ticket.pem
+fly secrets set NEKKO_RELAY_SIGNING_KEY="$(cat relay-ticket.pem)" NEKKO_RELAY_URL='wss://nekko-agent-relay.fly.dev'
+# Its public half, as the relay takes it (32 bytes, base64url):
+openssl pkey -in relay-ticket.pem -pubout -outform DER | tail -c 32 | base64 | tr '+/' '-_' | tr -d '='
+rm relay-ticket.pem
+```
+
+Set that public key on the relay as `NEKKO_RELAY_TICKET_KEY`.
+
+**Fleet presence from the relay** (optional, `src/relay-presence.ts`). With
+`NEKKO_RELAY_PRESENCE_URL` (the relay's base URL; `https`, or `http` only for
+`localhost`, `.internal` and `.flycast`, e.g. `http://nekko-relay.internal:8080`)
+and `NEKKO_RELAY_PRESENCE_SECRET` (the same value as the relay's
+`NEKKO_RELAY_PRESENCE_SECRET`) set, the fleet lists (`GET /v1/fleet`,
+`GET /v1/orgs/:id/fleet`) also report a computer online when the relay has its
+device online. The API calls `GET /presence?acct=<hash>&acct=...` with
+`authorization: Bearer <secret>` once per list read for the accounts shown
+(answers are kept 5 s), never per heartbeat. A relay that is down, slow (1.5 s)
+or answers badly changes nothing: the memory lease alone decides. Unset (or
+only one of the two set, which logs a warning) is the behaviour without it.
+```bash
+fly secrets set NEKKO_RELAY_PRESENCE_URL='http://nekko-relay.internal:8080' NEKKO_RELAY_PRESENCE_SECRET="$(openssl rand -base64 32)"
+```
 
 ## Billing: Stripe
 
@@ -394,6 +438,73 @@ when dispatched by hand (Actions > Deploy cloud > Run workflow, pick `api` or
    (`fly tokens create org`) instead.
 3. Create the Fly apps and set their secrets first (above); the workflow only
    runs `flyctl deploy`.
+
+## Memory
+
+The API runs on one small machine (`fly.toml`: `shared-cpu-1x`, 256 MB, about
+210 MB usable), so two things keep it inside that (issue #3342):
+
+**The heap cap follows the machine.** The Dockerfile starts the API with
+`start.sh`, never `node` directly. At every start it reads `MemTotal` from
+`/proc/meminfo` and caps V8's whole heap at `NODE_HEAP_PERCENT` of it (default
+50): the old space gets that share less the young generation, whose semi-space
+is pinned at 8 MB. Node's own default ignores the machine (259 MB on the
+210 MB machine), so V8 never collected hard enough and the kernel killed or
+stalled the process. Scaling the machine (`fly scale memory 512`) moves the cap
+with no change here. To change the share, set an env var (an `[env]` line in
+`fly.toml` or `fly secrets set NODE_HEAP_PERCENT=60`).
+
+| Machine | `start.sh` flags | V8 heap limit (Node 22) |
+|---|---|---|
+| 256 MB (209 MB usable) | `--max-old-space-size=80 --max-semi-space-size=8` | 104 MB |
+| 512 MB (462 MB usable) | `--max-old-space-size=207 --max-semi-space-size=8` | 231 MB |
+| 1 GB (957 MB usable) | `--max-old-space-size=454 --max-semi-space-size=8` | 478 MB |
+
+**Big requests queue for memory** (`src/memory-gate.ts`). A request whose body
+is over 64 KB, and every sync pull page or single blob it sends back, first
+takes an estimate of its peak memory from a budget: the machine's memory less
+112 MB for the idle process (about 98 MB on the 256 MB machine), so it too
+follows `fly scale memory`. The estimates are measured: a push body peaks at
+about 3 times its size, a page of stored blobs at about 7 times. When the
+budget is spent, requests wait in order (an upload's body stays in the socket
+until its turn); one bigger than the whole budget runs alone. A request that
+waits over 20 s, or finds 64 already waiting, gets 503 `busy` with
+`Retry-After: 5`, which the desktop and iPhone apps retry on their own.
+
+The line is first in, first out, except that a request of at most 2 MB that
+fits in the room left goes ahead of a waiting big one (until that one has
+waited half the limit), so a small page never sits behind a 16 MB one. The
+declared `Content-Length` is only the client's word: a request that declares
+more than its route's body limit is not queued at all (Fastify answers 413
+without reading it), and the weight never exceeds the limit. Sync pushes and
+share uploads take their room after the caller is authenticated and past the
+rate limit, so an anonymous request never holds any. A client that hangs up
+does not give its room back while the handler is still building the answer
+(the work and its memory are still there); the handler stops at its next check
+and the room is released then. A request whose client left while it queued is
+answered 499 (never logged as an error).
+
+**Database connections** (`src/db.ts`): the pool has an `error` listener (Neon
+drops idle connections; an unhandled pool error would end the process), TCP
+keep-alive, a client-side `query_timeout`, and every transaction starts with
+`set local statement_timeout = 30000` (Neon's pooler refuses startup options,
+so it cannot be set per connection). A connection whose rollback failed is
+destroyed, not reused. The service listens as soon as migrations are applied;
+the purge and retry jobs run afterwards in the background.
+
+Every start logs both numbers, for example
+`memory: machine 210 MB, heap limit 104 MB (50%), request budget 98 MB`. If
+the heap limit is over 75% of the machine (the cap was lost, say a Dockerfile
+that runs `node` directly), it also logs a warning and sends the error alert.
+After a deploy or a `fly scale`, check that line in `fly logs`.
+
+**Load probe** (`npm run probe:load`, `src/dev/load-probe.ts`): the real server on
+in-memory Postgres, with concurrent pushes through a small budget, a big pull
+that the client abandons and retries, and a request declaring a huge
+`Content-Length`; it exits 1 when one fails. `node --expose-gc
+dist/dev/load-probe.js --measure` prints peak RSS for one pull page and push
+latency at 50 and 200 objects (PGlite has no network round trip, so latencies
+understate Neon's).
 
 ## Cost
 

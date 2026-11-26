@@ -10,7 +10,8 @@
 
 use crate::installs::Installs;
 use crate::library::{Library, engine_settings};
-use nekko_engine::server::{Daemon, Env, ModelServer};
+use nekko_engine::load_check::EngineInUse;
+use nekko_engine::server::{Daemon, Engine, Env, ModelServer};
 use nekko_engine::{BoxFuture, acquire, folders, launch};
 use nekko_infer::{ServeConfig, SpawnSpec};
 use nekko_tools::path::native as path;
@@ -117,11 +118,13 @@ impl Env for Surroundings {
     fn prompt_caching(&self) -> bool {
         self.settings.store.get().get("promptCaching") != Some(&Value::Bool(false))
     }
-    fn bin(&self, runtime: &'static str) -> BoxFuture<Option<String>> {
+    fn engine(&self, runtime: &'static str) -> BoxFuture<Option<Engine>> {
         let installs = self.installs.clone();
-        Box::pin(
-            async move { installs.detect(runtime).await.get("binPath").and_then(Value::as_str).map(str::to_string) },
-        )
+        Box::pin(async move {
+            let install = installs.detect(runtime).await;
+            let bin = install.get("binPath").and_then(Value::as_str)?.to_string();
+            Some(Engine { bin, in_use: EngineInUse::from_install(&install) })
+        })
     }
     fn gpu_capable(&self) -> BoxFuture<Option<bool>> {
         let installs = self.installs.clone();
@@ -142,6 +145,11 @@ impl Env for Surroundings {
     fn gpu(&self) -> BoxFuture<Option<Value>> {
         let machine = self.machine.clone();
         Box::pin(async move { machine.gpu_stats_fresh().await.map(|s| s.to_value()) })
+    }
+    fn ram_headroom(&self) -> BoxFuture<Option<f64>> {
+        Box::pin(async {
+            tokio::task::spawn_blocking(|| nekko_machine::memory::headroom() as f64).await.ok().filter(|b| *b > 0.0)
+        })
     }
     fn flags(&self, bin: String) -> BoxFuture<Arc<HashSet<String>>> {
         // Read once per binary: the engine is installed once and kept. A build

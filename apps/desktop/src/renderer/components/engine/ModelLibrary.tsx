@@ -1,14 +1,20 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { LIST_PAGE, pageGroups, showMoreLabel } from '../../listPaging.js';
-import type { GpuFit, LocalModel, ModelModality, ResidentModel } from '@nekko-agent/shared';
-import { MODALITY_LABELS, MODEL_FOLDER_PROVIDERS, unsupportedLoadReason } from '@nekko-agent/shared';
+import type { EngineMemory, LocalModel, ModelModality, ResidentModel } from '@nekko-agent/shared';
+import { MODEL_FOLDER_PROVIDERS, cannotLoadReason } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
-import { TrashIcon, WarningIcon } from '../../icons.js';
+import { notifyModelsChanged } from '../../modelCatalog.js';
+import { CheckIcon, ChevronIcon, WarningIcon } from '../../icons.js';
 import { StatusDot } from '../primitives/index.js';
 import { formatBytes, formatTokens, placementLabel, placementTitle } from '../runtimes/verdict.js';
 import { EngineLoadDrawer } from './EngineLoadDrawer.js';
 import { ImageGeneration } from './ImageGeneration.js';
-import { gpuGuidance } from './modelFamilies.js';
+import { loadLocalModel } from './localModelShortcuts.js';
+import { gpuGuidance, sortLibraryModels, type LibraryModel, type ModelSort } from './modelFamilies.js';
+import { ModelRowActions, type ModelRowControl } from './ModelRowActions.js';
+import { RunnableAlternativeOffer } from './RunnableAlternativeOffer.js';
+import { loadableFiles } from './runnableAlternative.js';
+import { localTypeLabel, modelProblem, paramsLabel } from './modelFacts.js';
 import { MiddleTruncate } from '../primitives/MiddleTruncate.js';
 
 /**
@@ -58,26 +64,35 @@ export function ModelLibrary({
   models,
   canLoad,
   onChanged,
+  actions,
   query = '',
   autoloadIds,
   running,
   resident,
+  sortBy,
+  memory,
 }: {
   providerId: string;
-  models: Array<LocalModel & { loaded: boolean; gpuFit?: GpuFit }>;
+  models: LibraryModel[];
+  /** The GPU's size, so a model the busy GPU cannot hold now is not called too big. */
+  memory?: EngineMemory;
   /** The engine's resident list, for where each loaded model actually sits. */
   resident?: ResidentModel[];
   /** False until the engine binary exists: the list is real, running it is not. */
   canLoad: boolean;
   onChanged: () => void;
+  actions: ModelRowControl;
   /** Live filter from the shared search box (matches name, id, quant, folder). */
   query?: string;
   /** Ids marked to load when the engine starts. */
   autoloadIds?: Set<string>;
   /** Whether the engine is serving: autoload is a promise only while it is. */
   running?: boolean;
+  /** The installed-library order selected by the Models page. */
+  sortBy?: ModelSort;
 }) {
   const pushToast = useStore((s) => s.pushToast);
+  const settingsId = useId();
   const [open, setOpen] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
@@ -106,10 +121,7 @@ export function ModelLibrary({
     // A row's Load uses whatever this model was last saved with, and the planner's
     // own answer when it has never been configured. Opening the drawer is for
     // changing that, not for performing it.
-    const params = model.preset ? { ...model.preset, budgetFraction: undefined } : null;
-    const req = (params || model.modality === 'image'
-      ? window.nekko.runtimeLoad(providerId, model.id, params ?? {})
-      : autoLoad(providerId, model.id)).catch((e: Error) => ({ ok: false, message: e.message }));
+    const req = loadLocalModel(providerId, model);
     // The load is registered the moment the host picks the call up. Refreshing
     // now (and once a beat later, in case this read raced the registration)
     // puts the model in the "In memory" block while it is still streaming in,
@@ -120,13 +132,6 @@ export function ModelLibrary({
     clearTimeout(tick);
     setBusy(null);
     pushToast(res.ok ? 'success' : 'error', res.message ?? (res.ok ? 'Loaded.' : "Couldn't load it."));
-    onChanged();
-  };
-
-  const remove = async (model: LocalModel) => {
-    if (!window.confirm(`Delete ${model.name}? The file is removed from disk.`)) return;
-    const res = await window.nekko.engineDeleteModel(model.id);
-    pushToast(res.ok ? 'success' : 'error', res.message);
     onChanged();
   };
 
@@ -161,17 +166,19 @@ export function ModelLibrary({
     return (Object.keys(FILTER_LABELS) as Filter[]).filter((f) => f === 'all' || present.has(f));
   }, [models]);
 
+  const orderedModels = useMemo(() => sortBy ? sortLibraryModels(models, sortBy) : models, [models, sortBy]);
+
   const searched = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return models;
-    return models.filter((m) =>
+    if (!q) return orderedModels;
+    return orderedModels.filter((m) =>
       [m.name, m.id, m.quantization, m.parameterSize, m.sourceRepo, m.folderProvider]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
         .includes(q),
     );
-  }, [models, query]);
+  }, [orderedModels, query]);
 
   const visible = useMemo(
     () => (filter === 'all' ? searched : searched.filter((m) => bucketOf(m.modality) === filter)),
@@ -181,9 +188,10 @@ export function ModelLibrary({
   /**
    * The list groups by where each model lives: our own downloads first, then
    * the other apps' folders alphabetically. Headers only print when there is
-   * more than one group to name.
+   * more than one group to name. An installed sort orders across folders.
    */
-  const groups = useMemo(() => {
+  const groups = useMemo((): [string, LibraryModel[]][] => {
+    if (sortBy) return [['', visible]];
     const byLoc = new Map<string, typeof visible>();
     for (const m of visible) {
       const loc = locationOf(m);
@@ -194,13 +202,32 @@ export function ModelLibrary({
     return [...byLoc.entries()].sort(([a], [b]) =>
       a === b ? 0 : a === 'Nekko Agent' ? -1 : b === 'Nekko Agent' ? 1 : a.localeCompare(b),
     );
-  }, [visible]);
+  }, [visible, sortBy]);
+
+  /** The files already here, so a row's offer never suggests one the family has. */
+  const haveFiles = useMemo(() => loadableFiles(models), [models]);
 
   /** The page of rows on screen: a big library does not mount every row. */
   const paged = useMemo(() => pageGroups(groups, shown), [groups, shown]);
 
   /** Residency, by model id: where a loaded model actually sits. */
   const residentById = useMemo(() => new Map((resident ?? []).map((r) => [r.id, r])), [resident]);
+
+  // Another surface (the Local models monitor's starred and recent rows) asked
+  // for a model that is not in memory: the In memory list cannot serve that, so
+  // this list unfolds the row's settings, shows every row, and scrolls to it.
+  const focus = useStore((s) => s.localModelFocus);
+  const clearFocus = useStore((s) => s.clearLocalModelFocus);
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const target = focus ? models.find((m) => m.id === focus) : undefined;
+    if (!target || target.loaded) return;
+    setFilter('all');
+    setShown(Math.max(LIST_PAGE, models.length));
+    setOpen(target.id);
+    clearFocus();
+    requestAnimationFrame(() => rootRef.current?.querySelector(`[data-library-row="${CSS.escape(target.id)}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+  }, [focus, models, clearFocus]);
 
   const runImport = async () => {
     const path = importPath.trim();
@@ -211,11 +238,12 @@ export function ModelLibrary({
       setImportPath('');
       setImporting(false);
       onChanged();
+      notifyModelsChanged();
     }
   };
 
   return (
-    <div>
+    <div ref={rootRef}>
       <div className="flex items-center justify-between">
         <p className="text-xs text-ink-faint">
           {models.length === 0
@@ -271,8 +299,8 @@ export function ModelLibrary({
 
       {models.length === 0 ? (
         <p className="mt-(--q-inline) text-xs text-ink-faint">
-          Nothing here yet. Download one of the picks for this machine above or a model from the list, open{' '}
-          <strong>Folders</strong> to point at a folder another app already fills, or add a GGUF you have.
+          Nothing here yet. Get one under <strong>Find new models</strong>, open <strong>Folders</strong> to point at a
+          folder another app already fills, or add a GGUF you have.
         </p>
       ) : visible.length === 0 ? (
         <p className="mt-3 text-xs text-ink-faint">
@@ -304,40 +332,58 @@ export function ModelLibrary({
   );
 
   function renderRow(m: (typeof models)[number]) {
-    const unsupported = m.modality === 'image' ? undefined : unsupportedLoadReason(m);
+    const unsupported = m.modality === 'image' ? undefined : cannotLoadReason(m);
     const missingProjector = m.modality === 'vision' && !m.hasProjector;
     const live = residentById.get(m.id);
-    // A model that cannot fill the GPU wears the warning on its row: it will
-    // run, but not at the speed the card implies.
-    const fitWarn = m.gpuFit === 'partial' || m.gpuFit === 'wont';
+    const problem = modelProblem(m);
+    const fit = gpuGuidance(m.sizeBytes, memory, m);
+    const expanded = !unsupported && open === m.id;
+    const panelId = `${settingsId}-${m.id}`;
+    const details = (
+      <span className="block min-w-0 flex-1">
+        <MiddleTruncate text={m.name} tail={20} className="block max-w-full text-sm font-medium" />
+        {actions.isDefault(m) && <span className="text-2xs text-accent">Default</span>}
+        <span className="block text-xs text-ink-soft" data-model-facts>{[localTypeLabel(m), paramsLabel(m.name, m.parameterSize), m.sizeBytes > 0 && formatBytes(m.sizeBytes)].filter(Boolean).join(' · ')}</span>
+        <span className="block text-2xs text-ink-faint" title={m.modality && m.modality !== 'chat' ? modalityTitle(m.modality) : undefined}>
+          {[
+            fit,
+            m.quantization,
+            m.maxContext && `${formatTokens(m.maxContext)} max context`,
+            m.format === 'mlx' && 'MLX',
+            autoloadIds?.has(m.id) && 'loads on start',
+            m.managed === false && `from ${locationOf(m)}`,
+          ].filter(Boolean).join(' · ')}
+        </span>
+      </span>
+    );
     return (
-      <div key={m.id}>
+      <div key={m.id} data-library-row={m.id} className="scroll-mt-4">
         <div
           className="flex min-h-(--q-row) flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-2 py-2 text-xs transition-colors duration-(--dur-fast) hover:bg-(--q-wash)"
           style={{ opacity: unsupported ? 0.85 : 1, background: m.loaded ? 'var(--accent-soft)' : undefined }}
           data-quiet-row
         >
-          <div className="min-w-48 flex-1" title={m.path}>
-            <MiddleTruncate text={m.name} tail={20} className="block max-w-full text-sm font-medium" />
-            <p className="truncate text-2xs text-ink-faint" title={m.modality && m.modality !== 'chat' ? modalityTitle(m.modality) : undefined}>
-              {[
-                gpuGuidance(m.sizeBytes, undefined, m),
-                m.quantization,
-                m.parameterSize,
-                formatBytes(m.sizeBytes),
-                m.maxContext && `${formatTokens(m.maxContext)} max context`,
-                m.modality && m.modality !== 'chat' && MODALITY_LABELS[m.modality],
-                m.format === 'mlx' && 'MLX',
-                autoloadIds?.has(m.id) && 'loads on start',
-                m.gpuFit === 'cpu' && !unsupported && 'CPU only',
-                m.managed === false && `from ${m.folderProvider ? MODEL_FOLDER_PROVIDERS[m.folderProvider].label : 'another folder'}`,
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </p>
-          </div>
+          {unsupported ? (
+            <div className="min-w-0 flex-[1_1_12rem]" title={m.path}>{details}</div>
+          ) : (
+            <button
+              type="button"
+              className="flex min-h-8 min-w-0 flex-[1_1_12rem] items-center gap-2 rounded text-left"
+              title={m.path}
+              aria-label={`${m.modality === 'image' ? 'Image settings' : 'Settings'} for ${m.name}`}
+              aria-expanded={expanded}
+              aria-controls={expanded ? panelId : undefined}
+              data-model-row-toggle
+              onClick={() => setOpen(expanded ? null : m.id)}
+            >
+              {details}
+              <span aria-hidden="true" className="shrink-0 text-ink-faint">
+                <ChevronIcon className={`h-4 w-4 transition-transform duration-(--dur-fast) motion-reduce:transition-none ${expanded ? 'rotate-90' : ''}`} />
+              </span>
+            </button>
+          )}
 
-          <div className="ml-auto flex shrink-0 items-center gap-1">
+          <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1">
             {m.loaded ? (
               <span className="mr-1 inline-flex items-center gap-1.5 text-2xs text-ink-soft" title={live ? placementTitle(live) : undefined}>
                 <StatusDot color="var(--accent)" size={6} />
@@ -348,15 +394,9 @@ export function ModelLibrary({
                 <StatusDot tone="warning" size={6} />
                 No projector
               </span>
-            ) : !unsupported && (m.gpuFit === 'partial' || m.gpuFit === 'wont') ? (
-              <span
-                className="mr-1 inline-flex items-center gap-1.5 text-2xs text-warning-text"
-                title={m.gpuFit === 'partial'
-                  ? 'Under its saved settings, part of it runs on the CPU rather than fully in VRAM. Open Settings to change that.'
-                  : 'The planner says it will not fit on this machine, even partly offloaded to the CPU.'}
-              >
-                <StatusDot tone="warning" size={6} />
-                {m.gpuFit === 'partial' ? 'Part on CPU' : 'Won’t fit'}
+            ) : !problem && (m.gpuFit === 'full' || m.gpuFit === 'cpu' || m.gpuFit === 'partial' || m.gpuFit === 'wont') ? (
+              <span className={`mr-1 shrink-0 ${m.gpuFit === 'full' || m.gpuFit === 'cpu' ? 'text-success' : 'text-warning-text'}`} aria-hidden="true" title={fit} data-model-fit={m.gpuFit}>
+                {m.gpuFit === 'full' || m.gpuFit === 'cpu' ? <CheckIcon className="h-3.5 w-3.5" /> : <WarningIcon className="h-3.5 w-3.5" />}
               </span>
             ) : null}
             {!unsupported && !m.loaded && (
@@ -375,15 +415,6 @@ export function ModelLibrary({
                 On start
               </button>
             )}
-            {!unsupported && (
-              <button
-                className={`btn btn-ghost quiet-row-action min-h-8! px-2 py-1 touch:min-h-11! text-2xs ${open === m.id ? 'text-accent' : ''}`}
-                aria-expanded={open === m.id}
-                onClick={() => setOpen(open === m.id ? null : m.id)}
-              >
-                {m.modality === 'image' ? 'Image settings' : 'Settings'}
-              </button>
-            )}
             {unsupported ? null : m.loaded ? (
               <button className="btn btn-ghost quiet-row-action min-h-8! px-2 py-1 touch:min-h-11! text-2xs" disabled={busy === m.id} onClick={() => void unload(m.id)}>
                 {busy === m.id ? 'Unloading…' : 'Unload'}
@@ -398,72 +429,72 @@ export function ModelLibrary({
                 {busy === m.id ? 'Loading…' : 'Load'}
               </button>
             )}
-            {m.managed === false ? (
-              // The file belongs to whichever app downloaded it. Saying so
-              // beats a delete button that refuses after the click.
-              <span
-                className="px-2 text-2xs text-ink-faint"
-                title={`Delete this in ${m.folderProvider ? MODEL_FOLDER_PROVIDERS[m.folderProvider].label : 'the app that downloaded it'}`}
-              >
-                borrowed
-              </span>
-            ) : (
-              <button className="btn btn-ghost quiet-row-action min-h-8! px-2 py-1 touch:min-h-11!" title="Delete this model" aria-label="Delete this model" onClick={() => void remove(m)}>
-                <TrashIcon className="h-3.5 w-3.5" />
-              </button>
-            )}
+            <ModelRowActions model={m} actions={actions} />
           </div>
         </div>
 
-                {unsupported && (
-                  <p className="mt-(--q-tight) flex items-start gap-2 px-2 text-2xs text-warning-text">
-                    <WarningIcon className="mt-0.5 h-3 w-3 shrink-0" />
-                    {unsupported}
-                  </p>
-                )}
-                {missingProjector && !unsupported && (
-                  <p className="mt-(--q-tight) flex flex-wrap items-center gap-2 px-2 text-2xs text-warning-text">
-                    <WarningIcon className="h-3 w-3 shrink-0" />
-                    Its projector (mmproj-*.gguf) is missing: it answers text but cannot see images.
-                    <button
-                      className="underline underline-offset-2 hover:text-ink"
-                      disabled={busy === m.id}
-                      onClick={() => void fetchCompanions(m)}
-                    >
-                      Fetch it now
-                    </button>
-                  </p>
-                )}
-                {m.lastLoadError && !m.loaded && (
-                  <p className="mt-(--q-tight) flex flex-wrap items-start gap-2 px-2 text-2xs text-danger-text">
-                    <WarningIcon className="mt-0.5 h-3 w-3 shrink-0" />
-                    <span>Last load failed: {m.lastLoadError}</span>
-                    {missingProjector && (
-                      <button
-                        className="underline underline-offset-2 hover:text-ink"
-                        disabled={busy === m.id}
-                        onClick={() => void fetchCompanions(m)}
-                      >
-                        Fetch companion files
-                      </button>
-                    )}
-                  </p>
-                )}
+        {unsupported && (
+          <p className="mt-(--q-tight) flex items-start gap-2 px-2 text-2xs text-warning-text">
+            <WarningIcon className="mt-0.5 h-3 w-3 shrink-0" />
+            {unsupported}
+          </p>
+        )}
+        {unsupported && <RunnableAlternativeOffer model={m} have={haveFiles} onChanged={onChanged} />}
+        {!unsupported && m.loadCheck?.level === 'warning' && (
+          <p className="mt-(--q-tight) flex items-start gap-2 px-2 text-2xs text-warning-text" data-model-load-warning>
+            <WarningIcon className="mt-0.5 h-3 w-3 shrink-0" />
+            {m.loadCheck.reason}
+          </p>
+        )}
+        {missingProjector && !unsupported && (
+          <p className="mt-(--q-tight) flex flex-wrap items-center gap-2 px-2 text-2xs text-warning-text">
+            <WarningIcon className="h-3 w-3 shrink-0" />
+            Its projector (mmproj-*.gguf) is missing: it answers text but cannot see images.
+            <button
+              className="underline underline-offset-2 hover:text-ink"
+              disabled={busy === m.id}
+              onClick={() => void fetchCompanions(m)}
+            >
+              Fetch it now
+            </button>
+          </p>
+        )}
+        {m.lastLoadError && !m.loaded && (
+          <p className="mt-(--q-tight) flex flex-wrap items-start gap-2 px-2 text-2xs text-danger-text">
+            <WarningIcon className="mt-0.5 h-3 w-3 shrink-0" />
+            <span>Last load failed: {m.lastLoadError}</span>
+            {missingProjector && (
+              <button
+                className="underline underline-offset-2 hover:text-ink"
+                disabled={busy === m.id}
+                onClick={() => void fetchCompanions(m)}
+              >
+                Fetch companion files
+              </button>
+            )}
+          </p>
+        )}
 
-                {open === m.id && m.modality === 'image' && <ImageGeneration model={m} onChanged={onChanged} />}
-                {open === m.id && m.modality !== 'image' && (
-                  <EngineLoadDrawer
-                    providerId={providerId}
-                    model={m}
-                    loadedParams={residentById.get(m.id)?.params}
-                    autoloaded={autoloadIds?.has(m.id) ?? false}
-                    onToggleAutoload={(on) => void toggleAutoload(m, on)}
-                    onFetchCompanions={() => void fetchCompanions(m)}
-                    onDone={onChanged}
-                    onClose={() => setOpen(null)}
-                  />
-                )}
-              </div>
+        {expanded && (
+          <div id={panelId}>
+            {m.modality === 'image' ? <ImageGeneration model={m} onChanged={onChanged} /> : (
+              <EngineLoadDrawer
+                providerId={providerId}
+                model={m}
+                loadedParams={live?.params}
+                autoloaded={autoloadIds?.has(m.id) ?? false}
+                onToggleAutoload={(on) => void toggleAutoload(m, on)}
+                onFetchCompanions={() => void fetchCompanions(m)}
+                onDone={onChanged}
+                onClose={() => {
+                  setOpen(null);
+                  rootRef.current?.querySelector<HTMLButtonElement>(`[data-library-row="${CSS.escape(m.id)}"] [data-model-row-toggle]`)?.focus();
+                }}
+              />
+            )}
+          </div>
+        )}
+      </div>
     );
   }
 }
@@ -495,23 +526,4 @@ function modalityTitle(modality: ModelModality): string {
     default:
       return 'A chat model';
   }
-}
-
-/**
- * Load with the planner's own answer at a middling budget.
- *
- * A model nobody has configured still has to load sensibly, and asking the same
- * planner the drawer asks means the quick path and the considered path cannot
- * disagree.
- */
-async function autoLoad(providerId: string, modelId: string): Promise<{ ok: boolean; message?: string }> {
-  const auto = await window.nekko.runtimeAutoFit(providerId, modelId, 0.75).catch(() => null);
-  return window.nekko.runtimeLoad(providerId, modelId, {
-    contextTokens: auto?.request.contextTokens,
-    kvCacheDtype: auto?.request.kvCacheDtype,
-    gpuLayers:
-      auto?.plan.totalLayers && auto.request.gpuLayerFraction < 1
-        ? Math.round(auto.plan.totalLayers * auto.request.gpuLayerFraction)
-        : undefined,
-  });
 }

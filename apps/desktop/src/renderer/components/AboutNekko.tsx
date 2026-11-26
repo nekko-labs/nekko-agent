@@ -3,6 +3,7 @@ import { NekkoAvatar } from './Mascot.js';
 import { useUpdater } from './UpdateBanner.js';
 import { Modal } from './primitives/index.js';
 import { openFeedback } from './FeedbackSheet.js';
+import { openWhatsNew } from '../whatsNew.js';
 
 const FACTS = [
   { k: 'Local-first', v: 'Your chats, files and memory stay on this machine unless you send them somewhere.' },
@@ -49,7 +50,10 @@ export function AboutNekko() {
         <p className="mt-2 text-xs text-ink-faint">
           Built with care (and catnip) by <span className="font-semibold text-ink">Nekko Labs</span>.
         </p>
-        <button type="button" className="btn btn-outline" onClick={() => { setOpen(false); setPurr(null); openFeedback(); }}>Send feedback</button>
+        <div className="flex flex-wrap justify-center gap-2">
+          <button type="button" className="btn btn-ghost" onClick={() => { setOpen(false); setPurr(null); openWhatsNew(); }} data-testid="about-whats-new">What's new</button>
+          <button type="button" className="btn btn-outline" onClick={() => { setOpen(false); setPurr(null); openFeedback('about'); }}>Send feedback</button>
+        </div>
         <p className="text-2xs text-ink-faint">© {new Date().getFullYear()} Nekko Labs</p>
       </div>
     </Modal>

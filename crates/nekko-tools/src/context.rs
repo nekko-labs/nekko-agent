@@ -164,6 +164,9 @@ pub struct ToolContext {
     /// Host-owned app folder, accessible in local chats without becoming the working directory.
     /// Container chats never receive a native context or this host permission.
     pub app_data_root: Option<String>,
+    /// Shared Nekko product root for host agents; not a cwd or a delete root.
+    /// Container agents never receive this host permission.
+    pub shared_data_root: Option<String>,
     pub mode: ChatMode,
     /// The chat this call runs for: enables change tracking and the command log.
     pub session_id: Option<String>,
@@ -193,6 +196,7 @@ impl ToolContext {
             default_cwd: None,
             read_only_roots: Vec::new(),
             app_data_root: None,
+            shared_data_root: None,
             mode: ChatMode::default(),
             session_id: None,
             approver,

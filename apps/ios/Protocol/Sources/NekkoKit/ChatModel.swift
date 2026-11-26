@@ -151,6 +151,8 @@ public final class ChatModel {
     /// Events and answers so far, so a re-read can tell whether the cards changed while it waited.
     private var cardChanges = 0
     private var agentStateTask: Task<Void, Never>?
+    private var agentStateRead: Task<Void, Never>?
+    private var agentStateDirty = false
     private var lastConn: RelayState = .idle
 
     public init(sessionId: String, store: ComputersStore, now: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }) {
@@ -186,11 +188,36 @@ public final class ChatModel {
         }
     }
 
+    /// Whether this tool result can change the watches or the child chats: it
+    /// belongs to a watch, a clip or a sub-agent call. The result's call is already
+    /// in `blocks`; a result whose call we never saw (joined mid-turn) is read, to be safe.
+    func changesAgentState(_ result: ToolResult) -> Bool {
+        guard let name = blocks.lazy.compactMap({ block -> String? in
+            if case .tool(let id, let name, _, _, _, _) = block, id == result.toolCallId { return name } else { return nil }
+        }).first else { return true }
+        return name == AgentRows.watchTool || name == AgentRows.subagentTool || AgentRows.clipTools.contains(name)
+    }
+
+    /// Ask for a re-read of the agent state. One runs at a time; a burst of results
+    /// while it is in flight is answered by one more read after it, not one each.
+    func requestAgentStateRefresh() {
+        agentStateDirty = true
+        guard agentStateRead == nil else { return }
+        agentStateRead = Task { @MainActor [weak self] in
+            while let self, self.agentStateDirty, !Task.isCancelled {
+                self.agentStateDirty = false
+                await self.refreshAgentState()
+            }
+            self?.agentStateRead = nil
+        }
+    }
+
     /// Re-read what the agent-work rows show beyond the transcript: the watches,
     /// and the child chats when the transcript delegates. Failures keep the last state.
     public func refreshAgentState() async {
         guard let r = try? store.remote() else { return }
-        let hasWatch = blocks.contains { if case .tool(_, let name, _, _, _, _) = $0 { return name == AgentRows.watchTool } else { return false } }
+        // A clip is a watch the agent never armed itself: its chip shows while a clip tool is in the chat.
+        let hasWatch = blocks.contains { if case .tool(_, let name, _, _, _, _) = $0 { return name == AgentRows.watchTool || AgentRows.clipTools.contains(name) } else { return false } }
         let hasAgent = blocks.contains { if case .tool(_, let name, _, _, _, _) = $0 { return name == AgentRows.subagentTool } else { return false } }
         if hasWatch, let raw = try? await r.call(Channels.sessionWatches, [.string(sessionId)]) { watches = AgentWatch.list(raw) }
         if hasAgent, let raw = try? await r.call(Channels.sessionsSummaries) {
@@ -212,6 +239,9 @@ public final class ChatModel {
         subscription = nil
         agentStateTask?.cancel()
         agentStateTask = nil
+        agentStateRead?.cancel()
+        agentStateRead = nil
+        agentStateDirty = false
     }
 
     /// The connection came back: re-read, in case events were missed.
@@ -361,8 +391,9 @@ public final class ChatModel {
         }
         switch e {
         case .done, .error, .sessionMeta: scheduleReload()
-        // A watch is armed or cancelled at a tool result; a delegation's child appears then too.
-        case .toolResult: Task { await refreshAgentState() }
+        // A watch is armed or cancelled at a tool result, and a delegation's child appears then.
+        // Any other tool's result cannot change either, so it reads nothing.
+        case .toolResult(_, let result) where changesAgentState(result): requestAgentStateRefresh()
         default: break
         }
     }
@@ -899,6 +930,18 @@ public final class ChatModel {
             return outgoingPhotos.images[index]
         }
         return try await store.remote().call(Channels.sessionPhoto, [.string(sessionId), .string(savedId), .int(Int64(index))]).string
+    }
+
+    /// The pictures an agent made in one tool call (`generate_image`, `edit_image`): the result
+    /// message that holds them and how many. Nil for any other call, or when the computer sent none.
+    public func toolPictures(callId: String, tool: String) -> ToolPictures.Found? {
+        ToolPictures.find(session?.messages ?? [], callId: callId, tool: tool)
+    }
+
+    /// One of those pictures (`session:photo` on the result message), sized for the screen; nil when
+    /// the computer has none to send (a vector picture, or an older computer).
+    public func toolPhoto(_ found: ToolPictures.Found, _ index: Int) async throws -> String? {
+        try await store.remote().call(Channels.sessionPhoto, [.string(sessionId), .string(found.messageId), .int(Int64(index))]).string
     }
 
     // MARK: Projection

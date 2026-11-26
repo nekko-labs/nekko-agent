@@ -2,6 +2,29 @@ import { cloudError, type CloudStatus, type FleetComputerView, type FleetList, t
 
 /** How often the Computers list is refreshed while the Organization section is on screen. */
 export const FLEET_POLL_MS = 15_000;
+/**
+ * The slower refresh while this computer is on the Relay account channel (presence and a `fleet`
+ * nudge refresh the list sooner). Used only with `FLEET_FAST_PATH`.
+ */
+export const FLEET_POLL_CONNECTED_MS = 60_000;
+/**
+ * OFF until the Nekko Cloud API's fleet lease outlasts the engine's slow 10 minute heartbeat
+ * (`crates/nekko-cloud/src/orgs.rs`, `SLOW_HEARTBEAT_ENABLED`). Turn both on together, with that API
+ * change deployed: a slower poll beside the 30 s beat would only make the Computers list staler.
+ */
+export const FLEET_FAST_PATH = false;
+
+/** How often to read the Computers list: a minute while the account channel is up and the fast path is on, else 15 s. */
+export function fleetPollMs(relayConnected: boolean, fastPath: boolean = FLEET_FAST_PATH): number {
+  return fastPath && relayConnected ? FLEET_POLL_CONNECTED_MS : FLEET_POLL_MS;
+}
+
+/** Who is online on the account channel, as one string, so a change in it can refresh the list. */
+export function relayPresenceKey(status: CloudStatus | null): string {
+  const relay = status?.relay;
+  if (!relay?.connected) return '';
+  return relay.online.map((d) => d.dev).sort().join(',') || '-';
+}
 /** Local models shown on a computer before the rest fold behind "+N more". */
 export const MODELS_SHOWN = 3;
 
@@ -34,10 +57,17 @@ export function orgErrorText(e: unknown): string {
   const raw = cloudError(e);
   if (UNKNOWN_CHANNEL.test(raw)) return 'Organizations are not available in this version of Nekko Agent yet. Update the app and try again.';
   if (/orgs-not-available/.test(raw)) return 'Organizations are not available for your account yet.';
-  if (/plan-required/.test(raw)) return 'Creating an organization needs Nekko Cloud Pro or Team.';
+  if (/plan-required/.test(raw)) return 'Creating an organization needs Nekko Cloud Pro or Enterprise.';
   if (/last-owner/.test(raw)) return 'An organization needs at least one owner.';
   if (/needs-synced-device/.test(raw)) return 'Unlock your account on this computer to see this organization\'s computers.';
   return raw || 'Something went wrong. Try again.';
+}
+
+/** Unlike a detail lookup, the fleet list does not address a particular organization. */
+export function orgListErrorText(e: unknown): string {
+  const raw = cloudError(e);
+  if (/^That organization wasn't found\.$|^404\b/i.test(raw)) return 'Fleet management is not available on Nekko Cloud right now.';
+  return orgErrorText(e);
 }
 
 export const canManage = (role: OrgRole | undefined) => role === 'owner' || role === 'admin';
@@ -92,6 +122,8 @@ export interface OrgSnapshot {
   list: OrgList;
   detail: OrgDetail | null;
   fleet: FleetList | null;
+  selectedId: string | null;
+  detailError: string;
   /** Plain text when only the Computers list could not be loaded. */
   fleetError: string;
 }
@@ -104,10 +136,15 @@ export interface OrgSnapshot {
 export async function loadOrgs(api: OrgApi, wanted: string | null): Promise<OrgSnapshot> {
   const list = await api.orgList();
   const org = pickOrg(list.orgs, wanted);
-  if (!org) return { list, detail: null, fleet: null, fleetError: '' };
-  const detail = await api.orgGet(org.id);
-  const fleet = await loadFleet(api, detail);
-  return { list, detail, fleet: fleet.fleet, fleetError: fleet.error };
+  const base = { list, selectedId: org?.id ?? null, detail: null, detailError: '', fleet: null, fleetError: '' };
+  if (!org) return base;
+  try {
+    const detail = await api.orgGet(org.id);
+    const fleet = await loadFleet(api, detail);
+    return { ...base, detail, fleet: fleet.fleet, fleetError: fleet.error };
+  } catch (e) {
+    return { ...base, detailError: orgErrorText(e) };
+  }
 }
 
 /** The Computers list for an organization; nothing to ask while this device lacks the key. */

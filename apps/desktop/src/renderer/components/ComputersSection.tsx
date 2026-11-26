@@ -71,7 +71,7 @@ function IconPicker({ icon, label, onPick }: { icon?: string; label: string; onP
   );
 }
 
-/** Settings > Computers: the computers this one reaches, and the link that lets another reach it. */
+/** Settings > Phone and computers: the computers this one reaches, and the link that lets another reach it. */
 export function ComputersSection() {
   const [computers, setComputers] = useState<ComputerStatus[]>([]);
   const machineIcon = useStore((s) => s.settings?.machineIcon);

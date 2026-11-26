@@ -137,7 +137,7 @@ Node regressions exercise failure propagation/isolation, not actual rendering.
 Run the shared layout launcher with `NEKKO_LAYOUT_SANDBOX=wall-composers-sandbox.cjs`.
 The current plan starts expanded: the journey explicitly folds it, checks the
 working step/pass/position and the individual sub-agent cards, reopens it, then
-opens a completed step before checking its task and sub-agent links. It retains
+checks compact rows and the completed step's overflow disclosure before checking its task and sub-agent links. It retains
 the per-window composer, voice-island and selection-height checks (#2072).
 A failed journey returns a nonzero Electron status (covered by a registered
 Node regression); `app.quit()` alone does not preserve `process.exitCode`.

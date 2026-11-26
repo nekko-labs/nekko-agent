@@ -11,7 +11,7 @@ import { RemoteImageCard, RemoteImageGallery } from './RemoteImageCard.js';
 import { MermaidDiagram } from './ArtifactPreview.js';
 
 import { ContextAction, ContextMenu } from './ContextMenu.js';
-import { isPrUrl, PrLinkChip } from './PrLinkChip.js';
+import { IssueLinkChip, isIssueUrl, isPrUrl, PrLinkChip } from './PrLinkChip.js';
 import { useStore } from '../store.js';
 import { BranchIcon, CheckIcon, CompassIcon, CopyIcon, ListIcon, QuestionIcon, TerminalIcon } from '../icons.js';
 import { commandToRun } from '../suggestedCommands.js';
@@ -41,8 +41,9 @@ import { endsOnUnlabelledQuestion, topicLine, type Topic } from '../replyTopics.
  *
  * Chat text is rendered block by block (see `markdownSegments`): each finished
  * top-level block is memoized by its source, so a reply that is still
- * streaming re-parses only the block being written instead of the whole reply
- * on every frame. The output is the same as parsing the text in one go.
+ * streaming re-parses only the block being written (a loose list counts as one
+ * block) instead of the whole reply on every frame. The output is the same as
+ * parsing the text in one go.
  */
 /** True inside a Sandbox chat, where host file and image previews are unavailable. */
 export const MarkdownSession = React.createContext<string | undefined>(undefined);
@@ -63,7 +64,10 @@ function DocMarkdown({ text, basePath }: { text: string; basePath?: string }) {
 function ChatMarkdown({ text, basePath, topics, askTail, runnable }: { text: string; basePath?: string; topics?: boolean; askTail?: boolean; runnable?: boolean }) {
   const sessionId = React.useContext(MarkdownSession);
   const sandbox = React.useContext(MarkdownSandbox);
-  const ctx = React.useMemo<Ctx>(() => ({ doc: false, basePath, topics, sessionId, sandbox, evidence: topics ? verificationPairs(text, basePath) : [] }), [basePath, topics, text, sessionId, sandbox]);
+  // Memoized by value, not by `text`: a new ctx object on every streamed delta would defeat the
+  // memo on every finished TextSegment. `evidence` only changes when a pair itself changes.
+  const evidence = useStableEvidence(topics ? verificationPairs(text, basePath) : NO_EVIDENCE);
+  const ctx = React.useMemo<Ctx>(() => ({ doc: false, basePath, topics, sessionId, sandbox, evidence }), [basePath, topics, sessionId, sandbox, evidence]);
   const segments = markdownSegments(text);
   // A closing question gets the header the model did not write.
   const question = askTail && endsOnUnlabelledQuestion(text) ? segments.filter((s) => s.kind === 'text').at(-1) : undefined;
@@ -73,7 +77,7 @@ function ChatMarkdown({ text, basePath, topics, askTail, runnable }: { text: str
     <div className="space-y-1 text-sm leading-[1.6]">
       {segments.map((s) =>
         s.kind === 'code'
-          ? <MemoCodeBlock key={s.key} lang={s.lang} code={s.code} runnable={runnable && s !== open} />
+          ? <MemoCodeBlock key={s.key} lang={s.lang} code={s.code} runnable={runnable && s !== open} streaming={s === open} />
           : (
             <React.Fragment key={s.key}>
               {s === question && <TopicHeader topic="question" label="Question" />}
@@ -83,6 +87,19 @@ function ChatMarkdown({ text, basePath, topics, askTail, runnable }: { text: str
       )}
     </div>
   );
+}
+
+const NO_EVIDENCE: EvidencePair[] = [];
+
+/** Keeps the previous array while the pairs are equal by value, so an unchanged result is the same object. */
+function useStableEvidence(next: EvidencePair[]): EvidencePair[] {
+  const prev = React.useRef(next);
+  const same = prev.current.length === next.length && prev.current.every((p, i) => {
+    const n = next[i];
+    return p.surface === n.surface && JSON.stringify(p.before) === JSON.stringify(n.before) && JSON.stringify(p.after) === JSON.stringify(n.after);
+  });
+  if (!same) prev.current = next;
+  return prev.current;
 }
 
 const TOPIC_ICONS: Record<Topic, (p: { className?: string }) => React.ReactElement> = {
@@ -141,9 +158,12 @@ export type MarkdownSegment =
  * Code fences split first, exactly as the whole-text renderer splits them. The
  * text between fences then splits at blank lines: every block kind the parser
  * knows ends at a blank line and nothing carries across one, so rendering the
- * pieces one by one produces the same nodes as rendering the run whole. A
- * segment's key is where it starts, which stays put as text is appended, so a
- * streaming reply keeps every finished segment and re-parses only the last.
+ * pieces one by one produces the same nodes as rendering the run whole. The
+ * exception is a list: blank lines between its items do not end it, so a loose
+ * list stays one segment. A segment's key is where it starts, and text appended
+ * later can only grow a segment: a list absorbs the items after its blank lines,
+ * so a streamed item can extend an earlier list. A streaming reply therefore
+ * re-parses the last segment, plus any list that gains an item.
  */
 export function markdownSegments(text: string): MarkdownSegment[] {
   const out: MarkdownSegment[] = [];
@@ -157,7 +177,7 @@ export function markdownSegments(text: string): MarkdownSegment[] {
     for (let j = 0; j <= lines.length; j++) {
       const blank = j === lines.length || !lines[j].trim();
       if (!blank && start < 0) start = j;
-      if (blank && start >= 0) {
+      if (blank && start >= 0 && !continuesList(lines, start, j)) {
         out.push({ kind: 'text', key: `b${i}-${start}`, src: lines.slice(start, j).join('\n') });
         start = -1;
       }
@@ -200,7 +220,7 @@ export interface Ctx {
  * (`runnable` and a `ChatCodeRun` target), a shell block also offers Run,
  * and shows the chat's terminal under it once run (#2595).
  */
-function CodeBlock({ lang, code, runnable = false }: { lang: string; code: string; runnable?: boolean }) {
+function CodeBlock({ lang, code, runnable = false, streaming = false }: { lang: string; code: string; runnable?: boolean; streaming?: boolean }) {
   const [copied, setCopied] = useState(false);
   const target = React.useContext(ChatCodeRun);
   const sandbox = React.useContext(MarkdownSandbox);
@@ -213,7 +233,8 @@ function CodeBlock({ lang, code, runnable = false }: { lang: string; code: strin
       setTimeout(() => setCopied(false), 1200);
     });
   };
-  if (lang.toLowerCase() === 'mermaid') return <MermaidDiagram code={code} />;
+  // A diagram still being written is shown as code: re-rendering it on every delta is wasted work and flickers.
+  if (lang.toLowerCase() === 'mermaid' && !streaming) return <MermaidDiagram code={code} />;
   const copyButton = (
     <button type="button" onClick={copy} title="Copy code" className="quiet-tab code-action items-center!">
       {copied ? <CheckIcon className="h-3.5 w-3.5" /> : <CopyIcon className="h-3.5 w-3.5" />}
@@ -244,7 +265,7 @@ function CodeBlock({ lang, code, runnable = false }: { lang: string; code: strin
 const MemoCodeBlock = React.memo(CodeBlock);
 
 const BULLET_RE = /^(\s*)[-*+]\s+(.*)$/;
-const ORDERED_RE = /^(\s*)\d+[.)]\s+(.*)$/;
+const ORDERED_RE = /^(\s*)(\d+)[.)]\s+(.*)$/;
 const HEADING_RE = /^(#{1,6})\s+(.*?)\s*#*$/;
 const QUOTE_RE = /^\s*>\s?(.*)$/;
 const RULE_RE = /^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/;
@@ -282,10 +303,14 @@ function stripHtml(line: string): string {
     const alt = /\balt\s*=\s*["']([^"']*)["']/i.exec(tag)?.[1] ?? '';
     return src ? `![${alt}](${src})` : '';
   });
-  return withImages
-    .replace(/<br\s*\/?>/gi, ' ')
-    .replace(/<\/?[a-zA-Z][^>]*>/g, '')
-    .trimEnd();
+  // Repeat until nothing matches: one pass can leave a new tag behind (`<<b>script>`
+  // loses `<b>` and is `<script>` again), so the tag stripping runs to a fixed point.
+  let text = withImages.replace(/<br\s*\/?>/gi, ' ');
+  for (let previous = ''; previous !== text; ) {
+    previous = text;
+    text = text.replace(/<\/?[a-zA-Z][^>]*>/g, '');
+  }
+  return text.trimEnd();
 }
 
 /** Split a markdown table row into trimmed cells (drops the outer pipes). */
@@ -297,19 +322,44 @@ interface ListItem {
   indent: number;
   text: string;
   ordered: boolean;
+  /** The number the item was written with; a numbered list starts there. */
+  number?: number;
 }
 
 function listItem(line: string): ListItem | null {
   const bullet = BULLET_RE.exec(line);
   if (bullet) return { indent: bullet[1].length, text: bullet[2], ordered: false };
   const ordered = ORDERED_RE.exec(line);
-  if (ordered) return { indent: ordered[1].length, text: ordered[2], ordered: true };
+  if (ordered) return { indent: ordered[1].length, text: ordered[3], ordered: true, number: Number(ordered[2]) };
   return null;
 }
 
 /** True for any line that starts a block of its own, so a paragraph run stops. */
 function startsBlock(line: string): boolean {
   return !line.trim() || !!listItem(line) || HEADING_RE.test(line) || QUOTE_RE.test(line) || RULE_RE.test(line);
+}
+
+/**
+ * True when the blank lines at `blank` only separate items of a list that
+ * started earlier in the segment `start..blank`: a loose list (items with blank
+ * lines between them) is still one list, so the chat split must not cut it.
+ */
+function continuesList(lines: string[], start: number, blank: number): boolean {
+  let next = blank;
+  while (next < lines.length && !lines[next].trim()) next += 1;
+  if (next >= lines.length || !listLine(lines[next])) return false;
+  for (let k = start; k < blank; k++) if (listLine(lines[k])) return true;
+  return false;
+}
+
+/**
+ * A list item line, including a topic label whose words after it are one
+ * (`**Next steps:** 1. merge`): renderBlocks reads those words as the line.
+ * Merging too much is harmless; the merged text renders as the whole parse does.
+ */
+function listLine(line: string): ListItem | null {
+  const rest = topicLine(line)?.rest;
+  return listItem(line) ?? (rest ? listItem(rest) : null);
 }
 
 /**
@@ -350,7 +400,7 @@ function renderList(items: ListItem[], key: string, ctx: Ctx, depth = 0): React.
   }
   const className = ctx.doc ? 'my-2 ml-5 space-y-1' : 'ml-4 space-y-0.5';
   return items[0].ordered
-    ? <ol key={key} className={className} style={{ listStyleType: depth % 2 ? 'lower-alpha' : 'decimal', paddingLeft: '0.35rem' }}>{nodes}</ol>
+    ? <ol key={key} start={items[0].number === 1 ? undefined : items[0].number} className={className} style={{ listStyleType: depth % 2 ? 'lower-alpha' : 'decimal', paddingLeft: '0.35rem' }}>{nodes}</ol>
     : <ul key={key} className={className} style={{ listStyleType: depth % 2 ? 'circle' : 'disc', paddingLeft: '0.35rem' }}>{nodes}</ul>;
 }
 
@@ -469,6 +519,11 @@ function renderBlocks(src: string, key: string, ctx: Ctx): React.ReactNode[] {
         if (!it || (it.indent <= first.indent && it.ordered !== first.ordered)) break;
         items.push(it);
         j += 1;
+        // Blank lines between items keep a loose list one list (CommonMark).
+        let next = j;
+        while (next < lines.length && !lines[next].trim()) next += 1;
+        if (next >= lines.length || !listItem(lines[next])) break;
+        j = next;
       }
       out.push(renderList(items, `${key}-l${i}`, ctx));
       i = j;
@@ -709,8 +764,9 @@ function Link({ href, doc, children }: { href: string; doc?: boolean; children: 
   const menuNode = menu && <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
     {linkContextActions(safe).map((action) => <ContextAction key={action.label} onClick={() => { setMenu(null); action.run(); }}>{action.label}</ContextAction>)}
   </ContextMenu>;
-  // A PR reads as its live state, so it needs no site preview.
+  // A PR or issue reads as its live state, so it needs no site preview.
   if (web && !doc && isPrUrl(safe)) return <><PrLinkChip href={safe} label={children === href ? undefined : children} onContextMenu={openMenu} />{menuNode}</>;
+  if (web && !doc && isIssueUrl(safe)) return <><IssueLinkChip href={safe} label={children === href ? undefined : children} onContextMenu={openMenu} />{menuNode}</>;
   return (
     <>
       <a href={safe} target="_blank" rel="noreferrer" className="wrap-break-word cursor-pointer underline" style={{ color: 'var(--accent)' }} onContextMenu={openMenu}>

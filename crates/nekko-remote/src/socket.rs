@@ -136,8 +136,25 @@ pub fn encode_uri_component(s: &str) -> String {
     out
 }
 
+/// A Nekko Cloud Relay ticket for this computer's room (decision 0116), from
+/// the Cloud API: fetched before every dial, and again after `renew_after` to
+/// renew it in place. An error is the reason the owner sees.
+pub type Access = Arc<dyn Fn() -> Pin<Box<dyn Future<Output = Result<AccessTicket, String>> + Send>> + Send + Sync>;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AccessTicket {
+    pub ticket: String,
+    pub renew_after: Duration,
+}
+
+/// After a failed ticket (no plan, signed out), wait this long before asking again.
+const ACCESS_RETRY: Duration = Duration::from_secs(60);
+
 pub struct Spawn {
+    /// The agent URL ([`agent_url`]); with `access`, without its `access=`.
     pub url: String,
+    /// For Nekko Cloud Relay: where its tickets come from.
+    pub access: Option<Access>,
     /// The pairing secret and room the room key is derived from.
     pub secret: String,
     pub room: String,
@@ -210,7 +227,8 @@ impl LinkHandle for RelayAgent {
 }
 
 async fn run(shared: Arc<Shared>, spec: Spawn, mut stopped: watch::Receiver<bool>) {
-    let Spawn { url, secret, room, host_key, verify, dispatch, mut events, terminals, summaries, pending } = spec;
+    let Spawn { url, access, secret, room, host_key, verify, dispatch, mut events, terminals, summaries, pending } =
+        spec;
     let host = crate::agent::Host { room: room.clone(), key: host_key };
     let derive = tokio::task::spawn_blocking(move || e2e::derive_key(&secret, &room));
     let key = tokio::select! {
@@ -231,14 +249,33 @@ async fn run(shared: Arc<Shared>, spec: Spawn, mut stopped: watch::Receiver<bool
         if *stopped.borrow() {
             return;
         }
+        // A ticket first, for Nekko Cloud Relay; without one there is no point dialing.
+        let mut ticket: Option<AccessTicket> = None;
+        let mut redial = REDIAL;
         let (code, reason) = if !nekko_net::allowed_to(ID, Some(&host)) {
             if !blocked {
                 blocked = true;
                 let _ = nekko_net::check(ID, &host);
             }
             (1006, nekko_net::blocked_message(ID))
+        } else if let Some(Err(e)) = match &access {
+            Some(get) => {
+                let got = tokio::select! {
+                    r = get() => r,
+                    _ = stopped.changed() => return,
+                };
+                Some(got.map(|t| ticket = Some(t)))
+            }
+            None => None,
+        } {
+            redial = ACCESS_RETRY;
+            (4003, e)
         } else {
             blocked = false;
+            let url = match &ticket {
+                Some(t) => format!("{url}&access={}", encode_uri_component(&t.ticket)),
+                None => url.clone(),
+            };
             // Bounded: events queue for this socket while it connects, and a
             // dial nobody answers used to hold them for as long as the OS let it.
             let connect = tokio::select! {
@@ -251,8 +288,17 @@ async fn run(shared: Arc<Shared>, spec: Spawn, mut stopped: watch::Receiver<bool
             match connect {
                 Ok((ws, _)) => {
                     nekko_net::record(ID, nekko_net::Event::new("connect").host(&host));
-                    let (code, reason) =
-                        serve(&shared, ws, &verify, &dispatch, (&summaries, &pending), &mut events, &mut stopped).await;
+                    let renew = access.as_ref().zip(ticket.as_ref().map(|t| t.renew_after));
+                    let (code, reason) = serve(
+                        &shared,
+                        ws,
+                        (&verify, &dispatch),
+                        (&summaries, &pending),
+                        renew,
+                        &mut events,
+                        &mut stopped,
+                    )
+                    .await;
                     let mut ev = nekko_net::Event::new("close").host(&host);
                     if code != 1000 {
                         ev = ev.error(if reason.is_empty() { format!("code {code}") } else { reason.clone() });
@@ -278,7 +324,7 @@ async fn run(shared: Arc<Shared>, spec: Spawn, mut stopped: watch::Receiver<bool
             return;
         }
         // Wait out the redial, dropping events: nobody is connected to hear them.
-        let wait = tokio::time::sleep(REDIAL);
+        let wait = tokio::time::sleep(redial);
         tokio::pin!(wait);
         loop {
             tokio::select! {
@@ -296,12 +342,13 @@ type Ws = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<t
 async fn serve(
     shared: &Arc<Shared>,
     ws: Ws,
-    verify: &Verifier,
-    dispatch: &PhoneDispatcher,
+    handlers: (&Verifier, &PhoneDispatcher),
     sources: (&Option<Summaries>, &Option<Pending>),
+    renew: Option<(&Access, Duration)>,
     events: &mut Events,
     stopped: &mut watch::Receiver<bool>,
 ) -> (u16, String) {
+    let (verify, dispatch) = handlers;
     let (summaries, pending) = sources;
     let (mut sink, mut stream) = ws.split();
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
@@ -333,6 +380,9 @@ async fn serve(
     // Paced terminal output to phones waits for its window (phone_terminal::Coalescer).
     let mut tick = tokio::time::interval(TICK);
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    // Nekko Cloud Relay: a fresh ticket before this one runs out, sent on the open socket.
+    let renew_sleep = tokio::time::sleep(renew.map_or(Duration::from_secs(365 * 24 * 3600), |(_, after)| after));
+    tokio::pin!(renew_sleep);
     let result = loop {
         tokio::select! {
             // Drain queued events before accepting a read. Even a ready read
@@ -412,6 +462,17 @@ async fn serve(
                 }
                 Some(Ok(_)) => {}
                 Some(Err(_)) | None => break (1006, String::new()),
+            },
+            _ = &mut renew_sleep, if renew.is_some() => {
+                let (get, after) = renew.expect("guarded");
+                // A failed renewal tries again sooner; the relay closes the socket only when the ticket runs out.
+                let (shared, fetch) = (shared.clone(), get());
+                tokio::spawn(async move {
+                    if let Ok(t) = fetch.await {
+                        shared.send_all(vec![json!({ "type": "access", "access": t.ticket }).to_string()]);
+                    }
+                });
+                renew_sleep.as_mut().reset(tokio::time::Instant::now() + after.min(ACCESS_RETRY * 10));
             },
             _ = tick.tick() => {
                 if let Some(core) = lock(&shared.core).as_mut() {

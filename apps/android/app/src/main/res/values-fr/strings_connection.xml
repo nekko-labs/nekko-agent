@@ -50,4 +50,11 @@
     <string name="conn_update_required_fix">Mettez-la à jour depuis Google Play.</string>
     <string name="conn_removed_line">%1$s a retiré ce téléphone.</string>
     <string name="conn_unknown_line">%1$s ne connaît plus ce téléphone.</string>
+    <string name="conn_route_title">Se connecter via</string>
+    <string name="conn_route_tailscale">Tailscale</string>
+    <string name="conn_route_cloud">Nekko Cloud Relay</string>
+    <string name="conn_route_add_cloud">Appairez à nouveau depuis %1$s avec Nekko Cloud Relay activé pour l’ajouter.</string>
+    <string name="conn_route_add_tailscale">Appairez à nouveau depuis %1$s avec Tailscale activé pour l’ajouter.</string>
+    <string name="conn_route_line">%1$s n’autorise ce téléphone que par une autre route.</string>
+    <string name="conn_route_fix">Appairez à nouveau, ou changez-le sur %1$s.</string>
 </resources>

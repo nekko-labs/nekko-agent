@@ -512,6 +512,14 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
                 return Err(denied("value-invalid", "refresh"));
             }
         }
+        "session:cancelWatch" => {
+            // One watch of one chat (a clip's Cancel): the chat's Stop already ends them all.
+            id(0, "chat id")?;
+            id(1, "watch id")?;
+            if args.len() > 2 {
+                return Err(denied("option-denied", "extra argument"));
+            }
+        }
         "session:photo" => {
             id(0, "chat id")?;
             id(1, "message id")?;
@@ -778,7 +786,7 @@ pub fn redact(channel: &str, result: Value) -> Value {
                 Value::Null
             }
         }
-        "task:runNow" => Value::Null,
+        "task:runNow" | "session:cancelWatch" => Value::Null,
         "pr:sessionList" => crate::phone_views::prs(&result, &policy().views),
         "session:watches" => crate::phone_views::watches(&result, &policy().watch_view, policy().views.text_chars),
         "machine:summary" => {
@@ -855,6 +863,8 @@ fn cut_input(input: &Value, n: usize) -> (Value, bool) {
 fn phone_message(m: &Value, n: usize) -> Value {
     let Value::Object(m) = m else { return m.clone() };
     let mut out = m.clone();
+    // The context saved with a user message is for the model; the phone never shows it.
+    out.remove("turnContext");
     if let Some(Value::Object(r)) = m.get("toolResult") {
         let mut r = r.clone();
         if let Some(Value::Array(images)) = r.get("images") {
@@ -1011,6 +1021,7 @@ pub async fn call(run: &Dispatcher, channel: String, args: Value) -> Result<Valu
         "chat:editQueued" => vec![first.clone(), args[1].clone(), pick(&args[2], &policy().queue_edit_keys)],
         "pr:sessionList" => vec![first.clone(), json!(args.get(1) == Some(&Value::Bool(true)))],
         "session:photo" => args[..3].to_vec(),
+        "session:cancelWatch" => args[..2].to_vec(),
         "limits:get" => {
             // The phone names a provider; the computer reads that provider's limits key itself.
             let providers = run("providers:list".to_string(), json!([])).await?;
@@ -1770,6 +1781,15 @@ pub fn gate_secured(
 #[cfg(test)]
 mod tests {
 
+    #[test]
+    fn model_instructions_are_not_phone_settings() {
+        let profiles = json!({"modelInstructions": {"provider::model": "private guidance"}});
+        for channel in ["settings:get", "settings:update"] {
+            assert_eq!(redact(channel, json!({"theme": "dark", "promptProfiles": profiles})), json!({"theme": "dark"}));
+        }
+        assert!(screen("settings:update", &[json!({"promptProfiles": profiles})]).is_err());
+    }
+
     /// Provider setup from a phone (decision 0016): the sealed save is screened
     /// by shape, the switch takes an id and a bool, and the answers never carry a key.
     #[test]
@@ -1836,6 +1856,22 @@ mod tests {
         assert_eq!(redact("machine:summary", Value::Null), Value::Null);
     }
 
+    /// `session:cancelWatch` (a clip's Cancel from a phone): a chat id and a watch id, nothing else, no result.
+    #[test]
+    fn screens_a_phones_watch_cancel() {
+        assert!(screen("session:cancelWatch", &[json!("s1"), json!("w1")]).is_ok());
+        assert_eq!(screen("session:cancelWatch", &[json!("s1")]).map(|_| ()), Err(denied("value-invalid", "watch id")));
+        assert_eq!(
+            screen("session:cancelWatch", &[json!(""), json!("w1")]).map(|_| ()),
+            Err(denied("value-invalid", "chat id"))
+        );
+        assert_eq!(
+            screen("session:cancelWatch", &[json!("s1"), json!("w1"), json!("x")]).map(|_| ()),
+            Err(denied("option-denied", "extra argument"))
+        );
+        assert_eq!(redact("session:cancelWatch", json!({"secret": 1})), Value::Null);
+    }
+
     /// `session:watches` (2026-10-24): a chat id is required; the view keeps the
     /// `PHONE_WATCH_VIEW` fields, never the continuation prompt, and cuts `lastError`.
     #[test]
@@ -1849,12 +1885,14 @@ mod tests {
             json!([
                 { "id": "w1", "kind": "pr", "url": "https://github.com/o/r/pull/5", "status": "active", "deadlineAt": 10, "nextPollAt": 5,
                   "pending": false, "failures": 1, "lastError": long, "prompt": "secret continuation", "sessionId": "s1" },
+                { "id": "w2", "kind": "clip", "status": "active", "deadlineAt": 10, "pending": false, "clipStage": "step:3/20", "prompt": "secret" },
                 "junk",
                 null
             ]),
         );
         let want = json!([{ "id": "w1", "kind": "pr", "url": "https://github.com/o/r/pull/5", "status": "active", "deadlineAt": 10, "nextPollAt": 5,
-                            "pending": false, "failures": 1, "lastError": "x".repeat(600) }]);
+                            "pending": false, "failures": 1, "lastError": "x".repeat(600) },
+                           { "id": "w2", "kind": "clip", "status": "active", "deadlineAt": 10, "pending": false, "clipStage": "step:3/20" }]);
         assert_eq!(got, want);
         assert_eq!(redact("session:watches", Value::Null), json!([]));
     }
@@ -2543,6 +2581,11 @@ mod tests {
             assert!(set(json!({ "workMode": "design", "autoModel": true, "toolApproach": "code" })).is_ok());
             assert!(set(json!({ "workMode": "nope" })).unwrap_err().contains("value-invalid"));
             assert!(set(json!({ "autoModel": "yes" })).unwrap_err().contains("value-invalid"));
+            assert!(set(json!({ "orchestrate": true })).is_ok());
+            assert!(set(json!({ "orchestrate": false })).is_ok());
+            for not_a_switch in [json!("true"), json!(1), Value::Null] {
+                assert!(set(json!({ "orchestrate": not_a_switch })).unwrap_err().contains("value-invalid"));
+            }
             assert!(set(json!({ "unattended": true })).unwrap_err().contains("option-denied"));
             for guarded in [
                 json!({ "executionMode": "worktree" }),
@@ -2577,7 +2620,7 @@ mod tests {
             ] {
                 assert!(set(bad.clone()).unwrap_err().contains("value-invalid"), "{bad}");
             }
-            assert_eq!(calls.lock().unwrap().iter().filter(|(c, _)| c == "session:setOptions").count(), 1);
+            assert_eq!(calls.lock().unwrap().iter().filter(|(c, _)| c == "session:setOptions").count(), 3);
         }
 
         #[test]
@@ -2585,6 +2628,8 @@ mod tests {
             let (_, _, phone) = with_device(PHONE);
             let save = |o: Value| ask(&phone, "engine:settings", json!([o]));
             assert!(save(json!({ "maxLoaded": 3, "idleTtlSeconds": 60 })).is_ok());
+            // Overload protection switches from a device; how much it keeps free is the machine's.
+            assert!(save(json!({ "overloadGuard": false })).is_ok());
             let preset = |p: Value| ask(&phone, "engine:saveModelPreset", json!(["m1", p]));
             assert!(preset(json!({ "contextTokens": 8192 })).is_ok());
             assert!(
@@ -2602,6 +2647,7 @@ mod tests {
                 "modelFolders",
                 "shareWithComputers",
                 "clientModelSettings",
+                "overloadReserveMB",
             ] {
                 let mut o = json!({});
                 o[key] = json!("x");
@@ -2609,9 +2655,12 @@ mod tests {
             }
             let view = redact(
                 "engine:settings",
-                json!({ "maxLoaded": 2, "apiKey": "secret", "bind": "lan", "clientModelSettings": true }),
+                json!({ "maxLoaded": 2, "apiKey": "secret", "bind": "lan", "clientModelSettings": true, "overloadGuard": false, "overloadReserveMB": 1024 }),
             );
-            assert_eq!(view, json!({ "maxLoaded": 2, "clientModelSettings": true }));
+            assert_eq!(
+                view,
+                json!({ "maxLoaded": 2, "clientModelSettings": true, "overloadGuard": false, "overloadReserveMB": 1024 })
+            );
         }
 
         #[test]

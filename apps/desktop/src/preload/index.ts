@@ -36,6 +36,7 @@ import {
   TITLEBAR_OVERLAY_CHANNEL,
   type TitleBarOverlayTheme,
   type WindowChromeBridge,
+  SYSTEM_LANGUAGES_ARG,
 } from '../windowChrome.js';
 import {
   DISPLAY_ARG, DISPLAYS_CHANGED_EVENT, DISPLAYS_CLAIM_CHANNEL, DISPLAYS_LIST_CHANNEL, DISPLAYS_PLACED_EVENT,
@@ -124,6 +125,7 @@ const api: NekkoApi = {
   syncRevoke: (deviceId) => inv(IpcChannels.syncRevoke, deviceId),
   syncNow: () => inv(IpcChannels.syncNow),
   syncSetEnabled: (on) => inv(IpcChannels.syncSetEnabled, on),
+  syncSetKind: (kind, on) => inv(IpcChannels.syncSetKind, kind, on),
   syncDeleteAll: () => inv(IpcChannels.syncDeleteAll),
   librarySync: (files) => inv(IpcChannels.librarySync, files),
   orgList: () => inv(IpcChannels.orgList),
@@ -157,6 +159,7 @@ const api: NekkoApi = {
   engineCatalog: (query, format) => inv(IpcChannels.engineCatalog, query, format),
   engineCatalogModel: (id) => inv(IpcChannels.engineCatalogModel, id),
   engineCatalogDetail: (id) => inv(IpcChannels.engineCatalogDetail, id),
+  engineCatalogChecks: (id, file) => inv(IpcChannels.engineCatalogChecks, id, file),
   engineFolders: () => inv(IpcChannels.engineFolders),
   engineFoldersSave: (folders) => inv(IpcChannels.engineFoldersSave, folders),
   engineDownloadModel: (modelId, quantLabel) => inv(IpcChannels.engineDownloadModel, modelId, quantLabel),
@@ -258,10 +261,10 @@ const api: NekkoApi = {
   sandboxStatus: (id) => inv(IpcChannels.sandboxStatus, id),
   sandboxDiff: (id) => inv(IpcChannels.sandboxDiff, id),
   applySandboxDiff: (id, identity, diffId, paths) => inv(IpcChannels.sandboxApplyDiff, id, identity, diffId, paths) as Promise<never>,
-  setSessionOptions: (id, patch) => setChatOptionsAndDefaults({
+  setSessionOptions: (id, patch, opts) => setChatOptionsAndDefaults({
     setSessionOptions: (id, patch) => inv(IpcChannels.sessionSetOptions, id, patch),
     updateSettings: (patch) => inv(IpcChannels.settingsUpdate, settingsPatchWithModeReset(patch)),
-  }, id, patch),
+  }, id, patch, opts),
   truncateSession: (id, messageId) => inv(IpcChannels.sessionTruncate, id, messageId),
   clearSessions: (scope) => inv(IpcChannels.sessionsClear, scope),
   purgeExpiredArchives: () => inv(IpcChannels.sessionsPurgeArchived),
@@ -296,6 +299,7 @@ const api: NekkoApi = {
   listRepos: (query) => inv(IpcChannels.reposList, query ?? ''),
   cloneRepo: (repo, opts) => inv(IpcChannels.reposClone, repo, opts ?? {}),
   setSandboxRepos: (id, repos) => inv(IpcChannels.reposSetSandbox, id, repos),
+  suggestRepoFolder: (path) => inv(IpcChannels.reposSuggestFolder, path),
   indexWorkspace: (id) => inv(IpcChannels.workspaceIndex, id),
   getIndexStatus: (id) => inv(IpcChannels.workspaceIndexStatus, id),
   searchWorkspace: (id, query) => inv(IpcChannels.workspaceSearch, id, query),
@@ -329,6 +333,7 @@ const api: NekkoApi = {
   acceptAllChanges: (sessionId) => inv(IpcChannels.changeAcceptAll, sessionId),
 
   listSessionPrs: (sessionId, force) => inv(IpcChannels.prSessionList, sessionId, force),
+  listSessionPrsMany: (sessionIds, force) => inv(IpcChannels.prSessionListMany, sessionIds, force),
   getPrDiff: (url) => inv(IpcChannels.prDiff, url),
   prAction: (url, action) => inv(IpcChannels.prAction, url, action),
   continuePrStack: (sessionId, url) => inv(IpcChannels.prContinueStack, sessionId, url),
@@ -461,7 +466,8 @@ const api: NekkoApi = {
   getRemoteStatus: () => inv(IpcChannels.remoteStatus),
   getMessagingStatus: () => inv(IpcChannels.messagingStatus),
   getRemotePairing: () => inv(IpcChannels.remotePairing),
-  startRemotePairing: () => inv(IpcChannels.remotePair),
+  // A code for one route (decision 0116) rides as the second argument; none is the old call.
+  startRemotePairing: (route) => (route && route !== 'auto' ? inv(IpcChannels.remotePair, null, { route }) : inv(IpcChannels.remotePair)),
   startComputerPairing: () => inv(IpcChannels.remotePairComputer),
   listComputers: () => inv(IpcChannels.computersList),
   pairComputer: (link) => inv(IpcChannels.computersPair, link),
@@ -481,6 +487,8 @@ const api: NekkoApi = {
   renameRemoteDevice: (deviceId, name) => inv(IpcChannels.remoteRename, deviceId, name),
   rotateRemoteSecret: () => inv(IpcChannels.remoteRotate),
   setRemoteAccess: (deviceId, access) => inv(IpcChannels.remoteSetAccess, deviceId, access),
+  setRemoteRoute: (deviceId, route) => inv(IpcChannels.remoteSetRoute, deviceId, route),
+  setRemoteRelays: (urls) => inv(IpcChannels.remoteSetRelays, urls),
   getRemoteActivity: (deviceId) => inv(IpcChannels.remoteActivity, deviceId),
   localRelayStatus: () => inv(IpcChannels.localRelayStatus),
   localRelayStart: () => inv(IpcChannels.localRelayStart),
@@ -514,6 +522,8 @@ const api: NekkoApi = {
   getMcpStatus: () => inv(IpcChannels.mcpStatus),
   detectHypergate: (port?: number) => inv(IpcChannels.mcpHypergate, port),
   connectHypergate: (port?: number) => inv(IpcChannels.mcpHypergateConnect, port),
+  checkHypergate: (port?: number) => inv(IpcChannels.mcpHypergateCheck, port),
+  startHypergate: (port?: number) => inv(IpcChannels.mcpHypergateStart, port),
   registerPushToken: () => Promise.resolve(), // desktop isn't a relay client
   checkForUpdates: () => inv(IpcChannels.updateCheck),
   downloadUpdate: () => inv(IpcChannels.updateDownload),
@@ -565,6 +575,11 @@ const api: NekkoApi = {
     const listener = (_: unknown, e: { sessionId: string }) => cb(e);
     bus.on(IpcEvents.changesUpdated, listener);
     return () => bus.removeListener(IpcEvents.changesUpdated, listener);
+  },
+  onGitChanged: (cb) => {
+    const listener = (_: unknown, e: { path: string }) => cb(e);
+    bus.on(IpcEvents.gitChanged, listener);
+    return () => bus.removeListener(IpcEvents.gitChanged, listener);
   },
   onComputersUpdated: (cb) => {
     const listener = () => cb();
@@ -668,6 +683,7 @@ const chrome: WindowChromeBridge = {
   reportNotificationVisibility: report => { if (process.isMainFrame) ipcRenderer.send(NOTIFICATION_VISIBILITY_CHANNEL, report); },
   deepLinksReady: () => { if (process.isMainFrame) ipcRenderer.send(DEEP_LINKS_READY_CHANNEL); },
   platform: process.platform,
+  systemLanguages: process.argv.find((a) => a.startsWith(SYSTEM_LANGUAGES_ARG))?.slice(SYSTEM_LANGUAGES_ARG.length).split(',').filter(Boolean) ?? [],
   titleBarHeight: TITLEBAR_HEIGHT,
   setTitleBarOverlay: (theme: TitleBarOverlayTheme) => ipcRenderer.send(TITLEBAR_OVERLAY_CHANNEL, theme),
   setPageZoom: (factor) => { if (Number.isFinite(factor) && factor >= 0.8 && factor <= 1.5) webFrame.setZoomFactor(factor); },

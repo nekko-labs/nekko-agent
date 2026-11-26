@@ -203,6 +203,18 @@ fn is_local(kind: &str) -> bool {
     LOCAL_KINDS.contains(&kind)
 }
 
+/// Who caused this admitted turn. A subagent wins over unattended because its
+/// parent, not a person or workflow, started that persisted child chat.
+fn turn_actor(session: &Value, opts: &Value) -> &'static str {
+    if session.get("parentSessionId").is_some_and(|parent| !parent.is_null()) {
+        "subagent"
+    } else if crate::claude_policy::is_unattended(opts) {
+        "automation"
+    } else {
+        "user"
+    }
+}
+
 /// A cloud-only chat asked to run on a model server on this machine.
 pub(crate) const CLOUD_ONLY_REFUSAL: &str =
     "This chat runs on cloud models only. Pick a cloud model, or turn Cloud only off in the Mode panel.";
@@ -217,11 +229,12 @@ pub(crate) fn turn_provider_allowed(provider: &Value) -> bool {
     s(provider, "kind") == "claude-code" || provider_endpoint(provider).is_some()
 }
 
-/// `clampMaxOutputTokens`.
-fn clamp_max_output_tokens(n: Option<&Value>) -> f64 {
+/// `clampMaxOutputTokens`: no limit unless the user set one (unset, 0 or not
+/// a number means none), otherwise their value kept within 256–200,000.
+fn clamp_max_output_tokens(n: Option<&Value>) -> Option<f64> {
     match n.and_then(Value::as_f64) {
-        Some(n) if n.is_finite() => (n + 0.5).floor().clamp(256.0, 200_000.0),
-        _ => 8192.0,
+        Some(n) if n.is_finite() && n > 0.0 => Some((n + 0.5).floor().clamp(256.0, 200_000.0)),
+        _ => None,
     }
 }
 
@@ -318,10 +331,15 @@ async fn ended(ctx: &Ctx, session_id: &str, message: &str) -> Result<Admit, Stri
 /// A `spawn_agent` child's turn (`admitTurn` then `buildDaemonTurn`, in the
 /// parent's `spawn` callback): admitted like any chat's, never with the
 /// browser. `None` when it cannot start; its chat was told why.
-pub async fn admit_child(ctx: &Ctx, opts: Value) -> Result<Option<Value>, String> {
+pub async fn admit_child(
+    ctx: &Ctx,
+    opts: Value,
+    provider: &Value,
+    parent_effort: Option<&str>,
+) -> Result<Option<Value>, String> {
     let adm = ctx.admission.clone();
     let pending = adm.begin(s(&opts, "sessionId"))?;
-    match admit(ctx, &adm, opts, None, false, &pending.cancel).await? {
+    match admit(ctx, &adm, opts, None, false, &pending.cancel, Some((provider, parent_effort))).await? {
         Admit::Spec(mut spec) => {
             spec["allowBrowserControl"] = json!(false);
             Ok(Some(spec))
@@ -362,10 +380,27 @@ pub async fn send(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>) -> Result<V
     send_with(ctx, adm, opts, None).await
 }
 
+/// The computer a chat synced from another computer belongs to, or `None` for this computer's
+/// own chats (their files name no home: nekko-cloud strips it from this computer's records).
+async fn synced_home(ctx: &Ctx, session_id: &str) -> Option<String> {
+    let store = ctx.sessions.clone();
+    let id = session_id.to_string();
+    let meta = tokio::task::spawn_blocking(move || store.meta(&id)).await.ok()??;
+    let home = meta.get("home")?;
+    home.get("deviceId").and_then(Value::as_str).filter(|id| !id.is_empty())?;
+    let device = home.get("device").and_then(Value::as_str).filter(|d| !d.trim().is_empty());
+    Some(device.unwrap_or("another computer").to_string())
+}
+
 /// `sendChat(opts, ..., queued)`: admit and drive a turn and its chain; with
 /// `queued`, the turn runs that queue entry and claims it.
 async fn send_with(ctx: &Ctx, adm: &Arc<Admission>, opts: Value, queued: Option<Value>) -> Result<Value, String> {
     let session_id = s(&opts, "sessionId").to_string();
+    // Another computer's chat, synced here through Nekko Cloud, is a read-only copy (#3143): it
+    // carries on only on the computer it belongs to, or here as a fork.
+    if let Some(device) = synced_home(ctx, &session_id).await {
+        return Err(format!("This chat belongs to {device}. Continue it here to reply on this computer."));
+    }
     let pending = adm.begin(&session_id)?;
     let attended = !crate::claude_policy::is_unattended(&opts);
     let _attended = attended.then(|| adm.begin_attended());
@@ -379,7 +414,7 @@ async fn send_with(ctx: &Ctx, adm: &Arc<Admission>, opts: Value, queued: Option<
     } else {
         None
     };
-    let result = admit(ctx, adm, opts.clone(), queued, false, &pending.cancel).await?;
+    let result = admit(ctx, adm, opts.clone(), queued, false, &pending.cancel, None).await?;
     if pending.cancel.is_cancelled() && !matches!(&result, Admit::Ended) {
         stopped(ctx, &session_id).await?;
         return Ok(Value::Null);
@@ -455,7 +490,7 @@ pub async fn interrupt_queued(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>)
 pub async fn admit_queued(ctx: &Ctx, adm: &Arc<Admission>, payload: &Value) -> Option<Value> {
     let opts = payload.get("opts").cloned().unwrap_or(Value::Null);
     let cancel = adm.cancellation(s(&opts, "sessionId")).unwrap_or_default();
-    match admit(ctx, adm, opts, payload.get("queued").cloned(), true, &cancel).await {
+    match admit(ctx, adm, opts, payload.get("queued").cloned(), true, &cancel, None).await {
         Ok(Admit::Spec(spec)) => Some(json!({ "spec": spec })),
         Ok(Admit::Ended) | Err(_) => Some(json!({ "ended": true })),
     }
@@ -469,6 +504,7 @@ async fn admit(
     queued: Option<Value>,
     chained: bool,
     cancel: &Cancel,
+    child_route: Option<(&Value, Option<&str>)>,
 ) -> Result<Admit, String> {
     let session_id = s(&opts, "sessionId").to_string();
     let store = ctx.sessions.clone();
@@ -489,6 +525,9 @@ async fn admit(
     let Some(provider) = provider.filter(|p| nekko_js::truthy(p.get("enabled"))) else {
         return ended(ctx, &session_id, "Provider not configured or disabled.").await;
     };
+    if child_route.is_some_and(|(checked, _)| checked != &provider) {
+        return ended(ctx, &session_id, "Delegation provider changed after its route was checked.").await;
+    }
     // Using an LM Studio model is the one time a closed LM Studio is opened;
     // the Models page only asks (#2961).
     ctx.runtimes.open_for_turn(&provider).await;
@@ -601,6 +640,14 @@ async fn admit(
     let effort_setting: Option<nekko_agent::EffortLevel> =
         effort.as_ref().and_then(|e| serde_json::from_value(e.clone()).ok());
     let stats_effort = nekko_agent::claude::effective_effort_with_metadata(effort_setting, model_id, metadata.as_ref());
+    let stats_effort = if let Some((_, Some(cap))) = child_route {
+        match crate::subagent_model::cap_effort(stats_effort, cap, model_id, metadata.as_ref()) {
+            Some(effort) => effort,
+            None => return ended(ctx, &session_id, "The worker model has no comparable effort at or below the parent's. Choose a different saved worker route or effort.").await,
+        }
+    } else {
+        stats_effort
+    };
     let kind = s(&provider, "kind");
 
     let mut facts = Map::new();
@@ -637,13 +684,22 @@ async fn admit(
         .and_then(Value::as_str)
         .or_else(|| settings.get("defaultChatMode").and_then(Value::as_str))
         .unwrap_or("guardrails");
-    crate::telemetry::capture(
-        "turn_started",
+    // Attribution follows only the exact route admission validated. Managed
+    // Local Model Server ids are path-derived, and a provider can choose later;
+    // those cases get a fixed missing reason rather than an inferred model.
+    let managed_local =
+        kind == "llamacpp" && host_provider_config(ctx, &provider).get("managedCachePrompt") == Some(&json!(true));
+    let reported_model = crate::telemetry::model_attribution(kind, model_id, managed_local);
+    let subagent = session.get("parentSessionId").is_some_and(|parent| !parent.is_null());
+    crate::telemetry::capture_turn(
+        (!incognito).then_some(session_id.as_str()),
         &json!({
             "provider": kind, "local": is_local(kind), "offline": offline, "mode": mode_name, "sandbox": sandbox,
-            "model": model_id,
+            "model": reported_model.model,
+            "model_missing_reason": reported_model.missing_reason,
             "permission": permission,
-            "subagent": session.get("parentSessionId").is_some_and(|p| !p.is_null()),
+            "actor": turn_actor(&session, &opts),
+            "subagent": subagent,
             // Other chats with a turn running as this one starts.
             "running_agents": crate::routes::running_chats(ctx).len(),
             "connectors": connector_kinds.join(","),
@@ -659,11 +715,10 @@ async fn admit(
     // Execution and reply stats must describe the same resolved choice.
     facts.insert("effort".into(), json!(effort_name(&stats_effort)));
     facts.insert("statsEffort".into(), json!(effort_name(&stats_effort)));
-    if is_local(kind) {
-        facts.insert(
-            "maxOutputTokens".into(),
-            nekko_oauth::num(clamp_max_output_tokens(settings.get("maxOutputTokens"))),
-        );
+    if is_local(kind)
+        && let Some(cap) = clamp_max_output_tokens(settings.get("maxOutputTokens"))
+    {
+        facts.insert("maxOutputTokens".into(), nekko_oauth::num(cap));
     }
     facts.insert("promptCaching".into(), json!(settings.get("promptCaching") != Some(&json!(false))));
     let mut thinking = true;
@@ -706,7 +761,6 @@ async fn admit(
         &settings,
         &[
             "systemInstructions",
-            "promptProfiles",
             "turnWrapper",
             "aboutUser",
             "orchestration",
@@ -719,6 +773,12 @@ async fn admit(
             "privacyTerms",
         ],
     );
+    // Carry only the selected overlay; other models' instructions are not turn inputs.
+    if !sandbox
+        && let Some(text) = crate::prompt_profile::model_instructions(&settings, s(&provider, "id"), kind, model_id)
+    {
+        spec_settings["modelSystemInstructions"] = json!(text);
+    }
     spec_settings["providers"] = Value::Array(providers);
     let mut spec = json!({
         "turnId": turn_id,
@@ -741,7 +801,7 @@ async fn admit(
 async fn drive_chain(ctx: &Ctx, spec: Value) -> Result<(), String> {
     let (_, mut ended) = ctx.turns.launch(ctx.hub.clone(), spec)?;
     loop {
-        let Ok((summary, _)) = ended.await else { return Ok(()) };
+        let Ok((summary, _, _)) = ended.await else { return Ok(()) };
         let Some(next) = summary.get("next").and_then(Value::as_str) else { return Ok(()) };
         match ctx.turns.take_chained(next) {
             Some(n) => ended = n,
@@ -883,6 +943,14 @@ mod tests {
     }
 
     #[test]
+    fn turn_actor_distinguishes_people_automation_and_subagents() {
+        assert_eq!(turn_actor(&json!({}), &json!({})), "user");
+        assert_eq!(turn_actor(&json!({}), &json!({ "unattended": true })), "automation");
+        assert_eq!(turn_actor(&json!({ "parentSessionId": "parent" }), &json!({ "unattended": true })), "subagent");
+        assert_eq!(turn_actor(&json!({ "parentSessionId": null }), &json!({})), "user");
+    }
+
+    #[test]
     fn a_person_s_chat_counts_while_it_runs() {
         let adm = Admission::new(crate::compaction::Compactions::new(), false);
         assert!(!adm.attended_running());
@@ -914,11 +982,12 @@ mod tests {
 
     #[test]
     fn output_caps_and_index_words_follow_the_ts_rules() {
-        assert_eq!(clamp_max_output_tokens(None), 8192.0);
-        assert_eq!(clamp_max_output_tokens(Some(&json!(10))), 256.0);
-        assert_eq!(clamp_max_output_tokens(Some(&json!(1_000_000))), 200_000.0);
-        assert_eq!(clamp_max_output_tokens(Some(&json!(1000.5))), 1001.0);
-        assert_eq!(clamp_max_output_tokens(Some(&json!("4096"))), 8192.0);
+        assert_eq!(clamp_max_output_tokens(None), None);
+        assert_eq!(clamp_max_output_tokens(Some(&json!(0))), None);
+        assert_eq!(clamp_max_output_tokens(Some(&json!(10))), Some(256.0));
+        assert_eq!(clamp_max_output_tokens(Some(&json!(1_000_000))), Some(200_000.0));
+        assert_eq!(clamp_max_output_tokens(Some(&json!(1000.5))), Some(1001.0));
+        assert_eq!(clamp_max_output_tokens(Some(&json!("4096"))), None);
         assert!(has_index_words("fix the auth bug"));
         assert!(!has_index_words("hi, ok?"));
         assert_eq!(terminal_text("a\u{1b}[0mb\nc"), "a[0mb\r\nc");

@@ -69,6 +69,8 @@ export function startDecorClock(doc: DecorDocument = document as unknown as Deco
     for (const [a, state] of held) {
       const { start, target, stepMs } = state;
       if (!target?.isConnected) { held.delete(a); continue; }
+      // A parked pane keeps its frame: nobody sees it, and moving it would restyle it for nothing.
+      if (target.closest?.('[data-pane-hidden]')) continue;
       // The beam has only two keyframes. Between its discrete steps, another
       // currentTime write invalidates styles without changing a single pixel.
       const step = stepMs ? Math.floor((t - start) / stepMs + 1e-9) : NaN;

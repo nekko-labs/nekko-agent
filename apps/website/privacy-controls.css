@@ -1,0 +1,157 @@
+/* Shared consent controls for every public website surface. Both initial
+   choices deliberately have identical size, weight, colour and order treatment. */
+.privacy-controls {
+  --privacy-paper: #ffffff;
+  --privacy-ink: #16161c;
+  --privacy-muted: #5d5970;
+  --privacy-line: rgba(22, 22, 28, 0.18);
+  --privacy-wash: #f3e8ee;
+  --privacy-focus: #854f6c;
+  position: fixed;
+  z-index: 2147483000;
+  right: 20px;
+  bottom: 20px;
+  max-width: min(520px, calc(100vw - 40px));
+  color: var(--privacy-ink);
+  font-family: 'Inter Tight', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  text-align: left;
+}
+
+html[data-theme='dark'] .privacy-controls {
+  --privacy-paper: #16161c;
+  --privacy-ink: #ffffff;
+  --privacy-muted: #e6d0dc;
+  --privacy-line: rgba(255, 255, 255, 0.22);
+  --privacy-wash: #33242d;
+  --privacy-focus: #e6d0dc;
+}
+
+.privacy-panel {
+  position: relative;
+  padding: 20px;
+  border: 1px solid var(--privacy-line);
+  border-radius: 16px;
+  background: var(--privacy-paper);
+  box-shadow: 0 18px 48px rgba(22, 22, 28, 0.2);
+}
+
+.privacy-panel[hidden],
+.privacy-manage[hidden],
+.privacy-close[hidden] { display: none; }
+
+.privacy-kicker {
+  margin: 0 0 4px;
+  color: var(--privacy-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.privacy-panel h2 {
+  margin: 0 36px 8px 0;
+  color: var(--privacy-ink);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.privacy-panel p {
+  margin: 0;
+  color: var(--privacy-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.privacy-panel .privacy-note { margin-top: 8px; }
+
+.privacy-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.privacy-choice,
+.privacy-manage,
+.privacy-close {
+  border: 0;
+  color: var(--privacy-ink);
+  background: var(--privacy-wash);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 120ms ease-out, background 120ms ease-out;
+}
+
+.privacy-choice {
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.privacy-manage {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--privacy-line);
+  border-radius: 999px;
+  background: var(--privacy-paper);
+  box-shadow: 0 8px 24px rgba(22, 22, 28, 0.14);
+  font-size: 13px;
+}
+
+.privacy-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  color: var(--privacy-muted);
+  background: transparent;
+  font-size: 12px;
+}
+
+.privacy-policy-link {
+  display: inline-block;
+  margin-top: 12px;
+  color: var(--privacy-focus);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+@media (hover: hover) {
+  .privacy-choice:hover,
+  .privacy-manage:hover,
+  .privacy-close:hover { background: var(--privacy-line); }
+}
+
+.privacy-choice:active,
+.privacy-manage:active,
+.privacy-close:active { transform: scale(0.97); }
+
+.privacy-choice:focus-visible,
+.privacy-manage:focus-visible,
+.privacy-close:focus-visible,
+.privacy-policy-link:focus-visible {
+  outline: 3px solid var(--privacy-focus);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .privacy-choice,
+  .privacy-manage,
+  .privacy-close { transition: none; }
+}
+
+@media (max-width: 560px) {
+  .privacy-controls {
+    right: 12px;
+    bottom: 12px;
+    max-width: calc(100vw - 24px);
+  }
+  .privacy-panel { padding: 20px 16px 16px; }
+  .privacy-actions { grid-template-columns: 1fr; }
+  .privacy-choice { width: 100%; }
+}

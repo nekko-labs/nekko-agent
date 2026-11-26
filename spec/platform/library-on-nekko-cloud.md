@@ -16,7 +16,7 @@ Requested 2026-11-14: with Nekko Cloud on a paid plan, let people (1) sync Libra
 
 - Nekko Labs can't read a synced or shared Library file. Synced files are sealed with the account's sync keys, like chats. A shared file is sealed with a key that exists only in its link, after the `#`, which browsers never send to a server.
 - Everything is off until switched on: `library-cloud` covers sync, sharing and versions; `library-multiplayer` covers editing together. Both start off and are turned on by the team first ([plans and billing](plans-and-billing.md#the-switch)).
-- Writing needs Pro or Team, and everything stored (synced files, kept revisions, shared files and their versions) counts toward the plan's storage (Pro 5 GB, Team 20 GB). Reading, deleting and restoring a deleted share never depend on the plan or the switch.
+- Writing needs Pro or Enterprise, and everything stored (synced files, kept revisions, shared files and their versions) counts toward the plan's storage (Pro 5 GB, Enterprise 20 GB). Reading, deleting and restoring a deleted share never depend on the plan or the switch.
 
 ## Sync (#2748)
 
@@ -32,6 +32,10 @@ Implemented, not yet released (behind `library-cloud`, which is off):
 - **Storage full** stops the Library upload for that pass without failing chat sync.
 
 Verified: engine unit tests (record format, refused records, the 8 MB file fitting the 16 MiB cap once sealed, safe copy names, version folders); `crates/nekko-cloud/tests/library_live.rs` against the local service (two computers: the switch hides everything, files sync and a design's versions share a folder, a relative path and an over-8 MB file are refused, the server's copy has no names, paths, chats or contents, a change follows, an unchanged save uploads nothing, a delete removes the copy, Delete everything synced removes the copies); the existing `live`, `attacks`, `delete_account` and `step_up_stays_local` suites; renderer unit tests; and the hidden, isolated `library-sync` journey (17 checks, dark and light, all layouts, narrow). Not checked: two real computers, packaged builds, the Local Web UI in other browsers, files near 8 MB on a slow link, and the iPhone and Android apps, which don't list Library files yet. Files over 8 MB are not split into parts.
+
+### Files by computer (#3144)
+
+`[implemented 2026-11-21; renderer tests and a hidden full-App journey with synthetic synced files]` User intent (Philip): "the library should work the same" as chats from other computers (#3143). Once Library holds a file from another computer, two controls join *Include archived chats*: **Show computer** (on by default) starts each file's line with its computer (*Laptop · Trip planning notes · Nov 21*, this one as *This Mac*, *This PC* or *This computer*), and **Group by Kind / Computer** lists one group per computer (this one first) instead of one per kind; the kind slider still filters within it, and computer groups show every file with no "See all". Both choices are kept on this computer. With the computer named on the line or as the heading, another computer's file names the chat it came from instead of *From Laptop*. A synced copy of another computer's chat is not read for Library files: its files are on that computer and arrive here through Library sync, so they are never listed (or backed up) as this computer's.
 
 ## Share (#2749)
 

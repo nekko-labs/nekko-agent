@@ -13,6 +13,7 @@
 pub mod blobs;
 pub mod client_ids;
 pub mod meta;
+mod meta_event;
 mod phase;
 pub mod pr;
 mod review;
@@ -27,16 +28,55 @@ pub use summary::summarize;
 pub use write::{STARTER_MODES, execution_mode};
 
 use serde_json::{Value, json};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock};
-use std::time::SystemTime;
+use std::time::{Duration, Instant, SystemTime};
+
+/// How long the in-memory chat list is trusted before every chat file is
+/// looked at again, for a file changed by something other than the daemon
+/// (a sync tool, a person with an editor). The daemon's own writes, deletes
+/// and renames never wait for it: they mark their chat to be read again.
+pub const RESCAN_EVERY: Duration = Duration::from_secs(30);
+
+/// One chat file as the list last saw it.
+struct Entry {
+    mtime: SystemTime,
+    size: u64,
+    /// `None` for a file that is not a chat (half written, or not JSON): it is
+    /// not read again until its mtime or size changes.
+    summary: Option<Value>,
+}
+
+/// The chat list, kept between calls: each chat's summary valid while the file
+/// stands as it did, the same rule `listSessionSummaries` uses.
+#[derive(Default)]
+struct Index {
+    /// By path, so the list comes out in the same order every time.
+    entries: BTreeMap<PathBuf, Entry>,
+    /// Files this store wrote, deleted or renamed since the last look.
+    dirty: HashSet<PathBuf>,
+    /// When every file was last looked at (`None`: never).
+    scanned: Option<Instant>,
+    /// The summary of a chat with a deferred save, made from its memory:
+    /// `(save generation, disk mtime, disk size)` it was made for, and it.
+    overlays: HashMap<String, ((u64, SystemTime, u64), Value)>,
+}
+
+/// A running turn's chat held for a later save.
+struct Deferred {
+    session: Arc<Mutex<Value>>,
+    /// Counts the holds: a new one makes the in-memory chat newer.
+    generation: u64,
+    /// When it was last held (ms), the `updatedAt` its summary shows meanwhile.
+    held_at: f64,
+}
 
 pub struct SessionStore {
     dir: PathBuf,
-    /// Summaries by file, valid while the file's mtime and size match, the
-    /// same rule `listSessionSummaries` uses.
-    cache: Mutex<HashMap<PathBuf, (SystemTime, u64, Value)>>,
+    /// The chat list, see [`Index`].
+    index: Mutex<Index>,
+    rescan: Duration,
     /// Held for reading across each read-modify-write of one chat (with
     /// that chat's own lock), and for writing by the writes that walk every
     /// chat (clearing, purging).
@@ -48,7 +88,11 @@ pub struct SessionStore {
     /// disk ([`defer_turn_save`](Self::defer_turn_save)). Every read and
     /// every write of a chat here writes its pending save first, so nothing
     /// ever reads a chat older than the turn has made it.
-    deferred: Mutex<HashMap<String, Arc<Mutex<Value>>>>,
+    deferred: Mutex<HashMap<String, Deferred>>,
+    holds: std::sync::atomic::AtomicU64,
+    /// The small fields a `session_meta` event carries, as of each chat's last
+    /// write here ([`meta_event`]).
+    meta_fields: Mutex<HashMap<String, Value>>,
 }
 
 /// Session ids are `s_<time>_<random>` (base36 and base64url). Anything else
@@ -67,15 +111,96 @@ fn newest_first(list: &mut [Value]) {
     list.sort_by(|a, b| updated_at(b).partial_cmp(&updated_at(a)).unwrap_or(std::cmp::Ordering::Equal));
 }
 
+impl Index {
+    /// Bring the list up to date: every file looked at when it is due (or
+    /// never was), and always the files this store wrote since.
+    fn sync(&mut self, dir: &Path, rescan: Duration) {
+        if self.scanned.is_none_or(|at| at.elapsed() >= rescan) {
+            self.scan(dir);
+            return;
+        }
+        for path in std::mem::take(&mut self.dirty) {
+            self.refresh(&path, true);
+        }
+    }
+
+    /// Look at every chat file: read the ones that changed, forget the ones gone.
+    fn scan(&mut self, dir: &Path) {
+        self.dirty.clear();
+        let found = files(dir);
+        let present: HashSet<&PathBuf> = found.iter().map(|(p, _)| p).collect();
+        self.entries.retain(|k, _| present.contains(k));
+        for (path, meta) in &found {
+            self.load(path, meta, false);
+        }
+        self.scanned = Some(Instant::now());
+    }
+
+    /// Look at one file. `force` reads it even if its mtime and size are as before.
+    fn refresh(&mut self, path: &Path, force: bool) {
+        match std::fs::metadata(path) {
+            Ok(meta) if meta.is_file() => self.load(path, &meta, force),
+            _ => {
+                self.entries.remove(path);
+            }
+        }
+        self.dirty.remove(path);
+    }
+
+    fn load(&mut self, path: &Path, meta: &std::fs::Metadata, force: bool) {
+        let (mtime, size) = (meta.modified().unwrap_or(SystemTime::UNIX_EPOCH), meta.len());
+        if !force && self.entries.get(path).is_some_and(|e| e.mtime == mtime && e.size == size) {
+            return;
+        }
+        // Pictures are only counted here: never read back from their files.
+        let summary = std::fs::read(path)
+            .ok()
+            .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
+            .as_ref()
+            .and_then(summarize);
+        self.entries.insert(path.to_path_buf(), Entry { mtime, size, summary });
+    }
+}
+
+/// Every chat file in `dir`, with its metadata (one `stat` each, following
+/// links as `is_file` does).
+fn files(dir: &Path) -> Vec<(PathBuf, std::fs::Metadata)> {
+    let Ok(rd) = std::fs::read_dir(dir) else { return Vec::new() };
+    rd.filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "json"))
+        .filter_map(|p| {
+            let meta = std::fs::metadata(&p).ok()?;
+            meta.is_file().then_some((p, meta))
+        })
+        .collect()
+}
+
 impl SessionStore {
     pub fn new(data_dir: impl AsRef<Path>) -> Self {
         Self {
             dir: data_dir.as_ref().join("sessions"),
-            cache: Mutex::new(HashMap::new()),
+            index: Mutex::new(Index::default()),
+            rescan: RESCAN_EVERY,
+            holds: std::sync::atomic::AtomicU64::new(0),
+            meta_fields: Mutex::new(HashMap::new()),
             all: RwLock::new(()),
             chats: Mutex::new(HashMap::new()),
             deferred: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// Look at every chat file again after `every` instead of [`RESCAN_EVERY`].
+    pub fn with_rescan_every(mut self, every: Duration) -> Self {
+        self.rescan = every;
+        self
+    }
+
+    /// Chat `id`'s file was written, deleted or renamed here: read it again
+    /// at the next listing.
+    pub(crate) fn touched(&self, id: &str) {
+        let path = self.dir.join(format!("{id}.json"));
+        self.index.lock().unwrap_or_else(|e| e.into_inner()).dirty.insert(path);
     }
 
     /// Run `f` with chat `id`'s writes held: no other write to that chat, and
@@ -102,18 +227,56 @@ impl SessionStore {
         &self.dir
     }
 
-    /// Every chat file, with its metadata (one `stat` each, following links
-    /// as `is_file` does).
+    /// A picture kept beside the chats (`<sha256>.<ext>`, see blobs.rs) is here.
+    pub fn has_blob(&self, name: &str) -> bool {
+        blobs::valid_name(name) && blobs::dir(&self.dir).join(name).is_file()
+    }
+
+    /// A picture's bytes, by its blob name.
+    pub fn blob(&self, name: &str) -> Option<Vec<u8>> {
+        if !blobs::valid_name(name) {
+            return None;
+        }
+        std::fs::read(blobs::dir(&self.dir).join(name)).ok()
+    }
+
+    /// Move the pictures of a live `tool_result` event (`result.images`, data
+    /// URLs of 4 KB or more) beside the chats and leave `nekko-blob:<name>`
+    /// references in the event, so the frame the hub keeps and sends every
+    /// socket is a few hundred bytes, not megabytes. The chat read back through
+    /// the store has the pictures as data URLs as ever. Returns how many moved.
+    pub fn shed_event_images(&self, images: &mut [Value]) -> usize {
+        let dir = blobs::dir(&self.dir);
+        let mut moved = 0;
+        for image in images {
+            if let Some(url) = image.as_str()
+                && url.starts_with("data:")
+                && let Some(reference) = blobs::store_inline(&dir, url)
+            {
+                *image = Value::String(reference);
+                moved += 1;
+            }
+        }
+        moved
+    }
+
+    /// Keep a picture beside the chats, as a chat's `nekko-blob:<name>` will look for it. Refused
+    /// unless the bytes hash to the name, so nothing else can be written there under it.
+    pub fn put_blob(&self, name: &str, bytes: &[u8]) -> Result<(), String> {
+        if !blobs::matches(name, bytes) {
+            return Err("a picture that is not what its name says".into());
+        }
+        let dir = blobs::dir(&self.dir);
+        let path = dir.join(name);
+        if path.is_file() {
+            return Ok(());
+        }
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        write::write_atomic_bytes(&path, bytes).map_err(|e| e.to_string())
+    }
+
     fn files(&self) -> Vec<(PathBuf, std::fs::Metadata)> {
-        let Ok(rd) = std::fs::read_dir(&self.dir) else { return Vec::new() };
-        rd.filter_map(|e| e.ok())
-            .map(|e| e.path())
-            .filter(|p| p.extension().is_some_and(|x| x == "json"))
-            .filter_map(|p| {
-                let meta = std::fs::metadata(&p).ok()?;
-                meta.is_file().then_some((p, meta))
-            })
-            .collect()
+        files(&self.dir)
     }
 
     /// A chat file, with the pictures kept beside it put back (blobs.rs).
@@ -172,7 +335,9 @@ impl SessionStore {
             s.get("id").and_then(Value::as_str).unwrap_or_default().to_string()
         };
         if valid_id(&id) {
-            self.deferred.lock().unwrap_or_else(|e| e.into_inner()).insert(id, session.clone());
+            let generation = self.holds.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+            let held = Deferred { session: session.clone(), generation, held_at: nekko_js::now_ms() as f64 };
+            self.deferred.lock().unwrap_or_else(|e| e.into_inner()).insert(id, held);
         }
     }
 
@@ -180,12 +345,12 @@ impl SessionStore {
     pub fn flush(&self, id: &str) -> Result<(), String> {
         let pending = self.deferred.lock().unwrap_or_else(|e| e.into_inner()).remove(id);
         match pending {
-            Some(session) => self.save_turn_shared(&session, None),
+            Some(held) => self.save_turn_shared(&held.session, None),
             None => Ok(()),
         }
     }
 
-    /// Write every deferred turn save (before a listing, and at shutdown).
+    /// Write every deferred turn save (before a full listing, and at shutdown).
     pub fn flush_all(&self) {
         let ids: Vec<String> = self.deferred.lock().unwrap_or_else(|e| e.into_inner()).keys().cloned().collect();
         for id in ids {
@@ -282,43 +447,98 @@ impl SessionStore {
     }
 
     /// `listSessionSummaries`: every chat without its transcript, newest
-    /// first. Only files that changed since the last call are read.
+    /// first. Reads no chat file that has not changed, and does not write the
+    /// deferred turn saves: a running chat's summary is made from its memory
+    /// instead (what its save would have written), so a listing after every
+    /// event no longer defeats the save debounce.
+    ///
+    /// The file list is kept: a call looks at no file but the ones this store
+    /// wrote since the last, and at every file again once per
+    /// [`RESCAN_EVERY`], for a chat changed from outside.
     pub fn summaries(&self) -> Vec<Value> {
-        self.flush_all();
-        let files = self.files();
-        let mut out = Vec::with_capacity(files.len());
-        let mut cache = self.cache.lock().unwrap_or_else(|e| e.into_inner());
-        for (file, meta) in &files {
-            let (mtime, size) = (meta.modified().unwrap_or(SystemTime::UNIX_EPOCH), meta.len());
-            if let Some((m, s, summary)) = cache.get(file)
-                && *m == mtime
-                && *s == size
-            {
-                out.push(summary.clone());
-                continue;
-            }
-            // Pictures are only counted here: never read back from their files.
-            match std::fs::read(file)
-                .ok()
-                .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
-                .as_ref()
-                .and_then(summarize)
-            {
-                Some(summary) => {
-                    cache.insert(file.clone(), (mtime, size, summary.clone()));
-                    out.push(summary);
-                }
-                None => {
-                    cache.remove(file);
-                }
-            }
-        }
-        let present: HashSet<&PathBuf> = files.iter().map(|(p, _)| p).collect();
-        cache.retain(|k, _| present.contains(k));
-        drop(cache);
+        let mut index = self.index.lock().unwrap_or_else(|e| e.into_inner());
+        index.sync(&self.dir, self.rescan);
+        let overlays = self.overlays(&mut index);
+        let mut out: Vec<Value> =
+            index.entries.iter().filter_map(|(path, e)| overlays.get(path).or(e.summary.as_ref()).cloned()).collect();
+        let listed: HashSet<&PathBuf> = index.entries.keys().collect();
+        // A chat held before its file was ever listed.
+        out.extend(overlays.iter().filter(|(p, _)| !listed.contains(p)).map(|(_, v)| v.clone()));
+        drop(index);
         newest_first(&mut out);
         // After the cache, which keeps each chat's own PRs: a chat also lists its sub-agents'.
         pr::roll_up_child_pr_urls(&mut out);
+        out
+    }
+
+    /// One chat's summary, as [`summaries`](Self::summaries) lists it (its
+    /// sub-agents' PRs included), without looking at any other chat file: only
+    /// this file is checked, the rest of the list is as it was kept. `None`
+    /// when there is no such (readable) chat.
+    pub fn summary(&self, id: &str) -> Option<Value> {
+        if !valid_id(id) {
+            return None;
+        }
+        let path = self.dir.join(format!("{id}.json"));
+        let mut index = self.index.lock().unwrap_or_else(|e| e.into_inner());
+        if index.scanned.is_none() {
+            index.sync(&self.dir, self.rescan);
+        }
+        index.refresh(&path, false);
+        let overlays = self.overlays(&mut index);
+        let mut own = overlays.get(&path).or(index.entries.get(&path).and_then(|e| e.summary.as_ref())).cloned()?;
+        let below = {
+            let all: Vec<&Value> =
+                index.entries.iter().filter_map(|(p, e)| overlays.get(p).or(e.summary.as_ref())).collect();
+            pr::child_pr_urls(id, &all)
+        };
+        drop(index);
+        if !below.is_empty() {
+            let mut urls: Vec<String> =
+                serde_json::from_value(own.get("prUrls").cloned().unwrap_or_default()).unwrap_or_default();
+            for u in below {
+                if !urls.contains(&u) {
+                    urls.push(u);
+                }
+            }
+            own["prUrls"] = urls.into();
+        }
+        Some(own)
+    }
+
+    /// The summaries of the chats with a deferred save, made from what they
+    /// hold in memory, by file. What a flush would have written: the
+    /// fields the user changed (on disk) stay, `updatedAt` is when it was held.
+    fn overlays(&self, index: &mut Index) -> HashMap<PathBuf, Value> {
+        let held: Vec<(String, Arc<Mutex<Value>>, u64, f64)> = self
+            .deferred
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .map(|(id, d)| (id.clone(), d.session.clone(), d.generation, d.held_at))
+            .collect();
+        index.overlays.retain(|id, _| held.iter().any(|h| &h.0 == id));
+        let mut out = HashMap::new();
+        for (id, session, generation, held_at) in held {
+            let path = self.dir.join(format!("{id}.json"));
+            let disk = index.entries.get(&path);
+            let key = (generation, disk.map_or(SystemTime::UNIX_EPOCH, |e| e.mtime), disk.map_or(0, |e| e.size));
+            if let Some((made_for, v)) = index.overlays.get(&id)
+                && *made_for == key
+            {
+                out.insert(path, v.clone());
+                continue;
+            }
+            let memory = summarize(&session.lock().unwrap_or_else(|e| e.into_inner()));
+            let Some(mut v) = memory else { continue };
+            if let Some(disk) = disk.and_then(|e| e.summary.as_ref()) {
+                write::keep_user_fields(&mut v, disk);
+            }
+            let newest = updated_at(&v).max(held_at);
+            v["updatedAt"] = json!(newest);
+            index.overlays.insert(id, (key, v.clone()));
+            out.insert(path, v);
+        }
         out
     }
 
@@ -374,7 +594,9 @@ mod tests {
 
     #[test]
     fn lists_newest_first_skips_broken_files_and_refreshes_changed_ones() {
+        // Every call looks at every file: the files below are changed from outside.
         let (s, dir) = store();
+        let s = s.with_rescan_every(Duration::ZERO);
         let write = |id: &str, updated: u64, text: &str| {
             let v = json!({ "id": id, "title": id, "updatedAt": updated, "messages": [{ "id": "u", "role": "user", "content": text, "createdAt": 1 }] });
             std::fs::write(dir.join("sessions").join(format!("{id}.json")), serde_json::to_vec_pretty(&v).unwrap())
@@ -392,6 +614,70 @@ mod tests {
         assert_eq!(first["firstUserText"], "changed, and longer");
         assert!(first.get("messages").is_none());
         assert_eq!(s.list().len(), 2);
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn the_kept_list_follows_own_writes_at_once_and_outside_changes_on_the_rescan() {
+        let (s, dir) = store();
+        let id = |v: &Value| v["id"].as_str().unwrap().to_string();
+        let a = id(&s.create(None).unwrap());
+        assert_eq!(s.summaries().len(), 1);
+        // Own writes, deletes and creates show at once.
+        let b = id(&s.create(None).unwrap());
+        s.set_options(&a, &json!({ "title": "renamed" })).unwrap();
+        let listed = s.summaries();
+        assert_eq!(listed.len(), 2);
+        assert_eq!(listed.iter().find(|v| v["id"] == a.as_str()).unwrap()["title"], "renamed");
+        s.delete(&b).unwrap();
+        assert_eq!(s.summaries().len(), 1);
+        // A file changed from outside is not looked at until the next rescan.
+        let outside = dir.join("sessions").join("s_outside.json");
+        std::fs::write(&outside, json!({ "id": "s_outside", "updatedAt": 1, "messages": [] }).to_string()).unwrap();
+        assert_eq!(s.summaries().len(), 1);
+        assert!(s.summary("s_outside").is_some(), "one chat is always checked on its own file");
+        let s = s.with_rescan_every(Duration::ZERO);
+        assert_eq!(s.summaries().len(), 2);
+        std::fs::remove_file(&outside).unwrap();
+        assert_eq!(s.summaries().len(), 1);
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_single_summary_equals_the_listed_one_and_never_flushes() {
+        let (s, dir) = store();
+        let write = |id: &str, parent: Option<&str>, updated: u64, url: &str| {
+            let mut v = json!({ "id": id, "title": id, "updatedAt": updated, "messages": [
+                { "id": "u", "role": "user", "content": "do it", "createdAt": 1 },
+                { "id": "a", "role": "assistant", "content": "", "toolCalls": [{ "id": format!("t_{id}"), "name": "PowerShell", "input": { "command": "gh pr create --fill" } }] },
+                { "id": "r", "role": "tool", "toolResult": { "toolCallId": format!("t_{id}"), "output": url } },
+            ] });
+            if let Some(p) = parent {
+                v["parentSessionId"] = json!(p);
+            }
+            std::fs::write(dir.join("sessions").join(format!("{id}.json")), serde_json::to_vec(&v).unwrap()).unwrap();
+        };
+        let url = |n: u32| format!("https://github.com/o/r/pull/{n}");
+        write("s_parent", None, 1, &url(1));
+        write("s_child", Some("s_parent"), 2, &url(2));
+        write("s_grandchild", Some("s_child"), 3, &url(3));
+        write("s_other", None, 4, &url(4));
+        let listed = s.summaries();
+        for id in ["s_parent", "s_child", "s_grandchild", "s_other"] {
+            let want = listed.iter().find(|v| v["id"] == id).unwrap();
+            let mut got = s.summary(id).unwrap();
+            let sorted = |v: &mut Value| {
+                let mut u: Vec<String> = serde_json::from_value(v["prUrls"].clone()).unwrap();
+                u.sort();
+                v["prUrls"] = json!(u);
+            };
+            let mut want = want.clone();
+            sorted(&mut want);
+            sorted(&mut got);
+            assert_eq!(&got, &want, "{id}");
+        }
+        assert_eq!(s.summary("s_parent").unwrap()["prUrls"], json!([url(1), url(3), url(2)]), "newest chat first");
+        assert!(s.summary("../s_parent").is_none() && s.summary("s_none").is_none());
         std::fs::remove_dir_all(dir).ok();
     }
 
@@ -483,6 +769,29 @@ mod tests {
         assert_eq!(SessionStore::new(&dir).summaries()[0]["archivedAt"], 123);
         s.set_options(id, &json!({ "archivedAt": null })).unwrap();
         assert!(s.summaries()[0]["archivedAt"].is_null());
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_live_events_pictures_move_beside_the_chats_and_come_back_in_the_saved_chat() {
+        use base64::Engine;
+        let (s, dir) = store();
+        let png =
+            format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(vec![7u8; 8192]));
+        let small = "data:image/png;base64,AAAA".to_string();
+        let mut images = vec![json!(png), json!(small), json!("not a data url")];
+        assert_eq!(s.shed_event_images(&mut images), 1);
+        let reference = images[0].as_str().unwrap().to_string();
+        assert!(reference.starts_with("nekko-blob:") && reference.len() < 100, "{reference}");
+        assert_eq!(images[1], json!(small));
+        assert_eq!(images[2], json!("not a data url"));
+        assert!(s.has_blob(reference.strip_prefix("nekko-blob:").unwrap()));
+        // The checkpoint that saves the same picture finds its file and the chat reads back whole.
+        let mut chat = s.create(None).unwrap();
+        chat["messages"] =
+            json!([{ "id": "r", "role": "tool", "toolResult": { "toolCallId": "t", "output": "", "images": [png] } }]);
+        s.save_whole(&mut chat).unwrap();
+        assert_eq!(s.get(chat["id"].as_str().unwrap()).unwrap()["messages"][0]["toolResult"]["images"][0], json!(png));
         std::fs::remove_dir_all(dir).ok();
     }
 

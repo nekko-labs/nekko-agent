@@ -80,6 +80,17 @@ pub fn known_flags(help: &str) -> HashSet<String> {
     regex!(r"--[a-z0-9][a-z0-9-]*", "").find_iter(help).map(|m| help[m.range()].to_string()).collect()
 }
 
+/// The KV cache type a load runs with: the one it names, else the engine's
+/// default (`capacity::ENGINE_KV_CACHE_DTYPE`, q8_0). With Flash Attention
+/// switched off, f16: llama.cpp refuses a quantized V cache without it.
+pub fn effective_kv(params: &Value) -> String {
+    match params.get("kvCacheDtype").and_then(Value::as_str).filter(|s| !s.is_empty()) {
+        Some(named) => named.to_string(),
+        None if params.get("flashAttention") == Some(&Value::Bool(false)) => "f16".into(),
+        None => crate::capacity::ENGINE_KV_CACHE_DTYPE.into(),
+    }
+}
+
 /// The `llama-server` command line for one load (`buildArgs`).
 pub fn build_args(
     model: &Value,
@@ -196,8 +207,8 @@ pub fn build_args(
             push(&mut args, flag, text(p.get(k)));
         }
     }
-    if truthy(p, "kvCacheDtype") && str_of(p, "kvCacheDtype") != Some("f16") {
-        let kv = text(p.get("kvCacheDtype"));
+    let kv = effective_kv(p);
+    if kv != "f16" {
         push(&mut args, "--cache-type-k", kv.clone());
         push(&mut args, "--cache-type-v", kv);
     }

@@ -65,16 +65,16 @@ private final class QuietReconnectSecrets: SecureStore, @unchecked Sendable {
     func set(_ key: String, _ value: String?) { lock.withLock { values[key] = value } }
 }
 
-@MainActor
-private final class QuietReconnectCache: TranscriptCache {
+private final class QuietReconnectCache: TranscriptCache, @unchecked Sendable {
+    private let lock = NSLock()
     private var values: [String: [String: Data]] = [:]
-    func load(_ computerId: String, _ name: String) -> Data? { values[computerId]?[name] }
+    func load(_ computerId: String, _ name: String) -> Data? { lock.withLock { values[computerId]?[name] } }
     func save(_ computerId: String, _ name: String, _ data: Data) {
-        values[computerId, default: [:]][name] = data
+        lock.withLock { values[computerId, default: [:]][name] = data }
     }
-    func removeFile(_ computerId: String, _ name: String) { values[computerId]?[name] = nil }
-    func removeComputer(_ computerId: String) { values[computerId] = nil }
-    func removeAll() { values = [:] }
+    func removeFile(_ computerId: String, _ name: String) { lock.withLock { values[computerId]?[name] = nil } }
+    func removeComputer(_ computerId: String) { lock.withLock { values[computerId] = nil } }
+    func removeAll() { lock.withLock { values = [:] } }
 }
 
 /// Remains reconnecting, with no timers, sockets, push registration or remote calls.

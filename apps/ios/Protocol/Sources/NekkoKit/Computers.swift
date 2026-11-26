@@ -55,6 +55,27 @@ extension RemoteConnection {
 
 extension RelayClient: RemoteConnection {}
 
+/// How this iPhone may reach one computer, in the desktop's words (decision 0116):
+/// `auto` uses whatever the pairing link carried, `cloud` only Nekko Cloud Relay,
+/// `direct` only Tailscale and the local network.
+public enum RouteChoice: String, Codable, Sendable, CaseIterable {
+    case auto, cloud, direct
+
+    /// The two switches the screen shows: both on is `auto`, one on is that kind alone.
+    public init(tailscale: Bool, cloud: Bool) {
+        self = tailscale == cloud ? .auto : cloud ? .cloud : .direct
+    }
+
+    public var allowsDirect: Bool { self != .cloud }
+    public var allowsCloud: Bool { self != .direct }
+
+    /// Keeps the routes this choice allows; when that would leave none, all of them.
+    public func filter(_ urls: [String]) -> [String] {
+        let kept = urls.filter { RelayRoute.of($0) == .internet ? allowsCloud : allowsDirect }
+        return kept.isEmpty ? urls : kept
+    }
+}
+
 /// A paired computer, as listed. No secrets.
 public struct Computer: Codable, Equatable, Sendable, Identifiable {
     public let id: String
@@ -70,8 +91,12 @@ public struct Computer: Codable, Equatable, Sendable, Identifiable {
     public var nameIsCustom: Bool?
     /// An explicit phone-local disconnect; missing on older pairings means connected.
     public var connectionDisabled: Bool?
+    /// Which of its routes this phone may use. Missing on older pairings means `auto`.
+    public var routeChoice: RouteChoice = .auto
 
-    public init(id: String, name: String, relayUrl: String, pairedAt: Int64, platform: String? = nil, alts: [String] = [], icon: String? = nil) {
+    public init(id: String, name: String, relayUrl: String, pairedAt: Int64, platform: String? = nil, alts: [String] = [], icon: String? = nil,
+                routeChoice: RouteChoice = .auto) {
+        self.routeChoice = routeChoice
         self.id = id
         self.name = name
         self.relayUrl = relayUrl
@@ -94,12 +119,24 @@ public struct Computer: Codable, Equatable, Sendable, Identifiable {
         icon = try c.decodeIfPresent(String.self, forKey: .icon)
         nameIsCustom = try c.decodeIfPresent(Bool.self, forKey: .nameIsCustom)
         connectionDisabled = try c.decodeIfPresent(Bool.self, forKey: .connectionDisabled)
+        routeChoice = try c.decodeIfPresent(RouteChoice.self, forKey: .routeChoice) ?? .auto
     }
 
-    /// Every address, best first (the order the client tries them).
-    public var routes: [String] { RouteSupervisor.order([relayUrl] + alts) }
-    public var route: RelayRoute { RelayRoute.of(relayUrl) }
-    public var relayHost: String { Pairing.relayHost(relayUrl) }
+    /// Every address the pairing link carried, best first, whatever the choice.
+    public var allRoutes: [String] { RouteSupervisor.order([relayUrl] + alts) }
+    /// The addresses this phone may use, best first (the order the client tries them).
+    public var routes: [String] { routeChoice.filter(allRoutes) }
+    /// The address dialed first when it can be: the link's own, else the best allowed.
+    var primaryUrl: String { routes.contains(relayUrl) ? relayUrl : routes.first ?? relayUrl }
+    public var route: RelayRoute { RelayRoute.of(primaryUrl) }
+    /// The pairing link carried a Tailscale or local network address.
+    public var hasDirectRoute: Bool { allRoutes.contains { RelayRoute.of($0) != .internet } }
+    /// The pairing link carried Nekko Cloud Relay or another internet relay.
+    public var hasCloudRoute: Bool { allRoutes.contains { RelayRoute.of($0) == .internet } }
+    /// One of the routes this phone may use needs no tailnet: Nekko Cloud Relay or another internet relay (decision 0116).
+    /// A LAN address doesn't count: it is no use away from home, where Tailscale would be the fix.
+    public var reachableOffTailnet: Bool { routes.contains { RelayRoute.of($0) == .internet } }
+    public var relayHost: String { Pairing.relayHost(primaryUrl) }
 }
 
 /// Pairing material for one computer, stored as one Keychain item.
@@ -249,7 +286,7 @@ public final class ComputersStore {
     public var transcriptCache: TranscriptCache? {
         didSet {
             guard transcriptCache !== oldValue else { return }
-            if transcriptCache == nil { oldValue?.removeAll() }
+            if transcriptCache == nil, let oldValue { transcripts.wipeAll(oldValue) }
             transcripts.use(transcriptCache, computerId: offlineComputer)
         }
     }
@@ -707,7 +744,7 @@ public final class ComputersStore {
             offlineComputer = nil
         }
         offlineFiles?.remove(id)
-        transcriptCache?.removeComputer(id)
+        transcripts.wipeComputer(id)
         computers.removeAll { $0.id == id }
         attention[id] = nil
         saveIndex()
@@ -726,6 +763,20 @@ public final class ComputersStore {
 
     public func connectionEnabled(_ id: String) -> Bool {
         computers.first { $0.id == id }.map { $0.connectionDisabled != true } ?? false
+    }
+
+    /// Which routes this phone may use for one computer. The link is rebuilt at once, so it dials only the allowed kinds.
+    public func setRouteChoice(_ id: String, _ choice: RouteChoice) {
+        guard let i = computers.firstIndex(where: { $0.id == id }), computers[i].routeChoice != choice else { return }
+        computers[i].routeChoice = choice
+        saveIndex()
+        guard connectionEnabled(id) else { return }
+        if id == activeId {
+            connect(id)
+        } else if stayConnected {
+            dropLink(id)
+            syncFleet()
+        }
     }
 
     /// Keep pairing and saved chats, but close this computer's link until explicitly enabled.
@@ -857,9 +908,10 @@ public final class ComputersStore {
 
     /// The relay settings for one paired computer, the active one's or a fleet link's.
     func relayConfig(_ computer: Computer, _ secret: ComputerSecret, hostKey: String, keyBytes: Data) -> RelayConfig {
-        var config = RelayConfig(relayUrl: computer.relayUrl, room: secret.room, key: secret.key, hostKey: hostKey, keyBytes: keyBytes,
+        let routes = computer.routes
+        var config = RelayConfig(relayUrl: computer.primaryUrl, room: secret.room, key: secret.key, hostKey: hostKey, keyBytes: keyBytes,
                                  deviceId: deviceId(), deviceName: deviceName(), pairCode: secret.pair, platform: platform)
-        config.alternates = computer.alts
+        config.alternates = routes.filter { $0 != computer.primaryUrl }
         config.helloSigner = helloSigner
         config.requestTimeout = 120
         config.app = app
@@ -887,7 +939,7 @@ public final class ComputersStore {
             connDetail = s.detail
             if let r = s.route { route = r }
             // The log names the route when the computer has more than one.
-            let via = (active?.alts.isEmpty ?? true) ? nil : s.route.map(Pairing.relayHost)
+            let via = ((active?.routes.count ?? 0) < 2) ? nil : s.route.map(Pairing.relayHost)
             connectionLog.record(s.state, detail: s.detail, denied: s.denied, via: via)
             if let d = s.denied {
                 denied = d
@@ -1002,6 +1054,9 @@ public final class ComputersStore {
     /// rather than left retrying in the background. No background mode is
     /// involved: the grace fits in the app's ordinary background time.
     public func enterBackground(grace: TimeInterval = 30) {
+        // Saves wait a moment to coalesce; the app may be suspended before that moment ends.
+        chatListCache?.flush()
+        transcripts.flushNow()
         graceTask?.cancel()
         guard client != nil || !links.isEmpty, !suspended else { return }
         let anyOnline = conn == .online || peers.values.contains { $0.conn == .online }
@@ -1049,7 +1104,7 @@ public final class ComputersStore {
         defer { checking = false }
         let routes = computer.routes
         checks = routes.map { RouteReport(url: $0) }
-        var base = RelayConfig(relayUrl: computer.relayUrl, room: secret.room, key: secret.key, hostKey: hostKey, keyBytes: keyBytes,
+        var base = RelayConfig(relayUrl: routes.first ?? computer.relayUrl, room: secret.room, key: secret.key, hostKey: hostKey, keyBytes: keyBytes,
                                deviceId: deviceId(), deviceName: deviceName(), pairCode: nil, platform: platform)
         base.helloSigner = helloSigner
         // A constant for the concurrently run probes (Swift 6 mode: a captured var is an error).
@@ -1109,7 +1164,7 @@ public final class ComputersStore {
     /// Conservative single-authority enrollment: alternate endpoints cannot be
     /// assumed to share one relay process. Never send a per-relay subtotal.
     public var pushBadgeRooms: [String]? {
-        let routes = computers.flatMap(\.routes)
+        let routes = computers.flatMap(\.allRoutes)
         let rooms = computers.compactMap { secret($0.id)?.room }
         guard rooms.count == computers.count else { return nil }
         return PushBadgeManifest.rooms(routes: routes, rooms: rooms, needsYou: pushKinds?.contains(.needsYou) ?? true)

@@ -107,7 +107,7 @@ Unused while the desktop form hides screenshots (see above); the route and `nekk
 
 ## Optional contact and GitHub support (#2342)
 
-Implemented for desktop/shared Local Web UI renderer; native iOS/Android unchanged. Name (up to 200 characters) and email (up to 320) start blank, are independent and optional, are never prefilled from account/settings, and stay in the draft on failure. Entered email must be valid or cleared. The disclosure says “We don’t spam” and no mailing-list signup. Contact-only edits participate in discard confirmation. Contact labels and text append to the existing message and count toward the same 4,000 code-point limit; blank fields add nothing. The wire/schema/cloud deployment is unchanged.
+Implemented for desktop/shared Local Web UI renderer; native iOS/Android unchanged. Name (up to 200 characters) and email (up to 320) are independent and optional, and stay in the draft on failure. (They started blank and were never prefilled until #3322, below.) Entered email must be valid or cleared. The disclosure says “We don’t spam” and no mailing-list signup. Contact-only edits participate in discard confirmation. Contact labels and text append to the existing message and count toward the same 4,000 code-point limit; blank fields add nothing. The wire/schema/cloud deployment is unchanged.
 
 Good feedback (including its success state) and the new first Settings group, **Help out the Nekko Team**, share one GitHub support control. Settings also moves the existing usage-report opt-in into that group, without changing its value or behavior.
 
@@ -116,3 +116,18 @@ The Rust daemon owns `support:starStatus` / `support:star`. It uses only an expl
 A confirmed star appears selected with happy Nekko on both surfaces. Newly confirmed API stars, or a verified transition from not-starred to starred on the same account after starring in the browser, animate once per account/browser profile; existing stars do not animate, and reduced motion disables the animation. A local thank-you marker is not proof of star status: remote status is always read again. No unstar action is provided.
 
 Verification status: 4,212 shared/desktop tests pass, plus the full web/desktop production build and all-workspace TypeScript check. A hidden, nonfocusable, network-blocked Electron journey passed 13 assertions covering explicit writes, shared state/no replay, optional email validation/focus, failed-send draft retention, contact payload, browser fallback and reduced motion. Desktop/narrow before/after pixels and a first-star GIF are captured and published in PR #2349, but inspection tools failed (browser screenshot timeout, native UnknownVizError), so visual approval remains blocked. Rust mock-server tests await CI; local cargo is unavailable. Live GitHub writes are intentionally not exercised on the developer’s account.
+
+## Contact filled in from Profile or Nekko Cloud, behind a switch (#3322, #3357)
+
+`[implemented 2026-11-25 for desktop and the Local Web UI; unit-tested and driven in a hidden renderer with a synthetic bridge; not yet run in a packaged app]`
+
+Philip asked (2026-11-25) that someone who already gave their name and email not type them again, and that the sheet ask, already checked, before sending them. This replaces "never prefilled from account/settings" above.
+
+- **Filled in:** Name and Email start from `settings.userName` and `settings.userEmail`, what the person gave in setup or Settings > About you (trimmed). When no email is saved, use the signed-in Nekko Cloud account email. An untouched email follows sign-in, account changes, and sign-out even if the sheet is open, and the privacy line identifies the source. Never use a connector address. Both stay editable and clearable for this note; editing them here does not change About you.
+- **Settings > Profile:** About you shows the same fallback in **Email for updates**. The Cloud address is shown, not saved or submitted to the update list. An explicitly saved address takes priority; removing it restores the signed-in fallback.
+- **The switch:** **Include my name and email** (worded **Include my name** or **Include my email** when only one is filled in) sits beside Send, on by default, whenever a name or email is in the form. Off, the note carries neither: they are left out of `message`, the character count drops them, and an invalid email no longer blocks Send. The switch resets to on each time the sheet opens.
+- **Not a draft:** prefilled values don't make closing ask "Discard this feedback?"; an edit to them does.
+- **Analytics:** opening the sheet queues `feedback_opened` with its way in, only while usage reports are on ([opt-in usage reports](opt-in-usage-and-crash-reports.md)). Nothing about the note or the contact details is reported.
+- **Phones:** the iPhone, iPad and Android sheets still have no contact fields; [#3323](https://github.com/nekko-labs/nekko-agent/issues/3323).
+- **Unverified:** a packaged app; the wire and Nekko Cloud are unchanged.
+

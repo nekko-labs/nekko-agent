@@ -39,12 +39,12 @@ import {
 export type WallFilter = 'all' | 'chat' | 'terminal';
 
 /**
- * What the wall tree holds: chats and shells, and a Browser or Files window
- * opened from the Agents panel without an agent (#2824). Dashboard monitors
+ * What the wall tree holds: chats and shells, a file opened from the Agents
+ * panel's Files view, and a Browser or Files window saved from before (#2824). Dashboard monitors
  * live in the Monitors dock.
  */
-export type WallKind = 'chat' | 'terminal' | 'browser' | 'files';
-export const WALL_KINDS: readonly WallKind[] = ['chat', 'terminal', 'browser', 'files'];
+export type WallKind = 'chat' | 'terminal' | 'browser' | 'files' | 'file';
+export const WALL_KINDS: readonly WallKind[] = ['chat', 'terminal', 'browser', 'files', 'file'];
 
 export type { WallLayout, WallLayoutMode, MonitorsDock, MonitorsSide, MonitorKey } from '@nekko-agent/shared';
 export { DEFAULT_WALL_LAYOUT, DEFAULT_MONITORS_DOCK };
@@ -608,7 +608,7 @@ export function sanitizeWallLayout(raw: unknown): WallLayout {
   const dimension = (n: unknown, fallback: number) => typeof n === 'number' && Number.isFinite(n)
     ? Math.min(6, Math.max(1, Math.round(n))) : fallback;
   return {
-    mode: value.mode === 'focus' ? 'focus' : 'grid',
+    mode: value.mode === 'focus' ? 'focus' : value.mode === 'grid' || value.mode === 'fixed' ? 'grid' : DEFAULT_WALL_LAYOUT.mode,
     cols: dimension(value.cols, DEFAULT_WALL_LAYOUT.cols),
     rows: dimension(value.rows, DEFAULT_WALL_LAYOUT.rows),
     // Grid was a third layout mode until 2026-10-24; a wall saved in it opens as Dynamic with Fixed grid on.

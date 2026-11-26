@@ -45,6 +45,7 @@ export const SYNONYM_GROUPS: ReadonlyArray<readonly string[]> = [
   ['new', 'create', 'start', 'add'],
   ['close', 'quit', 'exit', 'shut down', 'shutdown'],
   ['update', 'updates', 'upgrade'],
+  ["what's", 'whats', 'changelog', 'changes'],
   ['help', 'support', 'feedback', 'bug'],
   ['model', 'models', 'llm', 'llms'],
   ['font', 'fonts', 'text', 'typeface'],

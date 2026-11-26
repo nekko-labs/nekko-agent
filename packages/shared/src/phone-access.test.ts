@@ -49,6 +49,7 @@ const SETTINGS = {
   skipDeleteConfirmation: false,
   automationsPaused: false,
   orchestration: { strategy: 'solo', maxDepth: 2, maxParallel: 4, delegationRoute: { providerId: 'p1', modelId: 'm1' } },
+  promptProfiles: { modelInstructions: { 'p1::m1': 'model-specific private guidance' } },
   prompts: [{ id: 'fix', name: 'fix', body: 'Find and fix the bug.' }],
   sandboxMode: 'workspace',
   providers: [{ id: 'p1', kind: 'anthropic', label: 'Claude', baseUrl: 'https://x', apiKey: 'sk-secret', tokenKey: 'tk', enabled: true }],
@@ -194,6 +195,7 @@ describe('settings from a phone', () => {
 
   it('exposes effort read-only, never as a phone-writable global setting', () => {
     expect(code(() => screenPhoneCall('settings:update', [{ effort: 'max' }]))).toBe('setting-denied');
+    expect(code(() => screenPhoneCall('settings:update', [{ promptProfiles: SETTINGS.promptProfiles }]))).toBe('setting-denied');
   });
 
   it('exposes the delegation strategy read-only', () => {
@@ -212,6 +214,14 @@ describe('settings from a phone', () => {
     const [view] = redactPhoneResult('session:watches', [watch, 'junk', null]) as Record<string, unknown>[];
     expect(view).toEqual({ id: 'w1', kind: 'pr', url: 'https://github.com/o/r/pull/5', status: 'active', deadlineAt: 10, nextPollAt: 5, pending: false, failures: 1, lastError: 'x'.repeat(600) });
     expect(redactPhoneResult('session:watches', null)).toEqual([]);
+  });
+
+  it("cancels one watch of a chat for a phone (session:cancelWatch), nothing more", () => {
+    expect(screenPhoneCall('session:cancelWatch', ['s1', 'w1'])).toEqual({});
+    expect(() => screenPhoneCall('session:cancelWatch', ['s1'])).toThrow(PhoneAccessError);
+    expect(() => screenPhoneCall('session:cancelWatch', ['', 'w1'])).toThrow(PhoneAccessError);
+    expect(() => screenPhoneCall('session:cancelWatch', ['s1', 'w1', 'x'])).toThrow(PhoneAccessError);
+    expect(redactPhoneResult('session:cancelWatch', { secret: 1 })).toBeNull();
   });
 
   it('takes a sealed provider key and a switch from a phone, never a plaintext save (decision 0016)', () => {
@@ -273,6 +283,9 @@ describe('chat options from a phone', () => {
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { executionMode: 'local' }]))).toBe('value-invalid');
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { workMode: 'design', autoModel: true }]))).toBe('ok');
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { autoModel: 'yes' }]))).toBe('value-invalid');
+    for (const value of [true, false, 'true', 1, null]) {
+      expect(code(() => screenPhoneCall('session:setOptions', ['s1', { orchestrate: value }]))).toBe(typeof value === 'boolean' ? 'ok' : 'value-invalid');
+    }
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { unattended: true }]))).toBe('option-denied');
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', null]))).toBe('value-invalid');
   });

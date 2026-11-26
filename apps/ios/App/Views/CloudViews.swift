@@ -34,7 +34,7 @@ struct CloudView: View {
                     }
                     Section {
                         if let a = cloud.account {
-                            LabeledContent(a.email, value: a.plan == "team" ? "Team" : a.plan == "pro" ? "Pro" : "Free")
+                            LabeledContent(a.email, value: a.plan == "team" ? "Enterprise" : a.plan == "pro" ? "Pro" : "Free")
                         }
                         Button("Sign out", role: .destructive) { Task { await cloud.signOut() } }
                     } header: { SectionHeader("Account") } footer: {
@@ -93,7 +93,7 @@ struct CloudView: View {
 
     private var subline: String {
         switch cloud.phase {
-        case .needsPlan: return "Sync is part of Nekko Cloud Pro and Team."
+        case .needsPlan: return "Sync is part of Nekko Cloud Pro and Enterprise."
         case .notSetUp: return "Open Settings → Sync on your computer and turn it on first."
         case .needsJoin: return "Use your recovery key, or approve this iPhone on a computer."
         case .awaitingApproval: return "Type this iPhone's code in Settings → Sync on a computer."

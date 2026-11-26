@@ -1,5 +1,5 @@
 import rateLimit from "@fastify/rate-limit";
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
 import { registerAccount, type SignInConfig } from "./account.js";
 import { registerBilling, type Stripe } from "./billing.js";
 import { accountGateFrom } from "./auth.js";
@@ -12,10 +12,16 @@ import { registerMachines, type MachinesOptions } from "./machines.js";
 import { confirmSignup, page, sendConfirmation, unsubscribe, type Mailer } from "./confirmations.js";
 import { parseSignup, recordSignup } from "./signups.js";
 import type { DeleteAuthUser } from "./supabase.js";
+import { registerHypergate } from "./hypergate.js";
 import { registerFleet } from "./fleet.js";
+import { registerPrivacyCases } from "./privacy-cases.js";
 import { registerOrgs } from "./orgs.js";
+import { registerRelay, type RelayOptions } from "./relay.js";
 import { registerShares } from "./shares.js";
+import { Presence, registerPresence } from "./presence.js";
+import type { RelayPresence } from "./relay-presence.js";
 import { registerSync } from "./sync.js";
+import { BusyError, budgetForMachine, MemoryGate, registerMemoryGate } from "./memory-gate.js";
 
 export interface ServerOptions {
   db: Db;
@@ -52,8 +58,11 @@ export interface ServerOptions {
   accountsAllowedEmails?: string[];
   /** Stripe plans and billing (issue #2724); without it the /v1/billing routes are absent. */
   stripe?: Stripe;
+  /** Nekko Cloud Relay tickets (decision 0116); without it the /v1/relay routes are absent. */
+  relay?: RelayOptions;
   /** Lower-case emails of Nekko team accounts, who switch unreleased features on. Defaults to DEFAULT_STAFF_EMAILS. */
   staffEmails?: string[];
+  privacyReviewers?: string[];
   /** Sends signup confirmation emails; without it signups still save and the email is skipped. */
   mailer?: Mailer;
   /** This service's public origin, for the links in emails. */
@@ -62,6 +71,15 @@ export interface ServerOptions {
   deleteAuthUser?: DeleteAuthUser;
   /** Called on every 5xx answer (ALERT_EMAIL); summaries carry no request data. */
   alert?: Alert;
+  /**
+   * Request queueing by memory (#3342). Defaults to this machine's memory less
+   * the idle process; `false` turns it off.
+   */
+  memoryGate?: MemoryGate | false;
+  /** Fleet presence kept in memory (presence.ts); tests pass one with a clock they control. */
+  presence?: Presence;
+  /** Online computers according to the relay (NEKKO_RELAY_PRESENCE_URL); without it the memory lease alone decides. */
+  relayPresence?: RelayPresence | null;
   /** Request logging, redacted (see LOG_SERIALIZERS); an object adds pino options such as a stream (tests). */
   logger?: boolean | { stream: { write(line: string): void } };
 }
@@ -78,7 +96,18 @@ export const LOG_SERIALIZERS = {
   err: (e: Error & { code?: unknown }) => ({ type: e.name, message: e.message, code: e.code, stack: e.stack ?? "" }),
 };
 
-export const DEFAULT_PUBLIC_URL = "https://nekko-agent-api.fly.dev";
+/**
+ * Postgres never connected, so the request did nothing and is safe to send
+ * again: node-postgres' connect and pool timeouts, and the server refusing new
+ * connections (57P03 starting up or shutting down, 53300 too many). A
+ * connection lost mid-query is not here: that query may have run.
+ */
+export function databaseUnavailable(e: { message?: string; code?: unknown }): boolean {
+  const m = e.message ?? "";
+  return m.includes("due to connection timeout") || m.includes("timeout exceeded when trying to connect") || e.code === "57P03" || e.code === "53300";
+}
+
+export const DEFAULT_PUBLIC_URL ="https://nekko-agent-api.fly.dev";
 export const DEFAULT_ORIGINS = ["https://nekkoagent.com", "https://www.nekkoagent.com"];
 
 export function buildServer(opts: ServerOptions): FastifyInstance {
@@ -89,23 +118,46 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
   const features: Features = {
     staff: new Set((opts.staffEmails ?? DEFAULT_STAFF_EMAILS).map((e) => e.trim().toLowerCase()).filter(Boolean)),
     // library-multiplayer joins once the service runs its relay (#2751).
-    available: new Set<Feature>([...(opts.stripe ? ["billing"] as const : []), "library-cloud"]),
+    available: new Set<Feature>([...(opts.stripe ? ["billing"] as const : []), "library-cloud", ...(opts.relay ? ["cloud-relay"] as const : [])]),
   };
   const gate = accountGateFrom(opts.accountsAllowedDomains, opts.accountsAllowedEmails);
   if (gate) app.decorate("accountGate", gate);
   const { max, windowMs } = opts.rateLimit ?? { max: 5, windowMs: 60 * 60 * 1000 };
   const hits = new Map<string, { count: number; resetAt: number }>();
 
+  // Hypergate signs in explicitly from its loopback manager. Never authorize cookies or other Cloud routes for loopback.
+  const canRead = (origin: string, path: string) => origins.has(origin) ||
+    (/^http:\/\/(localhost|127\.0\.0\.1)(:\d{1,5})?$/.test(origin) &&
+      ["/v1/auth/config", "/v1/auth/session", "/v1/hypergate/setup"].includes(path));
   app.addHook("onRequest", async (req, reply) => {
     const origin = req.headers.origin;
-    if (origin && origins.has(origin)) {
+    if (origin && canRead(origin, req.url)) {
       reply.header("access-control-allow-origin", origin);
       reply.header("vary", "Origin");
     }
   });
 
+  registerPresence(app, opts.presence);
+  app.decorate("relayPresence", opts.relayPresence ?? null);
+
+  // Big bodies and pages wait their turn for memory (src/memory-gate.ts).
+  if (opts.memoryGate !== false) registerMemoryGate(app, opts.memoryGate ?? new MemoryGate({ budgetBytes: budgetForMachine() }));
+
   // Fastify's own 404 logs the full URL, query string included.
   app.setNotFoundHandler((_req, reply) => reply.code(404).send({ error: "not-found" }));
+
+  // A 5xx never carries the error's own text: a pg message can name tables or
+  // quote values, and the apps showed it to people verbatim. The log keeps it.
+  // Postgres not connecting in time is 503 `unavailable` with a Retry-After,
+  // which the apps retry on their own (#3186).
+  app.setErrorHandler((error: FastifyError, req, reply) => {
+    if ((error.statusCode ?? 500) < 500) return reply.send(error);
+    // The memory queue was full or slow: the apps retry `busy` on their own.
+    if (error instanceof BusyError) return reply.code(503).header("retry-after", "5").send({ error: "busy" });
+    req.log.error({ err: error }, "request failed");
+    if (databaseUnavailable(error)) return reply.code(503).header("retry-after", "5").send({ error: "unavailable" });
+    return reply.code(error.statusCode ?? 500).send({ error: "internal" });
+  });
 
   if (opts.alert) {
     const alert = opts.alert;
@@ -114,6 +166,14 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     });
   }
 
+  // Console calls use explicit bearers, never cookies. Only configured web origins may preflight.
+  for (const path of ["hypergate/setup", "auth/*", "orgs", "orgs/*", "billing/*", "machines", "privacy/cases", "staff/privacy/cases", "staff/privacy/cases/*"]) {
+    app.options("/v1/" + path, async (req, reply) => {
+      if (!req.headers.origin || !canRead(req.headers.origin, req.url)) return reply.code(403).send();
+      return reply.header("access-control-allow-methods", path === "hypergate/setup" ? "GET,PUT" : "GET,POST,PATCH,DELETE")
+        .header("access-control-allow-headers", "authorization,content-type").code(204).send();
+    });
+  }
   app.options("/v1/signups", async (req, reply) => {
     if (!req.headers.origin || !origins.has(req.headers.origin)) return reply.code(403).send();
     reply
@@ -190,6 +250,9 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
   const auth = opts.authRateLimit ?? { max: 30, windowMs: 60 * 1000 };
   app.register(async (scope) => {
     await scope.register(rateLimit, { max: sync.max, timeWindow: sync.windowMs });
+    registerHypergate(scope, opts.db, features, { max: sync.max, timeWindow: sync.windowMs });
+    const reviewers = opts.privacyReviewers ?? [];
+    if (reviewers.length) scope.register(async privacy => registerPrivacyCases(privacy, opts.db, reviewers));
     registerSync(scope, opts.db);
     registerShares(scope, opts.db, features);
     if (opts.fleetEnabled) registerFleet(scope, opts.db);
@@ -197,6 +260,7 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     registerAccount(scope, opts.db, opts.signIn, { max: auth.max, timeWindow: auth.windowMs }, { driver: opts.machines?.driver, deleteAuthUser: opts.deleteAuthUser, stripe: opts.stripe }, features);
     registerFeatures(scope, opts.db, features);
     if (opts.stripe) registerBilling(scope, opts.db, opts.stripe, features, opts.publicUrl ?? DEFAULT_PUBLIC_URL);
+    if (opts.relay) registerRelay(scope, opts.db, features, opts.relay);
   });
   registerDonations(app, opts.db, opts.donationRateLimit ?? { max: 20, windowMs: 60 * 60 * 1000 });
   registerFeedback(app, opts.db, opts.feedbackRateLimit ?? { max: 10, windowMs: 60 * 60 * 1000 }, opts.feedbackScreenshotLimit);

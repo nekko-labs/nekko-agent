@@ -8,6 +8,7 @@ import {
   type Session,
 } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
+import { useModelCatalogVersion } from '../../modelCatalog.js';
 import { CheckIcon } from '../../icons.js';
 import { formatBytes } from '../runtimes/verdict.js';
 import { ensureRecommendedOffload } from './imageOffload.js';
@@ -162,10 +163,15 @@ export function ImageModeControls({ session, onChange, busy }: { session: Sessio
     await save({ modelId, ...(c ? { steps: c.defaults.steps, cfgScale: c.defaults.cfgScale } : {}) });
   };
 
+  // Read again when a download lands or a model is deleted, so an open chat lists a new model.
+  const catalog = useModelCatalogVersion();
   useEffect(() => {
-    window.nekko.engineModels().then((ms) => setModels(ms.filter((m) => m.modality === 'image'))).catch(() => setModels([]));
-    window.nekko.engineStatus().then((s) => setRuntime(!!s.diffusionInstall?.binPath)).catch(() => {});
-  }, []);
+    let live = true;
+    window.nekko.engineModels().then((ms) => { if (live) setModels(ms.filter((m) => m.modality === 'image')); }).catch(() => { if (live) setModels((cur) => cur ?? []); });
+    window.nekko.engineStatus().then((s) => { if (live) setRuntime(!!s.diffusionInstall?.binPath); }).catch(() => {});
+    if (catalog && params.modelId) window.nekko.engineImageCompanions(params.modelId).then((c) => { if (live) setCompanions(c); }).catch(() => {});
+    return () => { live = false; };
+  }, [catalog]);
   // A new image chat starts on the first image model rather than on nothing.
   useEffect(() => {
     if (models?.length && (!params.modelId || !models.some((m) => m.id === params.modelId))) void choose(models[0].id);

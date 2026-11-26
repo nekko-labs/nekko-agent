@@ -1,6 +1,7 @@
 import { terminalPresentation, terminalPrUrl } from './terminalActivity.js';
 import { ComputerChip, useComputerOf } from './ComputerChip.js';
-import React, { memo, useRef, useState } from 'react';
+import { syncedComputer, syncedHomes } from '../syncedComputers.js';
+import React, { memo, useMemo, useRef, useState } from 'react';
 import type { BlockedReason, PrInfo, SessionLane, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
 import { getSessionWorkspaceIds, guessContextWindow, reportedClaudeCodeContext, shortModelName } from '@nekko-agent/shared';
 import { useStore, type Workspace } from '../store.js';
@@ -17,6 +18,7 @@ import { fillTone } from './contextTone.js';
 import { SessionPrChip } from './SessionPrChip.js';
 import { ProviderMark, providerMarkKind } from './providers/ProviderMark.js';
 import { statusGroupOf, wakeSourcesOf } from '../views/agentPanelView.js';
+import { cutTitle } from '../views/cutTitle.js';
 
 /**
  * One workspace, as a card in the left sidebar.
@@ -230,8 +232,13 @@ function WorkspaceCardImpl({
   const liveCtxEstimate = useStore((s) => (session ? s.sessionCtxEstimate[session.id] : undefined));
   const compacting = useCompactionStore((s) => (session ? s.bySession[session.id]?.state === 'running' : false));
   const computer = useComputerOf(session?.id);
-  // Once a second computer is connected, every chat card names where it runs, this one included.
-  const anyComputer = useStore((s) => s.computers.length > 0);
+  // Another computer's chat synced here through Nekko Cloud names that computer (#3143).
+  const allComputers = useStore((s) => s.computers);
+  const home = session?.home;
+  const syncedHome = useMemo(() => (home && !computer ? syncedComputer(home, allComputers) : null), [home, computer, allComputers]);
+  // Once a second computer is connected, or a chat here is another computer's, every chat card
+  // names the computer it belongs to, this one included.
+  const anyComputer = useStore((s) => s.computers.length > 0 || syncedHomes(s.sessions).length > 0);
   const computersShown = useShown('computers', { computers: anyComputer });
   const remoteProviders = useStore((s) => (computer ? s.computerCatalogs[computer.id]?.providers : undefined));
   const provider = (remoteProviders ?? providers).find((p) => p.id === session?.providerId);
@@ -264,6 +271,8 @@ function WorkspaceCardImpl({
   const lastReply = session?.lastReplyAt;
   const terminalView = terminal ? terminalPresentation(terminal) : null;
   const title = session?.title ?? terminalView?.title ?? 'Agent';
+  // A title cut from the first message says so, and the hover shows the whole message.
+  const cut = session ? cutTitle(title, session.firstUserText) : null;
   const isChat = !!session;
   // Claude Code picks the version from the plan: when its `system/init` reports
   // a specific id for the alias we sent ("claude-opus-4-7" against our "opus"),
@@ -315,7 +324,7 @@ function WorkspaceCardImpl({
       className={`agent-chip group relative w-full cursor-pointer rounded-xl px-3 py-1 text-left transition-colors duration-150 ${isChat ? 'agent-chip-chat' : isActive ? 'border border-accent/40 bg-accent-soft' : 'border border-line bg-surface hover:bg-surface-2'}`}
       data-agent-active={isActive || undefined}
       data-terminal-row={terminal?.id}
-      title={title}
+      title={cut?.full ?? title}
       data-zone-tint={zoneTint}
     >
       {zoneTint !== undefined && <span className="agent-chip-zone" style={{ background: `var(--zone-tint-${zoneTint})` }} aria-hidden />}
@@ -323,8 +332,8 @@ function WorkspaceCardImpl({
         {terminal ? <TerminalIcon className="h-3.5 w-3.5 shrink-0" /> : <StatusIcon status={status ?? (session ? agentStatusOfLane('idle', undefined, wakeSourcesOf(session)) : 'idle')} />}
         {renaming && onRename
           ? <RenameField title={title} onDone={onRename} />
-          : <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
-            {title}
+          : <span className="min-w-0 flex-1 truncate text-xs leading-[18px] font-semibold text-ink">
+            {cut?.shown ?? title}
           </span>}
         {/* A title-only card has no room for both: its PR says more than the time. */}
         {showUpdated && lastReply && (!status || status === 'done' || status === 'idle') && !(showPullRequests && prLine === 'title' && prs.length > 0) && (
@@ -372,7 +381,7 @@ function WorkspaceCardImpl({
           context window is. The provider's name is in the tooltip. */}
       {showMetadata && <>
       {modelLine && <div className="mt-0.5 flex items-center gap-1 pl-3 text-2xs leading-[15px] text-ink-faint">
-        {computerShown && <ComputerChip computer={computer} dim={!!computer && computer.state !== 'online'} showIcon={showComputerIcons} />}
+        {computerShown && <ComputerChip computer={computer ?? syncedHome} dim={!!computer && computer.state !== 'online'} showIcon={showComputerIcons} />}
         {computerShown && showModel && <span aria-hidden>·</span>}
         {showModel && <Fact
           grow
@@ -477,7 +486,7 @@ function RenameField({ title, onDone }: { title: string; onDone: (title: string 
   };
   return (
     <input
-      className="min-w-0 flex-1 rounded-sm border border-accent bg-surface px-1 text-sm text-ink outline-none"
+      className="min-w-0 flex-1 rounded-sm border border-accent bg-surface px-1 text-xs text-ink outline-none"
       aria-label="Chat title"
       value={value}
       autoFocus

@@ -55,10 +55,14 @@ export function isComplexPrompt(prompt: string): boolean {
  * chat model. Vision-language models are chat models and stay in.
  */
 const NON_CHAT_RE =
-  /(^|[\W_])(whisper|distil-whisper|parakeet|wav2vec|seamless|tts|piper|kokoro|bark|xtts|embed|embedding|bge|gte|e5|nomic-embed|minilm|jina-(embed|clip)|rerank|reranker|colbert|clip|siglip|sd|sdxl|sd3|stable-diffusion|flux|dall-e|dalle|ocr|trocr|paddle|florence|donut|layoutlm|translate|moderation|guard)([\W_]|$)/i;
+  /(^|[\W_])(whisper|distil-whisper|parakeet|wav2vec|seamless|tts|piper|kokoro|bark|xtts|embed|embedding|bge|gte|e5|nomic-embed|minilm|jina-(embed|clip)|rerank|reranker|colbert|clip|siglip|sd|sdxl|sd3|stable-diffusion|flux|qwen[-_]?image|z[-_]image|hidream|pixart|ltxv|dall-e|dalle|ocr|trocr|paddle|florence|donut|layoutlm|translate|moderation|guard)([\W_]|$)/i;
+
+/** The built-in engine files every model under its kind: outside chat is never chat. */
+const NON_CHAT_KINDS = ['image/', 'video/', 'audio/', 'embedding/'];
 
 /** Whether this model can hold a conversation (so Auto may pick it). */
 export function isChatModel(model: ModelInfo): boolean {
+  if (NON_CHAT_KINDS.some((k) => model.id.startsWith(k))) return false;
   return !NON_CHAT_RE.test(`${model.id} ${model.name}`);
 }
 

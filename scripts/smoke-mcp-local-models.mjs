@@ -32,7 +32,7 @@ const flag = (name) => {
 };
 function findLlamaServer() {
   if (flag('llama-server')) return flag('llama-server');
-  const base = join(homedir(), '.nekko-agent', 'engine');
+  const base = join(homedir(), '.nekko', 'nekko-agent', 'engine');
   if (!existsSync(base)) return undefined;
   for (const backend of readdirSync(base)) {
     const dir = join(base, backend);

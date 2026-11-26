@@ -1,3 +1,4 @@
+import { useVisibleInterval } from '../visibleInterval.js';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import type { VoiceStatus, VoiceSettings as Preferences } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
@@ -8,7 +9,7 @@ import { SettingsSection } from './SettingsSection.js';
 
 const VoiceIntro = lazy(() => import('./VoiceIntro.js'));
 
-export function VoiceSettings({ compact = false }: { compact?: boolean }) {
+export function VoiceSettings({ compact = false, showHeading = true }: { compact?: boolean; showHeading?: boolean }) {
   const settings = useStore(s => s.settings);
   const voice = settings?.voice ?? {};
   const [status, setStatus] = useState<VoiceStatus | null>(null);
@@ -27,11 +28,9 @@ export function VoiceSettings({ compact = false }: { compact?: boolean }) {
     capture.current = null;
   };
   useEffect(() => {
-    let live = true;
-    const refresh = () => window.nekko.voiceStatus().then(s => { if (live) setStatus(s); }).catch(e => { if (live) setError(e.message); });
-    void refresh(); const timer = setInterval(refresh, 1000);
-    return () => { live = false; clearInterval(timer); stopTest(); };
+    return stopTest;
   }, []);
+  useVisibleInterval((live) => { window.nekko.voiceStatus().then(s => { if (live()) setStatus(s); }).catch(e => { if (live()) setError(e.message); }); }, 1000, { immediate: true });
   useEffect(() => { if (voice.enabled === false) { stopTest(); setLevel(null); } }, [voice.enabled]);
   const update = async (patch: Preferences) => {
     if (patch.enabled === false) { stopTest(); setLevel(null); }
@@ -108,6 +107,6 @@ export function VoiceSettings({ compact = false }: { compact?: boolean }) {
     {error && <p role="alert" className="mt-(--q-inline) text-xs text-danger-text">{error}</p>}
   </>;
   return compact
-    ? <section className="min-w-0" aria-label="Voice settings"><h2 className="text-sm font-semibold">Dictation</h2>{body}</section>
+    ? <section className="min-w-0" aria-label="Voice settings">{showHeading && <h2 className="text-sm font-semibold">Dictation</h2>}{body}</section>
     : <SettingsSection title="Dictation" aria-label="Voice settings">{body}</SettingsSection>;
 }

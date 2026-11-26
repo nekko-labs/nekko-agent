@@ -32,6 +32,7 @@ import com.nekko.android.voice.DictationController
 import com.nekko.android.voice.MicHardware
 import com.nekko.protocol.AskAnswer
 import com.nekko.protocol.Channels
+import com.nekko.protocol.Transcript
 import com.nekko.protocol.Effort
 import com.nekko.protocol.PullRequest
 import com.nekko.protocol.PhoneChanges
@@ -54,6 +55,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.android.awaitFrame
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import com.nekko.protocol.Activity
@@ -240,19 +242,24 @@ class ChatViewModel(
         dictation?.cancel()
     }
 
+    // One projector for the chat's life: the saved transcript is parsed once per read, a streamed token patches the live tail.
+    private val projector = ChatProjector()
+
     val ui: StateFlow<ChatUi> = combine(controller.state, repo.state.map(this::env).distinctUntilChanged()) { s, e ->
-        ChatController.project(s, e)
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, ChatController.project(controller.state.value, env(repo.state.value)))
+        ChatController.project(s, e, projector)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, ChatController.project(controller.state.value, env(repo.state.value), projector))
 
     init {
         // Instant paint (OF-6): the saved copy at once, replaced in place when the computer answers.
         controller.showSavedCopy()
         // Load when the computer is reachable, and again after every reconnect.
         viewModelScope.launch {
-            repo.state.map { it.conn }.distinctUntilChanged().collect { if (it == RelayState.ONLINE) controller.reload() }
+            repo.state.map { it.conn }.distinctUntilChanged().collect { if (it == RelayState.ONLINE) controller.reload(refreshSkills = true) }
         }
         viewModelScope.launch {
-            repo.events.collect { e -> if (controller.onEvent(e)) launch { controller.reload() } }
+            // Streamed words reach the transcript once per frame, not once per token (DeltaCoalescer).
+            val coalescer = DeltaCoalescer(this, sessionId, { awaitFrame() }) { e -> if (controller.onEvent(e)) launch { controller.reload() } }
+            repo.events.collect(coalescer::accept)
         }
     }
 
@@ -312,12 +319,21 @@ class ChatViewModel(
 
     private fun calls(tool: String) = ui.value.blocks.any { it is Block.Tool && it.name == tool }
 
+    /** A picture tool may have started a clip (a watch of kind clip), so its chip is read like a watch row's. */
+    private fun makesPictures() = ui.value.blocks.any { it is Block.Tool && Transcript.makesPictures(it.name) }
+
+    /** Cancel one clip (its chip's **Cancel clip**); the computer ends just that watch. Throws so the chip can say why. */
+    suspend fun cancelClip(watchId: String) {
+        repo.callRaising(Channels.SESSION_CANCEL_WATCH, listOf(JsonPrimitive(sessionId), JsonPrimitive(watchId)))
+        refreshAgentState()
+    }
+
     /**
      * Re-read what the agent-work rows show beyond the transcript: the watches,
      * and the child chats when the transcript delegates. Failures keep the last state.
      */
     suspend fun refreshAgentState() {
-        if (calls(AgentRows.WATCH_TOOL)) {
+        if (calls(AgentRows.WATCH_TOOL) || makesPictures()) {
             runCatching { AgentWatch.list(repo.caller.call(Channels.SESSION_WATCHES, JsonPrimitive(sessionId))) }
                 .onSuccess { _watches.value = it }
         }
@@ -330,17 +346,21 @@ class ChatViewModel(
     init {
         // Re-read when the transcript first holds a watch or a delegation, and after each turn.
         viewModelScope.launch {
-            ui.map { u -> Triple(u.blocks.any { it is Block.Tool && it.name == AgentRows.WATCH_TOOL },
+            ui.map { u -> Triple(u.blocks.any { it is Block.Tool && (it.name == AgentRows.WATCH_TOOL || Transcript.makesPictures(it.name)) },
                 u.blocks.any { it is Block.Tool && it.name == AgentRows.SUBAGENT_TOOL }, u.running) }
                 .distinctUntilChanged()
                 .collect { (watch, agent, _) -> if (watch || agent) refreshAgentState() }
         }
-        // While a watch is armed, its chip is re-read every 15 s (the desktop's cadence).
-        viewModelScope.launch {
-            while (true) {
-                delay(15_000)
-                if (_watches.value.any { it.status == AgentWatch.Status.ACTIVE }) refreshAgentState()
-            }
+    }
+
+    /**
+     * While a watch is armed, its chip is re-read every 15 s (the desktop's cadence). Run it under
+     * `repeatOnLifecycle(STARTED)` so it stops while the chat is not on screen.
+     */
+    suspend fun pollWatches(everyMs: Long = 15_000): Nothing {
+        while (true) {
+            delay(everyMs)
+            if (_watches.value.any { it.status == AgentWatch.Status.ACTIVE }) refreshAgentState()
         }
     }
 

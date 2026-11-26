@@ -18,14 +18,16 @@ pub const STATS_HEADER: &[u8] = b"NEKKOSTATS1\n";
 const STATS_BLOCK: usize = 512;
 
 /// Jobs at the current size before a size is suggested: two, so a runner tells its owner after
-/// its second CI run (#2700). The rules take the most demanding job, so one more job can only
-/// raise a suggestion, never undo a "too small".
+/// its second CI run (#2700). Two jobs can be the light ones of a mixed workflow, so a cut is also
+/// bounded by every job in the window, at any size (#3274).
 pub const SUGGEST_MIN_JOBS: u32 = 2;
 /// GitHub's standard hosted Mac, which passes the jobs routed to a runner.
 pub const FLOOR_CPUS: u8 = 3;
 pub const FLOOR_MEMORY_MB: u32 = 7 * 1024;
 const MAX_MEMORY_PER_VM_MB: u32 = 64 * 1024;
 const HEADROOM_MB: f64 = 2048.0;
+/// Share of a job's samples with every vCPU nearly full that asks for 2 more vCPUs.
+const CPU_FULL_SHARE: f32 = 0.20;
 
 /// One job's usage summary, kept on its audit line.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -91,7 +93,8 @@ pub fn parse_stats(disk: &[u8], cpus: u8, memory_mb: u32, from_ts: u64) -> Optio
     })
 }
 
-/// The VM size that fits a runner's jobs, from those that ran at its current size.
+/// The VM size that fits a runner's jobs: jobs at its current size decide whether to suggest,
+/// every job in the window bounds the figure.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SizeSuggestion {
@@ -114,6 +117,10 @@ fn round_up_gb(mb: f64) -> u32 {
 
 /// The spec's rules (CI runners, "Suggested VM size"): CPU and memory are judged separately, never
 /// under GitHub's standard hosted Mac, never over what the Mac can give each requested slot.
+///
+/// `jobs` is every job of the usage window, at any size. Jobs at the current size decide when to
+/// suggest and trigger a raise; every job bounds the figure, so two light jobs cannot cut below
+/// what a heavier job needed at another size, and a raise reaches the largest need in one step.
 pub fn suggest_size(jobs: &[Usage], s: &RunnerSettings, host: &HostFacts) -> SizeSuggestion {
     let (cpus, memory_mb) = (cpus_per_vm(s, host), s.memory_per_vm_mb);
     let here: Vec<&Usage> = jobs.iter().filter(|u| u.cpus == cpus && u.memory_mb == memory_mb).collect();
@@ -121,16 +128,21 @@ pub fn suggest_size(jobs: &[Usage], s: &RunnerSettings, host: &HostFacts) -> Siz
     if out.jobs < SUGGEST_MIN_JOBS {
         return out;
     }
-    let most = |f: fn(&Usage) -> f64| here.iter().map(|u| f(u)).fold(0.0, f64::max);
+    let most_here = |f: fn(&Usage) -> f64| here.iter().map(|u| f(u)).fold(0.0, f64::max);
+    let most = |f: fn(&Usage) -> f64| jobs.iter().map(f).fold(0.0, f64::max);
 
     let cpu_ceiling = host.cores.saturating_sub(2).max(2);
-    let full = most(|u| f64::from(u.cpu_full_share));
+    let full = most_here(|u| f64::from(u.cpu_full_share));
     let p95 = most(|u| f64::from(u.cpu_p95));
-    let (want, why) = if full >= 0.20 {
-        (cpus + 2, format!("All {cpus} vCPUs were busy for {:.0}% of a job.", full * 100.0))
+    // A job that kept every vCPU full needed 2 more than it had, whatever size it ran at.
+    let cpu_need =
+        jobs.iter().filter(|u| u.cpu_full_share >= CPU_FULL_SHARE).map(|u| u.cpus.saturating_add(2)).max().unwrap_or(0);
+    let (want, why) = if full >= f64::from(CPU_FULL_SHARE) {
+        ((cpus + 2).max(cpu_need), format!("All {cpus} vCPUs were busy for {:.0}% of a job.", full * 100.0))
     } else if p95 <= f64::from(cpus) - 2.0 {
         // The floor guards cuts only: a smaller size the owner chose stays theirs.
-        ((p95.ceil() as u8 + 1).max(FLOOR_CPUS), format!("Jobs kept at most {p95:.1} vCPUs busy (95th percentile)."))
+        let to = (p95.ceil() as u8 + 1).max(cpu_need).max(FLOOR_CPUS).min(cpus);
+        (to, format!("Jobs in the last 30 days kept at most {p95:.1} vCPUs busy (95th percentile)."))
     } else {
         (cpus, String::new())
     };
@@ -144,9 +156,16 @@ pub fn suggest_size(jobs: &[Usage], s: &RunnerSettings, host: &HostFacts) -> Siz
 
     let slots = u64::from(s.macos_slots.clamp(1, MAX_MACOS_VMS));
     let mem_ceiling = ((runner_memory_mb(s, host) / slots) as u32 / 1024 * 1024).clamp(4096, MAX_MEMORY_PER_VM_MB);
+    let starved = |u: &Usage| u.swap_out_mb > 0 || u64::from(u.compressed_peak_mb) * 4 >= u64::from(u.memory_mb);
+    let swapped = most_here(|u| f64::from(u.swap_out_mb));
+    let compressed = most_here(|u| f64::from(u.compressed_peak_mb));
     let peak = most(|u| f64::from(u.mem_peak_mb));
-    let swapped = most(|u| f64::from(u.swap_out_mb));
-    let compressed = most(|u| f64::from(u.compressed_peak_mb));
+    // The most any job needed: its peak plus headroom, or 4 GB more than it had if it swapped or
+    // compressed hard, whatever size it ran at.
+    let starved_at = jobs.iter().filter(|u| starved(u)).max_by_key(|u| (u.memory_mb, u.swap_out_mb > 0));
+    let starved_need = starved_at.map_or(0, |u| u.memory_mb.saturating_add(4096));
+    let peak_need = round_up_gb(peak + HEADROOM_MB);
+    let mem_need = starved_need.max(peak_need);
     let m = f64::from(memory_mb);
     let (want, why) = if swapped > 0.0 || compressed * 4.0 >= m {
         let why = if swapped > 0.0 {
@@ -154,16 +173,27 @@ pub fn suggest_size(jobs: &[Usage], s: &RunnerSettings, host: &HostFacts) -> Siz
         } else {
             format!("A job kept {} compressed.", gb(compressed))
         };
-        ((memory_mb + 4096).max(round_up_gb(peak + HEADROOM_MB)), why)
+        ((memory_mb + 4096).max(mem_need), why)
     } else if peak + HEADROOM_MB <= m - HEADROOM_MB {
-        let why = format!("The biggest job used {} at most and never swapped.", gb(peak));
-        (round_up_gb(peak + HEADROOM_MB).max(FLOOR_MEMORY_MB), why)
+        let why = format!("The biggest job in the last 30 days used {} at most.", gb(peak));
+        (mem_need.max(FLOOR_MEMORY_MB).min(memory_mb), why)
     } else {
         (memory_mb, String::new())
     };
     out.memory_mb = want.min(mem_ceiling);
     if want != memory_mb {
         out.reasons.push(why);
+    }
+
+    // A cut set by a job that ran short at another size names that size, or the figure looks
+    // unexplained next to the biggest job's peak.
+    if let Some(u) = starved_at.filter(|_| want < memory_mb && starved_need > peak_need) {
+        let how = if u.swap_out_mb > 0 { "swapped" } else { "compressed hard" };
+        out.reasons.push(format!("A job {how} at {}.", gb(f64::from(u.memory_mb))));
+    }
+
+    if want > memory_mb.saturating_add(4096) {
+        out.reasons.push(format!("Jobs in the last 30 days needed up to {}.", gb(f64::from(want))));
     }
     if want > mem_ceiling {
         let each = if slots > 1 { format!(" each of {slots} VMs") } else { " a VM".into() };

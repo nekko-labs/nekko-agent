@@ -20,6 +20,8 @@ describe('agent chat visual continuity', () => {
     expect(cssRule(css, `${palette} .command-wall-layout[data-wall-layout] .command-wall-window[data-wall-selected] > .panel`)['--nekko-glow']).toBe('1');
     expect(hasSelector(css, /data-wall-working.*> \.panel/)).toBe(false);
     expect(cssRule(css, `${palette} .command-wall-window[data-wall-selected] > .panel::before`).animation).toContain('agent-window-colour');
+    // A smooth endless fade redraws the window every display frame (#3136).
+    expect(cssRule(css, `${palette} .command-wall-window[data-wall-selected] > .panel::before`).animation).toMatch(/steps\(\d+\)/);
     expect(cssRule(css, `${palette} .command-wall-window > .panel::before`)['pointer-events']).toBe('none');
   });
   it('reuses static new-chat dithering behind selected existing conversations only', () => {
@@ -47,8 +49,8 @@ describe('agent chat visual continuity', () => {
     expect(box).toContain('data-composer-suggestions');
     expect(box.indexOf('data-composer-suggestions')).toBeGreaterThan(box.indexOf('composer-bar'));
     expect(box.indexOf('data-composer-suggestions')).toBeGreaterThan(box.indexOf('data-composer-action'));
-    const effort = box.match(/<button[^>]*class="([^"]*)"[^>]*aria-label="Reasoning effort:/)?.[1];
-    expect(effort).toBeDefined();
-    expect(effort).not.toMatch(/\bborder\b/);
+    // Effort is the model chip's gauge, not a button of its own.
+    expect(box).toContain('data-effort-gauge');
+    expect(box).not.toMatch(/<button[^>]*aria-label="Reasoning effort:/);
   });
 });

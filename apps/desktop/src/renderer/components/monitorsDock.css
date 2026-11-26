@@ -21,7 +21,7 @@
 .monitors-dock[data-dock-side='bottom'] {
   flex: 0 0 auto;
   width: 100%;
-  max-height: 360px;
+  max-height: var(--dock-height, 360px);
 }
 .monitors-dock[data-dock-side='top'] { order: -1; }
 .monitors-dock[data-dock-side='bottom'] { order: 1; }
@@ -40,7 +40,7 @@
    pill, the monitor header's icons and the app views a monitor hosts
    (Automations) keep their own quiet look. The :where() leaves them out
    without raising this rule over the dock's later, narrower button rules. */
-.monitors-dock button:not(.quiet-switch):where(:not(.monitors-dock__toggle, .monitors-dock__monitor-header button, .monitors-dock__app button)),
+.monitors-dock button:not(.quiet-switch):where(:not(.monitors-dock__toggle, .monitors-dock__monitor-header button, .monitors-dock__app button, .monitors-dock__icon-action)),
 .monitors-dock input[type='number'] {
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -51,7 +51,7 @@
 }
 .monitors-dock button { cursor: pointer; }
 @media (hover: hover) {
-  .monitors-dock button:not(.quiet-switch):where(:not(.monitors-dock__toggle, .monitors-dock__monitor-header button, .monitors-dock__app button)):hover:not(:disabled) { background: var(--surface); }
+  .monitors-dock button:not(.quiet-switch):where(:not(.monitors-dock__toggle, .monitors-dock__monitor-header button, .monitors-dock__app button, .monitors-dock__icon-action)):hover:not(:disabled) { background: var(--surface); }
 }
 .monitors-dock button:disabled { opacity: .5; cursor: default; }
 .monitors-dock button:not(.quiet-switch):focus-visible,
@@ -161,6 +161,11 @@
 @media (hover: hover) {
   .monitors-dock__resize:hover > .monitors-dock__grip { opacity: 1; }
 }
+/* Docked above or below the wall, the handle lies along the dock's inner edge,
+   in the gap to the wall, and drags the height. */
+.monitors-dock:is([data-dock-side='top'], [data-dock-side='bottom']) .monitors-dock__resize { top: auto; bottom: -9px; left: 0; right: 0; width: auto; height: 10px; cursor: row-resize; }
+.monitors-dock[data-dock-side='bottom'] .monitors-dock__resize { top: -9px; bottom: auto; }
+.monitors-dock:is([data-dock-side='top'], [data-dock-side='bottom']) .monitors-dock__grip { top: 50%; bottom: auto; left: 0; right: 0; width: auto; height: 3px; transform: translateY(-50%); }
 @media (prefers-reduced-motion: reduce) { .monitors-dock__grip { transition: none; } }
 @media (max-width: 767px) { .monitors-dock__resize { display: none; } }
 @media (prefers-reduced-motion: reduce) { .monitors-dock__minimized button { animation: none; } }
@@ -270,12 +275,29 @@
 .monitors-dock__provider-head .provider-mark > span { font-size: var(--text-2xs); }
 .monitors-dock__provider-name { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .monitors-dock__account { font-weight: 400; color: var(--ink-faint); }
-/* Local models: one compact row per resident model, its name left and the jump to its settings right. */
+/* Local models: one compact row per model, its name left and its actions right; space, not rules, between rows. */
 .monitors-dock__local-models { padding: 8px 12px; gap: 8px; }
-.monitors-dock__local-model { display: grid; gap: 2px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.monitors-dock__local-model { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
+.monitors-dock__local-model .monitors-dock__metric-row { align-items: center; }
 .monitors-dock__local-model .monitors-dock__metric-row strong { text-align: left; flex: 1; }
 .monitors-dock__local-model .monitors-dock__note { margin-top: 0; }
 .monitors-dock__local-model button.monitors-dock__text-button { flex-shrink: 0; }
+/* Settings and Load: quiet Gentleface icons, named by their tooltip, played once on hover. */
+.monitors-dock button.monitors-dock__icon-action { flex-shrink: 0; display: grid; place-items: center; width: 24px; height: 24px; padding: 4px; border: 0; border-radius: 6px; background: transparent; color: var(--ink-faint); transition: color 120ms ease; }
+@media (hover: hover) { .monitors-dock button.monitors-dock__icon-action:hover:not(:disabled) { color: var(--ink); } }
+/* The last icon's glyph lines up with the right edge, like Unload's text. */
+.monitors-dock__local-model .monitors-dock__metric-row > .monitors-dock__icon-action:last-child { margin-right: -4px; }
+.monitors-dock__busy { flex-shrink: 0; color: var(--ink-faint); font-size: var(--text-2xs); }
+/* Nothing loaded: a beach and one line, hovered to play the breeze. */
+.monitors-dock__local-idle { display: flex; align-items: center; gap: 8px; color: var(--ink-faint); font-size: var(--text-2xs); }
+.monitors-dock__local-idle .monitors-dock__icon { flex-shrink: 0; color: var(--ink-soft); }
+.monitors-dock__local-model button.monitors-dock__text-button:disabled { opacity: 0.5; }
+/* Starred and Recent: a group label, then rows, a step of space above each group. */
+.monitors-dock__local-group { display: grid; gap: 8px; margin-top: 12px; }
+.monitors-dock__local-group-label { color: var(--ink-faint); font-size: var(--text-2xs); font-weight: 600; }
+.monitors-dock button.monitors-dock__star { flex-shrink: 0; display: inline-flex; border: 0; background: transparent; padding: 0; color: var(--ink-faint); }
+.monitors-dock button.monitors-dock__star[aria-pressed="true"] { color: var(--accent); }
+@media (hover: hover) { .monitors-dock button.monitors-dock__star:hover { color: var(--ink); } }
 
 /* Keep the dock alive during exit so a second toggle reverses from here. */
 .monitors-dock { --dock-enter-x: 100%; --dock-enter-y: 0px; opacity: 1; transform: translate(0, 0); overflow: visible; clip-path: inset(0 -10px); interpolate-size: allow-keywords; transition: flex-basis 220ms ease-out, height 220ms ease-out, transform 220ms ease-out; }
@@ -287,6 +309,8 @@
 @media (prefers-reduced-motion: reduce) { .monitors-dock { transition: none; transform: none; } }
 
 .monitors-dock:is([data-dock-side='top'], [data-dock-side='bottom']) { height: auto; }
+/* Open above or below the wall, let the height grip show past the dock's edge. */
+.monitors-dock:is([data-dock-side='top'], [data-dock-side='bottom'])[data-panel-open='true'] { clip-path: inset(-10px); }
 .monitors-dock:is([data-dock-side='top'], [data-dock-side='bottom'])[data-panel-open='false'] { height: 0; }
 @starting-style { .monitors-dock:is([data-dock-side='top'], [data-dock-side='bottom'])[data-panel-open='true'] { height: 0; } }
 

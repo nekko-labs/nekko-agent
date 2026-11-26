@@ -119,7 +119,7 @@ test('workflow isolates diagnostics from normal shards, evidence dispatches and 
   assert.equal((workflow.match(/!inputs.turn_details_diagnostic && inputs\./g) ?? []).length, 7);
   // Infrastructure only: the normal matrix's commands stay byte-identical.
   const matrix = s => s.split('  protocol-and-build:\n')[1].split('    steps:\n')[1].split('  report-batch:\n')[0];
-  // SHA256 of default matrix commands at a845bd844; changes need deliberate review.
-  assert.equal(createHash('sha256').update(matrix(workflow)).digest('hex'), 'fa20bae76b1adbfb4a2e7101dc28e248bf535fa3c6df4a4011b8e4d42fdec136');
+  // SHA256 of default matrix commands, last changed for the quarantine list (#3094); changes need deliberate review.
+  assert.equal(createHash('sha256').update(matrix(workflow)).digest('hex'), '1f33f868e2d3a91402a404700b8260d8a261a2eae37ce91849b41c4d15dfcb71');
   assert.equal(DEVICE_TYPE, 'com.apple.CoreSimulator.SimDeviceType.iPhone-18-Pro');
 });

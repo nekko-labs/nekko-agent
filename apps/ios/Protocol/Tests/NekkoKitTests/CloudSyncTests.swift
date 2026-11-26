@@ -444,4 +444,67 @@ final class CloudSyncTests: XCTestCase {
         XCTAssertEqual(items.first { $0.name == "redirect_to" }?.value, CloudSync.oauthRedirect)
         XCTAssertEqual(url.path, "/auth/v1/authorize")
     }
+
+    /// Answers `/v1/auth/me` with the scripted statuses first, then like the fake cloud.
+    final class Stalling: CloudHTTP, @unchecked Sendable {
+        let fake: FakeCloud
+        var script: [(Int, String)]
+        var meCalls = 0
+        init(_ fake: FakeCloud, _ script: [(Int, String)]) { self.fake = fake; self.script = script }
+        func send(_ method: String, _ url: URL, headers: [String: String], body: Data?) async throws -> (Int, Data) {
+            if url.path == "/v1/auth/me" {
+                meCalls += 1
+                if !script.isEmpty {
+                    let (status, code) = script.removeFirst()
+                    return (status, Data(#"{"error":"\#(code)","message":"server text"}"#.utf8))
+                }
+            }
+            return try await fake.send(method, url, headers: headers, body: body)
+        }
+    }
+
+    func stalledPhone(_ script: [(Int, String)]) async throws -> (CloudSync, Stalling) {
+        let fake = FakeCloud()
+        let http = Stalling(fake, [])
+        let secrets = MemorySecrets()
+        let p = CloudSync(api: URL(string: "https://api.example")!, http: http, secrets: secrets, files: nil, deviceLabel: "iPhone",
+                          retryWaits: [.milliseconds(1), .milliseconds(1)], key: { SyncCrypto.SoftwareKey() })
+        try await p.verifyCode(email: "ada@example.com", code: "123456")
+        http.script = script
+        http.meCalls = 0
+        return (p, http)
+    }
+
+    func testA502ThenAnAnswerIsRetriedAndSucceeds() async throws {
+        let (p, http) = try await stalledPhone([(502, "")])
+        try await p.refresh()
+        XCTAssertEqual(http.meCalls, 2)
+        XCTAssertTrue(p.signedIn)
+    }
+
+    func testThree503sEndInTheBusyMessageNotTheServersText() async throws {
+        let (p, http) = try await stalledPhone([(503, "busy"), (503, "busy"), (503, "busy")])
+        do { try await p.refresh(); XCTFail("three stalls fail") } catch let e as CloudError {
+            XCTAssertEqual(e.status, 503)
+            XCTAssertEqual(e.message, "Nekko Cloud is busy right now. Try again in a moment.")
+        }
+        XCTAssertEqual(http.meCalls, 3, "one try and two retries")
+    }
+
+    func testA500InternalIsNotRetriedAndHidesTheServersText() async throws {
+        let (p, http) = try await stalledPhone([(500, "internal")])
+        do { try await p.refresh(); XCTFail("a 500 fails") } catch let e as CloudError {
+            XCTAssertEqual(e.status, 500)
+            XCTAssertEqual(e.message, "Nekko Cloud ran into a problem. Try again in a moment.")
+        }
+        XCTAssertEqual(http.meCalls, 1)
+    }
+
+    func testA401IsNotRetriedAndKeepsItsMessage() async throws {
+        let (p, http) = try await stalledPhone([(401, "unauthorized")])
+        do { try await p.refresh(); XCTFail("a 401 fails") } catch let e as CloudError {
+            XCTAssertEqual(e.message, "server text")
+        }
+        XCTAssertEqual(http.meCalls, 1)
+    }
 }

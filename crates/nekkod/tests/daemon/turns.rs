@@ -339,11 +339,76 @@ async fn chat_send_is_admitted_and_driven_by_the_daemon() {
     let events = rig.events.lock().unwrap().clone();
     assert!(events.iter().any(|e| e["sessionId"] == "s_admit" && e["type"] == "error"), "{events:?}");
     assert!(events.iter().any(|e| e["sessionId"] == "s_admit" && e["type"] == "done"), "{events:?}");
-    // The daemon's own index snippets and the guidelines reached the model.
+    // The daemon's own index snippets and the guidelines reached the model:
+    // the guidelines in the system prompt, the snippets found for this
+    // message's text on the message itself, so the prompt's prefix stays cached.
     let requests = model.requests.lock().unwrap().clone();
     let system = requests[0]["messages"][0]["content"].as_str().unwrap().to_string();
     assert!(system.contains("Always run the tests."), "{system}");
-    assert!(system.contains("1: export const secret = 'pineapple';"), "{system}");
+    assert!(!system.contains("export const secret"), "{system}");
+    let asked = requests[0]["messages"].as_array().unwrap().last().unwrap()["content"].as_str().unwrap().to_string();
+    assert!(asked.contains("1: export const secret = 'pineapple';"), "{asked}");
+    assert!(asked.ends_with("Explain the pineapple"), "{asked}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn exact_model_guidance_follows_the_admitted_route_and_keeps_the_cache_prefix() {
+    let rig = turn_rig(
+        "exact-model-guidance",
+        json!({
+            "id": "s_scoped", "title": "Named", "workspaceId": "w1", "executionMode": "unified",
+            "messages": [], "createdAt": 1, "updatedAt": 1, "providerId": "other", "modelId": "other-model"
+        }),
+    );
+    let model = scripted_model(vec![say_text("one"), say_text("two"), say_text("three"), say_text("four")]).await;
+    let provider = |id| {
+        json!({
+            "id": id, "kind": "openai-compat", "label": id, "enabled": true,
+            "baseUrl": format!("http://127.0.0.1:{}/v1", model.port),
+        })
+    };
+    write_settings(
+        &rig,
+        json!({
+            "providers": [provider("p1"), provider("other")],
+            "workspaces": [{"id": "w1", "name": "project", "path": rig.workspace.to_string_lossy()}],
+            "systemInstructions": "Include a summary.",
+            "promptProfiles": {
+                "providers": { "p1": "large" },
+                "models": { "p1::synthetic": "small" },
+                "modelInstructions": {
+                    "p1::synthetic": "Use numbered steps.",
+                    "other::other-model": "This text belongs to the saved route, not the admitted one."
+                }
+            }
+        }),
+    )
+    .await;
+    for (provider, model, text) in [
+        ("p1", "synthetic", "first"),
+        ("p1", "synthetic", "second"),
+        ("p1", "synthetic-v2", "third"),
+        ("other", "synthetic", "fourth"),
+    ] {
+        let opts = json!({"sessionId": "s_scoped", "providerId": provider, "modelId": model, "text": text});
+        let (status, body) = post(rig.d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
+        assert_eq!((status, body), (200, Value::Null));
+    }
+    let requests = turn_requests(&model);
+    assert_eq!(requests.len(), 4);
+    for (i, request) in requests.iter().enumerate() {
+        let system = request["messages"][0]["content"].as_str().unwrap();
+        let profile = if i < 2 { nekko_context::PromptProfile::Small } else { nekko_context::PromptProfile::Large };
+        assert!(system.starts_with(&nekko_context::intro(profile)), "request {i} got the wrong sizing profile");
+        assert_eq!(system.matches("Use numbered steps.").count(), usize::from(i < 2));
+        assert!(!system.contains("This text belongs to the saved route"));
+        assert!(system.contains("Include a summary."));
+        assert!(system.contains("Always run the tests."));
+        assert!(system.contains("Server instructions for this user turn:"));
+    }
+    let first = requests[0]["messages"].as_array().unwrap();
+    let second = requests[1]["messages"].as_array().unwrap();
+    assert_eq!(first, &second[..first.len()], "unchanged overlay leaves the prior request prefix intact");
 }
 
 /// A model reply of `n` text chunks (`word0 word1 ...`), then a stop.
@@ -1404,4 +1469,221 @@ async fn privacy_shield_sends_placeholders_and_keeps_real_values_on_this_compute
         .map(|f| f["value"].as_str().unwrap())
         .collect();
     assert_eq!(values, ["jane.doe@example.com", "bob@example.com"]);
+}
+
+/// Each `chat:turn`'s request as the scripted model got it, title calls left out.
+fn turn_requests(model: &ScriptedModel) -> Vec<Value> {
+    let titling = |r: &Value| {
+        r["messages"].as_array().is_some_and(|m| {
+            m.iter().any(|m| m["content"].as_str().is_some_and(|c| c.starts_with("Name this chat for a sidebar list")))
+        })
+    };
+    model.requests.lock().unwrap().iter().filter(|r| !titling(r)).cloned().collect()
+}
+
+fn memory_note(rig: &TurnRig, id: &str, title: &str, body: &str, at: u64) {
+    tagged_note(rig, id, title, body, at, "always");
+}
+
+fn tagged_note(rig: &TurnRig, id: &str, title: &str, body: &str, at: u64, tags: &str) {
+    let dir = rig.data.join("memory");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join(format!("{id}.md")),
+        format!("---\nid: {id}\nscope: global\ntitle: {title}\ntags: [{tags}]\ncreatedAt: {at}\nupdatedAt: {at}\n---\n{body}\n"),
+    )
+    .unwrap();
+}
+
+/// The KV-cache contract: a turn's request starts with the previous turn's
+/// request, byte for byte, so a local model reuses what it already computed.
+/// What changes from turn to turn (connector snippets, attachments, memory
+/// saved mid-chat) rides on that turn's own message, and is sent the same way
+/// on every later turn.
+#[tokio::test(flavor = "multi_thread")]
+async fn each_request_starts_with_the_one_before_so_the_prompt_cache_holds() {
+    let session = json!({
+        "id": "s_kv", "title": "Named", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("kv-prefix", session);
+    memory_note(&rig, "m_name", "Name", "The user is called Ada.", 1);
+    let model = scripted_model(vec![say_text("one"), say_text("two"), say_text("three")]).await;
+    let note = rig.workspace.join("notes.txt");
+    std::fs::write(&note, "turn one attachment\n").unwrap();
+
+    let turn = |id: &str, text: &str, snippet: Option<&str>, attached: Option<&std::path::Path>| {
+        let mut opts = json!({ "text": text });
+        if let Some(p) = attached {
+            opts["attachedPaths"] = json!([p.to_string_lossy()]);
+        }
+        let mut spec = turn_spec(&rig, &model, id, "s_kv", opts);
+        if let Some(body) = snippet {
+            spec["facts"]["connectorSnippets"] = json!([{ "label": "Inbox", "origin": "gmail", "body": body }]);
+        }
+        spec
+    };
+    let run = |spec: Value, id: &'static str| {
+        let port = rig.d.port;
+        let rig = &rig;
+        async move {
+            let (status, body) = post(port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+            assert_eq!(status, 200, "{body}");
+            let (_, end) = turn_record(rig, id, "s_kv").await;
+            assert_eq!(end["stop"], "complete", "{end}");
+        }
+    };
+
+    run(turn("t1", "first", Some("SNIPPET-ONE"), Some(&note)), "t1").await;
+    // Saved between turns, as the `remember` tool would.
+    memory_note(&rig, "m_editor", "Editor", "The user edits in Zed.", 2);
+    run(turn("t2", "second", Some("SNIPPET-TWO"), None), "t2").await;
+    run(turn("t3", "third", None, None), "t3").await;
+
+    let reqs = turn_requests(&model);
+    assert_eq!(reqs.len(), 3, "{reqs:?}");
+    let msgs = |r: &Value| r["messages"].as_array().unwrap().clone();
+    let (m1, m2, m3) = (msgs(&reqs[0]), msgs(&reqs[1]), msgs(&reqs[2]));
+    assert_eq!(m2[..m1.len()], m1[..], "turn 2 re-sends turn 1's request unchanged");
+    assert_eq!(m3[..m2.len()], m2[..], "turn 3 re-sends turn 2's request unchanged");
+    assert_eq!(reqs[0]["tools"], reqs[2]["tools"]);
+
+    let system = m1[0]["content"].as_str().unwrap();
+    assert_eq!(m1[0]["role"], "system");
+    assert!(system.contains("The user is called Ada."), "the frame's memory is in the system prompt");
+    assert!(system.contains("Always run the tests."), "guidelines stay in the system prompt");
+    for per_turn in ["SNIPPET-ONE", "SNIPPET-TWO", "turn one attachment", "Zed"] {
+        assert!(!system.contains(per_turn), "{per_turn} is not in the system prompt");
+    }
+    let content = |m: &Value| m["content"].as_str().unwrap_or_default().to_string();
+    let first = content(m1.last().unwrap());
+    assert!(first.starts_with("Additional context provided with this message:"), "{first}");
+    assert!(first.contains("SNIPPET-ONE") && first.contains("turn one attachment") && first.ends_with("first"));
+    let second = content(m2.last().unwrap());
+    assert!(second.contains("SNIPPET-TWO") && second.contains("# Memory saved or changed: Editor"), "{second}");
+    assert!(!second.contains("SNIPPET-ONE") && !second.contains("turn one attachment"), "{second}");
+    assert_eq!(content(m3.last().unwrap()), "third", "nothing new, nothing announced twice");
+
+    // The transcript keeps each message's context, so the next turn sends it again.
+    let saved = saved_session(&rig, "s_kv");
+    let users: Vec<&Value> = saved["messages"].as_array().unwrap().iter().filter(|m| m["role"] == "user").collect();
+    assert_eq!(users[0]["content"], "first", "the user's own text is unchanged");
+    assert!(users[0]["turnContext"].as_str().unwrap().contains("SNIPPET-ONE"));
+    assert!(users[2].get("turnContext").is_none());
+    assert_eq!(saved["memoryFrame"]["notes"].as_array().unwrap().len(), 1);
+}
+
+/// #3143: another computer's chat, synced here through Nekko Cloud, names its home and is a
+/// read-only copy. A send is refused before anything is admitted or reaches a model.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_chat_from_another_computer_takes_no_turn_here() {
+    let session = json!({
+        "id": "s_elsewhere", "title": "From the laptop", "workspaceId": "w1", "messages": [],
+        "createdAt": 1, "updatedAt": 1, "home": { "deviceId": "dev-laptop", "device": "Laptop" }
+    });
+    let rig = turn_rig("elsewhere", session);
+    let model = scripted_model(vec![say_text("never")]).await;
+    let provider = json!({
+        "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true,
+        "baseUrl": format!("http://127.0.0.1:{}/v1", model.port),
+    });
+    let settings = json!({
+        "providers": [provider],
+        "workspaces": [{ "id": "w1", "name": "project", "path": rig.workspace.to_string_lossy() }],
+        "defaultChatMode": "yolo",
+    });
+    write_settings(&rig, settings).await;
+    let opts = json!({ "sessionId": "s_elsewhere", "providerId": "p1", "modelId": "synthetic", "text": "hello" });
+    let (status, refused) = post(rig.d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
+    assert_eq!(status, 400, "{refused}");
+    assert!(refused.to_string().contains("belongs to Laptop"), "{refused}");
+    assert!(model.requests.lock().unwrap().is_empty(), "a copy never reaches a model");
+    assert!(saved_session(&rig, "s_elsewhere")["messages"].as_array().unwrap().is_empty());
+}
+
+/// Memory recall (#3276): the system prompt keeps the core (notes tagged
+/// `always`); any other note reaches the model on the message whose words
+/// match it, once per chat, and the prompt's prefix still never moves.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_message_recalls_the_notes_it_is_about_and_the_core_stays_put() {
+    let session = json!({
+        "id": "s_recall", "title": "Named", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("memory-recall", session);
+    tagged_note(&rig, "m_style", "Reply style", "Answer briefly.", 4, "always");
+    tagged_note(&rig, "m_deploy", "Deploy", "Deploys go through `fly deploy` from main.", 3, "");
+    tagged_note(&rig, "m_cat", "Cat", "The user has a cat called Miso.", 2, "");
+    let model = scripted_model(vec![say_text("one"), say_text("two"), say_text("three")]).await;
+    for (id, text) in
+        [("r1", "How do I deploy the app?"), ("r2", "The deployment failed again"), ("r3", "Tell me about my cat")]
+    {
+        let spec = turn_spec(&rig, &model, id, "s_recall", json!({ "text": text }));
+        let (status, body) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+        assert_eq!(status, 200, "{body}");
+        let (_, end) = turn_record(&rig, id, "s_recall").await;
+        assert_eq!(end["stop"], "complete", "{end}");
+    }
+    let reqs = turn_requests(&model);
+    assert_eq!(reqs.len(), 3, "{reqs:?}");
+    let msgs = |r: &Value| r["messages"].as_array().unwrap().clone();
+    let (m1, m2, m3) = (msgs(&reqs[0]), msgs(&reqs[1]), msgs(&reqs[2]));
+    assert_eq!(m2[..m1.len()], m1[..], "turn 2 re-sends turn 1's request unchanged");
+    assert_eq!(m3[..m2.len()], m2[..], "turn 3 re-sends turn 2's request unchanged");
+
+    let system = m1[0]["content"].as_str().unwrap();
+    assert!(system.contains("# Memory: Reply style\nAnswer briefly."), "the core is in the system prompt");
+    assert!(!system.contains("fly deploy") && !system.contains("Miso"), "{system}");
+    let last = |m: &[Value]| m.last().unwrap()["content"].as_str().unwrap_or_default().to_string();
+    let first = last(&m1);
+    assert!(first.contains("# Memory recalled: Deploy\nDeploys go through `fly deploy` from main."), "{first}");
+    assert!(!first.contains("Miso") && first.ends_with("How do I deploy the app?"), "{first}");
+    assert_eq!(last(&m2), "The deployment failed again", "a note already shown is not recalled again");
+    let third = last(&m3);
+    assert!(third.contains("# Memory recalled: Cat") && !third.contains("fly deploy"), "{third}");
+
+    let saved = saved_session(&rig, "s_recall");
+    let frame = &saved["memoryFrame"];
+    assert_eq!(frame["notes"].as_array().unwrap().len(), 1, "{frame}");
+    let known: Vec<&str> = frame["known"].as_object().unwrap().keys().map(String::as_str).collect();
+    assert_eq!(known, ["m_style", "m_deploy", "m_cat"], "every note the model saw");
+}
+
+/// `recall_memory` (#3276): a message in other words or another language than
+/// the note recalls nothing by itself; the model searches in the note's own
+/// words, gets the note, and a later message does not recall it again.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_model_looks_up_a_note_the_message_did_not_recall() {
+    let session = json!({
+        "id": "s_lookup", "title": "Named", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("memory-lookup", session);
+    tagged_note(&rig, "m_editor", "Editor", "The user edits code in Zed.", 2, "");
+    let model = scripted_model(vec![
+        call_tool("c1", "recall_memory", json!({ "query": "editor" })),
+        say_text("Zed."),
+        say_text("ok"),
+    ])
+    .await;
+    for (id, text) in [("l1", "Quale programma uso per scrivere?"), ("l2", "Change the editor theme")] {
+        let spec = turn_spec(&rig, &model, id, "s_lookup", json!({ "text": text }));
+        let (status, body) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+        assert_eq!(status, 200, "{body}");
+        let (_, end) = turn_record(&rig, id, "s_lookup").await;
+        assert_eq!(end["stop"], "complete", "{end}");
+    }
+    let reqs = turn_requests(&model);
+    assert_eq!(reqs.len(), 3, "{reqs:?}");
+    let tools: Vec<&str> = reqs[0]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|t| t.pointer("/function/name").and_then(Value::as_str))
+        .collect();
+    assert!(tools.contains(&"recall_memory"), "{tools:?}");
+    let first = reqs[0]["messages"].as_array().unwrap().last().unwrap()["content"].as_str().unwrap().to_string();
+    assert_eq!(first, "Quale programma uso per scrivere?", "nothing recalled by the Italian words");
+    let answer = reqs[1]["messages"].as_array().unwrap().last().unwrap().clone();
+    assert_eq!(answer["role"], "tool", "{answer}");
+    assert!(answer["content"].as_str().unwrap().contains("# Memory: Editor\nThe user edits code in Zed."), "{answer}");
+    let later = reqs[2]["messages"].as_array().unwrap().last().unwrap()["content"].as_str().unwrap().to_string();
+    assert_eq!(later, "Change the editor theme", "looked up once, never recalled again");
 }

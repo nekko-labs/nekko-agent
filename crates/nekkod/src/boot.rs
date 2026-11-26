@@ -12,7 +12,9 @@
 //! - a chat that runs out of context with nobody watching is compacted and
 //!   carried on (`startAutoContinue`, auto_continue.rs);
 //! - a chat the user asked to continue when its usage limit resets is armed
-//!   again (limit_resume.rs).
+//!   again (limit_resume.rs);
+//! - a Hypergate gateway saved before the renames gets its name and its own
+//!   agent token back (`hypergate::start_migration`).
 
 use crate::routes::Ctx;
 use serde_json::{Map, Value, json};
@@ -37,6 +39,8 @@ pub fn start(ctx: &Ctx, auto_start_engine: bool) {
         tokio::spawn(async move { start_engine(&ctx, auto_start_engine).await });
     }
     keep_awake(ctx);
+    // A Hypergate gateway saved before the renames: its name and token brought forward.
+    crate::hypergate::start_migration(ctx);
     {
         // Sub-agent chats that stopped recording early, from Claude Code's own copy (#2645).
         let store = ctx.sessions.clone();
@@ -112,6 +116,7 @@ pub fn reconcile_interrupted(store: &nekko_store::SessionStore) -> usize {
                     list.push(interrupted_reply());
                 }
             }
+            crate::orchestrate_state::interrupt_spawn(s);
             s.remove("activeRun");
             Ok(true)
         });

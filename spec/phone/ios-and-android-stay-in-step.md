@@ -40,7 +40,6 @@ Both implementations use scoped counts and initial English `status`, `send to NA
 
 | Capability | iPhone | Android | Gap / follow-up |
 | --- | --- | --- | --- |
-| Live card level preview ([#2928](https://github.com/nekko-labs/nekko-agent/issues/2928), 2026-11-17) | Settings shows the Lock Screen card built at the chosen level, with the chat lines that level sends under it | Radio rows with text only, no preview | [#2933](https://github.com/nekko-labs/nekko-agent/issues/2933) |
 | Voice without foregrounding | iOS 18+: authenticated LiveActivityIntent + AudioRecordingIntent path implemented, hardware unverified | Notification opens foreground sheet behind app lock; explicit Listen required; no background microphone | No-app goal remains unmet on Android. Track under dashboard #2046; validate supported native paths before claiming parity. |
 | Older OS fallback | iOS 17: Open app for voice opens list without auto-listening | Foreground sheet as above | iOS 17 is an app handoff, not equivalent background voice or an app-wide voice sheet. |
 | Recognition privacy | Computer transcription or on-device-only iOS recognizer | Existing Dictation engine; phone provider may use network recognition | Do not promise identical on-device-only guarantees. |
@@ -50,8 +49,21 @@ Both implementations use scoped counts and initial English `status`, `send to NA
 | Nekko in the car: voice-first, active work, Results of voice commands ([spec](carplay.md)) | CarPlay app built 2026-11-14 ([#2781](https://github.com/nekko-labs/nekko-agent/issues/2781)): Linux-tested logic, not yet in CarPlay Simulator; waits on Apple's entitlement | Android Auto as a messaging app through notifications (2026-11-17): a finished reply read aloud in the car, with Reply. No Work list, Results, Allow/Deny or Stop: Android Auto has no category for a voice agent | [#2782](https://github.com/nekko-labs/nekko-agent/issues/2782) |
 | GitHub star ask under the 10th and 50th reply ([spec](../platform/github-star-ask.md)) | Built 2026-11-09 ([#2423](https://github.com/nekko-labs/nekko-agent/issues/2423)): inline card, link to the repository only, verified in Native iOS CI, not on a device | Built 2026-11-09: inline card, link to the repository only, emulator-verified, not on a physical phone | Both: the native store rating request once on the App Store and Google Play (planned). |
 | Open your own computer from an organization's list with no pairing ([spec](../platform/organizations.md), desktop since #2806) | Separate issue #2804 | Protocol layer only (`FleetLink`, unit-tested); no Cloud sign-in, keyring unlock or org list in the app | [#2835](https://github.com/nekko-labs/nekko-agent/issues/2835) |
-| Paid cloud clip picker with a live total ([spec](../agents/media-tools-for-chat-agents.md), desktop since #2973 step 6) | Plain stepped questions, then a separate approval with the total | Same | [#3038](https://github.com/nekko-labs/nekko-agent/issues/3038) |
+| Paid cloud clip picker with a live total ([spec](../agents/media-tools-for-chat-agents.md), desktop since #2973 step 6) | Built 2026-11-20 (`ClipPickerCard`, logic in `ClipPicker`): segmented Length, Audio and Resolution, a Total that updates, the cannot-be-stopped warning with where the prompt goes, Cancel and **Make clip · $2.40**; answers carry the total, so no second approval. Logic Linux-tested; app target not built here and no simulator evidence yet | Built 2026-11-20 (`ClipPickerCard`, logic in `ClipPicker.kt`; JVM-tested, no emulator evidence yet) | None: both phones have it ([#3038](https://github.com/nekko-labs/nekko-agent/issues/3038)); visual evidence pending on both. |
+| Agent-made pictures under the tool row, and the **Making a clip** chip ([spec](../agents/media-tools-for-chat-agents.md), desktop since #2973) | Built 2026-11-20: `generate_image` / `edit_image` pictures load on demand through `session:photo` and open in the image viewer; the clip chip shows stage and **Cancel clip**; clips are never a timed wake-up. Logic Linux-tested; no simulator evidence yet | Built 2026-11-20: the same pictures through `session:photo`, opened full screen on a tap; the clip chip with **Cancel clip**. JVM-tested; no emulator evidence yet | None: both phones have it; visual evidence pending on both. |
 | Take back an always-allowed MCP tool or a known recipient (desktop since #2960, decisions 0054 and 0063) | Built 2026-11-17: Model panel → **Allowed without asking** (`ChatGrantsList`), each removal signed with Face ID or the passcode (`knownRecipients` joins `PHONE_GUARDED_OPTION_KEYS`); NekkoKit-tested, app target CI-built | Built 2026-11-18: Model sheet → **Allowed without asking** (`GrantsSheet`), each removal signed with the screen lock through `setRunOption`; controller JVM-tested | None: both phones have it. |
+
+## New chat: model on device, the connect checklist, limits and picker detail (#2950)
+
+| Feature | iPhone | Android | Gap / follow-up |
+| --- | --- | --- | --- |
+| Model ⟶ device on one line; the provider, then effort's word give way, then both names shorten | Built 2026-11-17 (#2952) | Built 2026-11-25: the device half opens Run on (Automatic, the computers, This phone); the Run on card is gone | Android's This phone opens the phone's own chats screen, as before: phone chats don't start from New chat |
+| No "no tools" note; the open phone chat says model ⟶ This phone once | Built (#2952) | Built 2026-11-25 | None |
+| Connect checklist over the first message, then the closeable note, with Undo | Built (#2952) | Built 2026-11-25 (`ConnectChecklist` ported with the same cases) | None |
+| The limit line in New chat and above an open chat's message box; phone keys from the last answer's rate-limit headers | Built (#2953) | Built 2026-11-25 (`LimitLine`, `PhoneRateLimits.providerLimits`, same cases) | None |
+| Model picker: size or context per model, dated snapshots folded, limits under each provider | Built (#2954) | Built 2026-11-25 (`ModelMeta`, `ModelSnapshots`, same cases) | None |
+
+Both: JVM or Linux unit tests only; neither app's screens have been looked at on a device or emulator yet.
 
 ## Pending response messages (#2476, #2497)
 
@@ -85,10 +97,8 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([repo
 | Apple Watch glance | No Wear OS app; needs a decision | [#2123](https://github.com/nekko-labs/nekko-agent/issues/2123) |
 | Background grace period | The keep-alive service holds the socket instead | AN-28 |
 | CarPlay: voice-first, active work across computers, command results (iPhone #2783, 2026-11-14) | Replies read aloud and answered by voice in Android Auto (notifications); no Work list, Results, approvals or Stop | [#2782](https://github.com/nekko-labs/nekko-agent/issues/2782) |
-| New chat: model ⟶ device on one line, the connect checklist and note, the limit line, picker size and context (iPhone #2921-#2925, 2026-11-17) | Still two rows and the "no tools" note | [#2950](https://github.com/nekko-labs/nekko-agent/issues/2950) |
 | Real brand marks on sign-in and provider headings (iPhone #2930, 2026-11-17) | Android has no Nekko Cloud sign-in yet; provider marks exist on chat rows only | [#2938](https://github.com/nekko-labs/nekko-agent/issues/2938) |
-| Models on This Phone: provider buttons, Anthropic choice with a disabled Claude subscription and a sad Nekko (iPhone #2931, 2026-11-17) | Not started | [#2939](https://github.com/nekko-labs/nekko-agent/issues/2939) |
-| Settings: Nekko Cloud profile on top, Computers second, avatar rows with a plus (iPhone #2929, 2026-11-17) | Not started | [#2940](https://github.com/nekko-labs/nekko-agent/issues/2940) |
+| Settings: Nekko Cloud profile on top (iPhone #2929, 2026-11-17) | Computers first, Models on This phone, avatar rows with a plus and the quiet design built 2026-11-26; the profile row waits for Nekko Cloud sign-in on Android (#2835) | [#2940](https://github.com/nekko-labs/nekko-agent/issues/2940) |
 
 Android features the iPhone lacks have not been audited yet.
 
@@ -106,8 +116,30 @@ Nothing is recorded as a true OS exclusive yet.
 | --- | --- | --- | --- |
 | The chat's secret box when the agent asks for a secret (`request_secret`) | Not implemented: the chat looks busy while it waits | Not implemented: the chat looks busy while it waits | [#2603](https://github.com/nekko-labs/nekko-agent/issues/2603), [#2604](https://github.com/nekko-labs/nekko-agent/issues/2604) |
 
+## The computer a synced chat came from (desktop first, #3143)
+
+| Feature | iPhone | Android | Follow-up |
+| --- | --- | --- | --- |
+| A synced chat names the computer it belongs to, and chats group by computer | Not implemented: synced chats show without their computer | Not implemented: no Nekko Cloud sync screens yet (#2835) | [#3147](https://github.com/nekko-labs/nekko-agent/issues/3147) |
+
 ## Quiet transcript follow-up
 
 | Feature | iPhone | Android | Follow-up |
 | --- | --- | --- | --- |
 | Collapsed progress notes and continuation summaries | Implemented on #2452 branch, native-unverified | Same folds (2026-11-13); the system bar hides the keyboard | None |
+| Saved chats and chat lists written off the main thread, unchanged chats skipped (#3386) | Implemented, unit-tested in NekkoKit | Not implemented: `OfflineFileStore.save` writes synchronously on the caller's thread | https://github.com/nekko-labs/nekko-agent/issues/3419 |
+
+
+## Performance pass (iPhone first, 2026-11-26)
+
+| Feature | iPhone | Android | Follow-up |
+| --- | --- | --- | --- |
+| Relay reconnect backoff has 0 to 50% random jitter (#3385) | Implemented, unit-tested in NekkoProtocol | Not implemented: fixed 1, 2, 4 ... 30 s | https://github.com/nekko-labs/nekko-agent/issues/3392 |
+
+## Performance pass (Android, 2026-11-26)
+
+| Feature | iPhone | Android | Follow-up |
+| --- | --- | --- | --- |
+| Chat re-reads skip the skills read | Implemented (#3388) | Implemented (#3415) | None |
+| Paged chat open (`session:page`, tail first, older on scroll) | Waits for the engine | Waits for the engine | Engine: [#3439](https://github.com/nekko-labs/nekko-agent/issues/3439); client: iPhone [#3388](https://github.com/nekko-labs/nekko-agent/issues/3388), Android [#3415](https://github.com/nekko-labs/nekko-agent/issues/3415). Both use the contract in #3439. |
+

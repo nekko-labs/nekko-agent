@@ -7,6 +7,41 @@ export const NO_STATUS = 'No current run status recorded.';
 export type SubagentStatus = 'working' | 'waiting' | 'completed' | 'failed' | 'stopped';
 export interface SubagentActivity { status: SubagentStatus; detail: string; toolId?: string; text?: string }
 const activities = new Map<string, SubagentActivity>();
+export type SubagentWait = 'approval' | 'question' | 'secret';
+/**
+ * What each chat is waiting on the person for, by call id. Kept apart from the
+ * last-event activity: a sibling tool's result that lands after an approval
+ * request must not hide the approval (#3270).
+ */
+const waits = new Map<string, Map<string, SubagentWait>>();
+const WAIT_DETAIL: Record<SubagentWait, string> = { approval: 'Waiting for approval.', question: 'Waiting for your answer.', secret: 'Waiting for a secret.' };
+function addWait(id: string, callId: string, kind: SubagentWait): void {
+  const mine = waits.get(id) ?? new Map<string, SubagentWait>();
+  mine.set(callId, kind);
+  waits.set(id, mine);
+}
+function dropWait(id: string, callId?: string): void {
+  const mine = waits.get(id);
+  if (!mine) return;
+  if (callId === undefined) mine.clear(); else mine.delete(callId);
+  if (!mine.size) waits.delete(id);
+}
+/** What a chat waits on the person for right now, approval first. */
+export function waitingOn(id: string): SubagentWait | undefined {
+  const kinds = [...(waits.get(id)?.values() ?? [])];
+  return kinds.includes('approval') ? 'approval' : kinds.includes('question') ? 'question' : kinds[0];
+}
+/**
+ * Seed the waits from the host's pending inputs: a window that connects after
+ * a request never gets its event (the engine does not resend waits).
+ */
+export function seedSubagentWaits(pending: Record<string, PendingInput>): void {
+  for (const [id, input] of Object.entries(pending)) {
+    if (input.approval) addWait(id, input.approval.call.id, 'approval');
+    if (input.question) addWait(id, input.question.callId, 'question');
+    if (input.secret) addWait(id, input.secret.callId, 'secret');
+  }
+}
 const delegations = new Map<string, { parentId: string; title: string; startedAt: number; endedAt?: number; childId?: string }>();
 const delegationKey = (parentId: string, callId: string) => JSON.stringify([parentId, callId]);
 const terminal = (activity?: SubagentActivity) => !!activity && ['completed', 'failed', 'stopped'].includes(activity.status);
@@ -43,6 +78,13 @@ export function foldSubagentActivity(event: AgentEvent, now = Date.now()): void 
   } else if (event.type === 'tool_result') {
     const delegation = delegations.get(delegationKey(event.sessionId, event.result.toolCallId));
     if (delegation) delegation.endedAt = now;
+  }
+  switch (event.type) {
+    case 'tool_approval_required': addWait(event.sessionId, event.call.id, 'approval'); break;
+    case 'question': addWait(event.sessionId, event.request?.callId ?? '', 'question'); break;
+    case 'secret_request': addWait(event.sessionId, event.request?.callId ?? '', 'secret'); break;
+    case 'approval_resolved': case 'question_resolved': case 'secret_resolved': dropWait(event.sessionId, event.callId); break;
+    case 'done': case 'error': dropWait(event.sessionId); break;
   }
   const prev = activities.get(event.sessionId);
   let next: SubagentActivity | undefined;
@@ -81,12 +123,37 @@ export function foldSubagentActivity(event: AgentEvent, now = Date.now()): void 
 export function stopSubagentActivity(id: string): void {
   if (activities.has(id)) activities.set(id, { status: 'stopped', detail: 'The run was stopped.' });
 }
-export function resetSubagentActivity(): void { activities.clear(); delegations.clear(); }
+export function resetSubagentActivity(): void { activities.clear(); delegations.clear(); waits.clear(); textSeen.clear(); }
+/** A streamed reply's tail is shown by the rail, but refreshed at most this often. */
+export const ACTIVITY_TEXT_REFRESH_MS = 500;
+const textSeen = new Map<string, { text: string; at: number }>();
+
+/**
+ * What `childActivity` and `waitingOn` would answer for every chat, as one
+ * string: it changes when a status, a detail line or a wait does. A detail that
+ * is the tail of a streaming reply changes with every token, so it counts at
+ * most every ACTIVITY_TEXT_REFRESH_MS, which keeps a rail current without
+ * waking it at frame rate.
+ */
+export function subagentActivitySignature(now = Date.now()): string {
+  let out = '';
+  for (const [id, a] of activities) {
+    if (a.text === undefined) { textSeen.delete(id); out += `${id}:${a.status}:${a.detail}|`; continue; }
+    const seen = textSeen.get(id);
+    if (!seen || (seen.text !== a.text && now - seen.at >= ACTIVITY_TEXT_REFRESH_MS)) textSeen.set(id, { text: a.text, at: now });
+    out += `${id}:${a.status}:t${textSeen.get(id)!.at}|`;
+  }
+  for (const id of waits.keys()) out += `${id}:wait:${waitingOn(id)}|`;
+  return out;
+}
+
 /** Forget one chat's own activity (its delegations stay): a replay folds it again. */
-export function resetSubagentActivityFor(id: string): void { activities.delete(id); }
+export function resetSubagentActivityFor(id: string): void { activities.delete(id); waits.delete(id); }
 
 export function childActivity(child: SessionSummary, running = false, pending?: PendingInput): SubagentActivity {
   if (pending?.question || pending?.approval) return { status: 'waiting', detail: pending.question ? 'Waiting for your answer.' : 'Waiting for approval.' };
+  const wait = waitingOn(child.id);
+  if (wait) return { status: 'waiting', detail: WAIT_DETAIL[wait] };
   const live = activities.get(child.id);
   if (running && (!live || terminal(live))) return { status: 'working', detail: 'Working on the task.' };
   if (live) return live;

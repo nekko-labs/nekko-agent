@@ -5,7 +5,9 @@ import { hasAppChrome } from '../chrome.js';
 import { CloudIcon, ComputerIcon } from '../icons.js';
 import { ModelsView } from './ModelsView.js';
 import { ModelServerView } from './ModelServerView.js';
+import { SystemModels } from '../components/engine/SystemModels.js';
 import { FirstLocalModel } from '../components/engine/FirstLocalModel.js';
+import { forwardWheelToContent } from '../railWheel.js';
 
 /**
  * The page's sections in reading order, as the side menu lists them. Each
@@ -15,6 +17,7 @@ import { FirstLocalModel } from '../components/engine/FirstLocalModel.js';
 export const MODELS_SECTIONS = [
   { id: 'cloud', label: 'Cloud providers', Icon: CloudIcon },
   { id: 'local', label: 'Local model server', Icon: ComputerIcon },
+  { id: 'system', label: 'System models', parent: 'local' },
   { id: 'library', label: 'Models', parent: 'local' },
   { id: 'connections', label: 'Connected servers', parent: 'local' },
 ] as const;
@@ -54,6 +57,8 @@ export function ModelsWorkspace() {
     const id = find(to) ? to : 'local';
     const target = find(id);
     if (!target) return;
+    // A folded section (System models) opens when asked for by name.
+    if (target instanceof HTMLDetailsElement) target.open = true;
     setActive(id);
     jumping.current = true;
     target.scrollIntoView?.({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
@@ -77,11 +82,11 @@ export function ModelsWorkspace() {
     shown.current = view;
   }, [view, goTo]);
   const fullLocal = firstRun.value === false;
-  return <div className="models-layout">
+  return <div className="models-layout" onWheel={(e) => { releaseJump(); forwardWheelToContent(e, scrollRef.current); }}>
     <aside className="models-rail">
       {!hasAppChrome && <h1 className="view-title">Models</h1>}
       <nav aria-label="Models sections" className="models-navigation">
-        {MODELS_SECTIONS.filter((s) => !('parent' in s) || fullLocal).map((s) => (
+        {MODELS_SECTIONS.filter((s) => !('parent' in s) || s.id === 'system' || fullLocal).map((s) => (
           <button
             key={s.id}
             type="button"
@@ -106,6 +111,7 @@ export function ModelsWorkspace() {
       </section>
       <section data-models-section="local" className="models-section models-section-local" aria-labelledby="models-local-title">
         <h2 id="models-local-title" className="models-section-heading"><ComputerIcon className="h-6 w-6 shrink-0" /> Local model server</h2>
+        <div className="mb-(--q-section)"><SystemModels /></div>
         {firstRun.value === null ? null : firstRun.value ? <FirstLocalModel onShowAll={showAll} /> : <>
           <ModelServerView embedded />
           <div data-models-section="connections" className="models-local-connections">

@@ -7,9 +7,10 @@ import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AgentEvent, ComputerStatus, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
-import { AUTO_MODEL_ID, computerIdOf, siteFolder, siteName } from '@nekko-agent/shared';
-import { useServedSites } from '../servedSites.js';
+import { AUTO_MODEL_ID, computerIdOf } from '@nekko-agent/shared';
+import { SidebarFileBrowser } from './SidebarFileBrowser.js';
 import { ComputerGlyph, thisComputerName } from '../components/ComputerChip.js';
+import { connectedTwin, syncedComputer, syncedHomes, withoutShadowedCopies } from '../syncedComputers.js';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore, type Workspace } from '../store.js';
 import { runningSessionIds } from '../liveRuns.js';
@@ -18,9 +19,8 @@ import { StatusIcon, WorkspaceCard, agentStatusOfLane, chatRenameTitle, type Age
 import { GroupActivity } from '../components/GroupActivity.js';
 import { ChatFinder } from '../components/ChatFinder.js';
 import { ArchiveIcon, CopyIcon, PlusIcon, SearchIcon, SlidersIcon, TerminalIcon } from '../icons.js';
-import { FolderOpenIcon, GfBotsIcon, GfGlobeIcon, GfImageIcon, GfTerminalIcon } from '../gentleface-icons.js';
+import { FolderOpenIcon, GfBotsIcon, GfImageIcon, GfTerminalIcon } from '../gentleface-icons.js';
 import { SlideToggle, type SlideOption } from '../components/library/SlideToggle.js';
-import { useWallLogs } from '../wallLogs.js';
 import { SHORTCUTS } from '../shortcuts.js';
 import { ARCHIVE_ROW_ATTR, archiveWithExit, findArchiveRow } from '../archiveExit.js';
 import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
@@ -156,7 +156,6 @@ const SHOWS_ICON: Record<AgentPanelShows, (p: { className?: string }) => React.R
   agents: GfBotsIcon,
   terminals: GfTerminalIcon,
   media: GfImageIcon,
-  browsers: GfGlobeIcon,
   files: FolderOpenIcon,
 };
 const SHOWS_OPTIONS: ReadonlyArray<SlideOption<AgentPanelShows>> = AGENT_PANEL_SHOWS.map(({ id, label }) => {
@@ -168,8 +167,7 @@ const SHOWS_EMPTY: Record<AgentPanelShows, string> = {
   agents: 'No active agents',
   terminals: 'No terminals open',
   media: 'No photo or video chats',
-  browsers: 'No agents to open a browser beside',
-  files: 'No agents whose files to browse',
+  files: 'No folders connected',
 };
 
 type SidebarActions = {
@@ -177,10 +175,12 @@ type SidebarActions = {
   onOpenTerminal: (id: string) => void;
   selectedId: string | null;
   onCreate: (kind: 'chat' | 'image' | 'video' | 'terminal', projectId?: string, shell?: string) => Promise<void>;
-  /** Open an agent with its Browser or Files drawer out (the Browsers and Files views). */
-  onOpenCompanion?: (sessionId: string, kind: 'browser' | 'files') => void;
-  /** Open a Browser on a page, or Files on a folder, as a window of its own: no agent needed (#2824). */
-  onOpenWindow?: (kind: 'browser' | 'files', refId: string) => void;
+  /** Open a file, editable, in a window of its own (the Files view). */
+  onOpenFile?: (path: string) => void;
+  /** Files open in the agent windows, listed at the top of the Files view. */
+  openFiles?: readonly string[];
+  /** The file whose window is the active one. */
+  activeFile?: string | null;
   /** Hide the panel; the Agents toolbar offers it back. */
   onClosePanel?: () => void;
   /** The colour of the zone showing each agent on the board, by chat or terminal id. */
@@ -190,14 +190,13 @@ type SidebarActions = {
 /**
  * The Agent board's panel beside the wall. A switcher at its top picks which
  * kind of window it lists: the agent cards (grouped), terminals, photo and
- * video chats, or the agents' browsers and files.
+ * video chats, or a browser of the files in the connected folders.
  */
-export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate, onOpenCompanion, onOpenWindow, onClosePanel, zoneTints }: SidebarActions) {
+export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate, onOpenFile, openFiles = [], activeFile, onClosePanel, zoneTints }: SidebarActions) {
   const [shows, setShowsState] = useState<AgentPanelShows>(readAgentPanelShows);
   const setShows = (next: AgentPanelShows) => { setShowsState(next); saveAgentPanelShows(next); };
-  const drawer = useWallLogs(useShallow((d) => ({ sessionId: d.closing ? null : d.sessionId, kind: d.kind })));
   const {
-    sessions, terminals, workspaces, settings,
+    sessions: listedSessions, terminals, workspaces, settings,
     refreshSessions, refreshTerminals,
     reorderWorkspaces, layoutChats, layoutTerminals,
     archiveWorkspace, archiveChat,
@@ -216,6 +215,8 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
       archiveChat: s.archiveChat,
     })),
   );
+  // A chat a connected computer shows live and Nekko Cloud also synced here is listed once, live (#3143).
+  const sessions = withoutShadowedCopies(listedSessions);
   const newChat = (projectId?: string) => onCreate('chat', projectId ?? activeProjectId());
   const activeProjectId = () => useStore.getState().activeProjectId ?? undefined;
   const newTerminal = (projectId?: string) => onCreate('terminal', projectId);
@@ -346,7 +347,8 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   /** Groups whose archived chats are expanded under their active ones. */
   const archiveTipSessionId = useStore((s) => s.archiveTipSessionId);
   const computers = useStore((s) => s.computers);
-  const computersShown = useShown('computers', { computers: computers.length > 0 });
+  const homes = syncedHomes(sessions);
+  const computersShown = useShown('computers', { computers: computers.length > 0 || homes.length > 0 });
   const computerCatalogs = useStore((s) => s.computerCatalogs);
   const showTips = useStore((s) => s.settings?.showTips !== false);
   const [showArchived, setShowArchived] = useState<Set<string>>(new Set());
@@ -568,15 +570,22 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
         return [{ key: b.key, name: b.name, ws: b.ws, items, archived }];
       });
     }
-    const all = order(buckets.flatMap((b) => bucketEntries(b.key)).filter(shown));
+    // Across projects, so General (where other computers' synced chats file) can't bury this one's newest under a group's 20-card cut (#3355).
+    const all = buckets.flatMap((b) => bucketEntries(b.key)).filter(shown).sort((a, b) => compareCards(view)(sortable(a), sortable(b)));
     const archived = archivedInGroup(sessions, '*', () => '*').filter(shownArchived);
     const archivedGroups: PanelGroup[] = archived.length > 0 ? [{ key: ARCHIVED_GROUP, name: 'Archived', items: [], archived }] : [];
     if (view.groupBy === 'none') return [{ key: 'all', name: 'All agents', items: all, archived: [], bare: true }, ...archivedGroups];
     if (view.groupBy === 'computer' && computersShown) {
-      const here = (e: Entry) => !computerIdOf(e.s?.id);
+      const here = (e: Entry) => !computerIdOf(e.s?.id) && !e.s?.home;
+      // A synced chat joins the connected computer of the same name, or its own group (#3143).
+      const twinOf = (e: Entry) => (e.s?.home ? connectedTwin(e.s.home, computers) : null);
+      const onlySynced = homes.filter((h) => !connectedTwin(h, computers));
       return [
         { key: 'computer:here', name: thisComputerName(), items: all.filter(here), archived: [] },
-        ...computers.map((c): PanelGroup => ({ key: 'computer:' + c.id, name: c.name, computer: c, items: all.filter((e) => computerIdOf(e.s?.id) === c.id), archived: [] })),
+        ...computers.map((c): PanelGroup => ({ key: 'computer:' + c.id, name: c.name, computer: c, items: all.filter((e) => computerIdOf(e.s?.id) === c.id || twinOf(e)?.id === c.id), archived: [] })),
+        ...onlySynced.map((h): PanelGroup => ({ key: 'computer:cloud:' + h.deviceId, name: syncedComputer(h, computers).name, items: all.filter((e) => e.s?.home?.deviceId === h.deviceId && !twinOf(e)), archived: [] }))
+          // A synced computer has a group while it has active chats here (its archived ones are under Archived).
+          .filter((g) => g.items.length > 0 || view.showEmptyGroups),
         ...archivedGroups,
       ];
     }
@@ -596,22 +605,9 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     : shows === 'media' ? utilityGroup('media', '__media', 'Photos and videos')
       : shows === 'agents' ? agentGroups()
         : [];
-  /** Browsers and Files: one row per active agent, in the panel's order, whose drawer that row opens. */
-  const companionKind = shows === 'browsers' ? 'browser' as const : shows === 'files' ? 'files' as const : null;
-  const companionAgents = companionKind
-    ? order(buckets.flatMap((b) => bucketEntries(b.key)).filter((e) => !!e.s && !utilityKind(e))).flatMap((e) => (e.s ? [e.s] : []))
-    : [];
-  const folderName = (s: SessionSummary) => (settings?.workspaces ?? []).find((p) => p.id === s.workspaceId)?.name ?? remoteFolders.find((p) => p.id === s.workspaceId)?.name;
-  /** Browsers: the pages served here. Files: the folders connected on this computer (repositories among them). */
-  const servedSites = useServedSites(shows === 'browsers');
   const localFolders = settings?.workspaces ?? [];
-  const openWindow = (kind: 'browser' | 'files', refId: string) => {
-    onOpenWindow?.(kind, refId);
-    setMobileNav(false);
-  };
-  const openCompanion = (id: string, kind: 'browser' | 'files') => {
-    if (onOpenCompanion) onOpenCompanion(id, kind);
-    else onOpenChat(id);
+  const openFile = (path: string) => {
+    onOpenFile?.(path);
     setMobileNav(false);
   };
 
@@ -640,7 +636,8 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     let cancelled = false;
     void prefetchSessionPrs(visiblePrIds.split('\0'), () => freshSessionPrs(useStore.getState().prsBySession, prReadAt.current),
       (id) => { prReadAt.current.set(id, Date.now()); return useStore.getState().refreshSessionPrs(id); },
-      prReadsInFlight.current, () => cancelled);
+      prReadsInFlight.current, () => cancelled,
+      (batch) => { const now = Date.now(); for (const id of batch) prReadAt.current.set(id, now); return useStore.getState().refreshSessionPrsMany(batch); });
     return () => { cancelled = true; };
   }, [sessions, visiblePrIds, prTick]);
 
@@ -817,70 +814,10 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
         <SlideToggle label="Show windows" options={SHOWS_OPTIONS} value={shows} onChange={setShows} iconOnly className="agent-panel-shows" />
       </div>
       <div ref={listRef} className="agent-panel-list min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-2 pb-3" data-agent-panel-list>
-        {!companionKind && groups.length === 0 && (
+        {shows !== 'files' && groups.length === 0 && (
           <p className="px-3 py-2 text-xs text-ink-faint" data-agent-panel-empty>{SHOWS_EMPTY[shows]}</p>
         )}
-        {companionKind === 'browser' && onOpenWindow && <div data-served-sites>
-          {(servedSites ?? []).map((site) => {
-            const folder = siteFolder(site, localFolders);
-            return (
-              <button key={site.url} type="button" data-served-site={site.port}
-                className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors duration-150 hover:bg-surface-2"
-                title={`Open ${site.url}${site.process ? ` (${site.process})` : ''}`}
-                onClick={() => openWindow('browser', site.url)}>
-                <GfGlobeIcon className="h-4 w-4 shrink-0 text-ink-faint" />
-                <span className="min-w-0 flex-1 truncate text-sm" dir="auto">{siteName(site)}</span>
-                <span className="max-w-[40%] shrink-0 truncate text-2xs text-ink-faint" dir="auto">{folder?.name ?? `:${site.port}`}</span>
-              </button>
-            );
-          })}
-          {servedSites?.length === 0 && <p className="px-2 py-1.5 text-xs text-ink-faint" data-agent-panel-empty>No pages served on this computer</p>}
-          <button type="button" data-blank-browser
-            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-ink-faint transition-colors duration-150 hover:bg-surface-2 hover:text-ink"
-            title="Open a browser and type an address"
-            onClick={() => openWindow('browser', 'about:blank')}>
-            <PlusIcon className="h-4 w-4 shrink-0" />
-            <span className="min-w-0 flex-1 truncate text-sm">New browser</span>
-          </button>
-        </div>}
-        {companionKind === 'files' && onOpenWindow && <div data-connected-folders>
-          {localFolders.map((f) => (
-            <button key={f.id} type="button" data-connected-folder={f.id}
-              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors duration-150 hover:bg-surface-2"
-              title={`Browse ${f.path}`}
-              onClick={() => openWindow('files', f.path)}>
-              <FolderOpenIcon className="h-4 w-4 shrink-0 text-ink-faint" />
-              <span className="min-w-0 flex-1 truncate text-sm" dir="auto">{f.name}</span>
-              {f.repo && <span className="max-w-[45%] shrink-0 truncate text-2xs text-ink-faint" dir="auto">{f.repo.fullName}</span>}
-            </button>
-          ))}
-          {localFolders.length === 0 && <p className="px-2 py-1.5 text-xs text-ink-faint" data-agent-panel-empty>No folders connected</p>}
-        </div>}
-        {companionKind && !onOpenWindow && companionAgents.length === 0 && (
-          <p className="px-3 py-2 text-xs text-ink-faint" data-agent-panel-empty>{SHOWS_EMPTY[shows]}</p>
-        )}
-        {companionKind && onOpenWindow && companionAgents.length > 0 && (
-          <p className="px-2 pb-1 pt-4 text-2xs font-semibold text-ink-faint" data-companion-heading>Beside an agent</p>
-        )}
-        {companionKind && companionAgents.map((s) => {
-          const Icon = companionKind === 'browser' ? GfGlobeIcon : FolderOpenIcon;
-          const open = drawer.sessionId === s.id && drawer.kind === companionKind;
-          const folder = folderName(s);
-          return (
-            <div key={s.id} ref={open || s.id === selectedId ? activeRowRef : undefined}><button
-              type="button"
-              data-companion-row={s.id}
-              aria-current={open || undefined}
-              className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors duration-150 ${open ? 'bg-accent-soft' : 'hover:bg-surface-2'}`}
-              title={companionKind === 'browser' ? `Open a browser beside ${s.title || 'this agent'}` : `Browse ${s.title || 'this agent'}'s working folder`}
-              onClick={() => openCompanion(s.id, companionKind)}
-            >
-              <Icon className={`h-4 w-4 shrink-0 ${open ? 'text-accent' : 'text-ink-faint'}`} />
-              <span className="min-w-0 flex-1 truncate text-sm" dir="auto">{s.title || 'Untitled chat'}</span>
-              {folder && <span className="max-w-[40%] shrink-0 truncate text-2xs text-ink-faint" dir="auto">{folder}</span>}
-            </button></div>
-          );
-        })}
+        {shows === 'files' && <SidebarFileBrowser folders={localFolders} openFiles={openFiles} activeFile={activeFile} onOpenFile={openFile} />}
         {groups.map((b) => {
           const { items, archived } = b;
           const byProject = view.groupBy === 'project' && shows === 'agents';

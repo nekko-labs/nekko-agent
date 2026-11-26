@@ -17,6 +17,11 @@ const DOCS: PaletteDoc[] = [
 const ids = (q: string, filter?: Parameters<typeof searchPalette>[2]) => searchPalette(DOCS, q, filter).hits.map((h) => h.doc.id);
 
 describe('synonyms', () => {
+  it("finds What's new typed without the apostrophe, or as a changelog", () => {
+    const docs = [doc({ id: 'command:whats-new', kind: 'command', title: "What's new", crumbs: ['Commands'], context: 'The changes in this version, and the full release notes' })];
+    for (const q of ['whats new', "what's new", 'changelog', 'release notes']) expect(searchPalette(docs, q).hits.map((h) => h.doc.id), q).toEqual(['command:whats-new']);
+  });
+
   it('expands a word to its group, and a 4+ letter start too', () => {
     expect(expandTerm('prefs').alts).toContain('settings');
     expect(expandTerm('config').alts).toContain('preferences');

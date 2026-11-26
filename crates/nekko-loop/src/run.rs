@@ -18,7 +18,8 @@ use crate::fit::{
     reported_window,
 };
 use crate::history::{
-    as_seen_by_chat_model, from_latest_compaction, latest_compaction_index, window_history, without_images,
+    as_seen_by_chat_model, from_latest_compaction, latest_compaction_index, window_history, with_turn_context,
+    without_images,
 };
 use crate::progress::{LOOP_WRAP_UP_PROMPT, LoopDetector, loop_note, loop_nudge};
 use crate::resume::{INTERRUPTED_NOTE, RESUME_PROMPT, repair_interrupted_history};
@@ -441,6 +442,7 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
         let mut messages: Vec<Value> = window_history(sent, self.opts.max_history_turns)
             .iter()
             .map(as_seen_by_chat_model)
+            .map(|m| with_turn_context(&m))
             .map(|m| if blind { without_images(&m) } else { m })
             .collect();
         messages.extend(extra);
@@ -671,7 +673,7 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
         self.event("error", json!({ "message": message }));
     }
 
-    async fn run(&mut self) {
+    async fn run(&mut self) -> ReplyOutcome {
         // Carried provider items only matter within the turn that made them.
         drop_carry_before_last_prompt(self.opts.history);
         let mut resume_extra = Vec::new();
@@ -694,7 +696,7 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
         let loop_reason = loop {
             if self.opts.cancel.is_cancelled() {
                 self.event("error", json!({ "message": "Aborted" }));
-                return;
+                return ReplyOutcome::Unknown;
             }
             let mut turn = Turn::default();
             let first_call = std::mem::take(&mut first_pass);
@@ -720,9 +722,12 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
             }
             if let Err(e) = result {
                 self.end_interrupted(&turn, e);
-                return;
+                return ReplyOutcome::Unknown;
             }
 
+            if turn.output_limit {
+                turn.calls.clear();
+            }
             let stalled = turn.is_empty();
             let mut m = Map::new();
             m.insert("id".into(), json!(id("msg")));
@@ -742,13 +747,17 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
                     put_reasoning(&mut m, trim_runaway(&turn.reasoning), turn.reasoning_seconds);
                 }
             } else {
-                let content = match (stalled, turn.output_limit) {
-                    (true, true) => OUTPUT_LIMIT_EMPTY.to_string(),
-                    (true, false) => STALLED.to_string(),
-                    (false, true) if turn.calls.is_empty() && !js::trim(&turn.text).is_empty() => {
-                        format!("{}\n\n{OUTPUT_LIMIT_NOTE}", js::trim(&turn.text))
+                let content = if turn.output_limit {
+                    let text = js::trim(&turn.text);
+                    if text.is_empty() {
+                        OUTPUT_LIMIT_EMPTY.to_string()
+                    } else {
+                        format!("{text}\n\n{OUTPUT_LIMIT_NOTE}")
                     }
-                    (false, _) => turn.text.clone(),
+                } else if stalled {
+                    STALLED.to_string()
+                } else {
+                    turn.text.clone()
                 };
                 m.insert("content".into(), json!(content));
                 if !turn.reasoning.is_empty() {
@@ -767,10 +776,21 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
 
             // A looping model does not recover by being asked again; and no tool
             // calls means the turn is complete.
-            if turn.runaway || (turn.calls.is_empty() && turn.phase.as_deref() != Some("commentary")) {
+            if turn.runaway
+                || turn.output_limit
+                || (turn.calls.is_empty() && turn.phase.as_deref() != Some("commentary"))
+            {
                 let stop = if turn.runaway { "runaway" } else { "complete" };
                 self.event("done", json!({ "messageId": message_id, "stop": stop, "steps": steps }));
-                return;
+                return if turn.output_limit {
+                    ReplyOutcome::OutputLimited
+                } else if turn.runaway {
+                    ReplyOutcome::Partial
+                } else if js::trim(&turn.text).is_empty() {
+                    ReplyOutcome::Unknown
+                } else {
+                    ReplyOutcome::Returned
+                };
             }
 
             if !turn.calls.is_empty() {
@@ -812,12 +832,12 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
         // withheld, so the work comes back as an answer rather than an error.
         if self.opts.cancel.is_cancelled() {
             self.event("error", json!({ "message": "Aborted" }));
-            return;
+            return ReplyOutcome::Unknown;
         }
         let mut wrap = Turn::default();
         if let Err(e) = self.stream_with_retry(&mut wrap, vec![user_nudge(LOOP_WRAP_UP_PROMPT)], false).await {
             self.end_interrupted(&wrap, e);
-            return;
+            return ReplyOutcome::Unknown;
         }
         let note = if wrap.runaway { RUNAWAY_NOTE.to_string() } else { loop_note(&loop_reason) };
         let wrap_text = js::trim(&if wrap.runaway { trim_runaway(&wrap.text) } else { wrap.text.clone() }).to_string();
@@ -836,7 +856,17 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
         let message_id = m["id"].clone();
         self.opts.history.push(Value::Object(m));
         self.event("done", json!({ "messageId": message_id, "stop": "loop", "steps": steps }));
+        if wrap.output_limit { ReplyOutcome::OutputLimited } else { ReplyOutcome::Partial }
     }
+}
+
+/// Internal reply evidence, independent of the public `done.stop` event.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ReplyOutcome {
+    Returned,
+    OutputLimited,
+    Partial,
+    Unknown,
 }
 
 /// Run the agent loop to the end of one reply, calling `emit` with each
@@ -847,7 +877,7 @@ pub async fn run_agent<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) 
     client: &C,
     tools: &T,
     emit: &mut E,
-) {
+) -> ReplyOutcome {
     Loop {
         opts: &mut opts,
         client,
@@ -860,7 +890,7 @@ pub async fn run_agent<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) 
         sent_units: (0, 0, false),
     }
     .run()
-    .await;
+    .await
 }
 
 #[cfg(test)]

@@ -200,6 +200,7 @@ export const PHONE_CHANNELS = [
   'providers:setEnabled',
   'remote:stop',
   'security:challenge',
+  'session:cancelWatch',
   'session:create',
   'session:delete',
   'session:fork',
@@ -464,6 +465,7 @@ export const PHONE_AGENT_CHANNELS: readonly string[] = [
   'engine:unloadAll',
   'model:load',
   'model:unload',
+  'session:cancelWatch',
   'session:create',
   'session:delete',
   'session:fork',
@@ -747,6 +749,7 @@ export const PHONE_SESSION_OPTION_KEYS = [
   'mode',
   'modelId',
   'offline',
+  'orchestrate',
   'order',
   'pinned',
   'privacy',
@@ -783,16 +786,18 @@ export const PHONE_OPTION_VALUES = {
  * has *Connected devices choose model settings* on. `port`, `bind`, `apiKey`,
  * `corsOrigins` and the model folders stay on the machine: they open it to its
  * network or read its disk. So do the two settings below, which decide this.
+ * Overload protection can be switched from a device; how much it keeps free
+ * (`overloadReserveMB`) is read there, for the label, and set on the machine.
  */
-export const PHONE_ENGINE_KEYS = ['autoStart', 'autoload', 'idleTtlSeconds', 'jitLoad', 'maxLoaded'] as const;
-export const PHONE_MODEL_SERVER_VIEW = [...PHONE_ENGINE_KEYS, 'clientModelSettings', 'shareWithComputers'] as const;
+export const PHONE_ENGINE_KEYS = ['autoStart', 'autoload', 'idleTtlSeconds', 'jitLoad', 'maxLoaded', 'overloadGuard'] as const;
+export const PHONE_MODEL_SERVER_VIEW = [...PHONE_ENGINE_KEYS, 'clientModelSettings', 'shareWithComputers', 'overloadReserveMB'] as const;
 /** Refused with `server-locked` while the Model Server sets its own. */
 export const PHONE_MODEL_SETTING_CHANNELS = ['engine:saveModelPreset', 'engine:settings', 'engine:unloadAll', 'model:load'] as const;
 /** A preset's keys that name files on the machine, which stay there. */
 export const PHONE_PRESET_PATH_KEYS = ['clip_g', 'clip_l', 'llm', 't5xxl', 'taesd', 'vae'] as const;
 
 /** Chat options that are on or off. */
-export const PHONE_OPTION_SWITCHES = ['autoModel', 'autoProviderSwitch', 'cloudOnly', 'gitIsolation', 'incognito', 'offline'] as const;
+export const PHONE_OPTION_SWITCHES = ['autoModel', 'autoProviderSwitch', 'cloudOnly', 'gitIsolation', 'incognito', 'offline', 'orchestrate'] as const;
 
 /** The effort levels a phone may set on a chat (`EffortLevel`, settings.ts). */
 export const PHONE_EFFORT_LEVELS = ['low', 'medium', 'normal', 'high', 'xhigh', 'max'] as const;
@@ -1097,6 +1102,12 @@ export function screenPhoneCall(
       if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
       if (channel === 'pr:sessionList' && args[1] !== undefined && typeof args[1] !== 'boolean') throw new PhoneAccessError('value-invalid', 'refresh');
       return {};
+    case 'session:cancelWatch':
+      // One watch of one chat (a clip's Cancel): the chat's Stop already ends them all.
+      if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
+      if (typeof args[1] !== 'string' || args[1] === '') throw new PhoneAccessError('value-invalid', 'watch id');
+      if (args.length > 2) throw new PhoneAccessError('option-denied', 'extra argument');
+      return {};
     case 'session:photo':
       if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
       if (typeof args[1] !== 'string' || args[1] === '') throw new PhoneAccessError('value-invalid', 'message id');
@@ -1322,6 +1333,7 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
     case 'workflow:run':
       return isObj(result) ? pick(result, PHONE_WORKFLOW_RUN_VIEW) : null;
     case 'task:runNow':
+    case 'session:cancelWatch':
       return null;
     case 'pr:sessionList':
       return phonePrsView(result);
@@ -1515,6 +1527,7 @@ export async function callFromPhone(
   if (channel === 'chat:editQueued') callArgs = [args[0], args[1], pick(args[2], PHONE_QUEUE_EDIT_KEYS)];
   if (channel === 'pr:sessionList') callArgs = [args[0], args[1] === true];
   if (channel === 'session:photo') callArgs = [args[0], args[1], args[2]];
+  if (channel === 'session:cancelWatch') callArgs = [args[0], args[1]];
   if ((PHONE_TERMINAL_CHANNELS as readonly string[]).includes(channel)) callArgs = phoneTerminalCallArgs(channel, args);
   if (channel === 'terminal:create') {
     // A new terminal starts in the chat's folder, as the desktop's does: the phone never names a path.

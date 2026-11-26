@@ -16,6 +16,8 @@ public enum RelayState: String, Sendable, Equatable {
 
 public enum DenyReason: String, Sendable, Equatable {
     case unknownDevice = "unknown-device", revoked, badCode = "bad-code", invalid, kicked, badKey = "bad-key"
+    /// The computer lets this device in only through another kind of route (Tailscale or Nekko Cloud Relay, #3243).
+    case route
     /// What a computer tells an app from before protocol 6, under the room key,
     /// which this app no longer reads.
     case updateRequired = "update-required"
@@ -130,6 +132,18 @@ public struct RelayConfig: Sendable {
     public var retryBase: TimeInterval = 1
     public var retryMax: TimeInterval = 30
     public var offlinePoll: TimeInterval = 15
+    /// Up to this fraction is added to each backoff delay, at random, so phones and
+    /// computers that lost the relay together do not all redial in the same instant.
+    public var retryJitter: Double = 0.5
+    /// A number in 0..<1 for the jitter; tests fix it.
+    public var jitterSource: @Sendable () -> Double = { Double.random(in: 0..<1) }
+
+    /// The wait before redial number `attempt` (0 is the first): 1s, 2s, 4s ... capped at
+    /// `retryMax`, then 0 to `retryJitter` more.
+    public func retryDelay(attempt: Int) -> TimeInterval {
+        let base = min(retryMax, retryBase * pow(2, Double(min(attempt, 20))))
+        return base * (1 + max(0, retryJitter) * min(max(jitterSource(), 0), 1))
+    }
     /// The device key every HELLO is signed with (protocol 5). Without one the
     /// HELLO goes unsigned and the computer asks this phone to pair again.
     public var helloSigner: HelloSigner?
@@ -238,6 +252,8 @@ public final class RelayClient: @unchecked Sendable {
     private var nextWaiter = 0
     private var _status = RelayStatus(.idle)
     private var routes: RouteSupervisor
+    /// Routes the computer refused with `denied: route` since the last welcome.
+    private var routesRefused: Set<String> = []
     /// One probe loop at a time; bumped to stop the running one.
     private var probeGeneration = 0
     private var probing = false
@@ -775,6 +791,7 @@ public final class RelayClient: @unchecked Sendable {
         case "welcome":
             locked {
                 welcomed = true
+                routesRefused = []
                 handshakeGeneration += 1
                 retry = 0
                 seq = 0 // the first request after each welcome is seq 1
@@ -806,6 +823,34 @@ public final class RelayClient: @unchecked Sendable {
     }
 
     private func deny(_ reason: DenyReason) {
+        // The computer won't take this device on this route: that is a failed route, not the end.
+        // With another saved route to try, move to it; else the denial stands.
+        if reason == .route {
+            let next: (changed: Bool, ready: Bool) = locked {
+                if stopped { return (false, false) }
+                routesRefused.insert(routes.url)
+                // Every saved route has now said no: nothing is left to try.
+                if routes.routes.allSatisfy(routesRefused.contains) { return (false, false) }
+                return routes.failed(now: now())
+            }
+            if next.changed {
+                if next.ready {
+                    moveRoute(detail: "Refused on this route")
+                } else {
+                    let old: WsConnection? = locked {
+                        cancelRetryLocked()
+                        welcomed = false
+                        let c = conn
+                        conn = nil
+                        return c
+                    }
+                    old?.close(code: 1000, reason: "route refused")
+                    failPending("connection lost")
+                    scheduleRetry("Refused on this route")
+                }
+                return
+            }
+        }
         let c: WsConnection? = locked {
             welcomed = false
             stopped = true
@@ -823,8 +868,8 @@ public final class RelayClient: @unchecked Sendable {
     private func scheduleRetry(_ detail: String?, offline: Bool = false) {
         let plan: (gen: Int, delay: TimeInterval)? = locked {
             if stopped { return nil }
-            // 1s, 2s, 4s … capped; an offline computer is polled at a fixed pace.
-            let delay = offline ? config.offlinePoll : min(config.retryMax, config.retryBase * pow(2, Double(min(retry, 20))))
+            // 1s, 2s, 4s … capped, plus jitter; an offline computer is polled at a fixed pace.
+            let delay = offline ? config.offlinePoll : config.retryDelay(attempt: retry)
             if !offline { retry += 1 }
             retryGeneration += 1
             retryPending = true

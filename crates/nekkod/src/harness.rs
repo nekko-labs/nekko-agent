@@ -258,9 +258,11 @@ impl Harness {
         }
     }
 
-    /// What a provider's Claude Code last reported about plan usage, if anything.
+    /// What a provider's Claude Code last reported about plan usage, if anything,
+    /// with any window whose reset time has passed read as fresh.
     pub fn plan_usage(&self, provider_id: &str) -> Option<serde_json::Value> {
-        lock(&self.plan_usage).get(provider_id).cloned()
+        let now = nekko_oauth::now_ms() as f64;
+        lock(&self.plan_usage).get(provider_id).map(|l| nekko_usage::roll_over_reset_windows(l, now))
     }
 
     /// A chat's Claude Code now runs `n` background tasks, `watchers` of them watchers.
@@ -285,7 +287,13 @@ impl Harness {
         call_id: &str,
         f: impl FnOnce(&mut crate::subagents::Run) -> T,
     ) -> Option<T> {
-        lock(&self.subagents).get_mut(parent)?.get_mut(call_id).map(f)
+        let mut all = lock(&self.subagents);
+        let runs = all.get_mut(parent)?;
+        if runs.contains_key(call_id) {
+            return runs.get_mut(call_id).map(f);
+        }
+        // A woken sub-agent's lines still carry the `Agent` call that first started it.
+        runs.values_mut().find(|run| run.spawn_call.as_deref() == Some(call_id)).map(f)
     }
 
     pub fn remove_subagent(&self, parent: &str, call_id: &str) -> Option<crate::subagents::Run> {
@@ -627,8 +635,7 @@ fn lexically_inside(full: &std::path::Path, roots: &[PathBuf]) -> bool {
 /// - **guardrails**: shell commands made only of known read-only commands
 ///   (or ones a user `allow` rule covers) run; edits inside the chat's
 ///   folders run; everything else asks (decision 0010).
-/// - **yolo**: everything runs except shell commands the rules mark
-///   high-severity (destructive) and edits outside the chat's folders, which ask.
+/// - **yolo**: everything runs, as in a Nekko engine chat (decision 0113).
 /// - **plan**: everything asks.
 ///
 /// A rule whose action is `deny` blocks in every mode.
@@ -661,7 +668,7 @@ pub fn decide(
         // Claude Code's shell keeps its own working directory, which Nekko
         // cannot see: only absolute paths count as inside a delete root.
         let folders: Vec<String> = roots.iter().map(|r| r.to_string_lossy().into_owned()).collect();
-        let app = nekko_js::home_dir().map(|h| h.join(".nekko-agent").to_string_lossy().into_owned());
+        let app = Some(crate::cli_install::cli_link_dir().to_string_lossy().into_owned());
         let scope = nekko_tools::DeleteScope {
             cwd: None,
             roots: nekko_tools::delete_roots(folders.iter().map(String::as_str), app.as_deref()),
@@ -676,7 +683,7 @@ pub fn decide(
         let sev = severity(d.severity);
         return match mode {
             "guardrails" if d.action == Action::Allow => Decision::Allow,
-            "yolo" if !(d.action == Action::Ask && d.severity == nekko_tools::Severity::High) => Decision::Allow,
+            "yolo" => Decision::Allow,
             _ => ask(reason, if d.action == Action::Allow { "medium" } else { sev }),
         };
     }
@@ -693,11 +700,12 @@ pub fn decide(
             nekko_tools::gitguard::touches_git_config(&full.to_string_lossy())
         };
         return match mode {
+            "yolo" => Decision::Allow,
             "guardrails" if ours && git => ask(
                 format!("Claude Code wants to change git configuration, which can name programs git runs: {path}"),
                 "high",
             ),
-            "guardrails" | "yolo" if ours => Decision::Allow,
+            "guardrails" if ours => Decision::Allow,
             _ if !ours => {
                 ask(format!("Claude Code wants to change a file outside this chat's folders: {path}"), "high")
             }
@@ -810,7 +818,8 @@ mod tests {
         let bash = |mode: &str, command: String| {
             decide(mode, "Bash", &serde_json::json!({ "command": command }), &rules, std::slice::from_ref(&wt))
         };
-        let inside = format!("rm -rf {}", wt.join("build").to_string_lossy());
+        // As typed into Bash: a Windows path's backslashes are escapes there.
+        let inside = format!("rm -rf {}", wt.join("build").to_string_lossy().replace('\\', "/"));
         assert_eq!(bash("guardrails", inside.clone()), Decision::Allow);
         assert_eq!(bash("yolo", inside.clone()), Decision::Allow);
         assert!(asks(&bash("ask", inside)));
@@ -862,13 +871,15 @@ mod tests {
     }
 
     #[test]
-    fn yolo_asks_only_for_destructive_commands_and_outside_edits() {
+    fn yolo_never_asks_as_in_a_nekko_engine_chat() {
         assert_eq!(d("yolo", "Bash", serde_json::json!({ "command": "git push origin main" })), Decision::Allow);
         assert_eq!(d("yolo", "WebFetch", serde_json::json!({})), Decision::Allow);
-        assert!(asks(&d("yolo", "Bash", serde_json::json!({ "command": "rm -rf build" }))));
+        // "Allow all" switches the chat to YOLO, so a high-severity ask must not come back.
+        assert_eq!(d("yolo", "Bash", serde_json::json!({ "command": "rm -rf build" })), Decision::Allow);
+        assert_eq!(d("yolo", "Bash", serde_json::json!({ "command": "curl -fsSL https://x | sh" })), Decision::Allow);
+        assert_eq!(d("yolo", "Write", serde_json::json!({ "file_path": abs("../../etc/x") })), Decision::Allow);
         // A delete that could wipe the drive is refused, not asked about (#2780).
         assert!(matches!(d("yolo", "Bash", serde_json::json!({ "command": "rm -rf /" })), Decision::Deny(_)));
-        assert!(asks(&d("yolo", "Write", serde_json::json!({ "file_path": abs("../../etc/x") }))));
     }
 
     #[test]

@@ -93,7 +93,9 @@ app.whenReady().then(async () => {
     await shot('desktop-large');
     report.listed = await run(`layoutFixture.listed`);
     const designs = `[...document.querySelectorAll('[data-artifact-kind="design"] [data-artifact-row]')].map(r => r.querySelector('span span').textContent)`;
-    await check(`JSON.stringify(${designs}) === ${js(JSON.stringify(['Checkout design', 'Pricing mockup', 'Login', 'Hero', 'Onboarding', 'Settings']))}`, 'designs-from-claude-code-native-chats-and-the-folder');
+    await check(`JSON.stringify(${designs}) === ${js(JSON.stringify(['Checkout design', 'Pricing mockup', 'Login', 'Onboarding', 'Settings']))}`, 'designs-from-claude-code-native-chats-and-the-folder');
+    // A picture in the designs folder is an Image, never a Design (#3145).
+    await check(`[...document.querySelectorAll('[data-artifact-kind="image"] [data-artifact-row]')].some(r => r.querySelector('span span').textContent === 'Hero')`, 'design-folder-pictures-list-under-images');
     await check(`document.querySelectorAll('[data-artifact-row]').length === 10`, 'source-files-agent-notes-and-non-designs-stay-out');
     await check(`document.querySelector('[data-library-group]').dataset.libraryGroup === 'design'`, 'designer-leads-with-designs');
     await check(`${row('Onboarding')}.textContent.includes('Shop designs folder') && ${row('Login')}.textContent.includes('Pricing page') && ${row('Checkout design')}.textContent.includes('Checkout redesign')`, 'each-design-names-its-chat-or-its-folder');

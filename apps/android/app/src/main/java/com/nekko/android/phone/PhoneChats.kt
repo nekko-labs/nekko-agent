@@ -25,9 +25,15 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
         val usage: com.nekko.protocol.PhoneUsageLedger = com.nekko.protocol.PhoneUsageLedger(),
         /** How this phone's models talk (Customize, #2426); from their next reply. */
         val tone: com.nekko.protocol.PhoneTone = com.nekko.protocol.PhoneTone.STANDARD,
-        /** OpenRouter's browser sign-in, while it runs (#2852). */
+        /** A browser sign-in while it runs: OpenRouter's (#2852) or ChatGPT's (#3244, [signInKind]). */
         val signIn: SignIn? = null,
         val signInError: String? = null,
+        val signInKind: String? = null,
+        /**
+         * Each provider's request and token budget from its last answer's headers (#2950, the
+         * iPhone's #2923), for the limit line. In memory only: never saved or sent anywhere.
+         */
+        val rateLimits: Map<String, com.nekko.protocol.PhoneRateLimits> = emptyMap(),
     )
     private val mutable = MutableStateFlow(State())
     val state = mutable.asStateFlow()
@@ -115,7 +121,7 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
     /** Start OpenRouter's sign-in: the page to open in the browser. */
     fun startOpenRouterSignIn(): String {
         val v = PhoneProviders.pkceVerifier()
-        synchronized(gate) { signInVerifier = v; mutable.update { it.copy(signIn = SignIn.WAITING, signInError = null) } }
+        synchronized(gate) { signInVerifier = v; mutable.update { it.copy(signIn = SignIn.WAITING, signInError = null, signInKind = "openrouter") } }
         return PhoneProviders.openRouterAuthorizeUrl(PhoneProviders.pkceChallenge(v))
     }
 
@@ -136,8 +142,87 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
         }
     }
 
+    /** ChatGPT's sign-in listener, open while its page is (#3244). */
+    private var chatGptListener: ChatGptSignIn.CallbackServer? = null
+
+    /**
+     * Start Sign in with ChatGPT (#3244): open the loopback listener the page comes back to, and
+     * return the page to open in the browser; null when the listener can't open (the reason is in
+     * [State.signInError]). The code is swapped for this phone's own tokens, the plan's models are
+     * read (which also proves the sign-in), and the provider is kept, or its sign-in replaced.
+     */
+    fun startChatGptSignIn(): String? {
+        val verifier = PhoneProviders.pkceVerifier()
+        val state = ChatGptSignIn.state()
+        val listener = try { ChatGptSignIn.CallbackServer.open() } catch (e: java.io.IOException) {
+            synchronized(gate) { mutable.update { it.copy(signIn = null, signInKind = "chatgpt", signInError = e.message ?: ChatGptSignIn.PORT_BUSY) } }
+            return null
+        }
+        synchronized(gate) {
+            chatGptListener?.close()
+            chatGptListener = listener
+            mutable.update { it.copy(signIn = SignIn.WAITING, signInKind = "chatgpt", signInError = null) }
+        }
+        scope.launch(Dispatchers.IO) {
+            val answer = listener.await(state)
+            val current = synchronized(gate) { (chatGptListener === listener).also { if (it) chatGptListener = null } }
+            if (!current) return@launch
+            when (answer) {
+                is ChatGptSignIn.Callback.Code -> finishChatGptSignIn(answer.code, verifier)
+                is ChatGptSignIn.Callback.Refused -> synchronized(gate) { mutable.update { it.copy(signIn = null, signInError = "ChatGPT sign-in was cancelled.") } }
+                // Timed out with the page left open: back to the form, nothing to say.
+                else -> synchronized(gate) { mutable.update { it.copy(signIn = null) } }
+            }
+        }
+        return ChatGptSignIn.authorizeUrl(PhoneProviders.pkceChallenge(verifier), state)
+    }
+
+    private suspend fun finishChatGptSignIn(code: String, verifier: String) {
+        synchronized(gate) { mutable.update { it.copy(signIn = SignIn.ADDING, signInError = null) } }
+        try {
+            val body = try { http.send(ChatGptSignIn.tokenRequest(code, verifier)) } catch (e: CancellationException) { throw e } catch (_: Exception) { throw IllegalArgumentException(ChatGptSignIn.SIGN_IN_FAILED) }
+            val tokens = ChatGptSignIn.tokens(body, now()) ?: throw IllegalArgumentException(ChatGptSignIn.SIGN_IN_FAILED)
+            val existing = lock.withLock { mutable.value.providers.firstOrNull { it.kind == "chatgpt" } }
+            if (existing == null) {
+                connect("chatgpt", "ChatGPT", null, tokens.encode())
+            } else {
+                // Signing in again replaces the old sign-in; the provider and its chats stay.
+                setKey(existing.id, tokens.encode())
+                if (!existing.enabled) enabled(existing.id, true)
+            }
+            synchronized(gate) { mutable.update { it.copy(signIn = SignIn.DONE) } }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            synchronized(gate) { mutable.update { it.copy(signIn = null, signInError = e.message ?: ChatGptSignIn.SIGN_IN_FAILED) } }
+        }
+    }
+
+    private val renewing = Mutex()
+
+    /**
+     * A ChatGPT sign-in about to run out is renewed before it is used (#3244); other keys pass.
+     * One renewal at a time: OpenAI replaces the refresh token each time. A failed renewal leaves
+     * the old tokens, and the request then fails with "sign in again".
+     */
+    private suspend fun renewSignIn(providerId: String) = renewing.withLock {
+        val (p, key) = lock.withLock {
+            val p = mutable.value.providers.firstOrNull { it.id == providerId && it.kind == "chatgpt" } ?: return@withLock null
+            p to secrets.get(keySlot(p.id))
+        } ?: return@withLock
+        val tokens = ChatGptSignIn.Tokens.decode(key)?.takeIf { it.needsRefresh(now()) } ?: return@withLock
+        val request = ChatGptSignIn.refreshRequest(tokens) ?: return@withLock
+        val body = try { http.send(request) } catch (e: CancellationException) { throw e } catch (_: Exception) { return@withLock }
+        val next = ChatGptSignIn.tokens(body, now(), tokens) ?: return@withLock
+        lock.withLock { if (secrets.get(keySlot(p.id)) == key) secrets.set(keySlot(p.id), next.encode()) }
+    }
+
     /** The person left the sign-in (Cancel, or back without approving). */
-    fun clearSignIn() = synchronized(gate) { signInVerifier = null; mutable.update { it.copy(signIn = null, signInError = null) } }
+    fun clearSignIn() = synchronized(gate) {
+        signInVerifier = null
+        chatGptListener?.close(); chatGptListener = null
+        mutable.update { it.copy(signIn = null, signInError = null, signInKind = null) }
+    }
 
     enum class SignIn { WAITING, ADDING, DONE }
 
@@ -161,7 +246,8 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
         operations.remove(providerId)?.toList()?.forEach { it.cancel() }
         modelLoads.remove(providerId)
         mutable.value.chats.filter { it.providerId == providerId }.forEach { stop(it.id) }
-        mutable.update { it.copy(models = it.models - providerId, errors = it.errors - providerId) }
+        // A new key or a removed provider starts with no known budget.
+        mutable.update { it.copy(models = it.models - providerId, errors = it.errors - providerId, rateLimits = it.rateLimits - providerId) }
     }
     suspend fun enabled(providerId: String, on: Boolean) = lock.withLock {
         ready()
@@ -180,6 +266,7 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
     }
 
     private suspend fun <T> operation(providerId: String, block: suspend (PhoneProvider, String?) -> T): T = coroutineScope {
+        renewSignIn(providerId)
         val lifetime = SupervisorJob(scope.coroutineContext[Job])
         lateinit var task: Deferred<T>
         task = async(lifetime, start = CoroutineStart.LAZY) {
@@ -300,6 +387,7 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
             var usedOut = 0L
             var ranOn: Triple<String, String, String>? = null
             try {
+                mutable.value.chats.firstOrNull { it.id == chatId }?.providerId?.let { renewSignIn(it) }
                 val request = lock.withLock {
                     currentCoroutineContext().ensureActive()
                     val old = mutable.value.chats.firstOrNull { it.id == chatId } ?: return@withLock null
@@ -321,7 +409,8 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
                 } ?: return@launch
                 currentCoroutineContext().ensureActive()
                 val parser = PhoneStreamParser(); var complete = false
-                http.send(request) { line ->
+                val providerId = ranOn?.first
+                http.send(request, line = { line ->
                     synchronized(gate) {
                         task.ensureActive()
                         if (!complete) parser.line(line).forEach { event -> if (!complete) when (event) {
@@ -332,7 +421,10 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
                         } }
                         !complete
                     }
-                }
+                }, headers = { answered ->
+                    val limits = com.nekko.protocol.PhoneRateLimits.from(answered, now())
+                    if (providerId != null && limits != null) synchronized(gate) { mutable.update { it.copy(rateLimits = it.rateLimits + (providerId to limits)) } }
+                })
                 synchronized(gate) {
                     task.ensureActive()
                     check(complete) { "The reply ended early. Retry to try again." }

@@ -57,11 +57,10 @@ import com.nekko.android.ui.theme.Nekko
 import com.nekko.android.ui.theme.ThemeChoice
 import com.nekko.android.ui.theme.ThemeIcons
 import com.nekko.android.ui.theme.ThemePreset
-import com.nekko.protocol.Appearance
 
 /**
  * Settings → Appearance (the iPhone's): the theme, picked from the desktop's
- * presets or following the computer, and the app's language, which Android's
+ * presets or following the phone, and the app's language, which Android's
  * per-app language setting chooses.
  */
 @Composable
@@ -69,15 +68,12 @@ fun AppearanceSection(deps: SettingsDeps) {
     val p = Nekko.palette
     val themePrefs = deps.themePrefs
     val choice by themePrefs.choice.collectAsStateWithLifecycle()
-    val c by deps.repo.state.collectAsStateWithLifecycle()
-    val computerName = c.active?.name ?: stringResource(R.string.your_computer)
     var picking by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val lock = LocalAppLock.current
     // The app's language, from the configuration so the row follows a change of language.
     val locale = LocalConfiguration.current.locales[0]
-    // The theme in use: the computer's when following it.
-    val current = ThemePreset.find(if (choice == ThemeChoice.COMPUTER) c.appearance?.preset else choice.id)
+    val current = ThemePreset.find(choice.id)
 
     SectionHeader(stringResource(R.string.appearance_title))
     Column(Modifier.padding(horizontal = 16.dp)) {
@@ -86,8 +82,7 @@ fun AppearanceSection(deps: SettingsDeps) {
                 stringResource(R.string.appearance_theme),
                 themeName(choice),
                 theme = current,
-                icon = ThemeIcons.of(current) ?: ThemeIcons.computer.takeIf { choice == ThemeChoice.COMPUTER },
-                accent = if (choice == ThemeChoice.COMPUTER) c.appearance?.accent else null,
+                icon = ThemeIcons.of(current),
                 tag = "settings.theme",
             ) { picking = true }
             HorizontalDivider(color = p.line)
@@ -111,22 +106,20 @@ fun AppearanceSection(deps: SettingsDeps) {
             }
         }
         Text(
-            if (choice == ThemeChoice.COMPUTER) stringResource(R.string.appearance_footer_computer, computerName)
-            else stringResource(R.string.appearance_footer),
+            stringResource(R.string.appearance_footer),
             style = MaterialTheme.typography.bodySmall,
             color = p.inkFaint,
             modifier = Modifier.padding(horizontal = 4.dp, vertical = 10.dp),
         )
     }
     if (picking) {
-        ThemeDialog(choice, c.appearance, computerName, onDismiss = { picking = false }) { themePrefs.set(it); picking = false }
+        ThemeDialog(choice, onDismiss = { picking = false }) { themePrefs.set(it); picking = false }
     }
 }
 
-/** A choice's name: Match my computer, Match this phone, Light, Dark, or the preset ("Blueberry · Dark"). */
+/** A choice's name: Match this phone, Light, Dark, or the preset ("Blueberry · Dark"). */
 @Composable
 private fun themeName(choice: ThemeChoice): String = when (choice) {
-    ThemeChoice.COMPUTER -> stringResource(R.string.appearance_match_computer)
     ThemeChoice.SYSTEM -> stringResource(R.string.appearance_match_phone)
     ThemeChoice.LIGHT -> stringResource(R.string.appearance_light)
     ThemeChoice.DARK -> stringResource(R.string.appearance_dark)
@@ -166,16 +159,15 @@ private fun ThemeGlyph(icon: Int, preset: ThemePreset?, accent: Long?) {
     )
 }
 
-/** The desktop's themes: following the computer or this phone, Light, Dark, the named presets and the experimental families. */
+/** The desktop's themes: following this phone, Light, Dark, the named presets and the experimental families. */
 @Composable
-private fun ThemeDialog(choice: ThemeChoice, computer: Appearance?, computerName: String, onDismiss: () -> Unit, onPick: (ThemeChoice) -> Unit) {
+private fun ThemeDialog(choice: ThemeChoice, onDismiss: () -> Unit, onPick: (ThemeChoice) -> Unit) {
     val p = Nekko.palette
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.appearance_theme)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()).selectableGroup()) {
-                ChoiceRow(stringResource(R.string.appearance_match_computer), computerDetail(computer, computerName), ThemePreset.find(computer?.preset), computer?.accent, choice == ThemeChoice.COMPUTER, "theme.computer", icon = ThemeIcons.computer) { onPick(ThemeChoice.COMPUTER) }
                 ChoiceRow(stringResource(R.string.appearance_match_phone), stringResource(R.string.appearance_match_phone_detail), ThemePreset.find("system"), null, choice == ThemeChoice.SYSTEM, "theme.system") { onPick(ThemeChoice.SYSTEM) }
                 ChoiceRow(stringResource(R.string.appearance_light), null, ThemePreset.find("light"), null, choice == ThemeChoice.LIGHT, "theme.light") { onPick(ThemeChoice.LIGHT) }
                 ChoiceRow(stringResource(R.string.appearance_dark), null, ThemePreset.find("dark"), null, choice == ThemeChoice.DARK, "theme.dark") { onPick(ThemeChoice.DARK) }
@@ -201,14 +193,6 @@ private fun Heading(text: String) {
         color = Nekko.palette.inkFaint,
         modifier = Modifier.padding(start = 12.dp, top = 16.dp, bottom = 4.dp),
     )
-}
-
-@Composable
-private fun computerDetail(computer: Appearance?, name: String): String = when (computer?.theme) {
-    null -> stringResource(R.string.appearance_computer_waiting, name)
-    Appearance.ThemeMode.DARK -> stringResource(R.string.appearance_computer_dark, name)
-    Appearance.ThemeMode.LIGHT -> stringResource(R.string.appearance_computer_light, name)
-    Appearance.ThemeMode.SYSTEM -> stringResource(R.string.appearance_computer_system, name)
 }
 
 @Composable

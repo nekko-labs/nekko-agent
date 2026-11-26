@@ -28,9 +28,10 @@ describe('the Agents panel window-type switcher', () => {
   it('sits under the header as one sliding icon segment per window kind', () => {
     const html = renderSidebar({ sessions: [chat] });
     expect(html).toMatch(/data-agent-panel-header[^]*role="radiogroup" aria-label="Show windows" class="slide-toggle slide-toggle-icons agent-panel-shows[^]*data-agent-panel-list/);
-    expect(radios(html)).toEqual([['Agents', true], ['Terminals', false], ['Photos and videos', false], ['Browsers', false], ['Files', false]]);
-    // Gentleface icons, one per segment.
-    for (const name of ['bots', 'terminal', 'image', 'globe', 'folder-open']) expect(html).toContain(`data-gf-icon="${name}"`);
+    expect(radios(html)).toEqual([['Agents', true], ['Terminals', false], ['Photos and videos', false], ['Files', false]]);
+    // Gentleface icons, one per segment; the Browsers segment is gone.
+    for (const name of ['bots', 'terminal', 'image', 'folder-open']) expect(html).toContain(`data-gf-icon="${name}"`);
+    expect(html).not.toContain('data-gf-icon="globe"');
     // The segments share the panel's width.
     const layout = stylesheet('components/commandWallLayouts.css');
     expect(cssRule(layout, '.agent-panel-shows')).toMatchObject({ display: 'flex', width: '100%' });
@@ -57,32 +58,28 @@ describe('the Agents panel window-type switcher', () => {
 
   it('offers group, sort and show only for the agent cards', () => {
     expect(renderSidebar()).toContain('data-agent-view-button');
-    for (const shows of ['terminals', 'media', 'browsers', 'files'] as const) expect(renderSidebar({ shows }), shows).not.toContain('data-agent-view-button');
+    for (const shows of ['terminals', 'media', 'files'] as const) expect(renderSidebar({ shows }), shows).not.toContain('data-agent-view-button');
   });
 
-  it('lists each agent once under Browsers and Files, marking the one whose drawer is out', () => {
-    const sessions = [chat, agentSummary('other', { title: 'Write docs' }), photo];
-    useWallLogs.setState({ sessionId: 'chat', kind: 'browser', closing: false });
-    const browsers = renderSidebar({ sessions, shows: 'browsers' });
-    expect([...browsers.matchAll(/data-companion-row="([^"]+)"/g)].map((m) => m[1]).sort()).toEqual(['chat', 'other']);
-    expect(browsers).toMatch(/data-companion-row="chat" aria-current="true"/);
-    expect(browsers).not.toMatch(/data-companion-row="other" aria-current/);
-    // The browser drawer being out does not mark the agent in Files.
-    const files = renderSidebar({ sessions, shows: 'files' });
-    expect(files).toContain('data-companion-row="chat"');
-    expect(files).not.toContain('aria-current="true"');
-    expect(files).toContain('Browse Fix login&#x27;s working folder');
+  it('lists no agents under Files: it is a file browser', () => {
+    const files = renderSidebar({ sessions: [chat, agentSummary('other', { title: 'Write docs' })], shows: 'files' });
+    expect(files).not.toContain('data-companion-row');
+    expect(files).not.toContain('Beside an agent');
+    expect(files).not.toContain('Fix login');
+    expect(files).toContain('data-connected-folder="w"');
   });
 
   it('says what is missing when a view is empty', () => {
     useStore.setState({ terminals: [] });
     expect(renderSidebar({ sessions: [chat], shows: 'terminals' })).toContain('No terminals open');
     expect(renderSidebar({ sessions: [chat], shows: 'media' })).toContain('No photo or video chats');
-    expect(renderSidebar({ sessions: [], shows: 'browsers' })).toContain('No agents to open a browser beside');
+    expect(renderSidebar({ sessions: [], shows: 'files', settings: { workspaces: [] } })).toContain('No folders connected');
   });
 
   it('remembers the pick and falls back to Agents for anything else', () => {
-    expect(AGENT_PANEL_SHOWS.map((s) => s.id)).toEqual(['agents', 'terminals', 'media', 'browsers', 'files']);
+    expect(AGENT_PANEL_SHOWS.map((s) => s.id)).toEqual(['agents', 'terminals', 'media', 'files']);
+    // A Browsers pick saved before the segment was removed.
+    expect(parseAgentPanelShows('browsers')).toBe('agents');
     expect(readAgentPanelShows()).toBe('agents');
     saveAgentPanelShows('files');
     expect(readAgentPanelShows()).toBe('files');

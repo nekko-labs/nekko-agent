@@ -74,21 +74,32 @@ class ConnectionRowTest {
         shot("1-all-online")
     }
 
-    @Test fun tailscaleOffLeadsAndOpensToOpenTailscale() {
+    @Test fun tailscaleOffIsTheTailnetComputersOwnItemAndOpensToOpenTailscale() {
         val notes = ConnectionNotes.make(listOf(facts("studio", RelayState.CONNECTING, RelayRoute.TAILSCALE, active = true), facts("gomi"), facts("laptop")), tailscaleOn = false)
-        assertEquals("tailscale", notes.first().id)
+        assertEquals(listOf("studio", "gomi", "laptop"), notes.map { it.id })
         show(notes)
-        compose.onNodeWithTag("strip.tailscale").performClick()
+        compose.onNodeWithTag("strip.tailscale").assertDoesNotExist()
+        compose.onNode(hasContentDescription("Studio, Tailscale off")).assertIsDisplayed()
+        compose.onNodeWithTag("strip.studio").performClick()
         compose.waitForIdle()
         compose.onNode(hasText("Turn on Tailscale to reach Studio.", substring = true)).assertIsDisplayed()
         compose.onNodeWithTag("open-tailscale").assertIsDisplayed()
         compose.onNodeWithTag("banner.details").assertIsDisplayed()
         shot("2-tailscale-off-open")
         compose.onNodeWithTag("open-tailscale").performClick()
-        assertEquals(listOf("tailscale" to ConnectionNote.Action.OPEN_TAILSCALE), acted)
+        assertEquals(listOf("studio" to ConnectionNote.Action.OPEN_TAILSCALE), acted)
         // Tap the item again to close it.
-        compose.onNodeWithTag("strip.tailscale").performClick()
+        compose.onNodeWithTag("strip.studio").performClick()
         compose.waitUntil(3_000) { compose.onAllNodes(hasText("Turn on Tailscale", substring = true)).fetchSemanticsNodes().isEmpty() }
+    }
+
+    @Test fun routeRefusedOpensToPairAgain() {
+        val notes = ConnectionNotes.make(listOf(facts("studio", active = true), facts("gomi", RelayState.DENIED, denied = DenyReason.ROUTE)), tailscaleOn = true)
+        show(notes, open = "gomi")
+        compose.onNode(hasContentDescription("Gomi, refused")).assertIsDisplayed()
+        compose.onNode(hasText("Gomi only lets this phone in through another route.", substring = true)).assertIsDisplayed()
+        compose.onNodeWithTag("banner.pair-again").assertIsDisplayed()
+        shot("6-route-refused-open")
     }
 
     @Test fun silentComputerSaysNoAnswerAndRetries() {
@@ -117,7 +128,7 @@ class ConnectionRowTest {
 
     @Test fun darkTheme() {
         val notes = ConnectionNotes.make(listOf(facts("studio", RelayState.CONNECTING, RelayRoute.TAILSCALE, active = true), facts("gomi"), facts("laptop", RelayState.OFFLINE)), tailscaleOn = false)
-        show(notes, open = "tailscale", dark = true)
+        show(notes, open = "studio", dark = true)
         shot("5-tailscale-off-dark")
     }
 

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { LABEL_WORKFLOWS, labelRuns, needsLabelRuns } from './ci-label-gate.mjs';
+import { LABEL_WORKFLOWS, gateRuns, labelRuns, needsLabelRuns } from './ci-label-gate.mjs';
 
 const run = (id, path, status, conclusion = null) => ({ id, name: path.split('/').pop(), path, status, conclusion, html_url: `https://example/${id}` });
 const ios = '.github/workflows/ios-native.yml';
@@ -82,6 +82,15 @@ test('a PR the batch leaves out for changing a workflow is decided by its own Na
   assert.deepEqual(labelRuns([run(4, ios, 'in_progress')], held).failed, []);
   assert.deepEqual(labelRuns([run(4, ios, 'completed', 'success')], held).passed.map(r => r.id), [4]);
   assert.equal(labelRuns([run(4, ios, 'completed', 'failure')], held).failed.length, 1);
+});
+
+test('an unlabelled iOS PR is still decided by its own Native iOS run, and waits for no other platform (#3094)', () => {
+  const held = { iosRequired: true, batch: { state: 'failure', target_url: 'https://example/held' } };
+  const android = run(5, LABEL_WORKFLOWS.find(w => w.includes('android')), 'in_progress');
+  assert.equal(labelRuns(gateRuns([run(4, ios, 'in_progress'), android], false), held).pending.map(r => r.name).join(), 'Native iOS');
+  assert.deepEqual(labelRuns(gateRuns([run(4, ios, 'completed', 'success'), android], false), held).pending, []);
+  assert.deepEqual(labelRuns(gateRuns([run(4, ios, 'completed', 'success')], false), held).passed.map(r => r.id), [4]);
+  assert.equal(gateRuns([run(4, ios, 'in_progress'), android], true).length, 2);
 });
 
 test('Automatic evidence dispatch still runs the full required Native iOS suite', () => {

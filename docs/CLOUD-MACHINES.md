@@ -1,12 +1,13 @@
 # Nekko Cloud machines
 
-> **Status:** first build, not yet live. The pieces exist in the code (the Cloud API, the
-> machine image, the iPhone screens); nothing is deployed, and the egress limits are not yet
-> enforced outside the machine. See `spec/phone/nekko-cloud-machines.md`.
+> **Status:** deployed 2026-11-26, invite-only, not yet run end to end. The API, the
+> `nekko-cloud-machines` app with its image, and the gated relay are live on Fly; no real machine
+> has been made from a phone yet, and the egress limits are not yet enforced outside the machine.
+> See `spec/phone/nekko-cloud-machines.md`.
 
 A Nekko Cloud machine is a sandboxed computer in the cloud that your phone pairs with like any
 other computer, so you can use cloud models from your phone with no computer of your own
-switched on. It is part of Nekko Cloud Pro and Team.
+switched on. It is part of Nekko Cloud Pro and Enterprise.
 
 ## What it is
 
@@ -53,8 +54,11 @@ Four Fly apps in the Nekko Labs org, deployed in this order. Each step is checke
 2. **`nekko-cloud-machines`**, which holds every user machine and serves nothing. Create it with no
    IP addresses, push the image to Fly's registry and note its digest:
    `fly apps create nekko-cloud-machines`, then
-   `fly deploy --build-only --push -a nekko-cloud-machines --image-label <git sha> .`
-   (from the repo root, which builds the root `Dockerfile`). Make a deploy token for this app
+   `fly deploy . -c machines.toml --dockerfile Dockerfile --build-only --push --remote-only -a nekko-cloud-machines --image-label <git sha>`,
+   where `machines.toml` holds only `app = "nekko-cloud-machines"` (the app has no machines, so
+   flyctl cannot infer a config). Run it from a clean export of the commit
+   (`git archive HEAD | tar -x -C <dir>`), not a working checkout: untracked build output there
+   sent 16 GB of context and timed the builder out. Make a deploy token for this app
    only: `fly tokens create deploy -a nekko-cloud-machines`.
 3. **`nekko-agent-api`** (`apps/nekko-agent-api/fly.toml`): set `FLY_API_TOKEN` (that token) and
    `NEKKO_MACHINE_IMAGE=registry.fly.io/nekko-cloud-machines@sha256:<digest>`, then `fly deploy`.

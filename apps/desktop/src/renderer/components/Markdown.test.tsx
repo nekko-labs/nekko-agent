@@ -125,7 +125,17 @@ describe('Markdown', () => {
     expect(out).toContain('>#1663</span>');
     expect(out).toContain('>nekko-agent#1662</span>');
     expect(out).not.toContain('>Preview</button>');
-    expect(html('[issue](https://github.com/nekko-labs/nekko-agent/issues/12)')).toContain('>Preview</button>');
+  });
+  it('draws issue links as issue chips beside PR chips, without a site preview', () => {
+    const out = html('Then [PR #3227](https://github.com/nekko-labs/nekko-agent/pull/3227), linked to [issue #3226](https://github.com/nekko-labs/nekko-agent/issues/3226) and https://github.com/nekko-labs/nekko-agent/issues/12');
+    expect(out.match(/class="pr-link-chip /g)).toHaveLength(3);
+    expect(out.match(/data-issue-state="unknown"/g)).toHaveLength(2);
+    expect(out).toContain('>issue #3226</span>');
+    expect(out).toContain('>nekko-agent#12</span>');
+    expect(out).not.toContain('>Preview</button>');
+    // The issue list and an issue's sub-pages are ordinary links.
+    expect(html('[all](https://github.com/nekko-labs/nekko-agent/issues)')).toContain('>Preview</button>');
+    expect(html('[x](https://github.com/a/b/issues/12/linked_closing_reference)')).toContain('>Preview</button>');
   });
   it('shows a pointer over every chat link, file links included', () => {
     const out = html('[site](https://example.com) and [#1](https://github.com/a/b/pull/1)');
@@ -165,6 +175,36 @@ describe('Markdown', () => {
     const out = html('- bullet\n1. number');
     expect(out).toContain('<ul');
     expect(out).toContain('<ol');
+  });
+
+  it('keeps a numbered list one list when its items are separated by blank lines', () => {
+    const out = html('1. first\n\n2. second\n\n3. third');
+    expect(out.match(/<ol/g)).toHaveLength(1);
+    expect(out.match(/<li dir="auto">/g)).toHaveLength(3);
+  });
+
+  it('keeps bold lead-in items in one list under a bold header', () => {
+    const out = html('**Improvements, in priority order**\n\n1. **One.** text\n\n2. **Two.** text\n\n3. **Three.** text');
+    expect(out.match(/<ol/g)).toHaveLength(1);
+    expect(out.match(/<li dir="auto">/g)).toHaveLength(3);
+  });
+
+  it('starts a numbered list at the number it was written with', () => {
+    expect(html('3. third\n4. fourth')).toContain('start="3"');
+  });
+
+  it('keeps a bulleted list one list across blank lines', () => {
+    expect(html('- a\n\n- b').match(/<ul/g)).toHaveLength(1);
+  });
+
+  it('still starts a new list at a bullet after a numbered item and a blank line', () => {
+    const out = html('1. a\n\n- b');
+    expect(out).toContain('<ol');
+    expect(out).toContain('<ul');
+  });
+
+  it('ends a numbered list at a paragraph after a blank line', () => {
+    expect(html('1. a\n\nplain text')).toMatch(/<\/ol><p[^>]*>plain text/);
   });
 
   it('renders numbered lists, headings, quotes and rules', () => {
@@ -256,6 +296,13 @@ describe('Markdown (document mode)', () => {
     expect(out).toContain('Nekko');
   });
 
+  it('does not rebuild a tag out of the text around a stripped one', () => {
+    // One pass over `<<b>script>` strips `<b>` and leaves `<script>` behind.
+    const out = doc('<<b>script>alert(1)</b>');
+    expect(out).not.toContain('&lt;script');
+    expect(out).toContain('alert(1)');
+  });
+
   it('turns an HTML img into the same chip as markdown image syntax', () => {
     const out = doc('<img src="docs/shot.png" alt="A screenshot" />');
     expect(out).toContain('A screenshot');
@@ -295,6 +342,11 @@ const FIXTURES = [
   'one\ntwo',
   '- bullet\n1. number',
   '1. first\n2. second',
+  '1. first\n\n2. second\n\n3. third',
+  '**Lead-in**\n\n1. **One.** a\n\n2. **Two.** b',
+  '3. third\n4. fourth',
+  '- a\n\n- b\n\n  - nested after a blank\n\n- c',
+  '1. a\n\n- b',
   '## Heading',
   '> quoted',
   '---',
@@ -332,7 +384,12 @@ const REPLY = [
   'Text glued to the fence, then a rule:',
   '---',
   '1. one',
+  '',
   '2. two',
+  '',
+  '  - nested after a blank',
+  '',
+  '3. three',
   '',
   '```',
   'an unlabelled fence',
@@ -362,13 +419,26 @@ describe('Markdown block split', () => {
     expect(out).not.toContain('<li');
   });
 
-  it('leaves finished blocks untouched as a reply grows', () => {
-    // A segment is final once another begins after it: its key and source must
-    // come out the same in every longer prefix, which is what lets React skip it.
+  it('keeps a loose list under a topic label one list, as the whole-text parse does', () => {
+    const text = '**Next steps:** 1. merge\n\n2. deploy';
+    const chat = renderToStaticMarkup(<Markdown text={text} topics />);
+    const wholeText = renderToStaticMarkup(
+      <div className="space-y-1 text-sm leading-[1.6]">{renderWhole(text, { doc: false, topics: true, evidence: [] })}</div>,
+    );
+    expect(chat).toBe(wholeText);
+    expect(chat.match(/<ol/g)).toHaveLength(1);
+  });
+
+  it('grows an earlier segment only by appending to it as a reply grows', () => {
+    // A segment keeps its key, and its source only grows: a list absorbs the items
+    // that follow its blank lines, so a streamed "2. " can extend an earlier list.
+    const body = (s: ReturnType<typeof markdownSegments>[number]) => (s.kind === 'text' ? s.src : s.code);
     for (let n = 1; n < REPLY.length; n += 3) {
       const before = markdownSegments(REPLY.slice(0, n));
       const after = markdownSegments(REPLY.slice(0, n + 3));
-      for (const seg of before.slice(0, -1)) expect(after).toContainEqual(seg);
+      for (const seg of before.slice(0, -1)) {
+        expect(after.some(s => s.key === seg.key && body(s).startsWith(body(seg)))).toBe(true);
+      }
     }
   });
 });

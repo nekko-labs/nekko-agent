@@ -5,7 +5,7 @@
 //! The Supabase access token is traded once for this device's Nekko Cloud
 //! token and dropped; the token goes in the [`vault`].
 //!
-//! **Sync (Pro and Team).** Every chat is sealed on this device with
+//! **Sync (Pro and Enterprise).** Every chat is sealed on this device with
 //! `nekko-sync` and only ciphertext is uploaded; see `docs/SYNC-ENCRYPTION.md`.
 //! Turning sync on for an account's first device makes the keyring and the
 //! recovery key (shown once). Another device joins either with the recovery
@@ -31,7 +31,9 @@ mod http;
 pub mod library;
 mod org_records;
 mod orgs;
+mod pace;
 pub mod records;
+pub mod relay_channel;
 pub mod state;
 pub use nekko_vault as vault;
 
@@ -48,7 +50,7 @@ use state::{Account, LibrarySynced, State, Synced};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use vault::Vault;
 use zeroize::Zeroize;
 
@@ -79,6 +81,7 @@ pub const CHANNELS: &[&str] = &[
     "sync:revoke",
     "sync:now",
     "sync:setEnabled",
+    "sync:setKind",
     "sync:deleteAll",
     "library:sync",
     "org:list",
@@ -181,6 +184,20 @@ pub struct Cloud {
     host: Mutex<Option<Arc<HostInfo>>>,
     /// One publish, withdrawal or sharing change at a time.
     share: tokio::sync::Mutex<()>,
+    /// The Nekko Cloud Relay account channel: presence and sync nudges (decision 0116).
+    relay: relay_channel::Channel,
+    /// Relay tickets kept until they are due for renewal (`renewAfterSeconds`).
+    tickets: pace::Tickets,
+    /// A pass started by a Relay nudge is waiting out its jitter; more nudges join it.
+    nudge_pending: pace::Pending,
+    /// The lease, in seconds, the API last said it granted this computer's heartbeat (0: not known).
+    lease_seconds: std::sync::atomic::AtomicU64,
+    /// A nudge in that burst said settings or organizations changed: the pass reads the account in full.
+    nudge_full: std::sync::atomic::AtomicBool,
+    /// The longest a nudge's pass is held, in milliseconds (a field so tests need not wait).
+    nudge_window_ms: std::sync::atomic::AtomicU64,
+    /// When the account and sync state were last read in full.
+    full_read: Mutex<pace::FullRead>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -213,28 +230,61 @@ impl Cloud {
             run: tokio::sync::Mutex::new(()),
             host: Mutex::new(None),
             share: tokio::sync::Mutex::new(()),
+            relay: relay_channel::Channel::default(),
+            tickets: pace::Tickets::default(),
+            nudge_pending: pace::Pending::default(),
+            lease_seconds: std::sync::atomic::AtomicU64::new(0),
+            nudge_full: Default::default(),
+            nudge_window_ms: std::sync::atomic::AtomicU64::new(pace::NUDGE_WINDOW.as_millis() as u64),
+            full_read: Mutex::default(),
         })
     }
 
-    /// Sync in the background every `every` while it is on.
+    /// Sync in the background while it is on. Without the Relay account channel the pass runs about
+    /// every `every`; with it up, changes arrive as nudges and the timer is a 5 minute safety poll.
+    /// A timer pass only pulls (one call); the account and sync state are read in full on start, on
+    /// a settings or organizations nudge, on a user action, when a pull meets a newer key epoch, and
+    /// every 10 minutes. Each computer starts at a random point in the first quarter of the
+    /// interval and each wait varies by 20% either way, so computers that started or stalled
+    /// together don't call Nekko Cloud together. The loop also looks at the clock every 30 s: a
+    /// jump means the computer woke from sleep, and it pulls at once.
     pub fn start(self: &Arc<Self>, every: Duration) {
         let me = self.clone();
         tokio::spawn(async move {
+            tokio::time::sleep(pace::start_offset(every, pace::unit())).await;
+            let mut watch = pace::WakeWatch::new(std::time::SystemTime::now());
             loop {
                 if me.ready() {
-                    let _ = me.sync_once().await;
+                    let _ = me.sync_quick().await;
                 }
-                tokio::time::sleep(every).await;
+                let spread = pace::unit();
+                let mut waited = Duration::ZERO;
+                loop {
+                    // The target follows the channel: it may come up or go down while waiting.
+                    let target = pace::jittered(pace::poll_interval(me.relay.connected(), every), spread);
+                    if waited >= target {
+                        break;
+                    }
+                    let step = (target - waited).min(pace::WAKE_TICK);
+                    tokio::time::sleep(step).await;
+                    waited += step;
+                    if watch.woke(std::time::SystemTime::now()) {
+                        // Several computers may wake together (a shared power event): don't call in step.
+                        tokio::time::sleep(pace::nudge_delay(pace::NUDGE_WINDOW, pace::unit())).await;
+                        break;
+                    }
+                }
             }
         });
-        // Sharing with organizations: a beat every 30 seconds (it also picks up after sleep or a lost connection).
+        // Sharing with organizations: a beat about every 30 seconds (it also picks up after sleep or a lost
+        // connection). On the Relay channel, with an API lease that outlasts it, every 10 minutes (see
+        // `orgs::heartbeat_wait`; off in this build). A descriptor is published only when it changed.
         let me = self.clone();
         tokio::spawn(async move {
-            let mut beat = tokio::time::interval(HEARTBEAT);
-            beat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            tokio::time::sleep(pace::start_offset(HEARTBEAT, pace::unit())).await;
             loop {
-                beat.tick().await;
                 me.share_tick().await;
+                tokio::time::sleep(pace::jittered(me.next_heartbeat(), pace::unit())).await;
             }
         });
     }
@@ -305,6 +355,20 @@ impl Cloud {
                 }
                 Ok(self.changed())
             }
+            // One kind of record (`chats`, `library`) on or off for this computer (#3089).
+            "sync:setKind" => {
+                let kind = arg(args, 0);
+                let on = args.get(1).and_then(Value::as_bool).unwrap_or(false);
+                let mut known = false;
+                self.edit(|s| known = s.set_kind(&kind, on))?;
+                if !known {
+                    return Err("Unknown kind of sync.".into());
+                }
+                if on && self.ready() {
+                    self.kick();
+                }
+                Ok(self.changed())
+            }
             "sync:deleteAll" => self.delete_all().await,
             // The files Library lists on this computer (#2748). Kept only while Library sync is
             // available to this account; a new or changed file starts a sync at once.
@@ -325,7 +389,7 @@ impl Cloud {
                         }
                     }
                 })?;
-                if fresh && self.ready() {
+                if fresh && self.ready() && lock(&self.state).kind_on("library") {
                     self.kick();
                 }
                 Ok(self.changed())
@@ -347,12 +411,50 @@ impl Cloud {
         self.vault.get("token").ok_or_else(|| "Sign in to Nekko Cloud first.".to_string())
     }
 
+    /// A Nekko Cloud Relay ticket (decision 0116): `agent` for this computer's
+    /// relay room, `account` for the account channel. The ticket, and how long
+    /// to keep it before asking for the next. Errors are what the owner reads.
+    pub async fn relay_ticket(&self, scope: &str, room: Option<&str>) -> Result<(String, Duration), String> {
+        let token = self.token().map_err(|_| "Sign in to Nekko Cloud to use Nekko Cloud Relay.".to_string())?;
+        // Kept until it is due for renewal: a redial, or a second user of the same room, doesn't ask again.
+        if let Some(held) = self.tickets.get(&token, scope, room, Instant::now()) {
+            return Ok(held);
+        }
+        let mut body = json!({ "scope": scope });
+        if let Some(room) = room {
+            body["room"] = json!(room);
+        }
+        match self.api.send(&token, reqwest::Method::POST, "/v1/relay/ticket", Some(body)).await {
+            Ok(v) => {
+                let ticket = v["ticket"]
+                    .as_str()
+                    .filter(|t| t.starts_with("nkr1."))
+                    .ok_or("Nekko Cloud sent no relay ticket.")?;
+                // At least a minute, so a short answer can't make the agent ask in a loop.
+                let renew = Duration::from_secs(v["renewAfterSeconds"].as_u64().unwrap_or(3 * 3600).max(60));
+                self.tickets.put(&token, scope, room, ticket, renew, Instant::now());
+                Ok((ticket.to_string(), renew))
+            }
+            Err(err) => Err(match (err.status, err.code.as_str()) {
+                (402, _) => "Nekko Cloud Relay is part of Nekko Cloud Pro. Upgrade, or use Tailscale for free.".into(),
+                (404, _) => "Nekko Cloud Relay isn't available for this account yet.".into(),
+                (401, _) => "Sign in to Nekko Cloud again to use Nekko Cloud Relay.".into(),
+                _ => format!("Couldn't get a Nekko Cloud Relay ticket: {}", err.message),
+            }),
+        }
+    }
+
     fn key_id(&self) -> u32 {
         lock(&self.state).key_id.unwrap_or(0)
     }
 
     fn account(&self) -> Option<Account> {
         lock(&self.state).account.clone()
+    }
+
+    /// Signed in with a Nekko team account (decision 0092).
+    pub fn is_staff(&self) -> bool {
+        self.account().is_some_and(|a| a.staff)
     }
 
     fn account_id(&self) -> Result<String, String> {
@@ -496,7 +598,7 @@ impl Cloud {
         // isn't open to this account, so the app shows no trace of it.
         let library = if s.account.as_ref().is_some_and(|a| a.can_sync && a.library_cloud) {
             let key = s.key_id.unwrap_or(0);
-            let on = has_keys && s.enabled;
+            let on = has_keys && s.enabled && s.kind_on("library");
             let files: serde_json::Map<String, Value> = s
                 .library_files
                 .keys()
@@ -542,9 +644,11 @@ impl Cloud {
         };
         json!({
             "signedIn": signed_in,
+            // Decision 0116: the account channel, while this account may use Nekko Cloud Relay.
+            "relay": if self.relay_included() { self.relay.status() } else { Value::Null },
             "account": s.account.as_ref().map(|a| json!({
                 "email": a.email, "plan": a.plan, "canSync": a.can_sync,
-                "staff": a.staff, "features": { "billing": a.billing, "libraryCloud": a.library_cloud },
+                "staff": a.staff, "features": { "billing": a.billing, "libraryCloud": a.library_cloud, "cloudRelay": a.cloud_relay },
             })),
             "library": library,
             "oauthPending": live.oauth.is_some(),
@@ -553,6 +657,8 @@ impl Cloud {
             "sync": {
                 "phase": phase,
                 "enabled": s.enabled,
+                // What syncs on this computer, kind by kind (#3089).
+                "kinds": { "chats": s.kind_on("chats"), "library": s.kind_on("library") },
                 "recoveryConfirmed": s.recovery_confirmed,
                 "keyEpoch": s.key_id,
                 "lastSyncAt": s.last_sync_at,
@@ -578,6 +684,7 @@ impl Cloud {
         self.edit(|s| s.account = Some(account))?;
         let remote = self.api.get(&token, "/v1/sync/state").await.map_err(e)?;
         lock(&self.live).remote = Some(remote);
+        lock(&self.full_read).done(&token, Instant::now());
         Ok(())
     }
 
@@ -991,7 +1098,7 @@ impl Cloud {
         let token = self.token()?;
         self.refresh().await?;
         if !self.account().is_some_and(|a| a.can_sync) {
-            return Err("Sync needs a Pro or Team plan.".into());
+            return Err("Sync needs a Pro or Enterprise plan.".into());
         }
         if self.keyring(self.key_id()).is_some() {
             self.edit(|s| s.enabled = true)?;
@@ -1358,8 +1465,22 @@ impl Cloud {
         self.changed();
     }
 
-    /// One pull and push, repeated (up to three times) while pushes conflict.
+    /// One pass, from a user action: the account and sync state are read in full first, then one
+    /// pull and push, repeated (up to three times) while pushes conflict.
     pub async fn sync_once(self: &Arc<Self>) -> Result<(), String> {
+        self.sync_with(false).await
+    }
+
+    /// A pass from a timer, a nudge, the channel coming up or a wake from sleep: it only pulls (and
+    /// pushes what changed here), without reading the account and sync state again, unless a full
+    /// read is due (on start, asked for by a settings or organizations nudge, or 10 minutes old).
+    pub async fn sync_quick(self: &Arc<Self>) -> Result<(), String> {
+        let token = self.token()?;
+        let due = lock(&self.full_read).due(&token, Instant::now()) || lock(&self.live).remote.is_none();
+        self.sync_with(!due).await
+    }
+
+    async fn sync_with(self: &Arc<Self>, pull_only: bool) -> Result<(), String> {
         let _one = self.run.lock().await;
         let token = self.token()?;
         {
@@ -1369,7 +1490,7 @@ impl Cloud {
             live.pulled = 0;
         }
         self.changed();
-        let result = self.pass(&token).await;
+        let result = self.pass(&token, pull_only).await;
         {
             let mut live = lock(&self.live);
             live.syncing = false;
@@ -1382,12 +1503,18 @@ impl Cloud {
                 s.last_sync_at = Some(nekko_js::now_ms_f64());
             }
         })?;
+        // Something new is in Nekko Cloud: the account's other devices pull now (decision 0116).
+        if err.is_none() && lock(&self.live).pushed > 0 {
+            self.relay.nudge("sync");
+        }
         self.changed();
         result
     }
 
-    async fn pass(self: &Arc<Self>, token: &str) -> Result<(), String> {
-        self.refresh().await?;
+    async fn pass(self: &Arc<Self>, token: &str, pull_only: bool) -> Result<(), String> {
+        if !pull_only {
+            self.refresh().await?;
+        }
         let held = lock(&self.state).key_id;
         let remote_key = self.remote_key();
         if held.is_some() && remote_key.is_none() {
@@ -1420,6 +1547,8 @@ impl Cloud {
                 }
                 continue;
             }
+            // Pictures chats here are still waiting for; one that fails waits for the next pass.
+            let _ = self.fetch_wanted_pictures(token).await;
             self.prove(token, self.key_id()).await?;
             let chats_again = self.push(token).await?;
             let library_again = self.push_library(token).await?;
@@ -1434,25 +1563,50 @@ impl Cloud {
 
     /// Pull and apply everything new. False when it stopped at a record under
     /// a newer key epoch than this device holds (it stays unread until then).
+    /// A record whose kind is off here is passed over unapplied (`State::kinds_off`).
+    /// A kind turned back on mid-pull moves the cursor back: the pull notices
+    /// (`State::rewinds`) and carries on from there rather than past it.
     async fn pull(&self, token: &str) -> Result<bool, String> {
         let account_id = self.account_id()?;
-        loop {
-            let since = lock(&self.state).cursor;
+        'pages: loop {
+            let (since, rewinds) = {
+                let s = lock(&self.state);
+                (s.cursor, s.rewinds)
+            };
             let page =
                 self.api.get(token, &format!("/v1/sync/pull?since={since}&limit={PULL_PAGE}")).await.map_err(e)?;
             let objects = page["objects"].as_array().cloned().unwrap_or_default();
             let held = self.key_id();
+            // Moves the cursor on, unless a kind came back on since this page began.
+            let advance = |to: u64| -> Result<bool, String> {
+                let mut rewound = false;
+                self.edit(|s| {
+                    if s.rewinds == rewinds {
+                        s.cursor = s.cursor.max(to);
+                    } else {
+                        rewound = true;
+                    }
+                })?;
+                Ok(!rewound)
+            };
             for o in &objects {
                 if o["keyId"].as_u64().is_some_and(|k| k > u64::from(held)) {
                     return Ok(false);
                 }
-                self.apply(&account_id, o)?;
-                if let Some(seq) = o["seq"].as_u64() {
-                    self.edit(|s| s.cursor = s.cursor.max(seq))?;
+                let skip = lock(&self.state).skips_collection(o["collection"].as_str().unwrap_or(""));
+                if !skip {
+                    self.apply(&account_id, o)?;
+                }
+                if let Some(seq) = o["seq"].as_u64()
+                    && !advance(seq)?
+                {
+                    continue 'pages;
                 }
             }
             let next = page["next"].as_u64().unwrap_or(since);
-            self.edit(|s| s.cursor = s.cursor.max(next))?;
+            if !advance(next)? {
+                continue 'pages;
+            }
             if page["more"].as_bool() != Some(true) || objects.is_empty() {
                 return Ok(true);
             }
@@ -1474,7 +1628,10 @@ impl Cloud {
             return Ok(());
         };
         let key_id = self.key_id();
-        if kid != key_id || lock(&self.state).revisions.get(oid).is_some_and(|seen| *seen >= rev) {
+        // A picture is checked against its own name, so an older revision of one is no rollback:
+        // it is opened again when a chat here still wants it (fetched one by one).
+        let seen_before = lock(&self.state).revisions.get(oid).is_some_and(|seen| *seen >= rev);
+        if kid != key_id || (seen_before && collection != records::PICTURE) {
             return Ok(());
         }
         let Some(keyring) = self.keyring(kid) else { return Ok(()) };
@@ -1519,26 +1676,78 @@ impl Cloud {
                 let local = self.sessions.get(&id);
                 let busy = (self.busy)(&id);
                 match rec {
-                    ChatRecord::Chat(chat) => {
+                    ChatRecord::Chat(mut chat) => {
                         let theirs = records::updated_at(&chat);
-                        let newer = local.as_ref().is_none_or(|l| theirs > records::updated_at(l));
-                        let same = local.as_ref().is_some_and(|l| theirs == records::updated_at(l));
-                        if newer && !busy && self.sessions.put_synced(&chat).is_ok() {
+                        let me = lock(&self.state).device_id.clone().unwrap_or_default();
+                        // Its pictures (#3298): the chat store puts each back from beside the
+                        // chats; those not there yet are fetched after the pull.
+                        let home = records::home_of(&chat).unwrap_or(&me).to_string();
+                        let pictures: Vec<String> =
+                            records::picture_refs(&chat).iter().map(|n| records::picture_local_id(&home, n)).collect();
+                        let missing: Vec<String> = records::picture_refs(&chat)
+                            .into_iter()
+                            .filter(|n| !self.sessions.has_blob(n))
+                            .map(|n| records::picture_local_id(&home, &n))
+                            .collect();
+                        // Whose chat it is (#3143): another computer's, this one's, or not said
+                        // (a record from before records named their computer).
+                        let named = records::home_of(&chat).is_some();
+                        let foreign = records::home_of(&chat).is_some_and(|h| h != me);
+                        let take = if foreign {
+                            // A copy removed here stays removed.
+                            let removed = lock(&self.state).chats.get(&id).is_some_and(|k| k.foreign && k.deleted);
+                            // Its computer's copy wins, unless this computer carried on a chat
+                            // nobody had claimed yet: then this one claims it with its newer copy.
+                            !removed
+                                && local
+                                    .as_ref()
+                                    .is_none_or(|l| records::home_of(l).is_some() || theirs >= records::updated_at(l))
+                        } else {
+                            local.as_ref().is_none_or(|l| theirs > records::updated_at(l))
+                        };
+                        let same = !foreign && local.as_ref().is_some_and(|l| theirs == records::updated_at(l));
+                        if foreign {
+                            // How the copy is arranged here is this computer's.
+                            if let (Some(l), Some(o)) = (&local, chat.as_object_mut()) {
+                                for key in records::KEPT_HERE {
+                                    match l.get(key) {
+                                        Some(v) => o.insert(key.into(), v.clone()),
+                                        None => o.remove(key),
+                                    };
+                                }
+                            }
+                        } else if let Some(o) = chat.as_object_mut() {
+                            // This computer's own chat: the file says nothing about a home.
+                            o.remove(records::HOME);
+                        }
+                        if take && !busy && self.sessions.put_synced(&chat).is_ok() {
                             lock(&self.live).pulled += 1;
                         }
-                        let synced =
-                            Synced { updated_at: theirs, digest: records::digest(&plain), deleted: false, key_id: kid };
+                        let synced = Synced {
+                            updated_at: theirs,
+                            digest: records::digest(&plain),
+                            deleted: false,
+                            key_id: kid,
+                            homed: named,
+                            foreign,
+                            pictured: true,
+                            pictures,
+                        };
                         self.edit(|s| {
                             s.revisions.insert(oid.into(), rev);
                             // Only when we took it (or already had it); otherwise our newer copy still needs pushing.
-                            if (newer && !busy) || same {
+                            if (take && !busy) || same {
                                 s.chats.insert(id.clone(), synced);
+                                s.pictures_wanted.extend(missing);
                             }
                         })?;
                     }
                     ChatRecord::Deleted { at } => {
+                        let foreign = local.as_ref().is_some_and(|l| {
+                            records::home_of(l).is_some_and(|h| Some(h) != lock(&self.state).device_id.as_deref())
+                        });
                         if let Some(l) = &local
-                            && records::updated_at(l) <= at
+                            && (foreign || records::updated_at(l) <= at)
                             && !busy
                         {
                             let _ = self.sessions.delete(&id);
@@ -1547,14 +1756,94 @@ impl Cloud {
                             s.revisions.insert(oid.into(), rev);
                             s.chats.insert(
                                 id.clone(),
-                                Synced { updated_at: at, digest: String::new(), deleted: true, key_id: kid },
+                                Synced {
+                                    updated_at: at,
+                                    digest: String::new(),
+                                    deleted: true,
+                                    key_id: kid,
+                                    homed: true,
+                                    foreign,
+                                    pictured: true,
+                                    pictures: Vec::new(),
+                                },
                             );
                         })?;
                     }
                 }
             }
+            records::PICTURE => self.apply_picture(&keyring, account_id, kid, oid, rev, blob, seen_before)?,
             LIBRARY => self.apply_library(&keyring, account_id, kid, oid, rev, blob)?,
             _ => {}
+        }
+        Ok(())
+    }
+
+    /// A chat's picture (#3298): kept beside the chats under its blob name, where a chat's
+    /// `nekko-blob:` reference finds it. One that isn't the record filed under its computer and
+    /// name, or whose bytes don't hash to its name, is ignored. A tombstone only notes that its
+    /// computer's chats no longer refer to it; a copy here that still does keeps its picture.
+    #[allow(clippy::too_many_arguments)]
+    fn apply_picture(
+        &self,
+        keyring: &Keyring,
+        account_id: &str,
+        kid: u32,
+        oid: &str,
+        rev: u64,
+        blob: &str,
+        seen_before: bool,
+    ) -> Result<(), String> {
+        let Ok(plain) = open_record(keyring, account_id, kid, records::PICTURE, oid, rev, blob) else {
+            return Ok(());
+        };
+        let Some(rec) = records::parse_picture(&plain) else { return Ok(()) };
+        let local = rec.local_id();
+        if object_id(keyring, records::PICTURE, &local).as_deref() != Ok(oid) {
+            return Ok(());
+        }
+        let deleted = matches!(rec, records::PictureRecord::Deleted { .. });
+        if let records::PictureRecord::Picture { name, bytes, .. } = &rec
+            && self.sessions.put_blob(name, bytes).is_ok()
+        {
+            lock(&self.live).pulled += usize::from(!seen_before);
+        }
+        self.edit(|s| {
+            s.pictures_wanted.remove(&local);
+            if !seen_before {
+                s.revisions.insert(oid.into(), rev);
+                s.pictures.insert(local.clone(), state::PictureSynced { key_id: kid, deleted });
+            }
+        })
+    }
+
+    /// Fetch, one by one, the pictures chats here refer to that are not beside them yet (a chat
+    /// that arrived before its picture, or a picture removed here since). One Nekko Cloud has no
+    /// record of, or only a tombstone for, is no longer looked for.
+    async fn fetch_wanted_pictures(&self, token: &str) -> Result<(), String> {
+        let wanted: Vec<String> = lock(&self.state).pictures_wanted.iter().take(PULL_PAGE as usize).cloned().collect();
+        if wanted.is_empty() {
+            return Ok(());
+        }
+        let account_id = self.account_id()?;
+        let Some(keyring) = self.keyring(self.key_id()) else { return Ok(()) };
+        for local in wanted {
+            let name = local.rsplit('\n').next().unwrap_or("");
+            if self.sessions.has_blob(name) {
+                self.edit(|s| {
+                    s.pictures_wanted.remove(&local);
+                })?;
+                continue;
+            }
+            let oid = object_id(&keyring, records::PICTURE, &local).map_err(|err| err.to_string())?;
+            match self.api.get(token, &format!("/v1/sync/objects/{}/{oid}", records::PICTURE)).await {
+                Ok(o) => self.apply(&account_id, &o)?,
+                Err(err) if err.status == 404 => {}
+                Err(err) => return Err(e(err)),
+            }
+            // Arrived, or nothing more will: either way it is not looked for again.
+            self.edit(|s| {
+                s.pictures_wanted.remove(&local);
+            })?;
         }
         Ok(())
     }
@@ -1631,31 +1920,71 @@ impl Cloud {
     }
 
     /// Push what changed here, and anything last written under an older
-    /// epoch. True when a conflict needs another pass.
+    /// epoch. True when a conflict needs another pass. Nothing while Chats is
+    /// off here: chats changed or deleted meanwhile go up once it is back on.
     async fn push(&self, token: &str) -> Result<bool, String> {
+        if !lock(&self.state).kind_on("chats") {
+            lock(&self.live).skipped.clear();
+            return Ok(false);
+        }
         let account_id = self.account_id()?;
         let key_id = self.key_id();
         let keyring = self.keyring(key_id).ok_or("This device has no sync keys.")?;
         let st = lock(&self.state).clone();
         let mut queue: Vec<(String, Vec<u8>, Synced)> = Vec::new();
+        // Chats synced before pictures did that hold none: noted, not sent again.
+        let mut pictured: Vec<String> = Vec::new();
         let mut skipped: BTreeMap<&'static str, usize> = BTreeMap::new();
+        let me = st.device_id.clone().ok_or("This device isn't registered for sync.")?;
         let summaries = self.sessions.summaries();
         let here: BTreeSet<String> = summaries.iter().filter_map(|s| s["id"].as_str().map(String::from)).collect();
         for s in &summaries {
             let Some(id) = s["id"].as_str() else { continue };
             let updated = s["updatedAt"].as_f64().unwrap_or(0.0);
+            // Another computer's chat: only that computer changes it (#3143). This computer pushes
+            // its copy, as it is and still naming that computer, only to carry it into a newer key
+            // epoch, so a chat of a removed computer stays readable to the computers left.
+            let foreign = records::home_of(s).is_some_and(|h| h != me);
+            if foreign && st.chats.get(id).is_none_or(|k| k.deleted || !k.foreign || k.key_id == key_id) {
+                continue;
+            }
             let known = st.chats.get(id).filter(|k| k.key_id == key_id);
-            if known.is_some_and(|k| !k.deleted && k.updated_at == updated) {
+            if known.is_some_and(|k| !k.deleted && k.homed && k.pictured && k.updated_at == updated) {
                 continue;
             }
             let Some(chat) = self.sessions.get(id) else { continue };
-            match records::chat_plaintext(&chat) {
+            match records::chat_plaintext(&chat, &me, &st.device_label) {
                 Ok(plain) => {
-                    let digest = records::digest(&plain);
+                    let digest = records::digest(&plain.bytes);
                     if known.is_some_and(|k| k.digest == digest) {
+                        // Synced before pictures did, and has none: nothing to send again.
+                        if known.is_some_and(|k| !k.pictured) {
+                            pictured.push(id.to_string());
+                        }
                         continue;
                     }
-                    queue.push((id.to_string(), plain, Synced { updated_at: updated, digest, deleted: false, key_id }));
+                    // Each picture is read again from beside the chats when it is sent.
+                    let mut pictures = Vec::new();
+                    for (name, bytes) in &plain.pictures {
+                        if let Some(bytes) = bytes {
+                            let _ = self.sessions.put_blob(name, bytes);
+                        }
+                        pictures.push(records::picture_local_id(&plain.home, name));
+                    }
+                    queue.push((
+                        id.to_string(),
+                        plain.bytes,
+                        Synced {
+                            updated_at: updated,
+                            digest,
+                            deleted: false,
+                            key_id,
+                            homed: true,
+                            foreign,
+                            pictured: true,
+                            pictures,
+                        },
+                    ));
                 }
                 Err(skip) => {
                     *skipped
@@ -1668,20 +1997,54 @@ impl Cloud {
                 }
             }
         }
-        // Chats deleted here since they were synced.
+        // Chats deleted here since they were synced. Another computer's copy removed here is only
+        // forgotten here: its computer still has it, and a newer copy isn't taken again.
+        let mut removed_copies = Vec::new();
         for (id, k) in &st.chats {
             if !k.deleted && !here.contains(id) {
+                if k.foreign {
+                    removed_copies.push(id.clone());
+                    continue;
+                }
                 let at = nekko_js::now_ms_f64();
                 queue.push((
                     id.clone(),
                     records::tombstone(at),
-                    Synced { updated_at: at, digest: String::new(), deleted: true, key_id },
+                    Synced {
+                        updated_at: at,
+                        digest: String::new(),
+                        deleted: true,
+                        key_id,
+                        homed: true,
+                        foreign: false,
+                        pictured: true,
+                        pictures: Vec::new(),
+                    },
                 ));
             }
         }
+        if !removed_copies.is_empty() || !pictured.is_empty() {
+            self.edit(|s| {
+                for id in &removed_copies {
+                    if let Some(k) = s.chats.get_mut(id) {
+                        k.deleted = true;
+                    }
+                }
+                for id in &pictured {
+                    if let Some(k) = s.chats.get_mut(id) {
+                        k.pictured = true;
+                    }
+                }
+            })?;
+        }
+        // Pictures go first, so a computer pulling the chat finds them already there (#3298).
+        let (sends, removes) = picture_work(&st, &me, key_id, &queue, |name| self.sessions.has_blob(name));
+        let (unsent, mut again) = self.push_pictures(token, &sends, false).await?;
+        if unsent > 0 {
+            skipped.insert("pictures", unsent);
+        }
         lock(&self.live).skipped = skipped;
         let total = queue.len();
-        let mut again = false;
         let mut done = 0;
         let sizes: Vec<usize> = queue.iter().map(|(_, plain, _)| plain.len()).collect();
         for range in push_batches(&sizes) {
@@ -1727,7 +2090,84 @@ impl Cloud {
             }
             done += batch.len();
         }
+        // Then the pictures no chat of this computer refers to any more leave Nekko Cloud.
+        if !removes.is_empty() {
+            again |= self.push_pictures(token, &removes, true).await?.1;
+        }
         Ok(again)
+    }
+
+    /// Push `picture` records (#3298), each read from beside the chats as its request is made,
+    /// or (`gone`) their tombstones. Returns how many could not be sent because the plan's
+    /// storage is full, and whether a conflict (another computer wrote one) needs another pass.
+    async fn push_pictures(
+        &self,
+        token: &str,
+        items: &[(String, String, String)],
+        gone: bool,
+    ) -> Result<(usize, bool), String> {
+        if items.is_empty() {
+            return Ok((0, false));
+        }
+        let account_id = self.account_id()?;
+        let key_id = self.key_id();
+        let keyring = self.keyring(key_id).ok_or("This device has no sync keys.")?;
+        let (mut again, mut i) = (false, 0);
+        while i < items.len() {
+            let (mut objects, mut meta, mut bytes) = (Vec::new(), Vec::new(), 0);
+            while i < items.len() && objects.len() < PUSH_BATCH {
+                let (local, home, name) = &items[i];
+                let plain = if gone {
+                    records::picture_tombstone(home, name)
+                } else {
+                    match self.sessions.blob(name).filter(|b| b.len() <= records::MAX_PICTURE_BYTES) {
+                        Some(b) => records::picture_plaintext(home, name, &b),
+                        None => {
+                            i += 1;
+                            continue;
+                        }
+                    }
+                };
+                if !objects.is_empty() && bytes + plain.len() > PUSH_BYTES {
+                    break;
+                }
+                i += 1;
+                bytes += plain.len();
+                let oid = object_id(&keyring, records::PICTURE, local).map_err(|err| err.to_string())?;
+                let revision = lock(&self.state).revisions.get(&oid).copied().unwrap_or(0) + 1;
+                let blob = seal_record(&keyring, &account_id, key_id, records::PICTURE, &oid, revision, &plain)
+                    .map_err(|err| err.to_string())?;
+                objects.push(json!({ "collection": records::PICTURE, "objectId": oid, "revision": revision, "keyId": key_id, "blob": blob }));
+                meta.push((local.clone(), oid, revision));
+            }
+            if objects.is_empty() {
+                continue;
+            }
+            let sent =
+                self.api.send(token, reqwest::Method::POST, "/v1/sync/push", Some(json!({ "objects": objects }))).await;
+            let res = match sent {
+                Ok(res) => res,
+                // The plan's storage is full: these and the rest wait, and the chats still sync.
+                Err(err) if err.status == 413 => return Ok((meta.len() + items.len() - i, again)),
+                Err(err) => return Err(e(err)),
+            };
+            let results = res["results"].as_array().cloned().unwrap_or_default();
+            for ((local, oid, revision), r) in meta.into_iter().zip(results) {
+                match r["status"].as_str() {
+                    Some("ok") => {
+                        lock(&self.live).pushed += 1;
+                        self.edit(|s| {
+                            s.revisions.insert(oid, revision);
+                            s.pictures.insert(local, state::PictureSynced { key_id, deleted: gone });
+                        })?;
+                    }
+                    // Another computer wrote it (the same picture, checked by its name): the pull takes it in.
+                    Some("conflict") | Some("stale-key") => again = true,
+                    _ => {}
+                }
+            }
+        }
+        Ok((0, again))
     }
 
     /// Push the Library files that are new or changed here, and a tombstone for each synced
@@ -1737,7 +2177,7 @@ impl Cloud {
     async fn push_library(&self, token: &str) -> Result<bool, String> {
         let st = lock(&self.state).clone();
         let device_id = st.device_id.clone().unwrap_or_default();
-        if !st.account.as_ref().is_some_and(|a| a.library_cloud) || device_id.is_empty() {
+        if !st.account.as_ref().is_some_and(|a| a.library_cloud) || device_id.is_empty() || !st.kind_on("library") {
             lock(&self.live).library_skipped.clear();
             return Ok(false);
         }
@@ -1746,10 +2186,20 @@ impl Cloud {
         let keyring = self.keyring(key_id).ok_or("This device has no sync keys.")?;
 
         enum Work {
-            File { path: String, size: u64, modified: f64 },
+            File {
+                path: String,
+                size: u64,
+                modified: f64,
+            },
             /// A file over 8 MB: push only a thumbnail record (#3044).
-            Thumb { path: String, size: u64, modified: f64 },
-            Gone { path: String },
+            Thumb {
+                path: String,
+                size: u64,
+                modified: f64,
+            },
+            Gone {
+                path: String,
+            },
         }
         let mut work = Vec::new();
         let mut skipped: BTreeMap<String, &'static str> = BTreeMap::new();
@@ -1787,10 +2237,21 @@ impl Cloud {
                             }
                         }
                     } else if !synced.is_some_and(|k| {
-                        k.key_id == key_id && k.size == size && k.modified_at == modified
-                            && k.thumbnail_digest == st.library_files.get(path)
-                                .map(|f| if f.thumbnail_data.is_empty() { String::new() } else { records::digest(f.thumbnail_data.as_bytes()) })
-                                .unwrap_or_default()
+                        k.key_id == key_id
+                            && k.size == size
+                            && k.modified_at == modified
+                            && k.thumbnail_digest
+                                == st
+                                    .library_files
+                                    .get(path)
+                                    .map(|f| {
+                                        if f.thumbnail_data.is_empty() {
+                                            String::new()
+                                        } else {
+                                            records::digest(f.thumbnail_data.as_bytes())
+                                        }
+                                    })
+                                    .unwrap_or_default()
                     }) {
                         work.push(Work::File { path: path.clone(), size, modified });
                     }
@@ -1835,20 +2296,30 @@ impl Cloud {
                             path,
                             plain,
                             LibrarySynced {
-                                modified_at: at, size: 0, digest: String::new(),
-                                deleted: true, key_id, thumbnail_digest: String::new(),
+                                modified_at: at,
+                                size: 0,
+                                digest: String::new(),
+                                deleted: true,
+                                key_id,
+                                thumbnail_digest: String::new(),
                             },
                         )
                     }
                     Work::Thumb { path, size, modified } => {
                         // Thumb-only record for a file over 8 MB (#3044).
                         let Some(f) = st.library_files.get(&path) else { continue };
-                        if f.thumbnail_data.is_empty() { continue; }
+                        if f.thumbnail_data.is_empty() {
+                            continue;
+                        }
                         let thumbnail_digest = records::digest(f.thumbnail_data.as_bytes());
                         let plain = library::thumb_plaintext(&device_id, &st.device_label, f, modified, size);
                         let synced = LibrarySynced {
-                            modified_at: modified, size, digest: String::new(),
-                            deleted: false, key_id, thumbnail_digest,
+                            modified_at: modified,
+                            size,
+                            digest: String::new(),
+                            deleted: false,
+                            key_id,
+                            thumbnail_digest,
                         };
                         (path, plain, synced)
                     }
@@ -1872,13 +2343,19 @@ impl Cloud {
                             records::digest(f.thumbnail_data.as_bytes())
                         };
                         let synced = LibrarySynced {
-                            modified_at: modified, size, digest, deleted: false, key_id, thumbnail_digest,
+                            modified_at: modified,
+                            size,
+                            digest,
+                            deleted: false,
+                            key_id,
+                            thumbnail_digest,
                         };
-                        if st
-                            .library
-                            .get(&path)
-                            .is_some_and(|k| !k.deleted && k.key_id == key_id && k.digest == synced.digest && k.thumbnail_digest == synced.thumbnail_digest)
-                        {
+                        if st.library.get(&path).is_some_and(|k| {
+                            !k.deleted
+                                && k.key_id == key_id
+                                && k.digest == synced.digest
+                                && k.thumbnail_digest == synced.thumbnail_digest
+                        }) {
                             self.edit(|s| {
                                 s.library.insert(path.clone(), synced.clone());
                             })?;
@@ -1954,9 +2431,92 @@ impl Cloud {
 
 const REMOVED: &str = "This device was removed from sync on another device.";
 
+/// A `picture` record to push: its local id, its computer and its blob name.
+type PictureItem = (String, String, String);
+
+/// Which `picture` records a push sends (#3298), as `(local id, home, name)`: each picture the
+/// chats being pushed refer to, and each a chat of this computer synced before refers to (one a
+/// full plan held back), that Nekko Cloud doesn't hold under this key epoch and that is here to
+/// send. And which it removes: this computer's pictures that none of its chats refers to any more.
+fn picture_work(
+    st: &State,
+    me: &str,
+    key_id: u32,
+    queue: &[(String, Vec<u8>, Synced)],
+    here: impl Fn(&str) -> bool,
+) -> (Vec<PictureItem>, Vec<PictureItem>) {
+    let split = |local: &str| {
+        let (home, name) = local.rsplit_once('\n').unwrap_or(("", local));
+        (local.to_string(), home.to_string(), name.to_string())
+    };
+    // What each chat refers to once this push lands: the queued copy, else the one synced before.
+    let mut refers: BTreeMap<&str, &Synced> =
+        st.chats.iter().filter(|(_, k)| !k.deleted && !k.foreign).map(|(id, k)| (id.as_str(), k)).collect();
+    for (id, _, k) in queue {
+        refers.insert(id.as_str(), k);
+    }
+    let used: BTreeSet<&String> = refers.values().filter(|k| !k.deleted).flat_map(|k| k.pictures.iter()).collect();
+    let queued = queue.iter().flat_map(|(_, _, k)| k.pictures.iter());
+    let held = |local: &str| st.pictures.get(local).is_some_and(|p| p.key_id == key_id && !p.deleted);
+    let mut sends: BTreeSet<&String> = BTreeSet::new();
+    for local in used.iter().copied().chain(queued) {
+        let (_, _, name) = split(local);
+        if !held(local) && here(&name) {
+            sends.insert(local);
+        }
+    }
+    let removes = st
+        .pictures
+        .iter()
+        .filter(|(local, p)| !p.deleted && !used.contains(local) && split(local).1 == me)
+        .map(|(local, _)| split(local))
+        .collect();
+    (sends.into_iter().map(|l| split(l)).collect(), removes)
+}
+
+#[cfg(test)]
+mod idle_tests;
+
 #[cfg(test)]
 mod push_batch_tests {
     use super::*;
+
+    #[test]
+    fn pictures_go_up_once_per_epoch_and_only_this_computers_leave() {
+        let pic = |home: &str, n: &str| records::picture_local_id(home, &format!("{}.png", n.repeat(64)));
+        let synced = |pictures: Vec<String>, foreign: bool| Synced {
+            pictures,
+            foreign,
+            key_id: 2,
+            pictured: true,
+            homed: true,
+            ..Synced::default()
+        };
+        let mut st = State::default();
+        // A chat of this computer synced before, with a picture held under the current epoch and
+        // one a full plan held back; another computer's copy, whose picture is that computer's.
+        st.chats.insert("s_old".into(), synced(vec![pic("me", "a"), pic("me", "b")], false));
+        st.chats.insert("s_copy".into(), synced(vec![pic("lap", "c")], true));
+        st.pictures.insert(pic("me", "a"), state::PictureSynced { key_id: 2, deleted: false });
+        // Pictures no chat refers to any more: this computer's, held under an older epoch, and another's.
+        st.pictures.insert(pic("me", "d"), state::PictureSynced { key_id: 1, deleted: false });
+        st.pictures.insert(pic("me", "f"), state::PictureSynced { key_id: 2, deleted: true });
+        st.pictures.insert(pic("lap", "e"), state::PictureSynced { key_id: 2, deleted: false });
+        // Pushed now: a new chat with a new picture and one already held; a picture not here.
+        let queue =
+            vec![("s_new".to_string(), vec![], synced(vec![pic("me", "a"), pic("me", "g"), pic("me", "h")], false))];
+        let here = |name: &str| !name.starts_with('h');
+        let (sends, removes) = picture_work(&st, "me", 2, &queue, here);
+        let locals = |v: &[PictureItem]| v.iter().map(|(l, ..)| l.clone()).collect::<Vec<_>>();
+        assert_eq!(locals(&sends), vec![pic("me", "b"), pic("me", "g")]);
+        assert_eq!(sends[0].1, "me");
+        assert_eq!(sends[0].2, format!("{}.png", "b".repeat(64)));
+        assert_eq!(locals(&removes), vec![pic("me", "d")]);
+        // The new chat deleted in the same push: its pictures are no longer needed.
+        let gone = vec![("s_old".to_string(), vec![], Synced { deleted: true, ..Synced::default() })];
+        let (_, removes) = picture_work(&st, "me", 2, &gone, here);
+        assert_eq!(locals(&removes), vec![pic("me", "a"), pic("me", "d")]);
+    }
 
     #[test]
     fn batches_cap_count_and_bytes_and_send_a_big_chat_alone() {

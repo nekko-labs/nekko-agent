@@ -236,7 +236,9 @@ impl Table {
                 let id = str_arg(&args, 0).unwrap_or_default().to_string();
                 let max = tail_bytes(channel, &args);
                 if is_agent(&id) {
-                    let snap = ctx.turns.agent_logs.route("terminal:snapshot", &id, &args).await?;
+                    // A window's card asks for a few lines (`maxBytes`): only that much of the log is read.
+                    let read = if channel == "terminal:snapshot" { max } else { None };
+                    let snap = ctx.turns.agent_logs.snapshot_tail(&id, read).await?;
                     return Ok(match max {
                         Some(max) => cap_buffer(snap, max),
                         None => snap,
@@ -495,6 +497,39 @@ impl Table {
                 Ok(crate::hypergate::detect(&base).await.map_or(Value::Null, Value::Object))
             }),
         );
+        // The Connectors page's Hypergate check: is it on this computer, and is it up?
+        t.add(
+            &["mcp:hypergate:check"],
+            handler!(|ctx, channel, args| {
+                let base = crate::hypergate::base(crate::hypergate::port_arg(arg(&args, 0)), |k| std::env::var(k).ok());
+                let info = crate::hypergate::detect(&base).await;
+                let cli = tokio::task::spawn_blocking(|| {
+                    crate::hypergate::find_cli(|k| std::env::var(k).ok(), |p| p.is_file())
+                })
+                .await
+                .map_err(|e| e.to_string())?;
+                // A daemon that answers is installed, even run from a checkout with no CLI found.
+                Ok(json!({
+                    "installed": info.is_some() || cli.is_some(),
+                    "info": info.map_or(Value::Null, Value::Object),
+                }))
+            }),
+        );
+        // Start an installed Hypergate and wait for it to answer (null: it did not).
+        t.add(
+            &["mcp:hypergate:start"],
+            handler!(|ctx, channel, args| {
+                let base = crate::hypergate::base(crate::hypergate::port_arg(arg(&args, 0)), |k| std::env::var(k).ok());
+                if let Some(info) = crate::hypergate::detect(&base).await {
+                    return Ok(Value::Object(info));
+                }
+                let cli = crate::hypergate::find_cli(|k| std::env::var(k).ok(), |p| p.is_file())
+                    .ok_or("Hypergate is not installed on this computer.")?;
+                crate::hypergate::start(&cli)?;
+                let up = crate::hypergate::wait_until_up(&base, std::time::Duration::from_secs(20)).await;
+                Ok(up.map_or(Value::Null, Value::Object))
+            }),
+        );
         // Probe and claim a token here, save the entry, and run the server list.
         t.add(
             &["mcp:hypergate:connect"],
@@ -516,6 +551,10 @@ impl Table {
         t.add(
             &["turn:spawnPrepare"],
             handler!(|ctx, channel, args| Ok(crate::spawn::prepare(ctx, arg(&args, 0)).await)),
+        );
+        t.add(
+            &["turn:delegationTargets"],
+            handler!(|ctx, channel, args| Ok(json!(crate::spawn::discover(ctx, arg(&args, 0)).await?))),
         );
         // Internal: one PR's live state, for an agent watch's snapshot (watches.rs).
         t.add(
@@ -597,10 +636,27 @@ impl Table {
             crate::downloads::CHANNELS,
             handler!(|ctx, channel, args| ctx.downloads.clone().route(channel, &args).await),
         );
-        t.add(crate::library::CHANNELS, handler!(|ctx, channel, args| ctx.library.clone().route(channel, &args).await));
+        t.add(
+            crate::library::CHANNELS,
+            handler!(|ctx, channel, args| {
+                // A loaded model's file is open in its server, and Windows will not
+                // delete an open file (os error 32), so it is unloaded first.
+                if channel == "engine:deleteModel" {
+                    let id = args.first().map(nekko_js::display).unwrap_or_default();
+                    if ctx.server.model.loaded_ids().contains(&id) {
+                        ctx.server.model.unload(&id).await;
+                    }
+                }
+                ctx.library.clone().route(channel, &args).await
+            }),
+        );
         t.add(
             crate::catalog::CHANNELS,
             handler!(|ctx, channel, args| crate::catalog::route(&ctx.catalog, channel, &args).await),
+        );
+        t.add(
+            crate::catalog::CHECK_CHANNELS,
+            handler!(|ctx, _channel, args| crate::catalog::route_checks(&ctx.catalog, &ctx.library, &args).await),
         );
         t.add(
             crate::tooling::CHANNELS,
@@ -875,25 +931,14 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
 /// admission) and the chat's dev servers.
 pub async fn stop_chat(ctx: &Ctx, session_id: &str) -> Result<Value, String> {
     // Include detached delegated descendants: their parent turn may already have ended.
-    let mut ids = vec![session_id.to_string()];
-    {
-        let metas = ctx.sessions.list_meta();
-        loop {
-            let before = ids.len();
-            for meta in &metas {
-                if let (Some(parent), Some(id)) =
-                    (meta.get("parentSessionId").and_then(Value::as_str), meta.get("id").and_then(Value::as_str))
-                    && ids.iter().any(|s| s == parent)
-                    && !ids.iter().any(|s| s == id)
-                {
-                    ids.push(id.to_string());
-                }
-            }
-            if ids.len() == before {
-                break;
-            }
-        }
-    }
+    // Found from the cached summaries, off the async threads: reading every chat
+    // file here (list_meta) made Close and Archive wait seconds on a big folder (#3120).
+    let ids = {
+        let (store, root) = (ctx.sessions.clone(), session_id.to_string());
+        tokio::task::spawn_blocking(move || chat_and_descendants(&root, &store.summaries()))
+            .await
+            .unwrap_or_else(|_| vec![session_id.to_string()])
+    };
     for id in &ids {
         ctx.admission.abort(id);
         ctx.image_turns.abort(id);
@@ -904,7 +949,32 @@ pub async fn stop_chat(ctx: &Ctx, session_id: &str) -> Result<Value, String> {
     Ok(Value::Null)
 }
 
-/// The chats with a turn (or an image turn) running.
+/// `root` first, then every chat below it by `parentSessionId`, at any depth.
+fn chat_and_descendants(root: &str, chats: &[Value]) -> Vec<String> {
+    let mut children: HashMap<&str, Vec<&str>> = HashMap::new();
+    for chat in chats {
+        if let (Some(parent), Some(id)) =
+            (chat.get("parentSessionId").and_then(Value::as_str), chat.get("id").and_then(Value::as_str))
+        {
+            children.entry(parent).or_default().push(id);
+        }
+    }
+    let mut ids = vec![root.to_string()];
+    let mut seen: HashSet<String> = ids.iter().cloned().collect();
+    let mut next = 0;
+    while next < ids.len() {
+        let below = children.get(ids[next].as_str()).cloned().unwrap_or_default();
+        for id in below {
+            if seen.insert(id.to_string()) {
+                ids.push(id.to_string());
+            }
+        }
+        next += 1;
+    }
+    ids
+}
+
+///The chats with a turn (or an image turn) running.
 pub fn running_chats(ctx: &Ctx) -> Vec<String> {
     let mut ids: Vec<String> = Vec::new();
     for id in ctx.turns.running_sessions().into_iter().chain(ctx.image_turns.running_sessions()) {
@@ -1358,6 +1428,21 @@ async fn session_op(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stopping_a_chat_reaches_every_sub_agent_below_it_and_nothing_else() {
+        let chats = [
+            json!({ "id": "grandchild", "parentSessionId": "child" }),
+            json!({ "id": "root" }),
+            json!({ "id": "child", "parentSessionId": "root" }),
+            json!({ "id": "sibling", "parentSessionId": "root" }),
+            json!({ "id": "other", "parentSessionId": "elsewhere" }),
+            json!({ "id": "loop", "parentSessionId": "root" }),
+            json!({ "id": "root", "parentSessionId": "loop" }),
+        ];
+        assert_eq!(chat_and_descendants("root", &chats), ["root", "child", "sibling", "loop", "grandchild"]);
+        assert_eq!(chat_and_descendants("alone", &chats), ["alone"]);
+    }
 
     #[test]
     fn activity_counts_working_chats_by_phase() {

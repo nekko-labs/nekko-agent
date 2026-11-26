@@ -1,17 +1,19 @@
 import { SubagentRoute } from './SubagentRoute.js';
-import React, { useMemo, useState } from 'react';
+import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ChatMessage, IssueInfo, PlanStep, PrInfo, Session, SessionSummary } from '@nekko-agent/shared';
 import { lastReplyInterrupted, parsePrUrl, planProgress } from '@nekko-agent/shared';
-import { getLiveRun, runningSessionIds, useLiveRunsVersion } from '../liveRuns.js';
+import { getLiveRun, runningSessionIds, useLiveRun, useLiveRunsVersion } from '../liveRuns.js';
 import { planStepLinks, type PlanStepLinks, type ProjectLink } from '../planStepLinks.js';
 import { sheetPlan } from '../claudeAgentPlan.js';
 import { useShown } from '../simpleMode.js';
 import { useStore } from '../store.js';
+import { stableSelector } from '../selectStable.js';
 import { CheckIcon, CloseIcon, RocketIcon, TagIcon, WarningIcon } from '../icons.js';
 import { GfIcon } from '../gentleface-icons.js';
 import type { ChatArtifact } from '../chatArtifacts.js';
 import { canonicalPrUrl, progressAge, safeProgressLink } from './WorkProgress.js';
 import { runPrAction } from './PrCard.js';
+import { PlanRow } from './PlanRow.js';
 import { PlanWorking } from './PlanWorking.js';
 import { StatusIcon, type AgentStatus } from './WorkspaceCard.js';
 import { PrStatusIcon, prStatus, prTone } from './SessionPrChip.js';
@@ -36,7 +38,7 @@ function StepMark({ step, paused }: { step: Pick<PlanStep, 'status' | 'verificat
   const evidence = safeProgressLink(v?.evidenceUrl);
   // A reported check names the bullet; the step's own status is the fallback.
   const label = running && paused ? 'Paused' : checkLabel ?? stepLabel;
-  const title = v ? `${label} · Agent-reported, not inferred from tool results · ${progressAge(step.updatedAt, Date.now(), ['active', 'pending'].includes(v.status))}${evidence ? ' · Open evidence' : ''}` : label;
+  const title = v ? `${label} · Agent-reported, not inferred from tool results · ${progressAge(step.updatedAt, Date.now(), ['active', 'pending'].includes(v.status))}${v.detail ? ' · ' + v.detail : ''}${evidence ? ' · Open evidence' : ''}` : label;
   const glyph = running ? (paused
       ? <svg aria-hidden="true" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: 'var(--accent)' }}><path d="M8 5v14M16 5v14" /></svg>
       : <PlanWorking />)
@@ -68,8 +70,27 @@ export function prChipLabel(url: string, info?: PrInfo): { text: string; tone: s
 }
 
 /** The approve, decline and merge round pills that fade in when the pointer is on a PR chip. */
+// Keep action pills outside the plan scroller without measuring them as chips.
+function placePrActions(host: HTMLElement) {
+  const actions = host.querySelector<HTMLElement>('.plan-sheet-pr-actions');
+  if (!actions) return;
+  const r = host.getBoundingClientRect(), a = actions.getBoundingClientRect();
+  actions.style.left = Math.max(8, Math.min(r.left, window.innerWidth - a.width - 8)) + 'px';
+  actions.style.top = Math.max(8, r.top >= a.height ? r.top - a.height : r.bottom) + 'px';
+}
+
 function PrHoverActions({ url, info, sessionId }: { url: string; info?: PrInfo; sessionId: string }) {
   const [busy, setBusy] = useState<'approve' | 'close' | 'merge' | null>(null);
+  const ref = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const host = ref.current?.parentElement;
+    if (!host) return;
+    const place = () => placePrActions(host);
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => { window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true); };
+  }, [info]);
   if (!info || info.state !== 'open') return null;
   const act = async (action: 'approve' | 'close' | 'merge', e: React.MouseEvent) => {
     e.stopPropagation(); e.preventDefault();
@@ -78,7 +99,7 @@ function PrHoverActions({ url, info, sessionId }: { url: string; info?: PrInfo; 
     try { await runPrAction(sessionId, url, action); } finally { setBusy(null); }
   };
   const disabled = (action: 'approve' | 'close' | 'merge') => !!busy || (action === 'merge' && info.checks === 'failing');
-  return <span className="plan-sheet-pr-actions" role="group" aria-label={`Actions for #${info.number}`}>
+  return <span ref={ref} className="plan-sheet-pr-actions" role="group" aria-label={`Actions for #${info.number}`}>
     <button type="button" className="plan-sheet-pr-action" data-pr-act="approve" disabled={disabled('approve')} title="Approve" onClick={(e) => void act('approve', e)}>{busy === 'approve' ? '…' : 'Approve'}</button>
     <button type="button" className="plan-sheet-pr-action" data-pr-act="close" disabled={disabled('close')} title="Decline" onClick={(e) => void act('close', e)}>{busy === 'close' ? '…' : 'Decline'}</button>
     <button type="button" className="plan-sheet-pr-action" data-pr-act="merge" disabled={disabled('merge')} title={info.checks === 'failing' ? 'Merge blocked while CI is failing' : info.stack ? 'Review stack on GitHub' : 'Merge'} onClick={(e) => void act('merge', e)}>{busy === 'merge' ? '…' : info.stack ? 'Merge on GH' : 'Merge'}</button>
@@ -101,20 +122,20 @@ const VERIFY = {
 const open = (url?: string) => { if (url) void window.nekko.openPath(url).catch(() => {}); };
 
 /** One slim row: each failing or running check by name, the passing ones folded into a count. */
-function CiChips({ info }: { info: PrInfo }) {
+function ciChips(info: PrInfo): React.ReactNode[] {
   const items = info.checkProgress?.items ?? [];
   const order = { failing: 0, pending: 1, unknown: 2, completed: 3 };
   const loud = items.filter(c => c.state !== 'completed').sort((a, b) => order[a.state] - order[b.state]);
   const passed = items.length - loud.length;
   const base = canonicalPrUrl(info.url);
-  return <>
-    {loud.map((check, i) => <button key={i} type="button" className="plan-sheet-chip" data-plan-chip="ci" title={`#${info.number} · ${check.name} · ${check.state}`} onClick={() => open(safeProgressLink(check.link))}>
+  return [
+    ...loud.map((check, i) => <button key={info.url + i} type="button" className="plan-sheet-chip" data-plan-chip="ci" title={`#${info.number} · ${check.name} · ${check.state}`} onClick={() => open(safeProgressLink(check.link))}>
       <span className="plan-sheet-dot" style={{ background: check.state === 'failing' ? 'var(--danger)' : check.state === 'pending' ? 'var(--warning)' : 'var(--ink-faint)' }} />CI: {check.name}
-    </button>)}
-    {passed > 0 && <button type="button" className="plan-sheet-chip" data-plan-chip="ci" title={`#${info.number} · CI checks`} onClick={() => open(base && base + '/checks')}>
+    </button>),
+    ...(passed > 0 ? [<button key={info.url + 'passed'} type="button" className="plan-sheet-chip" data-plan-chip="ci" title={`#${info.number} · CI checks`} onClick={() => open(base && base + '/checks')}>
       <span className="plan-sheet-dot" style={{ background: 'var(--success)' }} />CI: {passed} passed
-    </button>}
-  </>;
+    </button>] : []),
+  ];
 }
 
 /**
@@ -170,7 +191,7 @@ const CARD_ORDER: Record<AgentStatus, number> = { input: 0, working: 1, error: 2
  */
 export function subagentCardState(child: SessionSummary, running: boolean): { status: AgentStatus; detail: string } {
   const activity = childActivity(child, running);
-  const asking = activity.status === 'waiting' && /answer|approval/i.test(activity.detail);
+  const asking = activity.status === 'waiting' && /answer|approval|secret/i.test(activity.detail);
   const status: AgentStatus = asking ? 'input'
     : running ? 'working'
     : activity.status === 'failed' || activity.status === 'stopped' ? 'error'
@@ -206,18 +227,9 @@ function SubagentCards({ children, running, onOpen }: { children: SessionSummary
   </div>;
 }
 
-/**
- * The agent's plan as a sheet tucked behind the composer's top edge, with
- * curved shoulders into it and a slightly different tint.
- *
- * Folded it is one or two lines: the step being worked (its title, pass
- * and place in the plan) and its PR, task and file chips. Sub-agent cards
- * stay below it. Clicking it opens the whole flat plan, every step with its
- * own report and related chips underneath: task links, sub-agents (each opens
- * its chat), CI checks, PRs and files. Each step with details opens and closes on its own
- * title: unfinished steps start open, finished ones closed, except the last
- * step that has results for the user (PRs, files, links), which starts open.
- */
+/** The composer's plan: flat title rows with inline chips and per-row overflow. */
+const childrenOf = stableSelector((s: { sessions?: SessionSummary[] }, id) => (s.sessions ?? []).filter((c) => c.parentSessionId === id));
+
 export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpenChild, initiallyOpen = true }: {
   sessionId: string;
   session: Session | null;
@@ -232,14 +244,13 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
   // The whole plan is open by default; the user folds it to one line when they
   // want the chrome out of the way.
   const [collapsed, setCollapsed] = useState(initiallyOpen === false);
-  // The user's own open/close per step; unset steps follow the defaults below.
-  const [stepOpen, setStepOpen] = useState<Record<string, boolean>>({});
   // These chips are pull requests, so the condition holds wherever they would draw.
   const prsShown = useShown('pr-status', { pr: true });
-  const sessions = useStore((s) => s.sessions);
+  const childSessions = useStore((s) => childrenOf(s, sessionId));
   const providers = useStore((s) => s.providers);
-  const liveVersion = useLiveRunsVersion();
-  const live = getLiveRun(sessionId);
+  // Sub-agent state moves the global version; this chat's own streamed tools and text come from its own subscription.
+  useLiveRunsVersion();
+  const live = useLiveRun(sessionId);
   // Mid-turn, the saved `messages` don't yet show tool calls from the in-flight
   // reply. Fold the live tools in as a synthetic trailing assistant message so a
   // Claude Agent chat's TodoWrite plan updates while the agent is still writing
@@ -265,13 +276,10 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
       createdAt: live.startedAt + i,
     }));
     return { ...session, messages: [...(session.messages ?? []), synth, ...synthResults] };
-    // liveVersion is the subscription signal, so changes to `live.tools`
-    // reach the memo even when the array reference stays stable between ticks.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, liveVersion]);
+    // `live` is replaced on every repaint of this chat's run, so the memo follows its tools.
+  }, [session, live]);
   const messages = planSession?.messages;
   const plan = useMemo(() => sheetPlan(planSession, providers) ?? [], [planSession, providers]);
-  const childSessions = useMemo(() => (sessions ?? []).filter((s) => s.parentSessionId === sessionId), [sessions, sessionId]);
   // Keep the published order and each report on its own step. Related results
   // still share that step's disclosure, without a synthetic phase wrapper.
   const links = useMemo(() => planStepLinks(messages ?? [], plan, basePath, childSessions),
@@ -299,7 +307,7 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
     const info = prInfo.get(url);
     const status = prStatus(info ?? null);
     const { text, tone } = prChipLabel(url, info);
-    return <span key={url} className="plan-sheet-pr" data-plan-pr={info?.number ?? 'unknown'}>
+    return <span key={url} className="plan-sheet-pr" data-plan-pr={info?.number ?? 'unknown'} onPointerEnter={e => placePrActions(e.currentTarget)} onFocusCapture={e => placePrActions(e.currentTarget)}>
       <button type="button" className="plan-sheet-chip" data-plan-chip="pr" data-pr-status={status} title={info?.title ?? url} onClick={() => open(url)}>
         <span className="inline-flex" style={{ color: tone }}><PrStatusIcon status={status} className="h-3 w-3" /></span>{text}
       </button>
@@ -309,7 +317,6 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
   const artifactChip = (artifact: ChatArtifact) => <button key={artifact.path} type="button" className="plan-sheet-chip" data-plan-chip="link" title={artifact.path} onClick={() => openArtifact(artifact, sessionId)}>{artifact.live ? 'Preview: ' + artifact.live.host + artifact.live.route : 'File: ' + artifact.filename}</button>;
   const kids = (own?: PlanStepLinks) => (own?.subagents ?? []).map(id => childById.get(id)).filter((c): c is Child => !!c);
   const position = plan.indexOf(current) + 1;
-  const resultStep = plan.filter(step => links.get(step.id)?.prs.length || links.get(step.id)?.artifacts.length).pop()?.id;
 
   if (collapsed) {
     const own = links.get(current.id);
@@ -322,7 +329,7 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
       ...(own?.artifacts ?? []).map(artifactChip),
     ].filter(Boolean);
     return <div className="plan-sheet-dock"><div className="plan-sheet" data-plan-sheet data-folded aria-label="Agent plan">
-      <button type="button" className="plan-sheet-fold" onClick={() => setCollapsed(false)} aria-expanded={false} title="Show the whole plan">
+      <PlanRow chips={chips} title={<button type="button" className="plan-sheet-fold" onClick={() => setCollapsed(false)} aria-expanded={false} title="Show the whole plan">
         <span className="plan-sheet-line">
           <StepMark step={current} paused={paused} />
           <span className={`min-w-0 flex-1 truncate ${current.status === 'done' ? 'text-ink-soft' : 'text-ink'}`} title={current.title}>{current.title}</span>
@@ -330,8 +337,7 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
           <span className="shrink-0 tabular-nums text-2xs text-ink-faint">{position} of {plan.length}</span>
           <PlanCaret direction="down" label="Show the whole plan" />
         </span>
-      </button>
-      {chips.length > 0 && <div className="plan-sheet-chips plan-sheet-fold-chips">{chips}</div>}
+      </button>} />
       <SubagentCards children={childSessions} running={running} onOpen={openChild} />
     </div></div>;
   }
@@ -350,35 +356,20 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
         const own = links.get(step.id);
         const checks = ci.get(step.id) ?? [];
         const stepKids = kids(own);
-        const chips = !!((prsShown && own?.prs.length) || own?.artifacts.length || own?.projects.length || stepKids.length || checks.length);
-        const detail = step.verification?.detail || step.note;
+        const chips = [
+          ...(own?.projects ?? []).map(link => <ProjectChip key={link.url} link={link} />),
+          ...stepKids.map(child => <SubagentChip key={child.id} child={child} onOpen={openChild} />),
+          ...(prsShown ? own?.prs ?? [] : []).map(prChip),
+          ...checks.flatMap(ciChips),
+          ...(own?.artifacts ?? []).map(artifactChip),
+        ];
         const squeezed = step.status === 'done' || step.status === 'skipped';
-        const more = !!(detail || chips);
-        const isOpen = more && (stepOpen[step.id] ?? (!squeezed || step.id === resultStep));
-        const line = <>
-          <span className={`min-w-0 flex-1 truncate ${squeezed ? 'text-ink-soft' : 'text-ink'}${step.status === 'skipped' ? ' line-through' : ''}`} title={step.title}>{step.title}</span>
-          <Pass step={step} />
-        </>;
-        return <li key={step.id} className="plan-sheet-step" data-plan-step={squeezed ? 'done' : step.status} data-plan-step-id={step.id} data-open={isOpen || undefined}>
+        return <li key={step.id} className="plan-sheet-step" data-plan-step={squeezed ? 'done' : step.status} data-plan-step-id={step.id}>
           <StepMark step={step} paused={paused} />
-          <div className="min-w-0">
-            {more
-              ? <button type="button" className="plan-sheet-line plan-sheet-step-toggle" aria-expanded={isOpen} onClick={() => setStepOpen(o => ({ ...o, [step.id]: !isOpen }))}>
-                {line}
-                <svg className="plan-sheet-step-caret" aria-hidden="true" viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 4 4 4-4 4" /></svg>
-              </button>
-              : <p className="plan-sheet-line">{line}</p>}
-            {more && <div className="plan-sheet-more" data-plan-more hidden={!isOpen}>
-              {detail && <p className="truncate text-xs text-ink-faint" title={detail}>{detail}</p>}
-              {chips && <div className="plan-sheet-chips">
-                {own?.projects.map(link => <ProjectChip key={link.url} link={link} />)}
-                {stepKids.map(child => <SubagentChip key={child.id} child={child} onOpen={openChild} />)}
-                {prsShown && own?.prs.map(prChip)}
-                {checks.map(pr => <CiChips key={pr.url} info={pr} />)}
-                {own?.artifacts.map(artifactChip)}
-              </div>}
-            </div>}
-          </div>
+          <PlanRow chips={chips} title={<span className="plan-sheet-line">
+            <span className={`min-w-0 truncate ${squeezed ? 'text-ink-soft' : 'text-ink'}${step.status === 'skipped' ? ' line-through' : ''}`} title={step.title}>{step.title}</span>
+            <Pass step={step} />
+          </span>} />
         </li>;
       })}
     </ol>

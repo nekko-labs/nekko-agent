@@ -16,7 +16,12 @@ export interface ToolResult {
   toolCallId: string;
   /** Text or JSON-serializable output shown back to the model. */
   output: string;
-  /** Approved screenshot PNG data URLs delivered to the selected model. */
+  /**
+   * Approved screenshot PNG data URLs delivered to the selected model. In a
+   * live `tool_result` event, pictures of 4 KB or more are `nekko-blob:<name>`
+   * references instead (the frame stays small); the saved chat (`session:get`)
+   * has them as data URLs.
+   */
   images?: string[];
   isError?: boolean;
   /** Claude Code denied the call itself (a Claude Agent chat), with its reason. */
@@ -430,6 +435,8 @@ export interface Session {
   guidance?: GuidanceLevel;
   /** How this chat's turns reach their tools: a tool list, or code mode. Unset is `list`. */
   toolApproach?: ToolApproach;
+  /** Opt this chat into coordinating work across agents. Only true enables it. */
+  orchestrate?: boolean;
   /** Offline: no tool calls, no connectors/internet (local models only). */
   offline?: boolean;
   /**
@@ -442,6 +449,12 @@ export interface Session {
   incognito?: boolean;
   /** Keep this chat out of Nekko Cloud sync (it stays on this computer). Unset or false: it syncs. */
   syncOff?: boolean;
+  /**
+   * The computer this chat belongs to, when it is another computer's chat synced here through
+   * Nekko Cloud (#3143, decision 0112): a read-only copy, carried on only there or as a fork.
+   * Unset on this computer's own chats.
+   */
+  home?: import('./computers.js').ChatHome;
   /** Privacy Shield: what this chat hides from a cloud model (see privacy.ts). */
   privacy?: import('./privacy.js').SessionPrivacy;
   /** Pinned to the top of the chat list. */
@@ -606,8 +619,16 @@ export type AgentEvent =
    * The session record changed outside the event stream (its plan, its title),
    * so anything showing it should re-read it. Emitted mid-turn, which is why it
    * is an event rather than something a listener polls for.
+   *
+   * `summary` (added 2026-11-26) holds the record's small fields as the daemon
+   * last saved them: `title`, `titleAuto`, `plan`, `updatedAt`, `pinned`,
+   * `archivedAt`, `tags`, `order`, the mode, model and workspace fields, and the
+   * rest of the options a user can set. A field the chat does not have is
+   * `null`. Absent when the daemon has not saved the chat since it started
+   * (then re-read it), and never sent to a phone. A listener may apply it to a
+   * summary it already has instead of reading the list again.
    */
-  | { type: 'session_meta'; sessionId: string; connectivityNotice?: ConnectivityNotice }
+  | { type: 'session_meta'; sessionId: string; connectivityNotice?: ConnectivityNotice; summary?: Record<string, unknown> }
   /**
    * A Claude Agent chat's Claude Code now runs `tasks` background tasks (shell
    * commands, sub-agents). It keeps working after the turn's `done` and wakes

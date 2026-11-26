@@ -54,7 +54,9 @@ If you turn on step-up (Settings, Security), raising a chat's mode from a comput
 
 **Using its models from here.** Each connected computer adds its Model Server to your model picker, so a chat on this computer can use a model running there. Only that computer's Model Server is reachable this way: a Claude or ChatGPT plan stays on the computer it signed in on. To stop this, turn off *Let connected computers use these models* on the Model Server's Server tab.
 
-**Your own computers, with no link.** When your computers share themselves with your organization in Nekko Cloud (Settings, Phone pairing, Organization), any of them signed in to the same account and unlocked can open a chat on another without a pairing link. In the organization's Computers list, hover one of your own online computers and choose **Open chat**. It connects with your account's keys, adds the computer to Settings, Computers (as *Opened from your organization*) and opens a new chat there. The other computer needs **Remote access** on; otherwise its row says so. A teammate's computer is listed but can't be opened. Nothing is paired and nothing is saved: the link ends when you restart, sign out or lock, and the other computer cuts it within 15 seconds if it stops sharing, signs out, or your account removes this device. The same rules apply as for any connected computer above.
+**Create a fleet.** With a supported plan and an unlocked account, open Settings > Nekko Cloud > Fleet management, choose **Create a fleet**, and give it a name. To show this computer in the fleet, turn on **Share this computer** separately. Creating a fleet does not share your chats or computers. If Fleet management says it cannot load your fleets, choose **Try again**.
+
+**Your own computers, with no link.** When your computers share themselves with your organization in Nekko Cloud, any of them signed in to the same account and unlocked can open a chat on another without a pairing link. In the organization's Computers list, hover one of your own online computers and choose **Open chat**. It connects with your account's keys, adds the computer to Settings, Computers (as *Opened from your organization*) and opens a new chat there. The other computer needs **Remote access** on; otherwise its row says so. A teammate's computer is listed but can't be opened. Nothing is paired and nothing is saved: the link ends when you restart, sign out or lock, and the other computer cuts it within 15 seconds if it stops sharing, signs out, or your account removes this device. The same rules apply as for any connected computer above.
 
 **Keeping a computer awake for its agents.** A run you start on another computer stops when that computer falls asleep. On the computer that runs the agents, turn on *Keep this computer awake while agents run* (Settings, Computers). While any agent runs there it won't go to sleep on its own, and once the last one finishes it sleeps as usual. Closing the lid still sleeps it.
 
@@ -83,11 +85,12 @@ If you turn on step-up (Settings, Security), raising a chat's mode from a comput
 ## Pairing a phone
 
 1. On your computer: **Settings → Phone pairing** (second in the left-hand list), then in **Remote access**
-   pick how your phone connects: **Use Tailscale** (free, needs the Tailscale app on both) or
-   **Use Nekko Cloud** (works anywhere, nothing to install; shown as *Coming soon* and off until the
-   managed relay is running again). A self-hosted relay goes under **Use your own relay**. Then
-   **Pair a device**. To switch later, click **Change** next to *Connected through*; paired phones
-   keep the old address, so pair them again afterwards. The QR appears right under the button.
+   tick how phones connect under **Phones connect through**: **Tailscale** (free, needs the Tailscale
+   app on both), **Nekko Cloud Relay** (Pro: works anywhere, nothing to install; *Coming soon* until it
+   is running), or both. Then **Turn on remote access** and **Pair a device**. The ticks stay on the
+   page, so you can add or drop a way later without turning anything off; a phone keeps working as long
+   as one of the ways it was paired with is still ticked. A self-hosted relay goes under **Use your own
+   relay**. The QR appears right under **Pair a device**.
 2. On your phone: scan the QR in the Nekko Agent app (**Computers → Pair a computer**), or with the
    phone's camera app, which hands the `nekko-agent-pair:` link to the Nekko Agent app. Without the
    app, the pairing link also opens the web app in a browser over the relay, but it is limited to
@@ -178,11 +181,10 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > until both platform PRs land. See the [Android specification](../spec/phone/android-direct-cloud-chats.md).
 >
 
-> The Android app looks like your desktop by default: **Settings → Appearance → Same as computer**
-> uses the computer's light or dark theme and its accent color, and follows a change on the
-> computer right away. Pick **Phone setting**, **Light** or **Dark** to choose on the phone instead;
-> that choice is kept on the phone. Only the theme, theme preset and the two accent colors are sent
-> for this (the `appearance:updated` event), never the rest of the computer's settings.
+> The Android app's look is chosen on the phone: **Settings → Appearance → Theme** offers
+> **Match this phone** (the default: light or dark as the phone is set), **Light**, **Dark** and the
+> desktop's themes, kept on the phone. It no longer follows the computer's own theme (removed
+> 2026-11-26: the desktop's look didn't fit the phone), so it doesn't read the computer's theme at all.
 >
 > The iPhone app has the desktop's themes too: **Settings → Appearance → Theme** offers **Match my
 > computer** (the computer's preset, mode and accent), **Match this iPhone**, **Light**, **Dark** and
@@ -234,8 +236,11 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > works straight away. A slim row under the title shows every paired computer with a dot and its
 > name (green online, a ring while connecting, amber offline, red refused). A problem adds one word,
 > such as *offline* or *refused*; tap it to read one line and the fix (**Retry**, **Pair again**,
-> **Open Tailscale**). When Tailscale is off on the iPhone and that is what keeps a computer away,
-> **Tailscale off** leads the row. Computers and the computer's page offer **Reconnect** too.
+> **Open Tailscale**). A computer that only Tailscale reaches says *Tailscale off* itself when
+> Tailscale is off on the iPhone; nothing about Tailscale leads the row. On a computer's page,
+> **Connect through** lets you pick Tailscale, Nekko Cloud Relay or both for that computer (at
+> least one stays on, and a kind the pairing code did not carry says to pair again to add it).
+> Computers and the computer's page offer **Reconnect** too.
 > Each row shows where its chat runs: the computer's icon in its colour (as on the desktop) and
 > its name. **View → Group by → Computer** puts a heading over each computer's chats, and
 > **View → Show** turns the computer's name and icon off.
@@ -837,7 +842,7 @@ updater and shell.
 ### Where the logs live
 
 The logs a phone reads are files you can open yourself: `logs/app.log` and `logs/nekkod.log` in the data folder
-(`~/.nekko-agent` unless you moved it). Each is rotated at 5 MB, and the last three old copies are kept
+(`~/.nekko/nekko-agent` unless you moved it). Each is rotated at 5 MB, and the last three old copies are kept
 (`app.log.1` to `app.log.3`). Windows' engine log holds only start-up lines and crashes for now.
 
 ## Security model, honestly stated
@@ -880,9 +885,16 @@ How the Android and iOS apps each handle the connection (URL rules, pairing, rec
 
 **Not running right now:** the Fly app is gone and its name no longer resolves, so the desktop shows Nekko Cloud as *Coming soon*. A computer still set to it shows a warning with a **Change** button, and a phone paired through it says it can't find the address instead of "Connecting…". Use Tailscale until it is back.
 
-The app calls this **Nekko Cloud** and never shows the URL. Zero setup; free during beta with per-connection rate limits. When Nekko Cloud launches, the
-managed relay becomes part of the paid plans (it already supports gating via
-`NEKKO_RELAY_AUTHZ_URL`), while self-hosting stays free forever.
+The app calls this **Nekko Cloud** and never shows the URL. Self-hosting stays free forever.
+
+**Nekko Cloud Relay is part of Nekko Cloud Pro and Team** (in progress, behind a switch until launch; [the spec](../spec/platform/nekko-cloud-relay.md)):
+
+- Sign in to Nekko Cloud on the computer. On Pro or Team, tick **Nekko Cloud Relay** under *Phones connect through*; on Free the row offers **Upgrade to Pro**.
+- Tick both **Tailscale** and **Nekko Cloud Relay** and the computer is reachable both ways at once: phones with Tailscale go direct, phones without it (or away from it) come in through the relay. Untick Tailscale to use the relay alone.
+- With both ticked, **Pair a device** shows which ways the next device may use, and each paired device has its own **Connects through** ticks (Tailscale, Nekko Cloud Relay, at least one). The computer enforces them: a phone allowed only Tailscale is turned away if it tries the relay.
+- On the phone, each computer's page has **Connect through** with the same two ticks, limited to the ways its pairing code carried. A phone paired before Nekko Cloud Relay was ticked needs a fresh code to gain it.
+- Everything stays end-to-end encrypted. The relay checks a short-lived ticket your computer gets from Nekko Cloud, so it knows your plan, not who you are.
+- Signed-in computers on Pro also tell each other through the relay when they come online and when they've synced something, so another computer pulls new chats at once instead of within the minute.
 
 ### Private relay over Tailscale (free, no account, nothing hosted)
 
@@ -893,11 +905,11 @@ Tailscale address. Only devices on your tailnet can reach it, Tailscale encrypts
 tools such as Moonlight stay free: nothing runs in the cloud, the two ends find each other over a
 network you already own.
 
-**In the desktop app:** Settings → Remote access → **Use Tailscale**. The app finds this computer's Tailscale address (any interface in `100.64.0.0/10`), starts the
+**In the desktop app:** Settings → Remote access → tick **Tailscale** under *Phones connect through*. The app finds this computer's Tailscale address (any interface in `100.64.0.0/10`), starts the
 bundled relay bound to that address only, and turns remote access on through it. Phones dial the MagicDNS name
 (for example `ws://gomi.tailfd6474.ts.net:4400`) when the Tailscale CLI reports one, else the
 `100.x.y.z` address. Then **Pair a device** and scan the QR from the phone with Tailscale switched
-on. Without Tailscale on this computer the option links to Tailscale and stays off.
+on. Without Tailscale on this computer the row links to Tailscale and can't be ticked.
 
 - **It stays on:** once started it comes back with the app.
 - **It waits for Tailscale:** with Tailscale off it binds nowhere and waits, and starts when

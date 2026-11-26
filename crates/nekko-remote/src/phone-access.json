@@ -118,6 +118,7 @@
   "providers:setEnabled",
   "remote:stop",
   "security:challenge",
+  "session:cancelWatch",
   "session:create",
   "session:delete",
   "session:fork",
@@ -308,6 +309,7 @@
   "engine:unloadAll",
   "model:load",
   "model:unload",
+  "session:cancelWatch",
   "session:create",
   "session:delete",
   "session:fork",
@@ -442,7 +444,8 @@
   "nextPollAt",
   "pending",
   "failures",
-  "lastError"
+  "lastError",
+  "clipStage"
  ],
  "machineView": [
   "version",
@@ -497,6 +500,7 @@
   "mode",
   "modelId",
   "offline",
+  "orchestrate",
   "order",
   "pinned",
   "privacy",
@@ -565,14 +569,16 @@
   "cloudOnly",
   "gitIsolation",
   "incognito",
-  "offline"
+  "offline",
+  "orchestrate"
  ],
  "engineKeys": [
   "autoStart",
   "autoload",
   "idleTtlSeconds",
   "jitLoad",
-  "maxLoaded"
+  "maxLoaded",
+  "overloadGuard"
  ],
  "modelServerView": [
   "autoStart",
@@ -580,8 +586,10 @@
   "idleTtlSeconds",
   "jitLoad",
   "maxLoaded",
+  "overloadGuard",
   "clientModelSettings",
-  "shareWithComputers"
+  "shareWithComputers",
+  "overloadReserveMB"
  ],
  "activityView": [
   "chatActive",
@@ -1137,7 +1145,8 @@
    ],
    "remoteAccess": [
     "remote:enable",
-    "remote:attach"
+    "remote:attach",
+    "remote:setRelays"
    ],
    "pairing": [
     "remote:pair",
@@ -1145,7 +1154,8 @@
     "remote:rotate"
    ],
    "phoneAccess": [
-    "remote:setAccess"
+    "remote:setAccess",
+    "remote:setRoute"
    ],
    "providerKeys": [
     "providers:save",
