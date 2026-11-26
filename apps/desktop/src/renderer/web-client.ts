@@ -661,6 +661,7 @@ function makeWebClient(): NekkoApi {
     acceptAllChanges: (sessionId) => call(IpcChannels.changeAcceptAll, sessionId),
 
     listSessionPrs: (sessionId, force) => call(IpcChannels.prSessionList, sessionId, force),
+    listSessionPrsMany: (sessionIds, force) => call(IpcChannels.prSessionListMany, sessionIds, force),
     getPrDiff: (url) => call(IpcChannels.prDiff, url),
     prAction: (url, action) => call(IpcChannels.prAction, url, action),
     continuePrStack: (sessionId, url) => call(IpcChannels.prContinueStack, sessionId, url),
