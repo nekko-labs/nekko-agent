@@ -16,7 +16,7 @@ export interface Notice {
   /** The chat a click opens; for a workflow run, `run:<id>` (it opens `link`). */
   sessionId: string;
   /** `safety-exit`: a phone signed out, stopped remote access or quit the app (SK-4). */
-  kind: 'finished' | 'failed' | 'question' | 'approval' | 'run-failed' | 'run-finished' | 'safety-exit' | 'limit-reset';
+  kind: 'finished' | 'failed' | 'question' | 'approval' | 'run-failed' | 'run-finished' | 'safety-exit' | 'limit-reset' | 'runner-alert';
   title: string;
   body: string;
   /** Where a click goes, when not the chat (a workflow run). */
