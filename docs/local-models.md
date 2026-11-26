@@ -124,6 +124,12 @@ An engine is the program that runs a model. **Models > Local model server > Engi
 
 Finding a new model follows the engine in use: press **Use** on MLX and **Find new models** opens on MLX checkpoints.
 
+#### Faster replies with a DFlash drafter
+
+Some models have a **DFlash** (or DFlash 2) drafter: a small companion model that guesses several words at once for the big model to check. Replies come faster and are the same. A drafter is made for one model, is a download of its own (about 1.1 GB for Qwen3.8-27B) and works on llama.cpp only.
+
+Download the drafter from **Find new models** like any model (search for the model's name and "DFlash"). Then open the model's **Settings**, and under **Guessing ahead** pick it as the **Draft model**; it is listed first and marked "(DFlash)". A drafter made for a different model is not offered.
+
 **System models** is a separate section below Engines and above the local library, even before you download a chat model. It holds the on-device speech engines for dictation. Selecting a speech engine here does not change your default chat model.
 
 **On this machine, or Find new models.** Under **Models**, the switch picks between the models you have and getting a new one from Hugging Face. Each installed row shows what it does, the parameter count when known, the disk size, and whether it fits on your GPU. A failed load shows a warning and its explanation. Use the **star** to put a model in your chat picker’s favorites, or the **check** to make a chat or vision model the default for new chats. The **trash** deletes files managed by Nekko that the engine can remove; files borrowed from another app stay untouched. When a family has more than one variant, choose the family and use the controls on the exact variant. Select a model for GPU and context details. Models currently in memory appear above the library under **Loaded models**. The agent server (for the CLI and MCP) is in **Settings > Server**.

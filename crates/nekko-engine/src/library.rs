@@ -73,7 +73,8 @@ pub fn model_modality(
         ) {
             return "audio";
         }
-        if test(regex!(r"draft|eagle|medusa|lookahead|speculative"), arch) {
+        // A DFlash drafter's GGUF says `dflash`, with no "draft" in it.
+        if test(regex!(r"draft|dflash|eagle|medusa|lookahead|speculative"), arch) {
             return "draft";
         }
         if test(embedding_archs(), arch) {

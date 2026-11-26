@@ -57,7 +57,21 @@ pub struct Companions {
     pub mmproj: Option<String>,
     pub chat_template_file: Option<String>,
     pub draft_model: Option<String>,
+    /// The draft file's GGUF architecture, which decides how it is used:
+    /// a `dflash` drafter drafts a block at a time, anything else token by token.
+    pub draft_arch: Option<String>,
 }
+
+/// llama.cpp's `--spec-type` for a draft file of this architecture. DFlash and
+/// DFlash 2 share `draft-dflash`: the server tells them apart from the file.
+pub fn draft_spec_type(arch: Option<&str>) -> &'static str {
+    if arch.is_some_and(|a| a.to_lowercase().contains("dflash")) { "draft-dflash" } else { "draft-simple" }
+}
+
+/// How many tokens a DFlash drafter drafts per step, as its authors run it
+/// (the model card's example); llama.cpp's own default of 3 suits small
+/// token-by-token drafts and wastes most of a block drafter's block.
+pub const DFLASH_DRAFT_TOKENS: &str = "7";
 
 impl Companions {
     pub fn to_value(&self) -> Value {
@@ -266,8 +280,13 @@ pub fn build_args(
         if let Some(draft) = &companions.draft_model
             && supports("--spec-draft-model")
         {
-            for a in ["--spec-draft-model", draft, "--spec-draft-ngl", "all", "--spec-type", "draft-simple"] {
+            let kind = draft_spec_type(companions.draft_arch.as_deref());
+            for a in ["--spec-draft-model", draft, "--spec-draft-ngl", "all", "--spec-type", kind] {
                 args.push(a.into());
+            }
+            if kind == "draft-dflash" && supports("--spec-draft-n-max") {
+                args.push("--spec-draft-n-max".into());
+                args.push(DFLASH_DRAFT_TOKENS.into());
             }
         }
     }

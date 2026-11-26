@@ -910,12 +910,14 @@ impl ModelServer {
 
         // A draft model must be the same kind of file as its target.
         let mut draft_path = None;
+        let mut draft_arch = None;
         if let Some(draft_id) = params.get("draftModelId").filter(|d| nekko_js::truthy(Some(d))) {
             let draft_id = nekko_js::display(draft_id);
             let draft = self.env.find_model(draft_id.clone()).await;
             match draft {
                 Some(d) if (d.get("format").and_then(Value::as_str) == Some("mlx")) == mlx => {
                     draft_path = Some(text(d.get("path")));
+                    draft_arch = d.get("architecture").and_then(Value::as_str).map(str::to_string);
                 }
                 _ => self.say(format!("Draft model {draft_id} is not usable with {id}; loading without it.")),
             }
@@ -948,6 +950,7 @@ impl ModelServer {
         } else {
             let flags = self.env.flags(bin.clone()).await;
             companions.draft_model = draft_path.clone();
+            companions.draft_arch = draft_arch.clone();
             let mut p = params.as_object().cloned().unwrap_or_default();
             match &context {
                 Some(c) if !c.is_null() => {

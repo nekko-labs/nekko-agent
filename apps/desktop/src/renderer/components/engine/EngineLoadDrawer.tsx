@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { GpuFit, LoadParams, LocalModel, PlacementPlan, Recommendation, SplitPreset } from '@nekko-agent/shared';
-import { ENGINE_KV_CACHE_DTYPE } from '@nekko-agent/shared';
+import { draftCandidates, ENGINE_KV_CACHE_DTYPE, isDflashDrafter } from '@nekko-agent/shared';
 import { Toggle } from '../primitives/index.js';
 import { formatBytes, formatTokens } from '../runtimes/verdict.js';
 import { useStore } from '../../store.js';
@@ -799,10 +799,9 @@ function NumberInput({
 }
 
 /**
- * An optional second guesser: a small model of the same family. Offered only
- * from the same architecture and well under the target's size, because a
- * draft that is too large slows ordinary replies down (measured: a 7.5B draft
- * on a 12B model halved prose speed while it sped edits up).
+ * An optional second guesser from the library: a DFlash drafter made for this
+ * model, which drafts several words at once, or a small model of the same
+ * family (`draftCandidates`). Hidden when the library has neither.
  */
 function DraftModelRow({ model, value, onChange }: { model: LocalModel; value?: string; onChange: (id: string | undefined) => void }) {
   const [candidates, setCandidates] = useState<LocalModel[]>([]);
@@ -810,33 +809,23 @@ function DraftModelRow({ model, value, onChange }: { model: LocalModel; value?: 
     let live = true;
     window.nekko
       .engineModels()
-      .then((all) => {
-        if (!live || !all) return;
-        const family = model.architecture;
-        setCandidates(
-          all.filter(
-            (m) =>
-              m.id !== model.id &&
-              Boolean(family) &&
-              m.architecture === family &&
-              (m.modality === 'draft' || m.modality === 'chat' || !m.modality) &&
-              m.sizeBytes <= model.sizeBytes / 4,
-          ),
-        );
-      })
+      .then((all) => { if (live && all) setCandidates(draftCandidates(model, all)); })
       .catch(() => {});
     return () => {
       live = false;
     };
-  }, [model.id, model.architecture, model.sizeBytes]);
+  }, [model.id, model.name, model.architecture, model.sizeBytes, model.format]);
   if (candidates.length === 0 && !value) return null;
+  const dflash = candidates.some(isDflashDrafter);
   return (
-    <Row label="Draft model" flag="--spec-draft-model" hint="A small model from the same family that guesses ahead. Optional; the guessing above needs none.">
+    <Row label="Draft model" flag="--spec-draft-model" hint={dflash
+      ? 'A DFlash drafter made for this model guesses several words at once, and the model checks them: faster, with the same answers. Optional.'
+      : 'A small model from the same family that guesses ahead. Optional; the guessing above needs none.'}>
       <select className="input w-40 py-1 text-xs" value={value ?? ''} onChange={(e) => onChange(e.target.value || undefined)}>
         <option value="">None</option>
         {candidates.map((m) => (
           <option key={m.id} value={m.id}>
-            {m.id}
+            {isDflashDrafter(m) ? `${m.id} (DFlash)` : m.id}
           </option>
         ))}
       </select>

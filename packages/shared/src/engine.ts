@@ -506,7 +506,30 @@ const AUDIO_ARCHS = /^(whisper.*|parakeet.*|moonshine.*|sense-?voice.*|wav2vec.*
  * Speculative-decoding draft heads. They only run attached to a full model
  * (`--model-draft`), never as the served model itself.
  */
-const DRAFT_ARCHS = /draft|eagle|medusa|lookahead|speculative/i;
+const DRAFT_ARCHS = /draft|dflash|eagle|medusa|lookahead|speculative/i;
+
+/**
+ * Whether a library file is a DFlash or DFlash 2 drafter: a small block-diffusion
+ * model that drafts several tokens at once for one target model to check
+ * (llama.cpp's `--spec-type draft-dflash`). Its GGUF's architecture is `dflash`.
+ */
+export function isDflashDrafter(model: { architecture?: string }): boolean {
+  return /dflash/i.test(model.architecture ?? '');
+}
+
+const squash = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/**
+ * Whether a DFlash drafter was made for this target, going by their names: a
+ * drafter is published as its target's name plus "DFlash" ("Qwen3.8-27B-DFlash2"
+ * drafts for "Qwen3.8-27B"). A drafter bound to another model does not load, so
+ * only a named match is offered.
+ */
+export function dflashDrafterFor(target: { name?: string; id: string }, drafter: { name?: string; id: string; architecture?: string }): boolean {
+  if (!isDflashDrafter(drafter)) return false;
+  const base = squash((drafter.name ?? drafter.id).split(/dflash/i)[0]);
+  return base.length >= 4 && squash(target.name ?? target.id).startsWith(base);
+}
 
 /** Embedding encoders. Loadable (`--embedding`), but they answer /v1/embeddings, not chat. */
 const EMBEDDING_ARCHS = /bert|embed|bge|gte-?|roberta|xlm-?roberta|nomic|jina-?v\d/i;
@@ -823,4 +846,23 @@ export interface ModelFolderReport {
   folders: ModelFolderStatus[];
   /** Known layouts present on disk that nobody has added yet. */
   suggestions: ModelFolderSuggestion[];
+}
+
+/**
+ * The library files that can draft for `target` when it loads on llama.cpp,
+ * best first: DFlash drafters made for it, then small models of its own
+ * architecture. A same-family draft is kept well under the target's size,
+ * because one that is too large slows ordinary replies down (measured: a 7.5B
+ * draft on a 12B model halved prose speed while it sped edits up).
+ */
+export function draftCandidates<M extends Pick<LocalModel, 'id' | 'name' | 'architecture' | 'modality' | 'sizeBytes' | 'format'>>(target: M, models: M[]): M[] {
+  const others = models.filter((m) => m.id !== target.id && (m.format === 'mlx') === (target.format === 'mlx'));
+  const dflash = others.filter((m) => dflashDrafterFor(target, m));
+  const family = others.filter((m) =>
+    !isDflashDrafter(m) &&
+    Boolean(target.architecture) &&
+    m.architecture === target.architecture &&
+    (m.modality === 'draft' || m.modality === 'chat' || !m.modality) &&
+    m.sizeBytes <= target.sizeBytes / 4);
+  return [...dflash, ...family];
 }

@@ -42,9 +42,14 @@ An engine is the program that runs a model. Until this, which engine ran a model
 - oMLX ([#3494](https://github.com/nekko-labs/nekko-agent/issues/3494)), Basalt and squid5090 ([#3495](https://github.com/nekko-labs/nekko-agent/issues/3495)) are listed, and on a machine with the right hardware say "Not in this version of Nekko yet". They are never in use, never marked Fastest or Most stable, and have no button.
 - squid5090 publishes no downloads (a Zig and CUDA source build), so it starts as an engine you build and point Nekko at. Basalt and squid5090 stay out of the automatic choice until they have been run on a Blackwell machine.
 
-**Model options** `[planned, #3496]`
+**Model options: DFlash and DFlash 2 drafters** `[first part implemented 2026-11-26, #3496: launch arguments and the drafter pairing unit-tested, and the installed llama-server (b12503) checked to accept the flags; not run with a real drafter]`
 
-- A model that has a DFlash or DFlash 2 drafter offers it when loading; the drafter guesses a few words ahead and the model checks them, with the same answers. Models without one show no such row.
+- A DFlash drafter is a small model made for one target model. It drafts several words at once and the target checks them, so replies come faster with the same answers. It is a separate GGUF file (about 1.1 GB for Qwen3.8-27B) and only runs on llama.cpp.
+- A drafter in the library is recognised (its file says `dflash`), listed as a draft model, and never offered a Load button of its own.
+- When a model's load settings are open (**Guessing ahead > Draft model**), a drafter whose name matches the model ("Qwen3.8-27B-DFlash2" for "Qwen3.8-27B") is offered first, marked "(DFlash)", ahead of small models of the same family. A drafter made for another model is not offered: it would not load.
+- Loading with one starts llama.cpp with `--spec-type draft-dflash` and `--spec-draft-n-max 7` (the step the drafter's authors run it at); any other draft model keeps `draft-simple` and llama.cpp's own step. DFlash and DFlash 2 use the same flag: the server tells them apart from the file.
+- `[planned]` Offering to download the drafter for a model that has one published, and a single DFlash switch in place of the picker ([design canvas](../../nekko-designs/engines-design.html), frame 08). Until then a drafter is downloaded like any other model, from Find new models.
+- An llama.cpp older than DFlash support (before mid 2026) refuses the flag and the load fails with llama.cpp's message; the managed engine is newer.
 
 **First run and recommendations** `[planned, #3497]`
 

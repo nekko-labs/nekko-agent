@@ -56,7 +56,48 @@ fn join(parts: &[&str]) -> String {
 
 fn companions_of(v: Option<&Value>) -> Companions {
     let s = |k: &str| v.and_then(|v| v.get(k)).and_then(Value::as_str).map(str::to_string);
-    Companions { mmproj: s("mmproj"), chat_template_file: s("chatTemplateFile"), draft_model: s("draftModel") }
+    Companions {
+        mmproj: s("mmproj"),
+        chat_template_file: s("chatTemplateFile"),
+        draft_model: s("draftModel"),
+        draft_arch: s("draftArch"),
+    }
+}
+
+/// A DFlash drafter is a block drafter: its own `--spec-type`, and more tokens a step.
+#[test]
+fn a_dflash_drafter_is_launched_as_one() {
+    let model = json!({ "id": "qwen", "path": "/m/qwen.gguf", "architecture": "qwen38" });
+    let args = |arch: Option<&str>, flags: &[&str]| {
+        let companions = Companions {
+            draft_model: Some("/m/draft.gguf".into()),
+            draft_arch: arch.map(str::to_string),
+            ..Companions::default()
+        };
+        launch::build_args(&model, "1", &json!({ "contextTokens": 4096 }), &companions, &|f| flags.contains(&f), true)
+    };
+    let pairs =
+        |a: &[String]| -> Vec<(String, String)> { a.windows(2).map(|w| (w[0].clone(), w[1].clone())).collect() };
+    let has = |a: &[String], k: &str, v: &str| pairs(a).contains(&(k.to_string(), v.to_string()));
+    let all = ["--spec-default", "--spec-draft-model", "--spec-draft-n-max"];
+
+    let dflash = args(Some("dflash"), &all);
+    assert!(has(&dflash, "--spec-draft-model", "/m/draft.gguf"), "{dflash:?}");
+    assert!(has(&dflash, "--spec-type", "draft-dflash"), "{dflash:?}");
+    assert!(has(&dflash, "--spec-draft-n-max", launch::DFLASH_DRAFT_TOKENS), "{dflash:?}");
+    // An older converter wrote `dflash-draft`.
+    assert!(has(&args(Some("dflash-draft"), &all), "--spec-type", "draft-dflash"));
+
+    // Any other draft is the small model it always was, with llama.cpp's own step.
+    for arch in [Some("qwen38"), None] {
+        let simple = args(arch, &all);
+        assert!(has(&simple, "--spec-type", "draft-simple"), "{simple:?}");
+        assert!(!simple.iter().any(|a| a == "--spec-draft-n-max"), "{simple:?}");
+    }
+    // A build that does not know the step flag still gets the drafter.
+    let old = args(Some("dflash"), &["--spec-default", "--spec-draft-model"]);
+    assert!(has(&old, "--spec-type", "draft-dflash") && !old.iter().any(|a| a == "--spec-draft-n-max"), "{old:?}");
+    assert_eq!(launch::draft_spec_type(Some("DFlash")), "draft-dflash");
 }
 
 #[test]
