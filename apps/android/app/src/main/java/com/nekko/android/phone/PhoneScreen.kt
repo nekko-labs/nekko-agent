@@ -32,7 +32,7 @@ import kotlinx.coroutines.launch
 /** A separate native destination: no remote controllers, tools or sync. Photos go to models that take them. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PhoneScreen(phone: PhoneChats, startChat: String? = null, onBack: () -> Unit) {
+fun PhoneScreen(phone: PhoneChats, startChat: String? = null, openProviders: Boolean = false, addProvider: Boolean = false, onBack: () -> Unit) {
     val s by phone.state.collectAsStateWithLifecycle()
     if (!s.ready) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Opening phone chats…") }
@@ -41,8 +41,9 @@ fun PhoneScreen(phone: PhoneChats, startChat: String? = null, onBack: () -> Unit
     val scope = rememberCoroutineScope()
     // Opened from a row of the chat list (#2108): that chat, and Back returns to the list.
     var chatId by rememberSaveable { mutableStateOf(startChat) }
-    var providers by rememberSaveable { mutableStateOf(false) }
-    var adding by remember { mutableStateOf(false) }
+    // Opened from Settings → Models on This phone (#2940): on the providers, or straight on Add provider.
+    var providers by rememberSaveable { mutableStateOf(openProviders) }
+    var adding by remember { mutableStateOf(addProvider) }
     var picking by remember { mutableStateOf(false) }
     var keyFor by remember { mutableStateOf<String?>(null) }
     var remove by remember { mutableStateOf<String?>(null) }
@@ -57,7 +58,7 @@ fun PhoneScreen(phone: PhoneChats, startChat: String? = null, onBack: () -> Unit
     }; Unit }
     Scaffold(containerColor = p.paper, topBar = {
         TopAppBar(title = { Text(if (providers) "Phone providers" else "This phone") }, colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper), navigationIcon = {
-            TextButton(onClick = { if (providers) providers = false else if (chatId != null && chatId != startChat) chatId = null else onBack() }) { Text("Back") }
+            TextButton(onClick = { if (providers && !openProviders) providers = false else if (chatId != null && chatId != startChat) chatId = null else onBack() }) { Text("Back") }
         }, actions = { if (!providers) TextButton(onClick = { providers = true }, modifier = Modifier.testTag("phone.providers")) { Text("Providers") } })
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
