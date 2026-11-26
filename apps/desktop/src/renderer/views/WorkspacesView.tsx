@@ -93,6 +93,17 @@ function clampSidebarWidth(px: number): number {
   return Math.min(SIDEBAR_MAX_W, Math.max(SIDEBAR_MIN_W, Math.round(px)));
 }
 
+/** Chats whose sub-agent tree the user folded away, kept across restarts. */
+const HIDDEN_SUBAGENTS_KEY = 'nekko.hiddenSubagents';
+
+function readHiddenSubagents(): Set<string> {
+  try {
+    const saved = JSON.parse(localStorage.getItem(HIDDEN_SUBAGENTS_KEY) ?? '[]');
+    if (Array.isArray(saved)) return new Set(saved.filter((id): id is string => typeof id === 'string'));
+  } catch { /* private mode or bad JSON */ }
+  return new Set();
+}
+
 function readSidebarWidth(): number {
   try {
     const saved = Number(localStorage.getItem(SIDEBAR_W_KEY));
@@ -344,6 +355,13 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     return () => window.clearInterval(timer);
   }, []);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [hiddenSubagents, setHiddenSubagents] = useState(readHiddenSubagents);
+  const toggleSubagents = (id: string) => setHiddenSubagents((previous) => {
+    const next = new Set(previous);
+    if (!next.delete(id)) next.add(id);
+    try { localStorage.setItem(HIDDEN_SUBAGENTS_KEY, JSON.stringify([...next])); } catch { /* private mode */ }
+    return next;
+  });
   /** Groups whose archived chats are expanded under their active ones. */
   const archiveTipSessionId = useStore((s) => s.archiveTipSessionId);
   const computers = useStore((s) => s.computers);
@@ -938,6 +956,8 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                           now={now}
                           projects={settings?.workspaces ?? []}
                           subAgentCount={kids.length}
+                          subagentsHidden={!!s && hiddenSubagents.has(s.id)}
+                          onToggleSubagents={s && kids.length ? () => toggleSubagents(s.id) : undefined}
                           showMetadata={view.showMetadata}
                           showModel={view.showModel}
                           showContext={view.showContext}
@@ -966,7 +986,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                           onRenameStart={s ? () => setRenamingId(s.id) : undefined}
                           onRename={s ? (title) => void renameChat(s.id, title) : undefined}
                         />
-                        {s && <SubagentList children={kids} statuses={statuses} selectedId={selectedId}
+                        {s && !hiddenSubagents.has(s.id) && <SubagentList children={kids} statuses={statuses} selectedId={selectedId}
                           expandByDefault={settings?.expandSubagents === true} activeRowRef={activeRowRef} onOpen={onOpenChat} />}
                       </div>
                     );
