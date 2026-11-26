@@ -188,6 +188,10 @@ class MainActivity : FragmentActivity() {
                 if (link is DeepLink.Chat) (application as NekkoApp).alwaysAllow.opened(link.id, link.alwaysAllow)
                 // OpenRouter's sign-in came back: the key is fetched and checked while Phone chats opens.
                 if (link is DeepLink.OpenRouterKey) (application as NekkoApp).let { app -> app.appScope.launch { app.phoneChats.finishOpenRouterSignIn(link.raw) } }
+                // Nekko Cloud's browser sign-in came back (#2835): the session is traded while the Cloud page opens.
+                if (link is DeepLink.CloudCallback) (application as NekkoApp).let { app ->
+                    app.appScope.launch(kotlinx.coroutines.Dispatchers.Main) { app.cloudSignIn.finish(app.cloud, link.raw) }
+                }
                 incomingLink.value = link
             }
             Intent.ACTION_SEND -> {

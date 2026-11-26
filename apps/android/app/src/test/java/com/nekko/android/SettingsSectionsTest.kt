@@ -11,9 +11,9 @@ class SettingsSectionsTest {
     private fun pc(id: String, name: String) = Computer(id, name, "wss://r.dev", 0)
 
     @Test
-    fun `settings render computers first, then models on this phone, appearance, simple mode, security, device access, new chats, connectors, connection, connection status, vibration, dictation, the computer's, its automations and usage, this computer, feedback, about`() {
-        // #2940: Computers first and Models on This phone second, as on the iPhone (#2929).
-        assertEquals(17, SettingsSections.size)
+    fun `settings render the cloud profile, computers, then models on this phone, appearance, simple mode, security, device access, new chats, connectors, connection, connection status, vibration, dictation, the computer's, its automations and usage, this computer, feedback, about`() {
+        // #2940: the Nekko Cloud profile, Computers and Models on This phone first, as on the iPhone (#2929).
+        assertEquals(18, SettingsSections.size)
     }
 
     @Test

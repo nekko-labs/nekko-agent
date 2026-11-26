@@ -26,6 +26,8 @@ android {
         versionCode = providers.gradleProperty("nekkoVersionCode").orElse("1").get().toInt()
         versionName = providers.gradleProperty("nekkoVersionName").orElse("0.10.1004").get()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Nekko Cloud's API (#2835), as the iPhone's NekkoCloudURL; -PnekkoCloudUrl points a build elsewhere.
+        buildConfigField("String", "NEKKO_CLOUD_URL", "\"" + providers.gradleProperty("nekkoCloudUrl").orElse("https://nekko-agent-api.fly.dev").get() + "\"")
     }
 
     buildFeatures {

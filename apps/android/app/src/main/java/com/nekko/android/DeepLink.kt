@@ -26,6 +26,9 @@ sealed interface DeepLink {
     /** `nekko-agent://chatgpt-signed-in`: ChatGPT's sign-in page sending the browser back (#3244). The code already came to the app's listener. */
     data object ChatGptSignedIn : DeepLink
 
+    /** `nekko-agent://cloud-callback?code=…`: Nekko Cloud's browser sign-in coming back (#2835). */
+    data class CloudCallback(val raw: String) : DeepLink
+
     companion object {
         /** Pure so it can be unit-tested; MainActivity feeds it the parts of an android.net.Uri. */
         fun from(raw: String, scheme: String?, host: String?, path: List<String>, alwaysAllow: String? = null): DeepLink? {
@@ -37,6 +40,7 @@ sealed interface DeepLink {
                 s == "nekko-agent" && host == "new" -> NewChat
                 s == "nekko-agent" && host == "openrouter-key" -> OpenRouterKey(raw)
                 s == "nekko-agent" && host == "chatgpt-signed-in" -> ChatGptSignedIn
+                s == "nekko-agent" && host == "cloud-callback" -> CloudCallback(raw)
                 else -> null
             }
         }
