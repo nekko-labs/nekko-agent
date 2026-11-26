@@ -26,6 +26,15 @@ can also connect GitHub and set up this Mac. With no connected runners the panel
 shows a short setup hint. Runners are hidden when the connected service does not
 support them; a temporary service failure shows an error and retries.
 
+## See your other Macs
+
+With a Nekko Cloud Pro or Enterprise plan, share a Mac with your organization in
+**Settings > Nekko Cloud > Fleet management** (the switch is off until you turn it on). Every
+member then sees, under that Mac in **Computers**, one line per runner while it is online:
+"CI runner nekko-cloud-mac: running a job (1 of 2 VMs)", "ready", "waiting", "off" or "needs
+attention". Only the label, the state and the VM counts are shared, sealed so Nekko Cloud
+cannot read them; repos, jobs and why a runner waits stay on the Mac. One Mac needs none of this.
+
 ## What it does
 
 Nekko Agent registers this Mac as a GitHub Actions **self-hosted runner** for one repo or one
@@ -257,6 +266,36 @@ for an org runner, set its `org` input and use organization **Self-hosted runner
 from an org admin, since for anyone else GitHub answers 403 and every run goes to hosted), and it never fails the run: no token (as on a fork pull
 request), an API error or a timeout all give the hosted runner. Nekko Agent's own
 `ios-native.yml` uses it.
+
+**Pick through Nekko Cloud** (Pro or Enterprise). In the runner's settings, tick **Let the Nekko
+Cloud picker send jobs here**: this Mac then tells Nekko Cloud, every 30 seconds, its runner label,
+the repos it serves and how many VMs could take a job right now (none while it waits for you).
+Give the picker the Cloud address and let the job ask GitHub for an ID token; no secret is needed:
+
+```yaml
+jobs:
+  pick:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    outputs:
+      runs-on: ${{ steps.pick.outputs.runs-on }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: pick
+        uses: ./.github/actions/pick-runner
+        with:
+          cloud: https://nekko-agent-api.fly.dev
+  build:
+    needs: pick
+    runs-on: ${{ fromJSON(needs.pick.outputs.runs-on) }}
+```
+
+Nekko Cloud answers only for a repo a Mac with live status serves, holds the VM it hands out for
+3 minutes so two jobs at once do not both get it, and otherwise says to use the hosted runner. If
+Cloud cannot answer, the picker carries on with the token check above, then hosted. A fork pull
+request gets no ID token, so it goes hosted. If Cloud refuses this Mac (no plan, signed out), the
+reason shows under the setting.
 
 **On a public repo, the picker does not keep fork code off your Mac.** A pull request runs its
 own copy of the workflow file, so a fork could name your runner directly. Before you point a
