@@ -24,7 +24,8 @@ import com.nekko.protocol.PhoneProviders
 
 /**
  * Settings → Models on This phone (#2940, the iPhone's #2929): each of this phone's providers as an
- * avatar row with its mark, and **Add a provider** with a plus. Both open the phone's providers.
+ * avatar row with its mark that opens its page, and **Add a provider** with a plus, opening the
+ * phone's providers where the provider buttons are (#2939).
  */
 @Composable
 fun PhoneModelsSection(deps: SettingsDeps) {
@@ -41,7 +42,7 @@ fun PhoneModelsSection(deps: SettingsDeps) {
                 dim = !provider.enabled,
                 detailColor = if (error != null) p.danger else null,
                 modifier = Modifier.testTag("settings.phoneProvider.${provider.id}"),
-                onClick = { deps.open(Routes.phoneProviders()) },
+                onClick = { deps.open(Routes.phoneProvider(provider.id)) },
                 avatar = {
                     val mark = providerDrawable(ChatCard.providerMark(provider.kind, null))
                     if (mark != null) Icon(painterResource(mark), contentDescription = null, tint = p.ink, modifier = Modifier.size(20.dp))
@@ -49,6 +50,6 @@ fun PhoneModelsSection(deps: SettingsDeps) {
                 },
             )
         }
-        PlusRow(stringResource(R.string.settings_add_provider), Modifier.testTag("settings.addProvider")) { deps.open(Routes.phoneProviders(add = true)) }
+        PlusRow(stringResource(R.string.settings_add_provider), Modifier.testTag("settings.addProvider")) { deps.open(Routes.phoneProviders()) }
     }
 }

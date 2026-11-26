@@ -56,7 +56,11 @@ class PhoneCloudDeviceTest {
         runBlocking { phone.load() }
         compose.setContent { NekkoTheme(dark = dark) { PhoneScreen(phone) {} } }
         compose.onNodeWithTag("phone.providers").performClick()
-        compose.onNodeWithTag("phone.add").performClick()
+        // #2939: Anthropic's button shows its choices first; the subscription can't be picked here.
+        compose.onNodeWithTag("phone.addKind.anthropic").performClick()
+        compose.onNodeWithTag("anthropicChoice.subscription").assertIsNotEnabled()
+        shot("anthropic-choice")
+        compose.onNodeWithTag("anthropicChoice.apiKey").performClick()
         shot("add-provider")
         // Claude API is guided (#2852): its key page and Paste, no name or address to fill.
         compose.onNodeWithTag("phone.openKeyPage").assertExists()
@@ -71,10 +75,11 @@ class PhoneCloudDeviceTest {
         compose.onNodeWithTag("phone.key").performTextInput("synthetic-device-key")
         compose.onNodeWithTag("phone.save").performClick()
         compose.waitUntil(5000) { phone.state.value.providers.size == 1 }
+        // #2939: the provider is an avatar row that opens its page.
+        compose.onNodeWithTag("phone.provider.${phone.state.value.providers.single().id}").performClick()
         compose.onNodeWithText("Test", useUnmergedTree = true).performClick()
-        // The key was checked before it was kept (#2852); Test asks again.
+        // The key was checked before it was kept (#2852); Test asks again, and its page says how it went.
         compose.waitUntil(5000) { compose.onAllNodesWithText("Connection works.").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("Dismiss").performClick()
         compose.onNodeWithText("New key").performClick()
         compose.onNodeWithTag("phone.newKey").performTextInput("replacement-key")
         compose.onNodeWithText("Save key").performClick()
