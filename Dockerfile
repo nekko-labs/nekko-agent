@@ -14,6 +14,8 @@ COPY rust-toolchain.toml Cargo.toml Cargo.lock ./
 COPY crates ./crates
 # The CI runner's provisioning scripts are compiled into nekkod (include_str!).
 COPY scripts/runner-image ./scripts/runner-image
+# nekko-messaging compiles the shared model tier rules in (include_str!).
+COPY packages/shared/src/model-tiers.json ./packages/shared/src/model-tiers.json
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
     cargo build -p nekkod --release --locked \
