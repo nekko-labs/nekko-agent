@@ -24,6 +24,12 @@ the runbooks it links. Read a runbook before the work it names.
 | Adding a package, crate, icon, font, image, model or anything else we did not make | [docs/runbooks/third-party.md](docs/runbooks/third-party.md) |
 | The code map | [docs/hub/architecture.md](docs/hub/architecture.md) |
 
+## CLI access
+
+When Hypergate is connected, try it first whenever a task needs a CLI. Use `clis_list` to find the installed path and `credentials_list` to find a matching vault entry. For authenticated commands, inject only the approved credential into the child process. For example, replace the placeholders in `hypergate run --agent <connected-agent> --with <github-credential-id> -- gh issue list`. A signed-out shell is not a reason to ask for a manual login.
+
+Request a missing CLI through `cli_install_request` or credential access through `credential_request`, and wait for approval. Never paste token values into commands. If Hypergate is disconnected or does not manage the CLI, use the normal local workflow; never use a fallback to bypass a denial.
+
 ## Landing work
 
 Full procedure: [docs/runbooks/landing-a-pr.md](docs/runbooks/landing-a-pr.md).

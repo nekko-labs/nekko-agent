@@ -56,6 +56,21 @@ Conditions: Apple M1 Max, 64 GB, macOS 27.2.1, release `nekkod` (this branch), N
 Repeat and incremental work, new path only: asking for all chats again with the daemon's per-file cache warm took 85 ms and 0.04 s CPU (500) and 225 ms and 0.17 s CPU (2,000), the cost of building the reply (same 13.44 MB and 53.77 MB), but the app asks only for chats whose `updatedAt` changed: after one chat was saved, re-reading it took 14 ms (500) and 6 ms (2,000), 0.03 MB. The old path re-fetched each changed chat whole.
 
 Why: the finder keeps only message text and file names, so the daemon now serves exactly that (no pictures, reasoning or tool output, parsed by skipping them) and caches it per chat file version. The first-25 times are within run-to-run noise of each other (a single sample each); the wins are bytes, total time, parse time and CPU. The daemon still reads and scans each changed chat file once, so cold CPU is not zero. Source: #3446.
+## Warm chat switch: parked panes hold their animations without a stylesheet rule (#712, PR #3486, 2026-11-26)
+Area: renderer
+Result: improvement (fixes a regression)
+Conditions: a cloud Linux container, Intel Xeon @ 2.10GHz (4 threads), Chrome 158.0.8127.36 headless, `--no-gpu`, the production `build:web` renderer, a release `nekkod`. `node scripts/perf/run.mjs --only latency --no-gpu --report-only`, 40 warm switches per run, on `main` at `c92eac969`. Sequential runs on one machine, not interleaved, so compare the bands, not single runs.
+
+| Metric | `main` (runs 1, 2) | `main` without the rule (runs 1, 2) | This change (runs 1, 2) |
+|---|---|---|---|
+| Switch to a warm chat, to paint, p50 | 25.0 / 26.0 ms | 16.3 / 15.7 ms | 15.1 / 16.0 ms |
+| Switch to a warm chat, to paint, p95 | 32.0 / 37.7 ms | 24.7 / 24.1 ms | 23.2 / 22.7 ms |
+| Switch to a cold chat, frame painted, p50 | 30.2 ms (run 1) | - | 29.3 / 30.6 ms |
+
+CI's own numbers show when it started. The PR speed contract's warm switch read 11 to 15 ms p50 (14 to 19 ms p95) on every runner type up to the 22:47 UTC run on 2026-11-25, and 18 to 26 ms p50 (24 to 33 ms p95) from 23:44 on, over the 30 ms gate on unchanged base about half the time. The nightly perf job on `main` read 10 to 16 ms p50 from 2026-11-06 to 2026-11-25. Of the four PRs merged between those runs, #3407 was the only renderer change.
+
+Why: #3407 paused a parked pane's animations with `[data-pane-hidden] * { animation-play-state: paused !important }`. `data-pane-hidden` flips on both panes in every warm switch, and a rule that matches every descendant makes the browser restyle each pane's whole transcript inside the switch. The rule is gone. `useParkedAnimations` (`parkedAnimations.ts`) pauses the animations that are actually running through the Web Animations API one frame after the pane parks, and plays them when it is shown. `data-pane-hidden` stays for the decor clock, which no stylesheet rule reads now. What it gives up: an animation that starts inside a parked pane runs until the pane parks again. Source: #712, PR #3486.
+
 ## Renderer code splitting: non-default tabs, QR and Remotion load after first paint (#3445, PR #3455, 2026-11-26)
 Area: renderer
 Result: improvement (startup); no effect on chat switching or keypress
