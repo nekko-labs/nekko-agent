@@ -57,7 +57,8 @@ const escape = (s: string) =>
 /**
  * Sends the confirmation email for a pending signup, unless one went out in
  * the last day. Claims the send in the database first (one statement), so two
- * signups at once can't both send. A failed send releases the claim.
+ * signups at once can't both send. A failed send releases the claim and
+ * records when sending first failed, for the retry job (`retryConfirmations`).
  * Returns whether an email was sent.
  */
 export async function sendConfirmation(
@@ -76,7 +77,7 @@ export async function sendConfirmation(
   // sends nothing rather than risk it.
   const target = await db.query<{ email: string }>("select email from signups where id = $1", [signupId]);
   if (!target.rows[0] || (await isSuppressed(db, target.rows[0].email))) return false;
-  const { rows } = await db.query<{ email: string; name: string | null; list: string; unsubscribe_token: string; prev: string | null }>(
+  const { rows } = await db.query<{ email: string; list: string; unsubscribe_token: string; prev: string | null }>(
     `update signups s set
        confirm_token_hash = $2,
        confirm_expires_at = now() + make_interval(days => ${LINK_DAYS}),
@@ -84,7 +85,7 @@ export async function sendConfirmation(
      from (select confirmation_sent_at as prev from signups where id = $1) old
      where s.id = $1 and s.status = 'pending'
        and (s.confirmation_sent_at is null or s.confirmation_sent_at < now() - interval '1 day')
-     returning s.email, s.name, s.list, s.unsubscribe_token, old.prev`,
+     returning s.email, s.list, s.unsubscribe_token, old.prev`,
     [signupId, hashToken(token)],
   );
   const row = rows[0];
@@ -94,15 +95,49 @@ export async function sendConfirmation(
   const unsubscribe = `${base}/v1/signups/unsubscribe?token=${row.unsubscribe_token}`;
   try {
     const copy = copyFor(row.list);
-    await mailer({ to: row.email, subject: copy.subject, ...confirmationBody(row.name, copy, confirm, unsubscribe), headers: unsubscribeHeaders(unsubscribe) });
+    await mailer({ to: row.email, subject: copy.subject, ...confirmationBody(copy, confirm, unsubscribe), headers: unsubscribeHeaders(unsubscribe) });
     return true;
   } catch (e) {
     await db.query(
-      "update signups set confirm_token_hash = null, confirm_expires_at = null, confirmation_sent_at = $2 where id = $1",
+      `update signups set confirm_token_hash = null, confirm_expires_at = null, confirmation_sent_at = $2,
+         confirmation_failed_at = case when $2::timestamptz is null then coalesce(confirmation_failed_at, now()) else confirmation_failed_at end
+       where id = $1`,
       [signupId, row.prev],
     );
     throw e;
   }
+}
+
+/** Pending signups never emailed are retried this many at a time. */
+const RETRY_BATCH = 50;
+
+/**
+ * Sends the confirmation email to pending signups that were never emailed:
+ * one whose email failed (Resend down or refusing it), or saved while there
+ * was no Resend key. Runs hourly. Each send claims its row first, so a
+ * signup arriving at the same moment can't double it. Returns how many went out.
+ */
+export async function retryConfirmations(
+  db: Db,
+  mailer: Mailer | undefined,
+  publicUrl: string,
+  log: (msg: string) => void = console.log,
+): Promise<number> {
+  if (!mailer) return 0;
+  const { rows } = await db.query<{ id: string }>(
+    `select id from signups where status = 'pending' and confirmation_sent_at is null
+     order by confirmation_failed_at nulls first, created_at limit ${RETRY_BATCH}`,
+    [],
+  );
+  let sent = 0;
+  for (const { id } of rows) {
+    try {
+      if (await sendConfirmation(db, id, mailer, publicUrl, log)) sent++;
+    } catch (e) {
+      log(`confirmation retry failed for signup ${id}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  return sent;
 }
 
 /** RFC 8058 one-click unsubscribe, so mail apps can show their own Unsubscribe button. */
@@ -110,8 +145,13 @@ export function unsubscribeHeaders(url: string): Record<string, string> {
   return { "List-Unsubscribe": `<${url}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" };
 }
 
-function confirmationBody(name: string | null, copy: { line: string; button: string }, confirm: string, unsubscribe: string) {
-  const hi = name ? `Hi ${name},` : "Hi,";
+/**
+ * The email carries no text the sender chose: anyone can sign up any address,
+ * so a name typed into the form would be words of their choosing delivered
+ * from our domain to someone else's inbox.
+ */
+function confirmationBody(copy: { line: string; button: string }, confirm: string, unsubscribe: string) {
+  const hi = "Hi,";
   const text = `${hi}
 
 ${copy.line} Please confirm it was you:
@@ -133,6 +173,24 @@ Nekko Labs LLC · hello@nekkoagent.com`;
 <p style="color:#52525e;font-size:12px;margin-top:32px">Nekko Labs LLC · <a href="mailto:hello@nekkoagent.com" style="color:#52525e">hello@nekkoagent.com</a> · <a href="${escape(unsubscribe)}" style="color:#52525e">Unsubscribe</a></p>
 </div></body></html>`;
   return { html, text };
+}
+
+/** Whether a confirm link would still work, without using it. */
+export async function confirmTokenValid(db: Db, token: string): Promise<boolean> {
+  if (!token || token.length > 100) return false;
+  const { rows } = await db.query(
+    "select 1 from signups where confirm_token_hash = $1 and confirm_expires_at > now() and status = 'pending'",
+    [hashToken(token)],
+  );
+  return rows.length > 0;
+}
+
+/** Whether an unsubscribe link belongs to a signup, or was already used. */
+export async function unsubscribeTokenKnown(db: Db, token: string): Promise<boolean> {
+  if (!token || token.length > 100) return false;
+  const live = await db.query("select 1 from signups where unsubscribe_token = $1", [token]);
+  if (live.rows.length) return true;
+  return (await db.query("select 1 from used_unsubscribe_tokens where token_hash = $1", [hashToken(token)])).rows.length > 0;
 }
 
 export type ConfirmResult = "confirmed" | "invalid";
@@ -171,6 +229,16 @@ export async function unsubscribe(db: Db, token: string): Promise<boolean> {
   });
 }
 
+/**
+ * A page whose one button posts back to `action`. The confirm and unsubscribe
+ * links land here instead of acting on open: mail security scanners open every
+ * link in a message, and would otherwise confirm signups nobody made or
+ * unsubscribe people who never asked.
+ */
+export function buttonPage(title: string, text: string, action: string, button: string): string {
+  return page(title, `<p>${escape(text)}</p><form method="post" action="${escape(action)}"><button type="submit">${escape(button)}</button></form>`);
+}
+
 /** The small branded page the confirm and unsubscribe links land on. */
 export function page(title: string, body: string): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -183,5 +251,7 @@ main{max-width:460px;padding:32px 20px;text-align:center}
 h1{font-size:28px;margin:0 0 12px;background:linear-gradient(110deg,#5a2352,#c084b5);-webkit-background-clip:text;background-clip:text;color:transparent}
 @media (prefers-color-scheme:dark){h1{background-image:linear-gradient(110deg,#854f6c,#e6d0dc)}}
 p{color:var(--muted);line-height:1.5}a{color:var(--accent)}
+button{margin:12px 0 4px;font:inherit;font-weight:600;color:#fff;background:linear-gradient(115deg,#190019,#3a1438);border:0;border-radius:999px;padding:12px 22px;cursor:pointer}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 </style></head><body><main><h1>${escape(title)}</h1>${body}<p><a href="https://nekkoagent.com">nekkoagent.com</a></p></main></body></html>`;
 }

@@ -70,7 +70,7 @@ describe("feature switches", () => {
   it("start off for everyone, team accounts included", async () => {
     const philip = await user("Philip@NekkoLabs.com");
     expect(await me(philip.token)).toMatchObject({ staff: true, features: { billing: false } });
-    expect((await call(null, "GET", "/v1/features")).json()).toEqual({ staff: false, features: { billing: false, "library-cloud": false, "library-multiplayer": false, "cloud-relay": false } });
+    expect((await call(null, "GET", "/v1/features")).json()).toEqual({ staff: false, features: { billing: false, "library-cloud": false, "library-multiplayer": false, "cloud-relay": false, "ci-fleet": false } });
     expect((await call(philip.token, "GET", "/v1/billing/plans")).statusCode).toBe(404);
   });
 
@@ -91,7 +91,7 @@ describe("feature switches", () => {
     expect((await call(matt.token, "PUT", "/v1/staff/features/nope", { state: "on" })).statusCode).toBe(404);
     const r = await setBilling(matt.token, "team");
     expect(r.statusCode).toBe(200);
-    expect(r.json()).toEqual({ features: { billing: "team", "library-cloud": "off", "library-multiplayer": "off", "cloud-relay": "off" }, available: ["billing", "library-cloud"] });
+    expect(r.json()).toEqual({ features: { billing: "team", "library-cloud": "off", "library-multiplayer": "off", "cloud-relay": "off", "ci-fleet": "off" }, available: ["billing", "library-cloud", "ci-fleet"] });
     expect((await me(matt.token)).features.billing).toBe(true);
     expect((await me(someone.token)).features.billing).toBe(false);
     expect((await call(null, "GET", "/v1/billing/plans")).statusCode).toBe(404);

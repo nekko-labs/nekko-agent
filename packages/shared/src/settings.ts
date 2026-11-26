@@ -491,6 +491,12 @@ export interface AppSettings {
   userName?: string;
   /** The optional email given in setup for product updates; also joined to Nekko Cloud's `app` list then. */
   userEmail?: string;
+  /**
+   * `userEmail` while it has yet to reach Nekko Cloud (offline, Nekko Cloud
+   * down, or the connection switched off). Written by the engine, which sends
+   * it again later; null once sent, refused, or the email changes.
+   */
+  userEmailPending?: string | null;
   /** The closest of setup's "What do you mostly do?" cards; it only seeded the detail level. */
   workProfile?: WorkProfile;
   /**

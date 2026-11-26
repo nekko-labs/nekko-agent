@@ -8,7 +8,7 @@ vi.mock('./primitives/index.js', async (original) => ({
   Modal: ({ children }: { children: React.ReactNode }) => <div role="dialog">{children}</div>,
 }));
 
-import { LinuxImageRow, SettingsBody, editDraft, saveSettings, shownSettings, trustNetwork } from './RunnerSettingsSheet.js';
+import { CLOUD_PICKER_LABEL, LinuxImageRow, SettingsBody, editDraft, saveSettings, shownSettings, trustNetwork } from './RunnerSettingsSheet.js';
 
 const host: HostView = {
   ramMb: 36864, cores: 12, recommendedMemoryMb: 24576, runnerMemoryMb: 18432, cpusPerVm: 4,
@@ -35,6 +35,16 @@ describe('RunnerSettingsSheet', () => {
     const withRefresh = renderToStaticMarkup(<SettingsBody view={view()} image={image} draft={view().config.settings} onDraft={() => {}} onEnabled={() => {}} onSave={() => {}} onRemove={() => {}} onRefresh={() => {}} saving={false} />);
     expect(withRefresh).toContain('>Update scripts<');
     expect(withRefresh).toContain(esc("Update scripts puts this version of Nekko's scripts into the image in a few minutes. A new macOS or Xcode needs Rebuild image."));
+  });
+
+  it('the_cloud_picker_is_off_by_default_github_only_and_shows_cloud_refusals_while_on', () => {
+    const html = render(view());
+    expect(html).toContain(CLOUD_PICKER_LABEL);
+    expect(html).not.toContain('runner-cloud-picker-error');
+    expect(render(view({ config: { ...view().config, id: 'gl-abc' } }))).not.toContain(CLOUD_PICKER_LABEL);
+    const refused = view({ cloudPickerError: 'The Nekko Cloud picker is part of Nekko Cloud Pro.' }, { cloudPicker: true });
+    expect(render(refused)).toContain('The Nekko Cloud picker is part of Nekko Cloud Pro.');
+    expect(render(refused, { ...refused.config.settings, cloudPicker: false }), 'unticked in the form').not.toContain('runner-cloud-picker-error');
   });
 
   it('settings_match_mockup_4', () => {
