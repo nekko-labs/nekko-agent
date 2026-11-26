@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -248,6 +248,10 @@ describe('CI runners and other data folders', () => {
     ]);
     put(join(runners, 'images', 'default', 'disk.img'), 'old image');
     put(join(runners, 'images', 'custom', 'disk.img'), 'custom image');
+    put(join(runners, 'images', 'default.new', 'build.json'), { step: 'install' });
+    put(join(runners, 'images', 'cache', 'restore.ipsw'), 'download');
+    put(join(runners, 'images', 'linux-cache', 'kernel'), 'download');
+    put(join(runners, 'images', 'linux.old', 'vmlinux'), 'replaced');
     put(join(runners, 'audit.jsonl'), jsonl([{ ts: 1, event: 'job' }]));
     put(join(runners, 'logs', 'job-1.log'), 'log');
     put(join(runners, 'install-id'), 'oldid000');
@@ -272,6 +276,7 @@ describe('CI runners and other data folders', () => {
     expect(readFileSync(join(env.target, 'runners', 'images', 'default', 'disk.img'), 'utf8')).toBe('the image this Mac built');
     expect(readFileSync(join(env.target, 'runners', 'install-id'), 'utf8')).toBe('newid000');
     expect(existsSync(join(env.target, 'runners', 'vms'))).toBe(false);
+    for (const local of ['default.new', 'cache', 'linux-cache', 'linux.old']) expect(existsSync(join(env.target, 'runners', 'images', local))).toBe(false);
     expect(existsSync(join(env.target, 'runners', 'logs', 'job-1.log'))).toBe(true);
     expect(readFileSync(join(env.target, 'runners', 'audit.jsonl'), 'utf8')).toContain('"event":"job"');
     expect(report.roots.find((r) => r.source === s.main)?.runners).toBe(1);
@@ -290,7 +295,7 @@ describe('CI runners and other data folders', () => {
     expect(left).toContain('runners/runners.json');
     expect(left).toContain('runners/images/custom');
     expect(left).toContain('plugins/cat/manifest.json');
-    expect(left.filter((f) => /install-id|memory\.json|vms/.test(f))).toEqual([]);
+    expect(left.filter((f) => /install-id|memory\.json|vms|\.new|\.old|cache/.test(f))).toEqual([]);
   });
 
   it('keeps an old folder whose runners were not merged, and removes it once they are', () => {
@@ -320,13 +325,28 @@ describe('CI runners and other data folders', () => {
 
   it('leaves a moved JSON file byte for byte when it holds no old path', () => {
     const { env } = world(); const s = seed(env);
-    const text = '{\n\t"name": "x",\n\t"version": "1.0"\n}\n';
+    // A Latin-1 byte inside a string: still parses, but would not survive a UTF-8 round trip.
+    const bytes = Buffer.concat([Buffer.from('{\n\t"name": "caf'), Buffer.from([0xe9]), Buffer.from('",\n\t"version": "1.0"\n}\n')]);
     const file = join(s.main, 'workflow-checkouts', 'repo', 'package.json');
     mkdirSync(join(s.main, 'workflow-checkouts', 'repo'), { recursive: true });
-    writeFileSync(file, text);
+    writeFileSync(file, bytes);
+    chmodSync(file, 0o644);
 
     consolidate(detectLegacy(env), env);
-    expect(readFileSync(join(env.target, 'workflow-checkouts', 'repo', 'package.json'), 'utf8')).toBe(text);
+    const moved = join(env.target, 'workflow-checkouts', 'repo', 'package.json');
+    expect(readFileSync(moved).equals(bytes)).toBe(true);
+    if (process.platform !== 'win32') expect(statSync(moved).mode & 0o777).toBe(0o644);
+  });
+
+  it('copies a root JSON file the target lacks byte for byte when it holds no old path', () => {
+    const { env } = world(); const s = seed(env);
+    const bytes = Buffer.concat([Buffer.from('{"label":"caf'), Buffer.from([0xe9]), Buffer.from('"}')]);
+    writeFileSync(join(s.main, 'design.json'), bytes);
+    chmodSync(join(s.main, 'design.json'), 0o644);
+
+    consolidate(detectLegacy(env), env);
+    expect(readFileSync(join(env.target, 'design.json')).equals(bytes)).toBe(true);
+    if (process.platform !== 'win32') expect(statSync(join(env.target, 'design.json')).mode & 0o777).toBe(0o600);
   });
 
   it('keeps an old folder until the target holds every key of a runner JSON file', () => {
@@ -347,8 +367,9 @@ describe('CI runners and other data folders', () => {
     put(join(env.target, 'runners', 'logs', 'vm-1.log'), 'a longer console from this Mac');
     const items = detectLegacy(env);
 
-    consolidate(items, env);
+    const merged = consolidate(items, env);
     expect(readFileSync(join(env.target, 'runners', 'logs', 'vm-2.log'), 'utf8')).toBe('only here');
+    expect(merged.roots.flatMap((r) => r.conflicts).filter((c) => c.includes(join('runners', 'logs')))).toEqual([]);
     const report = cleanup(items, env, { uninstall: () => {} });
     expect(report.kept).toEqual([]);
     expect(report.removed).toContain(s.main);

@@ -1,4 +1,4 @@
-import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync } from 'node:fs';
+import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -72,6 +72,9 @@ const RUNNER_LOCAL = new Set(['install-id', 'memory.json', 'vms']);
 
 /** Under `runners/`, moved when the target lacks them, but a clash does not keep the old folder: rotated VM console logs. */
 const RUNNER_DISPOSABLE = new Set(['logs']);
+
+/** Under `runners/images/`, one install's unfinished builds, replaced images and downloads: left behind. */
+const imageLocal = (name: string): boolean => name === 'cache' || name.endsWith('-cache') || name.endsWith('.new') || name.endsWith('.old');
 
 /** The other known data folders in a root: they move file by file, and any left behind keeps the old folder. */
 const otherDataDirs = (root: string): string[] => dirEntries(root)
@@ -229,8 +232,9 @@ function writeJson(path: string, value: unknown, pretty = true): void {
 /** Copy one JSON file, rewriting paths that pointed into the old root. Raw copy when it will not parse. */
 function copyJson(src: string, dst: string, pairs: Pairs, ci: boolean): void {
   mkdirSync(dirname(dst), { recursive: true, mode: 0o700 });
-  // A rewrite in place leaves a file it cannot rewrite exactly as it is.
-  const raw = () => { if (resolve(src) !== resolve(dst)) copyFileSync(src, dst); };
+  // A rewrite in place leaves a file it cannot rewrite exactly as it is. A copy
+  // keeps the bytes but is owner-only, like every file the merge writes.
+  const raw = () => { if (resolve(src) !== resolve(dst)) { copyFileSync(src, dst); chmodSync(dst, 0o600); } };
   if (statSync(src).size > MAX_JSON_BYTES) return raw();
   const text = readFileSync(src, 'utf8');
   let value: unknown;
@@ -239,7 +243,7 @@ function copyJson(src: string, dst: string, pairs: Pairs, ci: boolean): void {
   // Only a file holding an old path is reformatted: anything else (a checkout's package.json) keeps its bytes.
   const out = remap(value, pairs, ci);
   if (JSON.stringify(out) !== JSON.stringify(value)) writeTextAtomic(dst, JSON.stringify(out, null, text.includes('\n  ') ? 2 : undefined));
-  else if (resolve(src) !== resolve(dst)) writeTextAtomic(dst, text);
+  else raw();
 }
 
 function copyMissing(src: string, dst: string, pairs: Pairs, ci: boolean): number {
@@ -592,7 +596,8 @@ function mergeRoot(src: string, target: string, ci: boolean): RootReport {
  * (the target's win), logs by line, and an image moves only when the target
  * has none of that name (one it has supersedes it, like an engine build). An
  * unfinished GitHub App setup moves only when the target has none. The rest
- * moves when missing; per-install state stays behind.
+ * moves when missing; per-install state, unfinished image builds, replaced
+ * images and downloads stay behind. A clashing VM log is not a conflict.
  */
 function mergeRunners(src: string, dst: string, pairs: Pairs, ci: boolean, report: RootReport): void {
   if (!isDir(src)) return;
@@ -606,7 +611,7 @@ function mergeRunners(src: string, dst: string, pairs: Pairs, ci: boolean, repor
     } else if (e.name === 'images' && e.isDirectory()) {
       for (const image of dirEntries(from)) {
         const target = join(to, image.name);
-        if (image.isSymbolicLink() || existsSync(target)) continue;
+        if (image.isSymbolicLink() || imageLocal(image.name) || existsSync(target)) continue;
         moveOne(join(from, image.name), target);
         moved.push(target);
       }
@@ -617,7 +622,7 @@ function mergeRunners(src: string, dst: string, pairs: Pairs, ci: boolean, repor
     } else if (e.isFile() && e.name.endsWith('.json')) {
       mergeJsonFile(from, to, pairs, ci);
     } else if (e.isDirectory()) {
-      moveMissing(from, to, moved, report.conflicts);
+      moveMissing(from, to, moved, RUNNER_DISPOSABLE.has(e.name) ? [] : report.conflicts);
     } else if (!existsSync(to)) {
       moveOne(from, to);
       moved.push(to);
@@ -649,7 +654,7 @@ function runnersLeft(src: string, target: string): string[] {
     const from = join(src, e.name), to = join(dst, e.name), rel = `runners/${e.name}`;
 
     if (e.name === 'images' && e.isDirectory()) {
-      for (const image of dirEntries(from)) if (!image.isSymbolicLink() && !existsSync(join(to, image.name))) missing.push(`${rel}/${image.name}`);
+      for (const image of dirEntries(from)) if (!image.isSymbolicLink() && !imageLocal(image.name) && !existsSync(join(to, image.name))) missing.push(`${rel}/${image.name}`);
     } else if (e.isFile() && e.name.endsWith('.jsonl')) {
       if (!linesCovered(from, to)) missing.push(rel);
     } else if (e.name === 'pending-app.json') {
