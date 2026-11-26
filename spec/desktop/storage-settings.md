@@ -67,7 +67,7 @@ A worktree is **idle** and offered for removal only when all of these hold, chec
 
 Removal runs `git worktree remove` (never `--force`) and **keeps the branch**: unlike the single Remove in Git management, the bulk action never deletes a branch, so a branch whose PR is still open, or that was pushed but not merged, can be checked out again later.
 
-The preview lists each worktree that would go (its folder, branch, project, size and why it counts as idle: "pushed", "PR merged") with a total, plus a count of worktrees kept and why ("3 have uncommitted changes, 2 were used in the last 3 days, 1 is running"). The person can untick any row. One removal failing never stops the others; the result says how much was freed and lists anything that could not be removed with Git's reason.
+The preview lists each worktree that would go (its folder, branch, project, size and why it counts as idle: "pushed", "PR merged") with a total, plus a count of worktrees kept and why ("3 have uncommitted changes, 2 were used in the last 3 days, 1 is running"). The person can untick any row; above the list, a running count ("130 of 131 selected · 166 GB") and **Select all** and **Deselect all** (Philip, 2026-11-26: any long pick list in Storage gets both). With nothing selected the remove button is disabled. One removal failing never stops the others; the result says how much was freed and lists anything that could not be removed with Git's reason.
 
 ### Leftover CI runner images
 

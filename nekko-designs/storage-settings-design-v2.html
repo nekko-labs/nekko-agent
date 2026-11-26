@@ -168,12 +168,13 @@ h3{font-size:16px;font-weight:600;margin:0}
 
 <!-- 03 -->
 <figure>
-<figcaption><b>03 · Remove idle worktrees.</b> A destructive confirmation (the one allowed object), opening under the row. Each worktree shows why it is safe; anything can be unticked. What is kept is one line, with the reasons behind a disclosure. Branches always stay.</figcaption>
+<figcaption><b>03 · Remove idle worktrees.</b> A destructive confirmation (the one allowed object), opening under the row. Each worktree shows why it is safe; anything can be unticked, with Select all and Deselect all and a running count above the list. What is kept is one line, with the reasons behind a disclosure. Branches always stay.</figcaption>
 <div class="frame w-page"><div class="pad">
   <div class="row"><span class="sw" style="background:var(--s1)"></span><div><div class="t">Agent worktrees</div><div class="d">158 checkouts · 135 GB of it is build output</div></div><span class="n">180 GB</span><span class="a"></span></div>
   <div class="confirm" role="alertdialog" aria-labelledby="wt-t">
     <h4 id="wt-t">Remove 131 idle worktrees? Frees about 168 GB.</h4>
     <p class="faint" style="margin:4px 0 0">Each is clean, unused for 3 days and fully pushed. Branches are kept, so you can check any of them out again.</p>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap"><span class="faint">130 of 131 selected · 166 GB</span><span style="margin-left:auto"><button class="btn link" type="button">Select all</button><button class="btn link" type="button">Deselect all</button></span></div>
     <div class="scroll">
       <label class="pick"><input type="checkbox" checked><span>compact-agents-panel<br><span class="faint">nekko-agent · compact-agents-panel · pushed</span></span><span class="n">2.4 GB</span></label>
       <label class="pick"><input type="checkbox" checked><span>p4-fleet<br><span class="faint">nekko-agent · feat/p4-fleet · PR #3402 merged</span></span><span class="n">1.9 GB</span></label>
