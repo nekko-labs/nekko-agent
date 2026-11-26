@@ -41,6 +41,7 @@ import { WallLayoutSettings } from './WallLayoutSettings.js';
 import { AnimationsSection, DesktopBehaviorSection, FunSection } from './DesktopBehaviorSections.js';
 import { SkillsColorIcon, ConnectorsColorIcon } from '../navIcons.js';
 import { StorageSettings, formatBytes } from '../components/StorageSettings.js';
+import { SETTINGS_PAGE_EVENT, takePendingSettingsPage } from '../settingsPage.js';
 import { DeleteEverythingDialog, wipeEverything } from '../components/DeleteEverythingDialog.js';
 import { StyleSection } from './StyleSection.js';
 import { openCustomize } from '../components/CustomizeExperience.js';
@@ -146,7 +147,11 @@ export function SettingsView() {
   const prevOnboardingOpen = useRef(onboardingOpen);
   const pageRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [active, setActiveState] = useState<SettingsGroupId>(lastPage);
+  const [active, setActiveState] = useState<SettingsGroupId>(() => {
+    const asked = takePendingSettingsPage();
+    if (asked && GROUP_IDS.has(asked)) lastPage = asked as SettingsGroupId;
+    return lastPage;
+  });
   const setActive = (id: SettingsGroupId) => { lastPage = id; setActiveState(id); };
   const [searching, setSearching] = useState(false);
   // Simple says nothing about computers until one is connected; Detailed is where the first one is paired.
@@ -162,6 +167,11 @@ export function SettingsView() {
     if (searching) document.getElementById(`settings-${id}`)?.scrollIntoView({ block: 'start' });
     else scroller.scrollTop = 0;
   };
+  useEffect(() => {
+    const onPage = (e: Event) => { const id = (e as CustomEvent<string>).detail; takePendingSettingsPage(); if (GROUP_IDS.has(id)) goTo(id as SettingsGroupId); };
+    window.addEventListener(SETTINGS_PAGE_EVENT, onPage);
+    return () => window.removeEventListener(SETTINGS_PAGE_EVENT, onPage);
+  });
   /** Show the page holding `el` (a section, row or group) and bring `el` into view. */
   const showElement = (el: HTMLElement | null, block: ScrollLogicalPosition = 'start') => {
     const group = el?.closest<HTMLElement>('[data-settings-group]')?.dataset.settingsGroup;
