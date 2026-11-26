@@ -70,6 +70,9 @@ const DISPOSABLE_DIRS = new Set(['desktop', 'run', 'logs', 'bin', 'runtime', 'fo
 /** Per-install state under `runners/`: the target keeps its own. */
 const RUNNER_LOCAL = new Set(['install-id', 'memory.json', 'vms']);
 
+/** Under `runners/`, moved when the target lacks them, but a clash does not keep the old folder: rotated VM console logs. */
+const RUNNER_DISPOSABLE = new Set(['logs']);
+
 /** The other known data folders in a root: they move file by file, and any left behind keeps the old folder. */
 const otherDataDirs = (root: string): string[] => dirEntries(root)
   .filter((e) => e.isDirectory() && LEGACY_PROFILE_ENTRIES.has(e.name) && !MERGED_DIRS.has(e.name) && !DISPOSABLE_DIRS.has(e.name))
@@ -232,7 +235,11 @@ function copyJson(src: string, dst: string, pairs: Pairs, ci: boolean): void {
   const text = readFileSync(src, 'utf8');
   let value: unknown;
   try { value = JSON.parse(text.replace(/^\uFEFF/, '')); } catch { return raw(); }
-  writeTextAtomic(dst, JSON.stringify(remap(value, pairs, ci), null, text.includes('\n  ') ? 2 : undefined));
+
+  // Only a file holding an old path is reformatted: anything else (a checkout's package.json) keeps its bytes.
+  const out = remap(value, pairs, ci);
+  if (JSON.stringify(out) !== JSON.stringify(value)) writeTextAtomic(dst, JSON.stringify(out, null, text.includes('\n  ') ? 2 : undefined));
+  else if (resolve(src) !== resolve(dst)) writeTextAtomic(dst, text);
 }
 
 function copyMissing(src: string, dst: string, pairs: Pairs, ci: boolean): number {
@@ -303,6 +310,18 @@ function linesCovered(src: string, dst: string): boolean {
 }
 
 const sameSize = (a: string, b: string): boolean => isFile(b) && statSync(a).size === statSync(b).size;
+
+/**
+ * `dst` holds every entry of the JSON file `src`, as `mergeJsonFile` merges
+ * them: array items by id, object keys at the top. A file that does not parse
+ * is only covered by one the same size.
+ */
+function jsonCovered(src: string, dst: string): boolean {
+  const a = readJson(src), b = readJson(dst);
+  if (Array.isArray(a)) return Array.isArray(b) && a.every((x) => b.some((y) => itemKey(y) === itemKey(x)));
+  if (isObj(a)) return isObj(b) && Object.keys(a).every((k) => Object.hasOwn(b, k));
+  return sameSize(src, dst);
+}
 
 type Json = Record<string, unknown>;
 const isObj = (v: unknown): v is Json => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -626,23 +645,18 @@ function runnersLeft(src: string, target: string): string[] {
   const dst = join(target, 'runners');
   const missing: string[] = [];
   for (const e of dirEntries(src)) {
-    if (e.isSymbolicLink() || RUNNER_LOCAL.has(e.name)) continue;
+    if (e.isSymbolicLink() || RUNNER_LOCAL.has(e.name) || RUNNER_DISPOSABLE.has(e.name)) continue;
     const from = join(src, e.name), to = join(dst, e.name), rel = `runners/${e.name}`;
 
-    if (e.name === 'runners.json') {
-      const records = readJson(from);
-      const have = readJson(to);
-      // A file that does not parse is only covered by an identical one.
-      const covered = Array.isArray(records)
-        ? Array.isArray(have) && records.every((r) => have.some((h) => itemKey(h) === itemKey(r)))
-        : sameSize(from, to);
-      if (!covered) missing.push(rel);
-    } else if (e.name === 'images' && e.isDirectory()) {
+    if (e.name === 'images' && e.isDirectory()) {
       for (const image of dirEntries(from)) if (!image.isSymbolicLink() && !existsSync(join(to, image.name))) missing.push(`${rel}/${image.name}`);
     } else if (e.isFile() && e.name.endsWith('.jsonl')) {
       if (!linesCovered(from, to)) missing.push(rel);
-    } else if (e.isFile() && e.name.endsWith('.json')) {
+    } else if (e.name === 'pending-app.json') {
+      // The merge keeps the target's own unfinished setup and drops this one.
       if (!existsSync(to)) missing.push(rel);
+    } else if (e.isFile() && e.name.endsWith('.json')) {
+      if (!jsonCovered(from, to)) missing.push(rel);
     } else if (e.isDirectory()) {
       missing.push(...leftover(from, rel, target));
     } else if (e.isFile() && !sameSize(from, to)) {

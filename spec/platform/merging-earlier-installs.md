@@ -17,7 +17,8 @@ Earlier names of the app each left a data folder behind. On launch the desktop a
 - An old folder is deleted only when everything a person made in it is in the current folder. A file that could not be placed keeps the whole old folder, and the result names it.
 - What counts: settings, sign-ins, chats, usage history, memory, models, CI runners, and every other known data folder (skills, plugins, voice, computers, sandboxes, workflow checkouts and the rest).
 - What does not: one machine's caches, downloads and running state (`desktop`, `run`, `logs`, `bin`, `runtime`, `fonts`, `agent-browser`), and a runner's per-install state (`install-id`, `memory.json`, `vms`). These are deleted with the old folder.
-- CI runners: records merge by id, the current one winning. An image moves when the current folder has none of that name; one it has supersedes it. The merge result says how many runners came over. The backup keeps the old `runners.json`.
+- CI runners: records merge by id, the current one winning. An image moves when the current folder has none of that name; one it has supersedes it. Other runner JSON files (such as the key file used where there is no OS keychain) gain the keys the current one lacks, and keep the old folder until it has them all. Rotated VM console logs move when missing; one that clashes does not keep the old folder. The merge result says how many runners came over. The backup keeps the old `runners.json`.
+- A moved file is rewritten only when it holds a path into the old folder; anything else (a checkout's `package.json`) keeps its exact bytes.
 - A backup of the changed small files is written before the first change.
 
 ## Known limits

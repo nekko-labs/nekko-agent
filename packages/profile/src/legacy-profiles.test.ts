@@ -317,4 +317,40 @@ describe('CI runners and other data folders', () => {
     expect(report.kept.map((k) => k.path)).toEqual([join(env.home, '.agent-nekko')]);
     expect(report.kept[0].reason).toContain('skills/a/SKILL.md');
   });
+
+  it('leaves a moved JSON file byte for byte when it holds no old path', () => {
+    const { env } = world(); const s = seed(env);
+    const text = '{\n\t"name": "x",\n\t"version": "1.0"\n}\n';
+    const file = join(s.main, 'workflow-checkouts', 'repo', 'package.json');
+    mkdirSync(join(s.main, 'workflow-checkouts', 'repo'), { recursive: true });
+    writeFileSync(file, text);
+
+    consolidate(detectLegacy(env), env);
+    expect(readFileSync(join(env.target, 'workflow-checkouts', 'repo', 'package.json'), 'utf8')).toBe(text);
+  });
+
+  it('keeps an old folder until the target holds every key of a runner JSON file', () => {
+    const { env } = world(); const s = seed(env);
+    put(join(s.main, 'runners', 'secrets.json'), { 'github-app-1': 'old key', 'github-app-2': 'other key' });
+    put(join(env.target, 'runners', 'secrets.json'), { 'github-app-1': 'target key' });
+    expect(unmerged(s.main, env.target)).toContain('runners/secrets.json');
+
+    consolidate(detectLegacy(env), env);
+    expect(unmerged(s.main, env.target)).not.toContain('runners/secrets.json');
+    expect(json(join(env.target, 'runners', 'secrets.json'))).toEqual({ 'github-app-1': 'target key', 'github-app-2': 'other key' });
+  });
+
+  it('does not keep an old folder for a runner VM log that clashes', () => {
+    const { env } = world(); const s = seed(env);
+    put(join(s.main, 'runners', 'logs', 'vm-1.log'), 'old console');
+    put(join(s.main, 'runners', 'logs', 'vm-2.log'), 'only here');
+    put(join(env.target, 'runners', 'logs', 'vm-1.log'), 'a longer console from this Mac');
+    const items = detectLegacy(env);
+
+    consolidate(items, env);
+    expect(readFileSync(join(env.target, 'runners', 'logs', 'vm-2.log'), 'utf8')).toBe('only here');
+    const report = cleanup(items, env, { uninstall: () => {} });
+    expect(report.kept).toEqual([]);
+    expect(report.removed).toContain(s.main);
+  });
 });
