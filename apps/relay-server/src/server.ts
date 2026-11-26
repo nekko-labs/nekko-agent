@@ -232,7 +232,24 @@ export interface RelayOptions {
   ticketKey?: import('node:crypto').KeyObject;
   allowUnauthenticated?: boolean;
   pushSender?: PushSender;
+  /**
+   * Liveness: every room and account socket is pinged every `pingMs` (default 25 s) and
+   * terminated once it has sent nothing (no pong, no frame) for `deadlineMs` (default 55 s),
+   * so a half-open socket goes offline (`agent-offline`, presence `online:false`) as on a clean close.
+   */
+  liveness?: { pingMs?: number; deadlineMs?: number };
+  /**
+   * Internal presence (`GET /presence?acct=<hash>&acct=...`, `authorization: Bearer <secret>`):
+   * which devices of the named accounts are online. Off (404) when unset.
+   */
+  presenceSecret?: string;
 }
+
+/** Default liveness timings, in ms. A silent socket is gone after at most deadline plus a fifth of the ping interval. */
+export const PING_MS = 25_000;
+export const DEADLINE_MS = 55_000;
+/** Most accounts one /presence call may ask about. */
+export const MAX_PRESENCE_ACCOUNTS = 100;
 
 /** Sites allowed to read /healthz from a browser: the website's status page. */
 export const STATUS_PAGE_ORIGINS = new Set(['https://nekkoagent.com', 'https://www.nekkoagent.com']);
@@ -362,8 +379,47 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
   const app = Fastify();
   app.register(websocket, { options: { maxPayload: limits.maxFrameBytes } });
 
+  // Liveness: a half-open socket (a sleeping laptop, a dropped network) never closes by itself.
+  const pingMs = opts.liveness?.pingMs ?? PING_MS;
+  const deadlineMs = opts.liveness?.deadlineMs ?? DEADLINE_MS;
+  const beating = new Map<any, { seen: number; pinged: number }>();
+  const sweep = setInterval(() => {
+    const now = Date.now();
+    for (const [socket, b] of beating) {
+      if (now - b.seen > deadlineMs) {
+        beating.delete(socket);
+        try {
+          socket.terminate();
+        } catch {
+          /* already gone */
+        }
+      } else if (now - b.pinged >= pingMs) {
+        b.pinged = now;
+        try {
+          socket.ping();
+        } catch {
+          /* closing */
+        }
+      }
+    }
+  }, Math.max(5, Math.floor(pingMs / 5)));
+  sweep.unref();
+  app.addHook('onClose', async () => clearInterval(sweep));
+  /** Watch a socket: any pong or frame shows it is alive. Dropped when it closes. */
+  const watch = (socket: any) => {
+    const b = { seen: Date.now(), pinged: Date.now() };
+    beating.set(socket, b);
+    const alive = () => {
+      b.seen = Date.now();
+    };
+    socket.on('pong', alive);
+    socket.on('message', alive);
+    socket.on('close', () => beating.delete(socket));
+  };
+
   app.register(async () => {
     app.get('/relay', { websocket: true }, async (socket: any, req) => {
+      watch(socket);
       const q = req.query as Record<string, string>;
       const code = q.room;
       const role = q.role; // 'agent' | 'client'
@@ -749,6 +805,7 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
   if (opts.ticketKey) {
     app.register(async () => {
       app.get('/account', { websocket: true }, (socket: any) => {
+        watch(socket);
         const bucket: Bucket = { tokens: limits.rateBurst, last: Date.now() };
         let me: Member | null = null;
         let acct = '';
@@ -831,6 +888,32 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
           if (group?.size === 0) accounts.delete(acct);
         });
       });
+    });
+  }
+
+  // Internal presence, for the Cloud API only: who of these accounts is online. Content-free:
+  // device ids only, from the same map the account channel already keeps. Off without a secret.
+  const presenceSecret = opts.presenceSecret;
+  if (presenceSecret) {
+    const want = sha256(presenceSecret);
+    app.get('/presence', async (req, reply) => {
+      reply.header('cache-control', 'no-store');
+      const auth = req.headers.authorization;
+      const given = typeof auth === 'string' && auth.startsWith('Bearer ') ? auth.slice(7) : '';
+      // Digests of equal length, so the compare takes the same time whatever was sent.
+      if (!hashEq(sha256(given), want)) return reply.code(401).send({ error: 'unauthorized' });
+      const raw = (req.query as Record<string, unknown>).acct;
+      const asked = raw === undefined ? [] : Array.isArray(raw) ? raw : [raw];
+      if (asked.length > MAX_PRESENCE_ACCOUNTS) return reply.code(400).send({ error: `at most ${MAX_PRESENCE_ACCOUNTS} acct` });
+      const online: Record<string, string[]> = {};
+      for (const acct of asked) {
+        if (typeof acct !== 'string' || acct.length === 0 || acct.length > 128) return reply.code(400).send({ error: 'bad acct' });
+        const group = accounts.get(acct);
+        if (!group) continue;
+        const devs = roster(group).map((d) => d.dev);
+        if (devs.length) online[acct] = devs;
+      }
+      return { online };
     });
   }
 

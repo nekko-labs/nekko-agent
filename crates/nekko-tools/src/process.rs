@@ -38,6 +38,11 @@ pub const READ_MAX: usize = 60_000;
 pub const READ_WAIT_MAX_MS: f64 = 120_000.0;
 /// Processes one chat may have running at once.
 pub const PROCESS_LIMIT: usize = 8;
+/// How long an exited process's output waits to be read: past this the
+/// buffers are freed (up to 2 MB of UTF-16 each), and a read says so.
+pub const EXITED_OUTPUT_KEEP: Duration = Duration::from_secs(10 * 60);
+/// How long an exited process stays listed (its exit status and command) before it is forgotten.
+pub const EXITED_ENTRY_KEEP: Duration = Duration::from_secs(60 * 60);
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
@@ -73,6 +78,8 @@ struct Entry {
     /// Everything kept for `read_process` with `all`, tail-trimmed.
     all: Vec<u16>,
     tree: Option<Arc<Tree>>,
+    /// The output was freed unread ([`EXITED_OUTPUT_KEEP`]).
+    dropped: bool,
 }
 
 /// `clip(s, max)`: past `max` units, the tail behind an ellipsis line.
@@ -208,8 +215,10 @@ impl Processes {
                 info.exit = Some(Exit::Code(-1));
                 info.ended_at = Some(nekko_js::now_ms());
                 let units: Vec<u16> = message.encode_utf16().collect();
-                lock(&self.entries)
-                    .insert(id.clone(), Entry { info: info.clone(), unread: units.clone(), all: units, tree: None });
+                lock(&self.entries).insert(
+                    id.clone(),
+                    Entry { info: info.clone(), unread: units.clone(), all: units, tree: None, dropped: false },
+                );
                 mirror(&session, workspace.as_deref(), &message);
                 info.exit = None;
                 info.ended_at = None;
@@ -217,8 +226,10 @@ impl Processes {
             }
         };
         let tree = Arc::new(Tree::attach(&child));
-        lock(&self.entries)
-            .insert(id.clone(), Entry { info: info.clone(), unread: Vec::new(), all: Vec::new(), tree: Some(tree) });
+        lock(&self.entries).insert(
+            id.clone(),
+            Entry { info: info.clone(), unread: Vec::new(), all: Vec::new(), tree: Some(tree), dropped: false },
+        );
 
         let (tx, mut rx) = tokio::sync::mpsc::channel::<(bool, Vec<u8>)>(64);
         for (is_err, pipe) in [
@@ -274,8 +285,34 @@ impl Processes {
             };
             me.set_exit(&id, exit);
             mirror(&session, workspace.as_deref(), &format!("[{label} exited{tail}]\n"));
+            // An exited process nobody reads would hold its output for as long as the daemon runs.
+            tokio::time::sleep(EXITED_OUTPUT_KEEP).await;
+            me.evict_exited(nekko_js::now_ms());
+            tokio::time::sleep(EXITED_ENTRY_KEEP - EXITED_OUTPUT_KEEP).await;
+            me.evict_exited(nekko_js::now_ms());
         });
         Ok(info)
+    }
+
+    /// Free the output of every process that exited [`EXITED_OUTPUT_KEEP`]
+    /// before `now_ms` and was not read (a read forgets the process itself),
+    /// and forget the ones that exited [`EXITED_ENTRY_KEEP`] before. Returns
+    /// how many buffers were freed or entries forgotten.
+    pub fn evict_exited(&self, now_ms: u64) -> usize {
+        let mut entries = lock(&self.entries);
+        let age = |e: &Entry| e.info.ended_at.map(|t| now_ms.saturating_sub(t));
+        let before = entries.len();
+        entries.retain(|_, e| age(e).is_none_or(|a| a < EXITED_ENTRY_KEEP.as_millis() as u64));
+        let mut freed = before - entries.len();
+        for e in entries.values_mut() {
+            if !e.dropped && age(e).is_some_and(|a| a >= EXITED_OUTPUT_KEEP.as_millis() as u64) {
+                e.unread = Vec::new();
+                e.all = Vec::new();
+                e.dropped = true;
+                freed += 1;
+            }
+        }
+        freed
     }
 
     pub fn get(&self, id: &str) -> Option<ProcessInfo> {
@@ -314,7 +351,11 @@ impl Processes {
         let e = entries.get_mut(id)?;
         let source = if all { &e.all } else { &e.unread };
         let truncated = source.len() > READ_MAX;
-        let output = String::from_utf16_lossy(if truncated { &source[source.len() - READ_MAX..] } else { source });
+        let mut output = String::from_utf16_lossy(if truncated { &source[source.len() - READ_MAX..] } else { source });
+        if e.dropped {
+            output =
+                "[The output was dropped: this process exited more than 10 minutes ago and was not read.]\n".into();
+        }
         e.unread.clear();
         let info = e.info.clone();
         if info.exit.is_some() {
@@ -677,6 +718,46 @@ mod tests {
         let seen = lock(&seen).clone();
         assert!(seen.contains("[background]") || seen.contains(", background]"), "{seen}");
         assert!(seen.contains(&format!("[{} exited with code 0]", info.id)), "{seen}");
+    }
+
+    #[tokio::test]
+    async fn an_exited_process_nobody_reads_loses_its_output_after_ten_minutes_and_is_forgotten_after_an_hour() {
+        let procs = Processes::new();
+        let cwd = std::env::temp_dir().to_string_lossy().into_owned();
+        let mirror: Mirror = Arc::new(|_, _, _| {});
+        let cmd = echo("unread output");
+        let started = |cmd: &str| {
+            procs
+                .start(
+                    StartRequest { session_id: "s", workspace_id: None, command: cmd, cwd: &cwd, name: None, env: &[] },
+                    mirror.clone(),
+                )
+                .unwrap()
+        };
+        let (quiet, read) = (started(&cmd), started(&cmd));
+        for _ in 0..100 {
+            if procs.get(&quiet.id).is_some_and(|i| i.exit.is_some())
+                && procs.get(&read.id).is_some_and(|i| i.exit.is_some())
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        let ended = procs.get(&quiet.id).unwrap().ended_at.unwrap();
+        let minutes = |m: u64| ended + m * 60_000 + 1_000;
+        // Not yet: the output is still there for the agent.
+        assert_eq!(procs.evict_exited(minutes(9)), 0);
+        // Ten minutes unread: the buffers go, the process stays listed with its exit status.
+        assert_eq!(procs.evict_exited(minutes(10)), 2);
+        assert_eq!(procs.evict_exited(minutes(11)), 0, "once");
+        assert_eq!(procs.list("s").len(), 2);
+        let (info, output, _) = procs.read(&quiet.id, None, true).await.unwrap();
+        assert_eq!(info.exit, Some(Exit::Code(0)));
+        assert!(output.contains("dropped") && !output.contains("unread output"), "{output}");
+        assert!(procs.get(&quiet.id).is_none(), "a read forgets it, as for any exited process");
+        // An hour on, the other is forgotten too.
+        assert_eq!(procs.evict_exited(minutes(61)), 1);
+        assert!(procs.list("s").is_empty());
     }
 
     #[tokio::test]

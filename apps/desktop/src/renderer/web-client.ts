@@ -51,6 +51,7 @@ function makeWebClient(): NekkoApi {
   const indexCbs = new Set<(s: IndexStatus) => void>();
   const terminalCbs = new Set<(e: TerminalEvent) => void>();
   const changesCbs = new Set<(e: { sessionId: string }) => void>();
+  const gitChangedCbs = new Set<(e: { path: string }) => void>();
   const tasksCbs = new Set<(t: import('@nekko-agent/shared').AutomationTask[]) => void>();
   const trainingCbs = new Set<(r: import('@nekko-agent/shared').TrainingRun[]) => void>();
   const workflowCbs = new Set<(s: import('@nekko-agent/shared').WorkflowsSnapshot) => void>();
@@ -76,6 +77,7 @@ function makeWebClient(): NekkoApi {
     else if (channel === IpcEvents.indexProgress) indexCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.terminalEvent) terminalCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.changesUpdated) changesCbs.forEach((cb) => cb(payload));
+    else if (channel === IpcEvents.gitChanged) gitChangedCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.tasksUpdated) tasksCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.backgroundUpdated) backgroundCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.simulatorsUpdated) simulatorsCbs.forEach((cb) => cb(payload));
@@ -555,7 +557,7 @@ function makeWebClient(): NekkoApi {
     openTerminalStream: (id, handlers) => openTerminalStream(id, handlers),
     listShells: () => call(IpcChannels.terminalShells),
     createTerminal: (opts) => call(IpcChannels.terminalCreate, opts),
-    terminalSnapshot: (id) => call(IpcChannels.terminalSnapshot, id),
+    terminalSnapshot: (id, opts) => (opts ? call(IpcChannels.terminalSnapshot, id, opts) : call(IpcChannels.terminalSnapshot, id)),
     updateTerminal: (id, patch) => call(IpcChannels.terminalUpdate, id, patch),
     writeTerminal: (id, data) => call(IpcChannels.terminalWrite, id, data),
     resizeTerminal: (id, cols, rows) => call(IpcChannels.terminalResize, id, cols, rows),
@@ -658,6 +660,7 @@ function makeWebClient(): NekkoApi {
     acceptAllChanges: (sessionId) => call(IpcChannels.changeAcceptAll, sessionId),
 
     listSessionPrs: (sessionId, force) => call(IpcChannels.prSessionList, sessionId, force),
+    listSessionPrsMany: (sessionIds, force) => call(IpcChannels.prSessionListMany, sessionIds, force),
     getPrDiff: (url) => call(IpcChannels.prDiff, url),
     prAction: (url, action) => call(IpcChannels.prAction, url, action),
     continuePrStack: (sessionId, url) => call(IpcChannels.prContinueStack, sessionId, url),
@@ -906,6 +909,10 @@ function makeWebClient(): NekkoApi {
     onChangesUpdated: (cb) => {
       changesCbs.add(cb);
       return () => changesCbs.delete(cb);
+    },
+    onGitChanged: (cb) => {
+      gitChangedCbs.add(cb);
+      return () => gitChangedCbs.delete(cb);
     },
     onTasksUpdated: (cb) => {
       tasksCbs.add(cb);

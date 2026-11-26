@@ -3704,6 +3704,8 @@ select:not([multiple]):not([size]) {
    beam, rocket and glow, just still, so a wall of busy agents left on screen
    behind another app stops costing the GPU. See appActivity.ts. */
 html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inactive] *::after { animation-play-state: paused !important; }
+/* A pane the workspace keeps mounted but parked (ChatPane sets this from usePaneVisible) holds its frame too, as the window does when it is unfocused; the decor clock (decorClock.ts) skips it. */
+[data-pane-hidden] *, [data-pane-hidden] *::before, [data-pane-hidden] *::after { animation-play-state: paused !important; }
 .command-wall-window[data-wall-selected] .wall-num, .wall-composer[data-has-agent] .wall-num { background: var(--accent); color: var(--win); }
 .wall-layout-control { position: relative; display: inline-flex; align-items: center; gap: 8px; }
 /* Reveal by grid track rather than a fixed pixel width: a fixed 38px was
@@ -4608,6 +4610,20 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
   .provider-families:has(> :last-child:nth-child(2)) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .provider-families:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }
+.provider-family-accounts [data-login-row],
+.provider-family-accounts [data-account-row] button[aria-expanded],
+.provider-family-models-toggle {
+  min-height: var(--q-row-dense);
+  padding-block: var(--q-tight);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .provider-family-models-toggle svg { transition: transform var(--dur-fast) var(--ease-out); }
+}
+.provider-family-models-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
+@media (pointer: coarse) {
+  .provider-family-accounts [data-account-row] button[aria-expanded],
+  .provider-family-models-toggle { min-height: 44px; }
+}
 .models-provider-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 20px; margin-bottom: 20px; }
 .models-add-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 /* Each provider is its mark and its name, quiet until hovered (design system: rows and tabs). */

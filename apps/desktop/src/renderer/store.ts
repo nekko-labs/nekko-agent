@@ -4,7 +4,7 @@ import { needsProviderSetup } from './components/providers/providerSetup.js';
 import { create } from 'zustand';
 import { rememberSplashColours } from './splash.js';
 import type { AppSettings, ComputerCatalog, ComputerStatus, Session, SessionSummary, ProviderConfig, ProviderKind, ModelInfo, TerminalInfo, InstalledSkillRecord, SkillDef, PrInfo, HypergateInfo } from '@nekko-agent/shared';
-import { AUTO_ARCHIVE_CHOICES, agentsToAutoArchive, autoArchiveDays, DEFAULT_IMAGE_CHAT_PARAMS, isArchived, getMarketSkill, marketToSkillDef, normalizeInstallTarget, summarizeSession } from '@nekko-agent/shared';
+import { computerIdOf, AUTO_ARCHIVE_CHOICES, agentsToAutoArchive, autoArchiveDays, DEFAULT_IMAGE_CHAT_PARAMS, isArchived, getMarketSkill, marketToSkillDef, normalizeInstallTarget, summarizeSession } from '@nekko-agent/shared';
 import type { MascotMood } from './components/Mascot.js';
 import { setPageZoom, syncTitleBarOverlay } from './chrome.js';
 import { isScreenWindow } from './displays.js';
@@ -281,6 +281,8 @@ interface UiState {
   prsBySession: Record<string, PrInfo[]>;
   /** Fetch a chat's PRs (gh/API, host-cached) and stash them for cards + badges. */
   refreshSessionPrs: (sessionId: string, force?: boolean) => Promise<void>;
+  /** [`refreshSessionPrs`] for several chats: one request for this computer's chats, one each for another computer's. */
+  refreshSessionPrsMany: (sessionIds: string[], force?: boolean) => Promise<void>;
   /** Open a PR's diff as a window in the active workspace. */
   openPrPane: (url: string) => void;
 
@@ -628,6 +630,33 @@ const loadedFontFaces: FontFace[] = [];
 export const textScaleOf = (v: number | undefined): number =>
   typeof v === 'number' && Number.isFinite(v) ? Math.min(150, Math.max(80, Math.round(v))) : 100;
 
+/**
+ * The new session list, reusing the previous objects where nothing changed.
+ * A summary is the same chat when `id` and `updatedAt` match (the daemon bumps
+ * `updatedAt` on every write), so it keeps its identity and subscribers that
+ * select one chat, or a filtered few, do not re-render when another chat
+ * finishes. When every entry is reused, in order, the previous array is
+ * returned as is.
+ */
+export function reuseSessions(prev: SessionSummary[], next: SessionSummary[]): SessionSummary[] {
+  if (!prev.length) return next;
+  const before = new Map(prev.map((x) => [x.id, x]));
+  let same = prev.length === next.length;
+  const merged = next.map((n, i) => {
+    const old = before.get(n.id);
+    const reused = old && old.updatedAt === n.updatedAt && shallowSame(old, n) ? old : n;
+    if (reused !== prev[i]) same = false;
+    return reused;
+  });
+  return same ? prev : merged;
+}
+
+function shallowSame(a: SessionSummary, b: SessionSummary): boolean {
+  const ak = Object.keys(a) as (keyof SessionSummary)[];
+  if (ak.length !== Object.keys(b).length) return false;
+  return ak.every((k) => a[k] === b[k] || JSON.stringify(a[k]) === JSON.stringify(b[k]));
+}
+
 export const useStore = create<UiState>((set, get) => ({
   archiveTipSessionId: null,
   ciRunnersFocus: false,
@@ -812,8 +841,8 @@ export const useStore = create<UiState>((set, get) => ({
     const ids = new Set(listed.map((x) => x.id));
     const kept = get().sessions.filter((x) => !ids.has(x.id) && (createdAtSeq.get(x.id) ?? -1) >= asked);
     for (const [id, seq] of createdAtSeq) if (ids.has(id) || seq < asked) createdAtSeq.delete(id);
-    const sessions = kept.length ? [...kept, ...listed] : listed;
-    set({ sessions });
+    const sessions = reuseSessions(get().sessions, kept.length ? [...kept, ...listed] : listed);
+    if (sessions !== get().sessions) set({ sessions });
     // A restored layout can point at chats that were archived or deleted since
     // (another client, the retention purge). Drop those windows now that the
     // truth is known; terminals are pruned in refreshTerminals.
@@ -1207,6 +1236,26 @@ export const useStore = create<UiState>((set, get) => ({
       set((s) => ({ prsBySession: { ...s.prsBySession, [sessionId]: prs } }));
     } catch {
       /* older host without PR channels, or gh/API unavailable */
+    }
+  },
+
+  refreshSessionPrsMany: async (sessionIds, force = false) => {
+    // Another computer's chats are asked of that computer, one call each; this one's go together.
+    const local = sessionIds.filter((id) => !computerIdOf(id));
+    const many = window.nekko.listSessionPrsMany;
+    const batch = typeof many === 'function' && local.length > 1;
+    await Promise.all((batch ? sessionIds.filter((id) => computerIdOf(id)) : sessionIds).map((id) => get().refreshSessionPrs(id, force)));
+    if (!batch) return;
+    // The host answers for at most 64 chats a call.
+    for (let i = 0; i < local.length; i += 64) {
+      const chunk = local.slice(i, i + 64);
+      try {
+        const byChat = await many.call(window.nekko, chunk, force);
+        set((s) => ({ prsBySession: { ...s.prsBySession, ...byChat } }));
+      } catch {
+        /* an older host without the batch channel, or gh/API unavailable: read them one by one */
+        await Promise.all(chunk.map((id) => get().refreshSessionPrs(id, force)));
+      }
     }
   },
 

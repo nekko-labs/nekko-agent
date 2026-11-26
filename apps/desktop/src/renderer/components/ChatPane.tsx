@@ -32,7 +32,7 @@ import { createPortal } from 'react-dom';
 import { DictationButton } from './DictationButton.js';
 import { voiceComposer } from '../voiceActions.js';
 import { decideApproval, type ApprovalScope } from './agent-console/approval-decision.js';
-import type { AgentEvent, ChatMessage, AskAnswer, AskRequest, SecretRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
+import type { AgentEvent, ChatMessage, SessionSummary, AskAnswer, AskRequest, SecretRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
 import { CHAT_MODE_LABEL, chatCodeModeSavings, privacyMode, CLAUDE_CODE_PROVIDER_KIND, canOfferSubagent, subagentModelChoice, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, claudePlanUsageNotice, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress, usageLimitResetAt } from '@nekko-agent/shared';
 import type { AutoProviderPick, BootedSimulator, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
@@ -42,9 +42,11 @@ import { useModelCatalogVersion } from '../modelCatalog.js';
 import { SubagentBanner } from './SubagentBanner.js';
 import { useGitStatus } from '../useGitStatus.js';
 import { anchorLiveRun, beginResumedRun, clearLiveRun, engineLost, getLiveRun, onRunOrphaned, takeFinishedRun, useLiveRun, type LiveRun } from '../liveRuns.js';
-import { getCachedSession, holdTranscript, loadSession, putCachedSession } from '../sessionCache.js';
+import { getCachedSession, holdTranscript, loadSession, putCachedSession, withSummaryFields } from '../sessionCache.js';
 import { retryUntilAnswered } from '../retryUntilAnswered.js';
 import { usePaneVisible } from '../paneVisibility.js';
+import { useVisibleInterval } from '../visibleInterval.js';
+import { watchEventFilter } from '../agentWatches.js';
 import { reportAgentWorking } from '../workingAgents.js';
 import { useAgentEventClaim } from '../agentSubscription.js';
 import { ComposerFocus } from './ComposerFocus.js';
@@ -131,6 +133,20 @@ import { ShieldCheckIcon } from '../icons.js';
 import { PanelIcon, DownloadIcon, PlusIcon, SearchIcon, CloseIcon, BoltIcon, IncognitoIcon, ThoughtIcon, ListIcon, TerminalIcon, WorktreeIcon, CheckIcon, TrashIcon, UndoIcon } from '../icons.js';
 import { GfSendIcon, GfStopIcon } from '../gentleface-icons.js';
 import { SimulatorStatus, useSimulatorAutoOpen } from './Simulators.js';
+
+/** The wake time is read on watch events; this slow poll only covers a watch the host arms by itself. */
+const WATCH_FALLBACK_POLL_MS = 60_000;
+
+/** The provider::model keys of past chats, newest first, each once. */
+export function recentModelKeys(sessions: SessionSummary[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const s of sessions.filter((c) => c.modelId && c.providerId).sort((a, b) => b.updatedAt - a.updatedAt)) {
+    const key = `${s.providerId}::${s.modelId}`;
+    if (!seen.has(key)) { seen.add(key); out.push(key); }
+  }
+  return out;
+}
 
 const NO_PRS: PrInfo[] = []; // stable empty ref so the store selector doesn't churn
 // The first-chat intro brings Remotion with it, so it loads only when it shows.
@@ -568,25 +584,26 @@ const LiveReplyStatus = memo(function LiveReplyStatus({
   const [elapsed, setElapsed] = useState(0);
   const [nextWakeAt, setNextWakeAt] = useState<number | null>(null);
   const [now, setNow] = useState(Date.now);
+  // The next wake time changes only when a watch is armed, cancelled or fires, so it is read on the
+  // events that can do that (an `agent_watch` result, a turn's end) and, as a slow fallback for a
+  // watch the host arms on its own (a PR watch), once a minute while the pane is visible.
+  const refreshWake = useRef<(live: () => boolean) => void>(() => {});
+  refreshWake.current = (live) => { void window.nekko.nextAgentWatchAt(sessionId).then((wake) => {
+    if (live()) { setNextWakeAt(wake); setNow(Date.now()); }
+  }).catch(() => { if (live()) setNextWakeAt(null); }); };
+  useVisibleInterval((live) => refreshWake.current(live), WATCH_FALLBACK_POLL_MS, { immediate: true, deps: [sessionId] });
   useEffect(() => {
     let live = true;
-    const refresh = () => { void window.nekko.nextAgentWatchAt(sessionId).then((wake) => {
-      if (live) { setNextWakeAt(wake); setNow(Date.now()); }
-    }).catch(() => { if (live) setNextWakeAt(null); }); };
-    refresh();
-    const interval = setInterval(refresh, 15_000);
+    const changes = watchEventFilter();
     const off = window.nekko.onAgentEvent((e) => {
-      if (e.sessionId === sessionId && (e.type === 'tool_result' || e.type === 'done' || e.type === 'error')) refresh();
+      if (e.sessionId === sessionId && changes(e)) refreshWake.current(() => live);
     });
-    return () => { live = false; clearInterval(interval); off(); };
+    return () => { live = false; off(); };
   }, [sessionId]);
   useEffect(() => {
-    if (!status.streaming) return;
-    const tick = () => { if (startedAt) setElapsed(Math.round((Date.now() - startedAt) / 1000)); };
-    tick();
-    const t = setInterval(tick, 500);
-    return () => clearInterval(t);
+    if (status.streaming && startedAt) setElapsed(Math.round((Date.now() - startedAt) / 1000));
   }, [status.streaming, startedAt]);
+  useVisibleInterval(() => { if (startedAt) setElapsed(Math.round((Date.now() - startedAt) / 1000)); }, status.streaming ? 500 : null);
   const liveRate = status.streaming ? liveTokenRate(run) : null;
   // Agrees with the turn status line: "Starting" or "Writing reply" for half an hour reads as hung or busy
   // when Claude Code is only waiting on its own background work.
@@ -859,11 +876,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // signed-out subscription, a local server with nothing loaded). Kept so the
   // chip can name what went missing instead of quietly reading "Choose a model".
   const [unavailableModel, setUnavailableModel] = useState<string | null>(null);
-  const recentModels = useStore((s) => s.sessions)
-    .filter((s) => s.modelId && s.providerId)
-    .sort((a, b) => b.updatedAt - a.updatedAt)
-    .map((s) => `${s.providerId}::${s.modelId}`)
-    .filter((key, i, all) => all.indexOf(key) === i);
+  const sessionList = useStore((s) => s.sessions);
+  const recentModels = useMemo(() => recentModelKeys(sessionList), [sessionList]);
   // Live telemetry for the subtext under the chat: output tokens, elapsed
   // seconds, and a summary of the last completed reply.
   const [turnOut, setTurnOut] = useState(0);
@@ -1137,6 +1151,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   latestCtxRef.current = ctx;
   const latestSessionRef = useRef(session);
   latestSessionRef.current = session;
+  const publishCtx = useRef<(() => void) | null>(null);
   useEffect(() => {
     if (!publishesContext) return;
     const publish = () => {
@@ -1156,10 +1171,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       useStore.getState().setSessionCtxEstimate(sessionId, base + live);
     };
     publish();
-    if (!streaming) return;
-    const t = setInterval(publish, 4_000);
-    return () => clearInterval(t);
+    publishCtx.current = publish;
   }, [publishesContext, streaming, sessionId, ctx, marks, reportedCtx]);
+  // While streaming, the estimate is republished every 4 s, only while the pane is on screen.
+  useVisibleInterval(() => publishCtx.current?.(), publishesContext && streaming ? 4_000 : null);
   useEffect(() => {
     if (!publishesContext) return;
     return () => useStore.getState().setSessionCtxEstimate(sessionId, null);
@@ -1297,16 +1312,28 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           // A prompt sent from this pane got its reply: it counts, and the 10th
           // and 50th carry the GitHub star ask under them.
           if (userPromptRef.current) { userPromptRef.current = false; if (starAskAfterReply()) setStarAsk(true); }
-          endTurn();
+          const settled = endTurn();
           refreshCtx();
-          void requestSuggestions();
+          void requestSuggestions(settled);
           break;
         case 'session_meta':
           if (e.connectivityNotice) setLiveConnectivity((notices) => mergeConnectivityNotices(notices, [e.connectivityNotice!]));
-          // The session record changed mid-turn — a new agent plan, or a fresh
-          // title — so re-read it and refresh the sidebar/boards alongside.
-          loadSession(sessionId).then((s) => { if (s) setSession(s); }).catch(() => {});
-          void refreshSessions();
+          // The session record changed mid-turn (a new agent plan, or a fresh
+          // title). The sidebar list is refreshed anyway, and it carries every
+          // field of the chat but its transcript, so the record is updated from
+          // it; only a changed transcript (the summary counts other messages
+          // than this copy holds) is read back whole.
+          void refreshSessions().then(() => {
+            const summary = useStore.getState().sessions.find((x) => x.id === sessionId);
+            const current = latestSessionRef.current;
+            const merged = summary && current ? withSummaryFields(current, summary) : null;
+            if (!merged) {
+              loadSession(sessionId).then((s) => { if (s) setSession(s); }).catch(() => {});
+            } else if (merged !== current) {
+              putCachedSession(merged);
+              setSession(merged);
+            }
+          }).catch(() => { loadSession(sessionId).then((s) => { if (s) setSession(s); }).catch(() => {}); });
           break;
       }
     });
@@ -1373,7 +1400,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     // Hold the streamed reply on screen until its persisted copy is in state,
     // then clear the held copy in the same commit, so the end of a reply never
     // flashes the answer out and back in.
-    loadSession(sessionId).then((s) => {
+    const loaded = loadSession(sessionId);
+    loaded.then((s) => {
       finalizingReply.current = false;
       setSession(s);
       if (heldRef.current === final) {
@@ -1384,6 +1412,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     refreshSessions();
     // A reply may have created or updated a PR (e.g. `gh pr create`).
     useStore.getState().refreshSessionPrs(sessionId);
+    // The transcript this turn ended with, for what else wants it (the suggestions), so it is read once.
+    return loaded;
   };
 
   /**
@@ -1392,20 +1422,21 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
    * session with nothing to suggest from, or a malformed reply all just mean
    * no placeholder suggestion this turn.
    */
-  const requestSuggestions = async () => {
+  const requestSuggestions = async (settled: Promise<Session | null>) => {
     try {
-      const before = await window.nekko.getSession(sessionId);
+      // The transcript the turn's end already fetched; asking the host for it again, twice, was the rest of the cost.
+      const before = await settled;
       const reply = before?.messages[before.messages.length - 1];
       if (!reply || reply.role !== 'assistant') return;
       const res = await window.nekko.suggestReplies(sessionId);
       if (!res) return;
       const options = followUpOptions(res.options, res.next);
       if (!options.length) return;
-      const fresh = await window.nekko.getSession(sessionId);
-      const last = fresh?.messages[fresh.messages.length - 1];
       // A turn that started while the call was in flight (a queued prompt, a
-      // send from another pane) makes the suggestions stale; drop them.
-      if (!last || last.role !== 'assistant' || last.id !== reply.id) return;
+      // send from another pane) makes the suggestions stale; drop them. The pane's own
+      // copy shows a prompt sent from anywhere here, and a run in flight shows the rest.
+      const last = latestSessionRef.current?.messages.at(-1);
+      if (streamingRef.current || getLiveRun(sessionId) || !last || last.role !== 'assistant' || last.id !== reply.id) return;
       setSuggestions({ forId: last.id, next: res.next, options });
     } catch {
       /* suggestions are nice-to-have */
@@ -2984,7 +3015,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     <ChatCodeRun.Provider value={codeRun}>
     <ChatImages.Provider value={chatImages}>
     {/* Portaled popups (the Mode panel and its lists) bubble here through React but are not part of the chat. */}
-    <div ref={paneRef} onContextMenu={(e) => { if (surface === 'composer' || e.defaultPrevented || !e.currentTarget.contains(e.target as Node) || (e.target as HTMLElement).closest('a, img, textarea, [contenteditable], [data-agent-logs]')) return; e.preventDefault(); const picked = window.getSelection(); setChatMenu({ x: e.clientX, y: e.clientY, selection: picked && e.currentTarget.contains(picked.anchorNode) ? picked.toString() : '' }); }} data-session-id={sessionId} data-chat-surface={surface} data-clean-start={cleanStart || undefined} data-chat-expanding={expanding || undefined} onAnimationEnd={expanding ? (e) => { if (e.animationName === 'composer-expand-in') setExpanding(false); } : undefined} className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
+    <div ref={paneRef} onContextMenu={(e) => { if (surface === 'composer' || e.defaultPrevented || !e.currentTarget.contains(e.target as Node) || (e.target as HTMLElement).closest('a, img, textarea, [contenteditable], [data-agent-logs]')) return; e.preventDefault(); const picked = window.getSelection(); setChatMenu({ x: e.clientX, y: e.clientY, selection: picked && e.currentTarget.contains(picked.anchorNode) ? picked.toString() : '' }); }} data-session-id={sessionId} data-pane-hidden={paneShown ? undefined : ''} data-chat-surface={surface} data-clean-start={cleanStart || undefined} data-chat-expanding={expanding || undefined} onAnimationEnd={expanding ? (e) => { if (e.animationName === 'composer-expand-in') setExpanding(false); } : undefined} className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
       {contextChangeNotice && <ContextChangeNotice tokens={ctx ? ctxUsed : undefined} onClose={closeContextNotice} />}
       {chatMenu && <ContextMenu x={chatMenu.x} y={chatMenu.y} onClose={() => setChatMenu(null)}>
         {chatMenu.selection && <ContextAction onClick={() => { void navigator.clipboard.writeText(chatMenu.selection).catch(() => useStore.getState().pushToast('error', "Couldn't copy text.")); setChatMenu(null); }}><CopyIcon className="mr-2 inline h-3.5 w-3.5" />Copy</ContextAction>}

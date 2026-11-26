@@ -21,9 +21,11 @@ import { HelpImproveStep } from '../components/onboarding/HelpImproveStep.js';
 import { DoneStep } from '../components/onboarding/DoneStep.js';
 import { EmailStep, NameStep, WorkStep } from '../components/onboarding/AboutYouSteps.js';
 import { DetailStep } from '../components/onboarding/DetailStep.js';
+import { useOnboardingT } from '../onboardingMessages.js';
 import { themeModePatch } from '../themeMode.js';
 
 export function OnboardingView() {
+  const t = useOnboardingT();
   const { settings, setOnboardingOpen } = useStore(useShallow((s) => ({ settings: s.settings, setOnboardingOpen: s.setOnboardingOpen })));
   const [index, setIndex] = useState(0);
   const stepsRef = useRef<Record<string, 'done' | 'skipped'>>({});
@@ -176,16 +178,16 @@ export function OnboardingView() {
 
   return (
     <WizardShell
-      steps={ONBOARDING_STEPS}
+      steps={ONBOARDING_STEPS.map(({ id }) => ({ id, title: t(`step.${id}`) }))}
       index={index}
       onBack={back}
       onNext={next}
       onSkipStep={skipStep}
       onSkipAll={skipAll}
       onGoTo={goTo}
-      nextLabel={index === ONBOARDING_STEPS.length - 1 ? 'Finish' : step.id === 'welcome' ? "Let's go" : 'Next'}
+      nextLabel={t(step.id === 'done' ? 'finish' : step.id === 'welcome' ? 'start' : 'next')}
       showSkipStep={SKIPPABLE_STEP_IDS.has(step.id)}
-      skipLabel={step.id === 'email' ? 'No thanks' : undefined}
+      skipLabel={step.id === 'email' ? t('noThanks') : undefined}
       wide={WIDE_STEP_IDS.has(step.id)}
     >
       {step.id === 'welcome' && <WelcomeStep />}

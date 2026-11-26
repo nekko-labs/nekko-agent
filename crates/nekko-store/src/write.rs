@@ -16,7 +16,7 @@ use std::path::Path;
 use std::sync::Mutex;
 
 /// The fields `setSessionOptions` takes (its `Pick<Session, ...>`).
-const OPTION_KEYS: &[&str] = &[
+pub(crate) const OPTION_KEYS: &[&str] = &[
     "title",
     "turnFailure",
     "pinned",
@@ -154,7 +154,7 @@ fn apply_mode(s: &mut JsObject, options: &Value) {
 
 /// What a running turn's save takes from disk rather than from memory
 /// (`USER_FIELDS` in sessions.ts): the user may change them mid-turn.
-const USER_FIELDS: &[&str] = &[
+pub(crate) const USER_FIELDS: &[&str] = &[
     "pinned",
     "tags",
     "order",
@@ -211,6 +211,29 @@ fn queue_payload(item: &Value) -> Value {
 /// `queueItemsEqual`: the same payload, as `JSON.stringify` prints it.
 fn queue_items_equal(a: &Value, b: &Value) -> bool {
     js::stringify(&queue_payload(a)) == js::stringify(&queue_payload(b))
+}
+
+/// [`merge_disk`] for a summary: what a deferred save would take from the
+/// chat on disk, put into the summary made from the chat in memory.
+pub(crate) fn keep_user_fields(summary: &mut Value, disk: &Value) {
+    let (Some(target), Some(disk)) = (summary.as_object_mut(), disk.as_object()) else { return };
+    for key in USER_FIELDS {
+        match disk.get(*key) {
+            Some(v) => {
+                target.insert((*key).into(), v.clone());
+            }
+            None => {
+                target.shift_remove(*key);
+            }
+        }
+    }
+    if disk.get("titleAuto") == Some(&Value::Bool(false)) {
+        target.insert("title".into(), disk.get("title").cloned().unwrap_or(Value::Null));
+        target.insert("titleAuto".into(), json!(false));
+    }
+    if let Some(outcome) = disk.get("spawnOutcome") {
+        target.insert("spawnOutcome".into(), outcome.clone());
+    }
 }
 
 /// What `saveTurnSession` takes from the chat on disk into the one a turn
@@ -401,12 +424,16 @@ impl SessionStore {
         if nekko_js::truthy(s.get("incognito")) {
             self.remove_review(id)?;
         }
-        self.write_text(id, &chat_text(&self.dir, s, None)?)
+        self.write_text(id, &chat_text(&self.dir, s, None)?)?;
+        self.note_meta_fields(s);
+        Ok(())
     }
 
     fn write_text(&self, id: &str, text: &str) -> Result<(), String> {
         std::fs::create_dir_all(&self.dir).map_err(|e| e.to_string())?;
-        write_atomic(&self.path(id), text).map_err(|e| format!("could not save the chat: {e}"))
+        let written = write_atomic(&self.path(id), text).map_err(|e| format!("could not save the chat: {e}"));
+        self.touched(id);
+        written
     }
 
     /// Read, change, save; `None` when there is no such chat. Writes to one
@@ -474,7 +501,9 @@ impl SessionStore {
             if nekko_js::truthy(head.get("incognito")) {
                 self.remove_review(&id)?;
             }
-            self.write_text(&id, &chat_text(&self.dir, &head, messages.as_deref())?)
+            self.write_text(&id, &chat_text(&self.dir, &head, messages.as_deref())?)?;
+            self.note_meta_fields(&head);
+            Ok(())
         });
         if let Some(m) = messages
             && let Some(obj) = lock().as_object_mut()
@@ -691,7 +720,12 @@ impl SessionStore {
             std::fs::create_dir_all(&self.dir).map_err(|e| e.to_string())?;
             let fields = s.as_object().ok_or("a session that is not an object")?;
             let text = chat_text(&self.dir, fields, None)?;
-            write_atomic(&self.path(id), &text).map_err(|e| format!("could not save the chat: {e}"))
+            let written = write_atomic(&self.path(id), &text).map_err(|e| format!("could not save the chat: {e}"));
+            self.touched(id);
+            if written.is_ok() {
+                self.note_meta_fields(fields);
+            }
+            written
         })
     }
 
@@ -702,10 +736,13 @@ impl SessionStore {
         }
         self.with_chat(id, || {
             self.remove_review(id)?;
-            match std::fs::remove_file(self.path(id)) {
+            let removed = match std::fs::remove_file(self.path(id)) {
                 Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
                 _ => Ok(()),
-            }
+            };
+            self.touched(id);
+            self.forget_meta_fields(id);
+            removed
         })
     }
 
@@ -757,7 +794,8 @@ impl SessionStore {
                 Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.to_string()),
                 _ => {}
             }
-            self.cache.lock().unwrap_or_else(|e| e.into_inner()).remove(&file);
+            self.touched(id);
+            self.forget_meta_fields(id);
 
             count += 1;
         }
@@ -853,7 +891,8 @@ impl SessionStore {
                 Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.to_string()),
                 _ => {}
             }
-            self.cache.lock().unwrap_or_else(|e| e.into_inner()).remove(&file);
+            self.touched(id);
+            self.forget_meta_fields(id);
             count += 1;
         }
         Ok(count)

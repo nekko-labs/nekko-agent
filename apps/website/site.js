@@ -753,7 +753,7 @@
       website: form.elements.website?.value || '',
       // Product updates are their own unticked choice; the API records which policy text was agreed to.
       marketing: Boolean(form.elements.marketing?.checked),
-      policyVersion: '2026-11-13',
+      policyVersion: '2026-11-26',
     };
     button.disabled = true;
     let res;

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Translated from values/strings_settings_rows.xml (scripts/translations.py fill). -->
+<resources>
+    <string name="settings_add_computer">添加电脑</string>
+    <string name="settings_manage_computers">管理电脑</string>
+    <string name="settings_models_on">%1$s上的模型</string>
+    <string name="settings_phone_provider_off">关闭</string>
+</resources>

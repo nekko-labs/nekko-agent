@@ -280,6 +280,8 @@ export const IpcChannels = {
   changeAcceptAll: 'changes:acceptAll',
 
   prSessionList: 'pr:sessionList',
+  /** `pr:sessionList` for several chats at once: `{ [chatId]: PrInfo[] }`. */
+  prSessionListMany: 'pr:sessionListMany',
   prDiff: 'pr:diff',
   prAction: 'pr:action',
   prContinueStack: 'pr:continueStack',
@@ -572,6 +574,8 @@ export const IpcEvents = {
   /** A terminal's remote viewers changed (`TerminalViewersEvent`). */
   terminalViewers: 'terminal:viewers',
   changesUpdated: 'changes:updated',
+  /** A git change the daemon made (stage, commit, push, switch, PR create) invalidated its cached status of `{ path }`. */
+  gitChanged: 'git:changed',
   tasksUpdated: 'tasks:updated',
   /** `BackgroundState` changed: a background turn started, ended, paused or resumed. */
   backgroundUpdated: 'background:updated',
@@ -1217,6 +1221,8 @@ export interface NekkoApi {
 
   /** Live PR state for every GitHub PR URL referenced in a chat's transcript. */
   listSessionPrs(sessionId: string, force?: boolean): Promise<import('./pr.js').PrInfo[]>;
+  /** [`listSessionPrs`] for several of this computer's chats in one call (a board of cards), keyed by chat id. At most 64 chats. */
+  listSessionPrsMany(sessionIds: string[], force?: boolean): Promise<Record<string, import('./pr.js').PrInfo[]>>;
   /** A PR's changed files + patches (for the diff pane). */
   getPrDiff(url: string): Promise<import('./pr.js').PrDiff>;
   /** Approve / decline / merge / reopen a PR. Always user-initiated. */
@@ -1578,6 +1584,8 @@ export interface NekkoApi {
   ): Promise<import('./terminal.js').TerminalStream | null>;
   /** Fires when a session's tracked file changes shift (after an agent edit/accept). */
   onChangesUpdated(cb: (e: { sessionId: string }) => void): () => void;
+  /** The daemon changed a folder's git state (see `IpcEvents.gitChanged`): re-read what shows it. */
+  onGitChanged(cb: (e: { path: string }) => void): () => void;
   /** Fires when the automation-task list changes (created/updated/fired/deleted). */
   onTasksUpdated(cb: (tasks: AutomationTask[]) => void): () => void;
   onBackgroundUpdated(cb: (state: import('./background.js').BackgroundState) => void): () => void;

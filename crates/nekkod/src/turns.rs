@@ -2534,6 +2534,32 @@ pub(crate) fn base36(mut n: u64) -> String {
     String::from_utf8(out).unwrap_or_default()
 }
 
+/// A `tool_result` event's pictures, moved beside the chats and replaced by
+/// `nekko-blob:` references before the event goes out. The frame is what the
+/// hub keeps for replay and queues for every socket, relay and API client, and
+/// a screenshot or two made it megabytes; nothing live reads the pictures (the
+/// window and the phones show a result's text, and re-read the saved chat,
+/// which has them, for the pictures). The pictures are written by the checkpoint
+/// anyway; a picture that cannot be moved stays inline.
+async fn shed_images(store: &Arc<SessionStore>, event: &mut Value) {
+    if str_at(event, "type") != Some("tool_result") {
+        return;
+    }
+    let Some(images) = event.pointer_mut("/result/images").and_then(Value::as_array_mut) else { return };
+    let mut taken = std::mem::take(images);
+    let store = store.clone();
+    // `taken` is lost with the task only if it panics; the event then goes out without pictures.
+    let moved = tokio::task::spawn_blocking(move || {
+        store.shed_event_images(&mut taken);
+        taken
+    })
+    .await
+    .unwrap_or_default();
+    if let Some(slot) = event.pointer_mut("/result/images") {
+        *slot = Value::Array(moved);
+    }
+}
+
 fn is_checkpoint(e: &Value) -> bool {
     matches!(str_at(e, "type"), Some("step" | "steered" | "tool_result" | "done" | "error"))
 }
@@ -2874,14 +2900,16 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
         }
         let (event, snapshot) = match out {
             None | Some(Out::End) => break,
-            Some(Out::Event(e)) => {
+            Some(Out::Event(mut e)) => {
                 deltas.flush(&f.hub);
+                shed_images(&f.store, &mut e).await;
                 note_error(&f.last_error, &e);
                 f.hub.publish("agent:event", e, false);
                 continue;
             }
-            Some(Out::Loop(e, s)) => {
+            Some(Out::Loop(mut e, s)) => {
                 let s = s.or_else(|| if is_checkpoint(&e) { lock(&f.latest).take() } else { None });
+                shed_images(&f.store, &mut e).await;
                 (e, s)
             }
         };
@@ -4639,6 +4667,32 @@ mod usage_attribution_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn a_tool_results_pictures_leave_the_event_as_blob_references() {
+        use base64::Engine;
+        let dir = std::env::temp_dir().join(format!("nekkod-shed-images-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let store = Arc::new(SessionStore::new(&dir));
+        let png =
+            format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(vec![3u8; 20_000]));
+        let mut event = json!({ "type": "tool_result", "sessionId": "s", "result": { "toolCallId": "c", "output": "ok", "images": [png, "data:image/png;base64,AAAA"] } });
+        shed_images(&store, &mut event).await;
+        let images = event["result"]["images"].as_array().unwrap();
+        assert!(images[0].as_str().unwrap().starts_with("nekko-blob:"), "{images:?}");
+        assert_eq!(images[1], "data:image/png;base64,AAAA", "a small picture stays");
+        assert!(event.to_string().len() < 300, "{event}");
+        assert_eq!(event["result"]["output"], "ok");
+        // Other events, and results without pictures, pass untouched.
+        let mut other = json!({ "type": "text", "sessionId": "s", "result": { "images": [png] } });
+        let before = other.clone();
+        shed_images(&store, &mut other).await;
+        assert_eq!(other, before);
+        let mut plain = json!({ "type": "tool_result", "result": { "output": "x" } });
+        shed_images(&store, &mut plain).await;
+        assert_eq!(plain, json!({ "type": "tool_result", "result": { "output": "x" } }));
+        let _ = std::fs::remove_dir_all(dir);
+    }
 
     #[test]
     fn claude_naming_eligibility_preserves_manual_titles_and_private_chats() {

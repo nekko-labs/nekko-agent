@@ -1,3 +1,4 @@
+import { useVisibleInterval } from '../visibleInterval.js';
 import { useEffect, useState } from 'react';
 import { CONNECTION_GROUPS, CONNECTIONS, connectionAllowed, withConnection } from '@nekko-agent/shared';
 import type { AppSettings, ConnectionEvent, ConnectionInfo, ConnectionStatus, ConnectionsStatus } from '@nekko-agent/shared';
@@ -34,13 +35,7 @@ function eventText(e: ConnectionEvent): string {
 function EventLog({ id }: { id: string }) {
   const [events, setEvents] = useState<ConnectionEvent[] | null>(null);
   const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    let live = true;
-    const load = () => window.nekko.connectionsEvents(id, 200).then((e) => live && setEvents(e), () => live && setFailed(true));
-    void load();
-    const t = setInterval(load, POLL_MS);
-    return () => { live = false; clearInterval(t); };
-  }, [id]);
+  useVisibleInterval((live) => { void window.nekko.connectionsEvents(id, 200).then((e) => live() && setEvents(e), () => live() && setFailed(true)); }, POLL_MS, { immediate: true, deps: [id] });
   if (failed) return <p className="mt-(--q-inline) text-xs text-danger-text" role="status">Couldn’t read the log.</p>;
   if (!events) return <p className="mt-(--q-inline) text-xs text-ink-faint">Loading…</p>;
   if (!events.length) return <p className="mt-(--q-inline) text-xs text-ink-faint">Nothing logged yet.</p>;
@@ -100,13 +95,7 @@ export function ConnectionsSettings({ settings, update }: {
   const conn = settings.connections;
   const allOff = conn?.allOff === true;
 
-  useEffect(() => {
-    let live = true;
-    const load = () => window.nekko.connectionsStatus().then((s) => { if (live) { setStatus(s); setNow(Date.now()); } }, () => {});
-    void load();
-    const t = setInterval(load, POLL_MS);
-    return () => { live = false; clearInterval(t); };
-  }, []);
+  useVisibleInterval((live) => { void window.nekko.connectionsStatus().then((s) => { if (live()) { setStatus(s); setNow(Date.now()); } }, () => {}); }, POLL_MS, { immediate: true });
 
   const byId = new Map((status?.connections ?? []).map((s) => [s.id, s]));
   const clear = async () => setStatus(await window.nekko.connectionsClear());

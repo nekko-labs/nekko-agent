@@ -17,6 +17,7 @@ describe('click reports', () => {
     const inside = (attrs: Record<string, string> | null) =>
       ({ closest: () => (attrs ? { getAttribute: (k: string) => attrs[k] ?? null } : null) }) as unknown as EventTarget;
     expect(clickControl(inside({ 'aria-label': 'Add provider' }))).toBe('Add provider');
+    expect(clickControl(inside({ 'aria-label': 'Mostrar sugerencias', 'data-testid': 'Show tips' }))).toBe('Show tips');
     expect(clickControl(inside({ 'aria-label': 'Open file taxes-2026.pdf' }))).toBeNull();
     expect(clickControl(inside(null))).toBeNull();
     expect(clickControl(null)).toBeNull();

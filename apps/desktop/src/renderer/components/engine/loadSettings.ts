@@ -73,7 +73,7 @@ export function precisionOf(p: LoadParams): number {
 }
 
 /** The planner's question for these parameters. */
-export function toPlacementRequest(p: LoadParams, model: Pick<LocalModel, 'layers' | 'weightLayout'>): PlacementRequest {
+export function toPlacementRequest(p: LoadParams, model: Pick<LocalModel, 'layers'>): PlacementRequest {
   const layers = model.layers ?? 1;
   const runOn = runOnOf(p, model.layers);
   return {
