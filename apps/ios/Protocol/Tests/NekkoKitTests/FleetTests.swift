@@ -108,6 +108,7 @@ final class FleetTests: XCTestCase {
         c.online()
         await settle()
         s.transcripts.save(session("aaaa1"))
+        await s.transcripts.flush()
         s.drafts.set("aaaa1", Draft(text: "Saved draft"))
         s.drafts.set(DraftStore.newChat, Draft(text: "New chat draft", modelId: "m"))
         s.drafts.flush()
@@ -182,6 +183,8 @@ final class FleetTests: XCTestCase {
             ca.online()
             await settle()
             s.transcripts.save(session("aaaa1"))
+            await s.transcripts.flush()
+        await s.transcripts.flush()
             s.drafts.set("aaaa1", Draft(text: "A draft")) // Switching must flush pending edits.
             s.outbox.add(chatId: "aaaa1", text: "A queued", id: "queue-a")
             s.setConnectionEnabled(a, false)
