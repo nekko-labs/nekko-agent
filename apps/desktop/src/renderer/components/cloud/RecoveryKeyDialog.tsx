@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import QRCode from 'qrcode';
 import { cloudError } from '@nekko-agent/shared';
 import './cloud.css';
 
@@ -101,6 +100,7 @@ export function RecoveryKeySteps({ recoveryKey, email, onDone, inWalkthrough = f
 
 /** A one-page recovery kit (HTML, prints well) with the key as text and as a QR code for the phone. */
 async function saveKit(key: string, email: string) {
+  const { default: QRCode } = await import('qrcode');
   const qr = await QRCode.toDataURL(key, { margin: 1, width: 220, errorCorrectionLevel: 'M' });
   const date = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
   const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
