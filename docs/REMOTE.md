@@ -181,11 +181,10 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > until both platform PRs land. See the [Android specification](../spec/phone/android-direct-cloud-chats.md).
 >
 
-> The Android app looks like your desktop by default: **Settings → Appearance → Same as computer**
-> uses the computer's light or dark theme and its accent color, and follows a change on the
-> computer right away. Pick **Phone setting**, **Light** or **Dark** to choose on the phone instead;
-> that choice is kept on the phone. Only the theme, theme preset and the two accent colors are sent
-> for this (the `appearance:updated` event), never the rest of the computer's settings.
+> The Android app's look is chosen on the phone: **Settings → Appearance → Theme** offers
+> **Match this phone** (the default: light or dark as the phone is set), **Light**, **Dark** and the
+> desktop's themes, kept on the phone. It no longer follows the computer's own theme (removed
+> 2026-11-26: the desktop's look didn't fit the phone), so it doesn't read the computer's theme at all.
 >
 > The iPhone app has the desktop's themes too: **Settings → Appearance → Theme** offers **Match my
 > computer** (the computer's preset, mode and accent), **Match this iPhone**, **Light**, **Dark** and
