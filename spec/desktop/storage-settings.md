@@ -5,7 +5,7 @@ area: desktop
 
 # Storage: where Nekko's disk goes, and safe cleanup
 
-`[planned 2026-11-26; design in nekko-designs/storage-settings-design.html, waiting for approval]`
+`[planned 2026-11-26; design approved by Philip 2026-11-26: nekko-designs/storage-settings-design-v2.html, notice option A]`
 
 ## Intent
 
