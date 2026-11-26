@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { NekkoLabsTag } from './NekkoLabsTag.js';
 import type { HypergateInfo, McpServerConfig } from '@nekko-agent/shared';
 import { HypergateIcon } from '../connectorIcons.js';
 import { PlugIcon } from '../icons.js';
@@ -92,7 +93,10 @@ export function HypergateRow({
           <HypergateIcon size={20} />
         </span>
         <span className="flex min-w-0 flex-1 flex-col" style={{ gap: 'var(--q-tight)' }}>
-          <span className="truncate text-sm font-medium">Hypergate</span>
+          <span className="flex min-w-0 items-baseline gap-2">
+            <span className="truncate text-sm font-medium">Hypergate</span>
+            <NekkoLabsTag />
+          </span>
           <span key={phase} className="truncate text-xs text-ink-faint fade-in" title={typeof detail === 'string' ? detail : undefined}>
             {detail}
           </span>
