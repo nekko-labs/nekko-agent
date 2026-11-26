@@ -1,3 +1,4 @@
+import { useOnboardingT } from '../../onboardingMessages.js';
 import React, { useEffect, useState } from 'react';
 import type { ModelInfo, OAuthStatus, ProviderConfig, ProviderKind } from '@nekko-agent/shared';
 import { PROVIDER_DEFAULTS, isLocalProvider, formatModelPriceLabel, modelPricing, oauthProviderOffered } from '@nekko-agent/shared';
@@ -19,6 +20,7 @@ type TestState = { state: 'testing' } | { state: 'done'; ok: boolean; message: s
  * shows as connected instead of offering a duplicate add.
  */
 export function ProvidersStep({ onExit }: { onExit?: (after?: () => void) => void }) {
+  const t = useOnboardingT();
   const { providers, refreshProviders, pushToast, setView, setOnboardingOpen } = useStore(
     useShallow((s) => ({
       providers: s.providers,
@@ -128,7 +130,7 @@ export function ProvidersStep({ onExit }: { onExit?: (after?: () => void) => voi
 
   return (
     <div className="w-full">
-      <h1 className="text-center text-2xl font-semibold tracking-tight">Connect a model</h1>
+      <h1 className="text-center text-2xl font-semibold tracking-tight">{t('providers')}</h1>
       <p className="mx-auto mt-2 max-w-md text-center text-sm leading-relaxed text-ink-soft">
         Nekko Agent chats through providers you connect: a ChatGPT subscription, an API key,
         or a local server like Ollama or LM Studio.

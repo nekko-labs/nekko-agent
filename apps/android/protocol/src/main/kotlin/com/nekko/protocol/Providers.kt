@@ -95,10 +95,10 @@ object SealedBox {
         return okm.copyOfRange(0, 32) to okm.copyOfRange(32, 44)
     }
 
-    /** HKDF-SHA256 to [size] bytes. */
+    /** HKDF-SHA256 to [size] bytes. An empty [salt] is 32 zero bytes, as RFC 5869 says (Java refuses an empty HMAC key). */
     internal fun hkdf(ikm: ByteArray, salt: ByteArray, info: ByteArray, size: Int): ByteArray {
         val prk = Mac.getInstance("HmacSHA256").run {
-            init(SecretKeySpec(salt, "HmacSHA256"))
+            init(SecretKeySpec(if (salt.isEmpty()) ByteArray(32) else salt, "HmacSHA256"))
             doFinal(ikm)
         }
         val okm = ByteArray(size)

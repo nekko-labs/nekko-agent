@@ -24,6 +24,9 @@
 // this band's bottom edge so it lines up with the buttons.
 export const TITLEBAR_HEIGHT = 38;
 
+/** Preferred OS languages, available to the renderer on its first render. */
+export const SYSTEM_LANGUAGES_ARG = '--nekko-system-languages=';
+
 /** Renderer → main, fire-and-forget: repaint the native buttons for a theme. */
 export const TITLEBAR_OVERLAY_CHANNEL = 'chrome:titlebar-overlay';
 
@@ -55,6 +58,7 @@ export interface WindowChromeBridge {
   /** The page's deep-link listeners are attached (`DEEP_LINKS_READY_CHANNEL`). */
   deepLinksReady: () => void;
   platform: string;
+  systemLanguages: readonly string[];
   titleBarHeight: number;
   setTitleBarOverlay: (theme: TitleBarOverlayTheme) => void;
   /** Settings' text size: Chromium's page zoom, so every coordinate scales alike. */

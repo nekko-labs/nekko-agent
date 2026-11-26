@@ -100,6 +100,7 @@ import {
   TITLEBAR_HEIGHT,
   TITLEBAR_OVERLAY_CHANNEL,
   type TitleBarOverlayTheme,
+  SYSTEM_LANGUAGES_ARG,
 } from '../windowChrome.js';
 
 if (process.env.ELECTRON_RUN_AS_NODE) {
@@ -272,8 +273,10 @@ function newAppWindow(bounds: { x?: number; y?: number; width: number; height: n
       nodeIntegration: false,
       // Enable <webview> for the in-app browser pane (BrowserPane).
       webviewTag: true,
-      // Tells the preload which screen this window fills (multi-monitor).
-      ...(displayId ? { additionalArguments: [`${DISPLAY_ARG}${displayId}`] } : {}),
+      additionalArguments: [
+        `${SYSTEM_LANGUAGES_ARG}${app.getPreferredSystemLanguages().join(',')}`,
+        ...(displayId ? [`${DISPLAY_ARG}${displayId}`] : []),
+      ],
     },
   });
 }
