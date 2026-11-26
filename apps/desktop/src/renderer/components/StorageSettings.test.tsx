@@ -80,6 +80,7 @@ const click = async (el: Element) => { await act(async () => { (el as HTMLElemen
 
 describe('formatBytes', () => {
   it('uses decimal units, one decimal under 10', () => {
+    expect(formatBytes(0)).toBe('0 KB');
     expect([formatBytes(14 * GB), formatBytes(1.9 * GB), formatBytes(113e6), formatBytes(2e12), formatBytes(1.6e12), formatBytes(512)]).toEqual(['14 GB', '1.9 GB', '113 MB', '2 TB', '1.6 TB', '1 KB']);
   });
 });
@@ -94,6 +95,15 @@ describe('Settings → Storage', () => {
     expect(row('worktrees').textContent).toContain('158 checkouts · 135 GB of it is build output');
     expect(row('history').textContent).toContain('Measuring…');
     expect(row('runners').textContent).toContain('1 unused old image runner · 76 GB');
+  });
+
+  it('leaves a models folder on another disk out of this disk\'s bar and says so', async () => {
+    const u = usage();
+    u.categories[2] = { id: 'models', bytes: 2053 * GB, detail: { elsewhere: true, elsewhereBytes: 2000 * GB } };
+    api({ getStorageUsage: vi.fn(async () => u) });
+    await mount();
+    expect(row('models').textContent).toContain('2 TB on another disk');
+    expect(host.textContent).toContain('Nekko 370 GB');
   });
 
   it('hides runner images when there are none, and app caches outside the desktop app', async () => {

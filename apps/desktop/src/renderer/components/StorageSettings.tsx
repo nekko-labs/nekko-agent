@@ -27,6 +27,7 @@ const KEPT_TEXT: Record<KeptReason, string> = {
   running: 'open in a running chat',
   locked: 'locked',
   open: 'open in another program',
+  ignored: "with ignored files that aren't build output",
 };
 
 const folderName = (p: string) => p.split(/[\\/]/).filter(Boolean).pop() ?? p;
@@ -265,7 +266,9 @@ export function StorageSettings({ goTo, openView, refreshSessions }: { goTo: (gr
     .map(cat)
     .filter((c) => !(c.id === 'runners' && !c.bytes && images.length === 0) && !(c.id === 'caches' && !canClear))
     .sort((a, b) => (b.bytes ?? -1) - (a.bytes ?? -1));
-  const nekko = rows.reduce((n, c) => n + (c.bytes ?? 0), 0);
+  // A models folder on another disk isn't this disk's space.
+  const here = (c: StorageCategory) => Math.max(0, (c.bytes ?? 0) - (c.detail?.elsewhereBytes ?? 0));
+  const nekko = rows.reduce((n, c) => n + here(c), 0);
   const disk = usage?.disk;
   const otherApps = disk ? Math.max(0, disk.total - disk.free - nekko) : 0;
 
@@ -290,7 +293,7 @@ export function StorageSettings({ goTo, openView, refreshSessions }: { goTo: (gr
         </React.Fragment>
       );
       case 'models': return (
-        <StorageRow key="models" id="models" title="Models" bytes={b} detail={`Models and their runtimes · removed one at a time${c.detail?.elsewhere ? ' · partly on another disk' : ''}`}>
+        <StorageRow key="models" id="models" title="Models" bytes={b} detail={`Models and their runtimes · removed one at a time${c.detail?.elsewhereBytes ? ` · ${formatBytes(c.detail.elsewhereBytes)} on another disk` : ''}`}>
           <button type="button" className="btn btn-ghost py-1 text-xs" onClick={() => openView('models')}>Open Models</button>
         </StorageRow>
       );
@@ -329,7 +332,7 @@ export function StorageSettings({ goTo, openView, refreshSessions }: { goTo: (gr
       {disk && (
         <>
           <Bar total={disk.total} label={`Disk: Nekko ${formatBytes(nekko)}, other apps and files ${formatBytes(otherApps)}, ${formatBytes(disk.free)} free`}
-            segments={[...rows.map((c) => ({ key: c.id, bytes: c.bytes, colour: COLOUR[c.id] })), { key: 'apps', bytes: otherApps, colour: OTHER_APPS }]} />
+            segments={[...rows.map((c) => ({ key: c.id, bytes: c.bytes === null ? null : here(c), colour: COLOUR[c.id] })), { key: 'apps', bytes: otherApps, colour: OTHER_APPS }]} />
           <Legend items={[{ colour: COLOUR.worktrees, text: `Nekko ${formatBytes(nekko)}` }, { colour: OTHER_APPS, text: `Other apps and files ${formatBytes(otherApps)}` }, { colour: 'var(--surface-2)', text: `Free ${formatBytes(disk.free)}` }]} />
         </>
       )}
