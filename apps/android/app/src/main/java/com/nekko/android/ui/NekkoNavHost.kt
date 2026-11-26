@@ -127,6 +127,8 @@ object Routes {
     fun phone(chat: String? = null) = if (chat == null) "phone" else "phone?chat=${Uri.encode(chat)}"
     /** This phone's providers (Settings → Models on This phone, #2940); [add] opens Add provider on them. */
     fun phoneProviders(add: Boolean = false) = "phone?open=${if (add) "add" else "providers"}"
+    /** One of this phone's providers, on its own page (#2939). */
+    fun phoneProvider(id: String) = "phone?open=${Uri.encode("provider:$id")}"
     fun pair(link: String? = null) = if (link == null) "pair" else "pair?link=${Uri.encode(link)}"
 }
 
@@ -210,7 +212,7 @@ fun NekkoNavHost(
             ) { entry ->
                 val app = LocalContext.current.applicationContext as com.nekko.android.NekkoApp
                 val open = entry.arguments?.getString("open")
-                com.nekko.android.phone.PhoneScreen(app.phoneChats, startChat = entry.arguments?.getString("chat"), openProviders = open != null, addProvider = open == "add") { nav.popBackStack() }
+                com.nekko.android.phone.PhoneScreen(app.phoneChats, startChat = entry.arguments?.getString("chat"), openProviders = open != null, addProvider = open == "add", startProvider = open?.removePrefix("provider:")?.takeIf { open.startsWith("provider:") }) { nav.popBackStack() }
             }
             composable(Routes.CHATS) {
                 Column(Modifier.fillMaxSize()) {
