@@ -11,8 +11,8 @@ const off = (id: EngineOption['id'], name: string, reason: string, state: Engine
 
 /** An Apple Silicon Mac with MLX and llama.cpp installed, as the daemon lists it. */
 const mac: EngineOption[] = [
-  option('mlx', 'MLX', { labels: ['fastest', 'stable'], runtime: 'mlx', installed: true, version: 'mlx-lm 0.31.3', source: 'managed', inUse: true }),
-  option('llama', 'llama.cpp', { runtime: 'llama', installed: true, version: 'b12532', source: 'managed' }),
+  option('llama', 'llama.cpp', { labels: ['fastest'], runtime: 'llama', installed: true, version: 'b12532', source: 'managed', inUse: true }),
+  option('mlx', 'MLX', { labels: ['stable'], runtime: 'mlx', installed: true, version: 'mlx-lm 0.31.3', source: 'managed' }),
   off('omlx', 'oMLX', 'Not in this version of Nekko yet', 'planned'),
   off('basalt', 'Basalt', 'NVIDIA RTX 50 series only'),
   off('squid5090', 'squid5090', 'NVIDIA RTX 5090 only'),
@@ -26,33 +26,36 @@ const render = (engines: EngineOption[], diffusionInstall?: EngineInstall) =>
 describe('the Engines block', () => {
   it('lists every engine, the ones this machine cannot run last, with the reason in place of the description', () => {
     const rows = chat(mac);
-    expect(rows.map((r) => r.id)).toEqual(['mlx', 'llama', 'omlx', 'basalt', 'squid5090']);
+    expect(rows.map((r) => r.id)).toEqual(['llama', 'mlx', 'omlx', 'basalt', 'squid5090']);
     expect(rows.filter((r) => r.disabled).map((r) => r.detail)).toEqual(['Not in this version of Nekko yet', 'NVIDIA RTX 50 series only', 'NVIDIA RTX 5090 only']);
     // Nothing to do on a row that cannot be picked.
     expect(rows.filter((r) => r.disabled).every((r) => r.action === null && !r.removable && !r.runtime)).toBe(true);
   });
 
   it('marks the fastest and the most stable, and offers Use on the installed engines that are not in use', () => {
-    const [mlx, llama] = chat(mac);
-    expect(mlx).toMatchObject({ labels: ['Fastest', 'Most stable'], inUse: true, action: null, removable: true, meta: 'mlx-lm 0.31.3' });
-    expect(llama).toMatchObject({ labels: [], inUse: false, action: 'use', removable: true, meta: 'b12532' });
+    const [llama, mlx] = chat(mac);
+    expect(llama).toMatchObject({ labels: ['Fastest'], inUse: true, action: null, removable: true, meta: 'b12532' });
+    expect(mlx).toMatchObject({ labels: ['Most stable'], inUse: false, action: 'use', removable: true, meta: 'mlx-lm 0.31.3' });
+    // One engine can hold both.
+    expect(chat([option('llama', 'llama.cpp', { labels: ['fastest', 'stable'] })])[0].labels).toEqual(['Fastest', 'Most stable']);
   });
 
   it('puts the one primary Install on the fastest engine this machine can run and does not have', () => {
+    // The daemon lists usable engines fastest first, so a row above the one in use is a faster engine.
     const rows = chat([
-      option('mlx', 'MLX', { labels: ['fastest', 'stable'], runtime: 'mlx' }),
+      option('mlx', 'MLX', { labels: ['fastest'], runtime: 'mlx' }),
       option('llama', 'llama.cpp', { runtime: 'llama', installed: true, source: 'managed', inUse: true }),
     ]);
     expect(rows.map((r) => [r.action, r.primary])).toEqual([['install', true], [null, false]]);
     // An engine slower than the one in use is still installable, quietly.
     const slower = chat([
-      option('mlx', 'MLX', { runtime: 'mlx', installed: true, source: 'managed', inUse: true }),
-      option('llama', 'llama.cpp', { runtime: 'llama' }),
+      option('llama', 'llama.cpp', { runtime: 'llama', installed: true, source: 'managed', inUse: true }),
+      option('mlx', 'MLX', { runtime: 'mlx' }),
     ]);
     expect(slower.map((r) => [r.action, r.primary])).toEqual([[null, false], ['install', false]]);
-    // Nothing installed: the first installable row is the one to get.
-    const none = chat([option('mlx', 'MLX', { runtime: 'mlx' }), option('llama', 'llama.cpp', { runtime: 'llama' })]);
-    expect(none.map((r) => r.primary)).toEqual([true, false]);
+    // llama.cpp's own row is never the primary: the model server's install card below already is.
+    const none = chat([option('llama', 'llama.cpp', { runtime: 'llama' }), option('mlx', 'MLX', { runtime: 'mlx' })]);
+    expect(none.map((r) => [r.action, r.primary])).toEqual([['install', false], ['install', false]]);
   });
 
   it("never removes an engine that is the person's own install", () => {
@@ -70,9 +73,10 @@ describe('the Engines block', () => {
   });
 
   it('names the engine in use, and whether finding a model should start on MLX', () => {
-    expect(engineInUse({ engines: mac })?.name).toBe('MLX');
-    expect(prefersMlx({ engines: mac })).toBe(true);
-    expect(prefersMlx({ engines: [option('llama', 'llama.cpp', { inUse: true })] })).toBe(false);
+    expect(engineInUse({ engines: mac })?.name).toBe('llama.cpp');
+    expect(prefersMlx({ engines: mac })).toBe(false);
+    expect(prefersMlx({ engines: [option('mlx', 'MLX', { inUse: true })] })).toBe(true);
+    expect(prefersMlx({ engines: [option('omlx', 'oMLX', { inUse: true })] })).toBe(true);
     expect(engineInUse({})).toBeUndefined();
     expect(engineGroups(null)).toEqual([]);
   });
@@ -86,7 +90,8 @@ describe('the Engines block', () => {
     expect(html.match(/In use/g)).toHaveLength(2);
     expect(html).toContain('NVIDIA RTX 5090 only');
     expect(html).toContain('data-engine="squid5090" data-engine-state="disabled"');
-    expect(html).toContain('data-engine="mlx" data-engine-state="in-use"');
+    expect(html).toContain('data-engine="llama" data-engine-state="in-use"');
+    expect(html).toContain('data-engine="mlx" data-engine-state="installed"');
     // A row that cannot be picked is marked so, takes no wash, and has no button.
     const squid = html.slice(html.indexOf('data-engine="squid5090"') - 200, html.indexOf('data-engine="squid5090"') + 600).split('</li>')[0];
     expect(html).toMatch(/aria-disabled="true"[^>]*data-engine="squid5090"/);

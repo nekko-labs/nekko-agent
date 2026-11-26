@@ -15,7 +15,7 @@ An engine is the program that runs a model. Until this, which engine ran a model
 
 **The Engines block** `[implemented 2026-11-26, #3493; unit and daemon end-to-end tested; verified in a hidden, network-blocked renderer fixture at 1280 and 390 px, dark and light, for a Mac, Linux and Windows with an RTX 5090, and a PC without one; not yet pressed in a packaged app; no Blackwell machine checked]`
 
-- **Models > Local model server > Engines** is a block above System models, folded until clicked or chosen in the side menu (**Engines**, above **System models**). Folded, its one line names the engine in use ("MLX in use").
+- **Models > Local model server > Engines** is a block above System models, folded until clicked or chosen in the side menu (**Engines**, above **System models**). Folded, its one line names the engine in use ("llama.cpp in use").
 - Open, it has a group per kind of model. **Chat models** lists llama.cpp, MLX, oMLX, Basalt and squid5090. **Photo and video models** lists stable-diffusion.cpp, where this machine has a build for it. Speech engines stay in System models, right below.
 - **One engine in a group is in use**: its name is in the accent colour with a green dot and "In use". An installed engine that is not in use offers **Use**. An engine this machine can run and does not have offers **Install**, with its download size beside it; the fastest such engine above the one in use carries the one primary button. An engine Nekko installed can be **Uninstalled** (the action appears on hover or focus; models are kept; the model server has to be stopped). An engine found on your PATH or pointed at by you says "your own install" and is never removed here.
 - **An engine this machine cannot run stays in the list**, below the usable ones, its name faint, the reason in place of its description, and no button:
@@ -26,7 +26,8 @@ An engine is the program that runs a model. Until this, which engine ran a model
   | Basalt | "NVIDIA RTX 50 series only" |
   | squid5090 | "NVIDIA RTX 5090 only"; with that card on Windows, "Linux only" |
 
-- **Fastest** and **Most stable** mark one engine each, worked out among the engines this machine can run. Speed order: squid5090, Basalt, oMLX, MLX, llama.cpp. Stability order: MLX, llama.cpp, oMLX, Basalt, squid5090. One engine can hold both. With only one usable engine neither is shown: there is nothing to compare.
+- **Fastest** and **Most stable** mark one engine each, worked out among the engines this machine can run. Speed order: squid5090, Basalt, llama.cpp, oMLX, MLX. Stability order: MLX, llama.cpp, oMLX, Basalt, squid5090. One engine can hold both. With only one usable engine neither is shown: there is nothing to compare.
+- llama.cpp ahead of MLX is measured: as Nekko runs it, with speculative decoding on, it returned a code edit 4.6x sooner than mlx-lm and decoded chat 1.6x to 6.7x faster ([benchmarks](../../docs/benchmarks.md), Apple M5 Max, Qwen3-8B). The other positions are not measured by us: squid5090 and Basalt go by what each project reports for its GPU family and by Philip's call, and oMLX sits beside MLX until it is benchmarked the same way.
 - The image engine's build picker shows while it is not installed and this machine has more than one build to choose from.
 
 **Which engine is in use**
@@ -34,7 +35,7 @@ An engine is the program that runs a model. Until this, which engine ran a model
 - With no choice made: the fastest usable engine that is installed. With nothing installed, none is in use and the fastest one Nekko can install carries the primary Install.
 - **Use** saves the choice (`settings.engine.chatEngine`), on this computer only: a phone or another computer cannot change it. A choice this machine cannot run, or one that is not installed, is ignored until it can be honoured; it never blocks a load.
 - **In use is a preference, not a switch.** Nekko loads a model on the engine in use whenever that engine can run it. A model only another engine can run still loads on that one: a GGUF file runs on llama.cpp while MLX is in use.
-- What follows the engine in use today: **Find new models** opens on MLX checkpoints when it is MLX (or oMLX), on GGUF otherwise.
+- What follows the engine in use today: **Find new models** opens on MLX checkpoints when it is MLX (or oMLX), on GGUF otherwise. On a Mac that never chose, llama.cpp is in use, so nothing changes for anyone until they press Use on MLX.
 
 **Engines Nekko cannot start yet** `[planned]`
 
@@ -57,7 +58,7 @@ An engine is the program that runs a model. Until this, which engine ran a model
 
 ## Acceptance
 
-- On an Apple Silicon Mac with MLX and llama.cpp installed: MLX is in use and marked Fastest and Most stable; llama.cpp offers Use; Basalt says "NVIDIA RTX 50 series only" and squid5090 "NVIDIA RTX 5090 only", both without a button.
-- Pressing Use on llama.cpp moves "In use" to it, saves the choice, and survives a restart of the daemon.
+- On an Apple Silicon Mac with MLX and llama.cpp installed: llama.cpp is in use and marked Fastest; MLX is marked Most stable and offers Use; Basalt says "NVIDIA RTX 50 series only" and squid5090 "NVIDIA RTX 5090 only", both without a button.
+- Pressing Use on MLX moves "In use" to it, saves the choice, survives a restart of the daemon, and Find new models then opens on MLX checkpoints.
 - On Linux or Windows the Mac engines say "macOS only"; on Windows with an RTX 5090, squid5090 says "Linux only".
 - Model server > Configure no longer has a Runtimes group; installing and removing MLX and the image engine happen in the Engines block.

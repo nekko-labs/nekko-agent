@@ -23,10 +23,10 @@ const on = (id: string, more: Partial<Row> = {}): Row => ({ id, name: DETAIL[id]
 const off = (id: string, reason: string, state: Row['state'] = 'unsupported'): Row => ({ id, name: DETAIL[id][0], detail: DETAIL[id][1], state, reason });
 const NOT_BUILT = 'Not in this version of Nekko yet';
 const llama = { installed: true, version: 'b12532', source: 'managed' };
-/** Each machine's rows as the daemon lists them; the first installed row is in use until one is chosen. */
+/** Each machine's rows as the daemon lists them (usable engines fastest first); the first installed row is in use until one is chosen. */
 const MACHINES: Record<string, Row[]> = {
-  mac: [on('mlx', { labels: ['fastest', 'stable'], installed: true, version: 'mlx-lm 0.31.3', source: 'managed' }), on('llama', llama), off('omlx', NOT_BUILT, 'planned'), off('basalt', 'NVIDIA RTX 50 series only'), off('squid5090', 'NVIDIA RTX 5090 only')],
-  'mac-no-mlx': [on('mlx', { labels: ['fastest', 'stable'] }), on('llama', llama), off('omlx', NOT_BUILT, 'planned'), off('basalt', 'NVIDIA RTX 50 series only'), off('squid5090', 'NVIDIA RTX 5090 only')],
+  mac: [on('llama', { ...llama, labels: ['fastest'] }), on('mlx', { labels: ['stable'], installed: true, version: 'mlx-lm 0.31.3', source: 'managed' }), off('omlx', NOT_BUILT, 'planned'), off('basalt', 'NVIDIA RTX 50 series only'), off('squid5090', 'NVIDIA RTX 5090 only')],
+  'mac-no-mlx': [on('llama', { ...llama, labels: ['fastest'] }), on('mlx', { labels: ['stable'] }), off('omlx', NOT_BUILT, 'planned'), off('basalt', 'NVIDIA RTX 50 series only'), off('squid5090', 'NVIDIA RTX 5090 only')],
   linux5090: [on('llama', llama), off('omlx', NOT_BUILT, 'planned'), off('basalt', NOT_BUILT, 'planned'), off('squid5090', NOT_BUILT, 'planned'), off('mlx', 'macOS only')].map((r) => r.id === 'omlx' ? off('omlx', 'macOS only') : r),
   windows5090: [on('llama', llama), off('basalt', NOT_BUILT, 'planned'), off('mlx', 'macOS only'), off('omlx', 'macOS only'), off('squid5090', 'Linux only')],
   pc: [on('llama', llama), off('mlx', 'macOS only'), off('omlx', 'macOS only'), off('basalt', 'NVIDIA RTX 50 series only'), off('squid5090', 'NVIDIA RTX 5090 only')],

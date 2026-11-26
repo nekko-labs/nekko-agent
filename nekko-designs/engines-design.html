@@ -46,24 +46,24 @@ table{border-collapse:collapse;font-size:12px;width:100%}td,th{text-align:left;p
 
 <figure><figcaption>01 / Folded, the default<small>One line above System models. Says which engine is in use without opening.</small></figcaption><article class="page">
 <h2>Local model server</h2>
-<div class="fold"><div class="sum"><span class="chev">▸</span>Engines<span class="inuse">oMLX in use</span></div></div>
+<div class="fold"><div class="sum"><span class="chev">▸</span>Engines<span class="inuse">llama.cpp in use</span></div></div>
 <div class="fold"><div class="sum"><span class="chev">▸</span>System models</div></div>
 <p class="muted" style="margin-top:20px">● Model server &nbsp; http://127.0.0.1:11500/v1 &emsp; Models · On this machine 12 · Find new models</p>
 </article></figure>
 
 <figure><figcaption>02 / Open on an Apple Silicon Mac<small>Fastest and Most stable are worked out among what this machine can run.</small></figcaption><article>
 <div class="fold"><div class="sum"><span class="chev">▾</span>Engines</div>
-<p class="help">What runs your models. Nekko uses the one in use for every model it can run.</p>
+<p class="help">What runs your models. Nekko loads a model on the engine in use whenever that engine can run it.</p>
 <div class="group">Chat models</div>
-<div class="row on"><div class="main"><div class="name">oMLX<span class="tag">Fastest</span><span class="use">In use</span></div><div class="detail">MLX with batching and a prompt cache kept on disk.</div></div><span class="meta">0.8.3</span><button class="danger">Uninstall</button></div>
+<div class="row on"><div class="main"><div class="name">llama.cpp<span class="tag">Fastest</span><span class="use">In use</span></div><div class="detail">Runs any GGUF model, on every computer.</div></div><span class="meta">b12532</span></div>
+<div class="row"><div class="main"><div class="name">oMLX</div><div class="detail">MLX with batching and a prompt cache kept on disk.</div></div><span class="meta">0.8.3 · 420 MB</span><button>Install</button></div>
 <div class="row"><div class="main"><div class="name">MLX<span class="tag">Most stable</span></div><div class="detail">Apple's own framework. Runs MLX models.</div></div><span class="meta">mlx-lm 0.31.3</span><button>Use</button></div>
-<div class="row"><div class="main"><div class="name">llama.cpp</div><div class="detail">Runs any GGUF model, on every computer.</div></div><span class="meta">b12532</span><button>Use</button></div>
 <div class="row off"><div class="main"><div class="name">Basalt</div><div class="detail">NVIDIA RTX 50 series only</div></div></div>
 <div class="row off"><div class="main"><div class="name">squid5090</div><div class="detail">NVIDIA RTX 5090 only</div></div></div>
 <div class="group">Photo and video models</div>
-<div class="row on"><div class="main"><div class="name">stable-diffusion.cpp<span class="use">In use</span></div><div class="detail">Runs SD3.5, FLUX and other image models.</div></div><span class="meta">master-492</span><button class="danger">Uninstall</button></div>
+<div class="row on"><div class="main"><div class="name">stable-diffusion.cpp<span class="use">In use</span></div><div class="detail">Runs SD3.5, FLUX and other image models.</div></div><span class="meta">master-1086</span><button class="danger">Uninstall</button></div>
 </div>
-</article><p class="note">A GGUF model still runs on llama.cpp while oMLX is in use: the engine in use takes every model it can run, and the rest go to the engine that can.</p></figure>
+</article><p class="note">llama.cpp is Fastest on a Mac because Nekko runs it with speculative decoding: measured 4.6x ahead of mlx-lm on a code edit (docs/benchmarks.md). An MLX model still runs on MLX while llama.cpp is in use.</p></figure>
 
 <figure><figcaption>03 / Linux with an RTX 5090<small>squid5090 is the fastest; llama.cpp the most stable. Mac engines stay, disabled.</small></figcaption><article>
 <div class="fold"><div class="sum"><span class="chev">▾</span>Engines</div>
@@ -101,17 +101,17 @@ table{border-collapse:collapse;font-size:12px;width:100%}td,th{text-align:left;p
 <figure><figcaption>06 / Installing<small>The row carries its own progress. Use appears when it lands.</small></figcaption><article>
 <div class="fold"><div class="sum"><span class="chev">▾</span>Engines</div>
 <div class="group">Chat models</div>
-<div class="row"><div class="main"><div class="name">oMLX<span class="tag">Fastest</span></div><div class="detail">Downloading, 176 MB of 420 MB</div></div><span class="bar"><i></i></span><button class="quiet">Cancel</button></div>
-<div class="row on"><div class="main"><div class="name">MLX<span class="tag">Most stable</span><span class="use">In use</span></div><div class="detail">Apple's own framework. Runs MLX models.</div></div><span class="meta">mlx-lm 0.31.3</span></div>
-<div class="row"><div class="main"><div class="name">llama.cpp</div><div class="detail">Runs any GGUF model, on every computer.</div></div><span class="meta">b12532</span><button>Use</button></div>
+<div class="row on"><div class="main"><div class="name">llama.cpp<span class="tag">Fastest</span><span class="use">In use</span></div><div class="detail">Runs any GGUF model, on every computer.</div></div><span class="meta">b12532</span></div>
+<div class="row"><div class="main"><div class="name">oMLX</div><div class="detail">Downloading, 176 MB of 420 MB</div></div><span class="bar"><i></i></span><button class="quiet">Cancel</button></div>
+<div class="row"><div class="main"><div class="name">MLX<span class="tag">Most stable</span></div><div class="detail">Apple's own framework. Runs MLX models.</div></div><span class="meta">mlx-lm 0.31.3</span><button>Use</button></div>
 </div>
 </article></figure>
 
 <figure class="narrow"><figcaption>07 / Narrow, 390<small>Version drops under the name; the action stays on the right.</small></figcaption><article>
 <div class="fold"><div class="sum"><span class="chev">▾</span>Engines</div>
 <div class="group">Chat models</div>
-<div class="row on"><div class="main"><div class="name">MLX<span class="tag">Most stable</span><span class="use">In use</span></div><div class="detail">Apple's own framework. Runs MLX models.</div></div></div>
-<div class="row"><div class="main"><div class="name">llama.cpp</div><div class="detail">Runs any GGUF model, on every computer.</div></div><button>Use</button></div>
+<div class="row on"><div class="main"><div class="name">llama.cpp<span class="tag">Fastest</span><span class="use">In use</span></div><div class="detail">Runs any GGUF model, on every computer.</div></div></div>
+<div class="row"><div class="main"><div class="name">MLX<span class="tag">Most stable</span></div><div class="detail">Apple's own framework. Runs MLX models.</div></div><button>Use</button></div>
 <div class="row off"><div class="main"><div class="name">Basalt</div><div class="detail">NVIDIA RTX 50 series only</div></div></div>
 <div class="row off"><div class="main"><div class="name">squid5090</div><div class="detail">NVIDIA RTX 5090 only</div></div></div>
 </div>
@@ -130,9 +130,9 @@ table{border-collapse:collapse;font-size:12px;width:100%}td,th{text-align:left;p
 <tr><th>Engine</th><th>Usable on</th><th>Otherwise says</th><th>Runs</th><th>Speed order</th><th>Stability order</th></tr>
 <tr><td>squid5090</td><td>Linux, RTX 5090</td><td>NVIDIA RTX 5090 only · Linux only</td><td>Inkling 2 Mini</td><td>1</td><td>5</td></tr>
 <tr><td>Basalt</td><td>Linux or Windows, RTX 50 series</td><td>NVIDIA RTX 50 series only</td><td>Its .basalt packs</td><td>2</td><td>4</td></tr>
-<tr><td>oMLX</td><td>Apple Silicon, macOS 15+</td><td>macOS only · macOS 15 or later only</td><td>MLX models</td><td>3</td><td>3</td></tr>
-<tr><td>MLX</td><td>Apple Silicon</td><td>macOS only · Apple Silicon only</td><td>MLX models</td><td>4</td><td>1</td></tr>
-<tr><td>llama.cpp</td><td>Everything</td><td></td><td>Any GGUF</td><td>5</td><td>2</td></tr>
+<tr><td>llama.cpp</td><td>Everything</td><td></td><td>Any GGUF</td><td>3 (measured against MLX)</td><td>2</td></tr>
+<tr><td>oMLX</td><td>Apple Silicon, macOS 15+</td><td>macOS only · macOS 15 or later only</td><td>MLX models</td><td>4</td><td>3</td></tr>
+<tr><td>MLX</td><td>Apple Silicon</td><td>macOS only · Apple Silicon only</td><td>MLX models</td><td>5</td><td>1</td></tr>
 </table>
 </article><p class="note">In use, with no choice made: the fastest usable engine that is installed; with nothing installed, the fastest one Nekko can install. A choice sticks until changed.</p></figure>
 

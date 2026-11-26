@@ -73,10 +73,16 @@ const CATALOG: [Entry; 5] = [
     },
 ];
 
-/// Fastest first, on hardware that can run each. squid5090 and Basalt are
-/// written for one GPU family, oMLX adds batching and a disk prompt cache to
-/// MLX, and MLX is usually ahead of llama.cpp on Apple Silicon.
-pub const SPEED: [&str; 5] = ["squid5090", "basalt", "omlx", "mlx", "llama"];
+/// Fastest first, on hardware that can run each.
+///
+/// llama.cpp above MLX is measured: as Nekko runs it, with speculative
+/// decoding on, llama.cpp returned a code edit 4.6x sooner than mlx-lm and
+/// decoded chat 1.6x to 6.7x faster, where plain mlx-lm is 13 to 16% ahead of
+/// plain llama.cpp (`docs/benchmarks.md`, Apple M5 Max). The rest is not
+/// measured by us: squid5090 and Basalt lead on what each is built for and
+/// reports on its one GPU family, and oMLX sits with MLX, whose decoder it
+/// uses, until it is benchmarked the same way.
+pub const SPEED: [&str; 5] = ["squid5090", "basalt", "llama", "omlx", "mlx"];
 
 /// Most stable first: the two that have run the most models for the longest,
 /// then the newer ones in the order they have settled.
@@ -263,12 +269,12 @@ mod tests {
     fn an_apple_silicon_mac_runs_mlx_and_llama_and_says_why_not_the_nvidia_engines() {
         let m = machine("darwin", "arm64", &["Apple M1 Max"]);
         let rows = list(&m, &both(), None);
-        assert_eq!(ids(&rows), ["mlx", "llama", "omlx", "basalt", "squid5090"]);
-        assert_eq!(by_id(&rows, "mlx")["labels"], json!(["fastest", "stable"]));
-        assert_eq!(by_id(&rows, "mlx")["inUse"], json!(true));
+        assert_eq!(ids(&rows), ["llama", "mlx", "omlx", "basalt", "squid5090"]);
+        assert_eq!(by_id(&rows, "llama")["labels"], json!(["fastest"]));
+        assert_eq!(by_id(&rows, "llama")["inUse"], json!(true));
+        assert_eq!(by_id(&rows, "mlx")["labels"], json!(["stable"]));
         assert_eq!(by_id(&rows, "mlx")["version"], "mlx-lm 0.31.3");
-        assert!(by_id(&rows, "llama").get("labels").is_none());
-        assert!(by_id(&rows, "llama").get("inUse").is_none());
+        assert!(by_id(&rows, "mlx").get("inUse").is_none());
         assert_eq!(by_id(&rows, "omlx")["state"], "planned");
         assert_eq!(by_id(&rows, "omlx")["reason"], NOT_BUILT);
         assert_eq!(by_id(&rows, "basalt")["reason"], "NVIDIA RTX 50 series only");
@@ -326,23 +332,28 @@ mod tests {
     #[test]
     fn a_saved_choice_wins_while_it_is_installed_and_waits_while_it_is_not() {
         let m = machine("darwin", "arm64", &[]);
-        assert_eq!(in_use(&m, &both(), Some("llama")), "llama");
+        assert_eq!(in_use(&m, &both(), None), "llama");
+        assert_eq!(in_use(&m, &both(), Some("mlx")), "mlx");
         let llama_only = json!({ "llama": { "binPath": "/e/llama-server" }, "mlx": { "available": [] } });
-        // MLX was chosen (its Install was clicked) but has not landed yet.
+        // MLX was chosen and has since been removed.
         assert_eq!(in_use(&m, &llama_only, Some("mlx")), "llama");
+        // With only MLX installed, it is the one in use.
+        let mlx_only = json!({ "llama": { "available": [] }, "mlx": { "binPath": "/e/mlx/bin/mlx_lm.server" } });
+        assert_eq!(in_use(&m, &mlx_only, None), "mlx");
         // An engine this machine cannot run, or one Nekko cannot start yet, is never in use.
-        assert_eq!(in_use(&m, &both(), Some("basalt")), "mlx");
-        assert_eq!(in_use(&m, &both(), Some("omlx")), "mlx");
-        assert_eq!(in_use(&m, &both(), Some("nonsense")), "mlx");
+        assert_eq!(in_use(&m, &both(), Some("basalt")), "llama");
+        assert_eq!(in_use(&m, &both(), Some("omlx")), "llama");
+        assert_eq!(in_use(&m, &both(), Some("nonsense")), "llama");
     }
 
     #[test]
     fn with_nothing_installed_the_fastest_installable_engine_is_the_one_to_get() {
         let none = json!({ "llama": { "available": [] }, "mlx": { "available": [] } });
-        assert_eq!(in_use(&machine("darwin", "arm64", &[]), &none, None), "mlx");
+        assert_eq!(in_use(&machine("darwin", "arm64", &[]), &none, None), "llama");
         assert_eq!(in_use(&machine("linux", "x64", &["NVIDIA GeForce RTX 5090"]), &none, None), "llama");
         let rows = list(&machine("darwin", "arm64", &[]), &none, None);
-        assert!(by_id(&rows, "mlx").get("installed").is_none());
+        assert_eq!(ids(&rows)[0], "llama");
+        assert!(by_id(&rows, "llama").get("installed").is_none());
         assert!(rows.as_array().unwrap().iter().all(|r| r.get("inUse").is_none()));
         assert_eq!(by_id(&rows, "mlx")["runtime"], "mlx");
     }

@@ -119,10 +119,10 @@ An engine is the program that runs a model. **Models > Local model server > Engi
 - The engine **in use** has a green dot. Nekko loads a model on it whenever it can run that model; a model only another engine can run still loads on that one, so a GGUF file keeps working while MLX is in use.
 - **Use** switches to another installed engine. **Install** downloads one your computer can run, and shows the size first. **Uninstall** (on hover) removes an engine Nekko installed; your models stay.
 - An engine your computer cannot run stays in the list with the reason: "macOS only", "NVIDIA RTX 50 series only", "NVIDIA RTX 5090 only".
-- **Fastest** and **Most stable** compare the engines your computer can run. They are a guide, not a measurement of your models. If you never choose, the fastest installed engine is in use.
+- **Fastest** and **Most stable** compare the engines your computer can run. They are a guide, not a measurement of your models. On a Mac, llama.cpp is marked Fastest because Nekko runs it with speculative decoding, which our [benchmarks](/docs/benchmarks) measured well ahead of MLX; MLX is marked Most stable. If you never choose, the fastest installed engine is in use.
 - oMLX, Basalt and squid5090 are listed but cannot be started by Nekko yet; on a computer that could run them they say "Not in this version of Nekko yet".
 
-Finding a new model follows the engine in use: with MLX in use, **Find new models** opens on MLX checkpoints.
+Finding a new model follows the engine in use: press **Use** on MLX and **Find new models** opens on MLX checkpoints.
 
 **System models** is a separate section below Engines and above the local library, even before you download a chat model. It holds the on-device speech engines for dictation. Selecting a speech engine here does not change your default chat model.
 

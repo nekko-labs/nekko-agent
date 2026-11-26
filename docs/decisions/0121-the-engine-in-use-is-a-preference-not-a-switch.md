@@ -21,7 +21,9 @@ Engines are not interchangeable. Each reads its own files: llama.cpp reads GGUF,
 
 Option 3. The choice is saved as `settings.engine.chatEngine` and resolved by the daemon (`nekko-engine`'s `engines`): the saved choice while this machine can run it and has it installed, else the fastest usable installed engine, else none.
 
-Fastest and Most stable come from two fixed orders, compared among the engines the machine can run. Speed: squid5090, Basalt, oMLX, MLX, llama.cpp. Stability: MLX, llama.cpp, oMLX, Basalt, squid5090. The orders are judgments, not measurements: the speed order follows what each project is built for and reports, and MLX leads stability because Philip named it. With one usable engine neither label shows.
+Fastest and Most stable come from two fixed orders, compared among the engines the machine can run. Speed: squid5090, Basalt, llama.cpp, oMLX, MLX. Stability: MLX, llama.cpp, oMLX, Basalt, squid5090. With one usable engine neither label shows.
+
+One position in the speed order is measured: llama.cpp above MLX. As Nekko runs it, with speculative decoding on, llama.cpp returned a code edit 4.6x sooner than mlx-lm and decoded chat 1.6x to 6.7x faster, although plain mlx-lm is 13 to 16% ahead of plain llama.cpp ([benchmarks](../benchmarks.md)). The first draft of this decision had MLX above llama.cpp on the strength of the old MLX card's "often the fastest way to run a model on this Mac"; the benchmark says otherwise for the way Nekko runs them. The rest is judgment: squid5090 and Basalt lead on what each project reports for its GPU family and because Philip named squid5090 fastest, oMLX sits beside MLX (it uses the same decoder) until it is benchmarked the same way, and MLX leads stability because Philip named it.
 
 An engine that is listed before Nekko can start it says so and is left out of the labels and of the automatic choice. An engine that has not been run on its hardware by us stays out of the automatic choice even once built.
 
@@ -30,4 +32,5 @@ An engine that is listed before Nekko can start it says so and is left out of th
 - No load ever fails because of the engine choice.
 - "In use" does not mean "the only engine running": two models can be loaded on two engines at once.
 - The labels can be wrong for a particular model or card. They become measured once the engines are benchmarked on the same machine; until then the docs call them a guide.
+- On a Mac that never chose, llama.cpp stays in use, as before the Engines block existed.
 - Per-model choice of engine (the same model in two formats) is not offered; it would need the library to know two files are the same model.

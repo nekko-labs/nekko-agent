@@ -54,13 +54,13 @@ app.whenReady().then(async () => {
     await run("document.querySelector('[data-model-server-configure]').click()");
     if (!baseline) {
       await check('Engines sits above System models and starts folded', `!${ENGINES}.open && ${ENGINES}.compareDocumentPosition(document.querySelector('[data-models-section=system]')) & Node.DOCUMENT_POSITION_FOLLOWING`);
-      await check('Folded, it names the engine in use', "document.querySelector('[data-engine-in-use]').textContent === 'MLX in use'");
+      await check('Folded, it names the engine in use', "document.querySelector('[data-engine-in-use]').textContent === 'llama.cpp in use'");
       await check('Configure no longer lists runtimes', "!document.querySelector('[data-model-server-config]').innerText.includes('Runtimes')");
       await run("[...document.querySelectorAll('.models-navigation button')].find(b => b.textContent === 'Engines').click()");
       await check('The side menu opens Engines', `${ENGINES}.open`);
       await wait(`!!${row('squid5090')}`);
-      await check('Every engine is listed on a Mac, usable ones first', `[...document.querySelectorAll('[data-engine-group=chat] [data-engine]')].map(e => e.dataset.engine).join() === 'mlx,llama,omlx,basalt,squid5090'`);
-      await check('MLX is in use and marked Fastest and Most stable', `${row('mlx')}.dataset.engineState === 'in-use' && ${row('mlx')}.innerText.includes('Fastest') && ${row('mlx')}.innerText.includes('Most stable')`);
+      await check('Every engine is listed on a Mac, usable ones first', `[...document.querySelectorAll('[data-engine-group=chat] [data-engine]')].map(e => e.dataset.engine).join() === 'llama,mlx,omlx,basalt,squid5090'`);
+      await check('llama.cpp is in use and marked Fastest; MLX is marked Most stable', `${row('llama')}.dataset.engineState === 'in-use' && ${row('llama')}.innerText.includes('Fastest') && !${row('llama')}.innerText.includes('Most stable') && ${row('mlx')}.innerText.includes('Most stable') && !${row('mlx')}.innerText.includes('Fastest')`);
       await check('An engine this Mac cannot run is disabled with the reason and no button', `${row('squid5090')}.getAttribute('aria-disabled') === 'true' && ${row('squid5090')}.innerText.includes('NVIDIA RTX 5090 only') && !${row('squid5090')}.querySelector('button') && ${row('basalt')}.innerText.includes('NVIDIA RTX 50 series only')`);
       await check('Image models have their own group', "document.querySelector('[data-engine-group=image] [data-engine=diffusion]').innerText.includes('stable-diffusion.cpp')");
       await sleep(600);
@@ -73,11 +73,16 @@ app.whenReady().then(async () => {
       await capture('mac-open-narrow-light', 390, 1100, 'light', 'engines');
       await themed('dark');
       // Choosing another installed engine.
-      await run(`[...${row('llama')}.querySelectorAll('button')].find(b => b.textContent === 'Use').click()`);
-      await check('Use puts llama.cpp in use and saves the choice', `${row('llama')}.dataset.engineState === 'in-use' && ${row('mlx')}.dataset.engineState === 'installed' && JSON.stringify(fixture.saves()) === '[{"chatEngine":"llama"}]'`);
-      await capture('mac-llama-in-use-dark', 1280, 1100, 'dark');
+      const find = "[...document.querySelectorAll('[data-models-section=library] button')].find(b => b.textContent.trim() === 'Find new models')";
+      const format = "document.querySelector('select[aria-label=\"Catalog format\"]')";
+      await run(`${find}.click()`);
+      await check('Find new models starts on GGUF while llama.cpp is in use', `${format} && ${format}.value === 'gguf'`);
+      await run(`[...${row('mlx')}.querySelectorAll('button')].find(b => b.textContent === 'Use').click()`);
+      await check('Use puts MLX in use and saves the choice', `${row('mlx')}.dataset.engineState === 'in-use' && ${row('llama')}.dataset.engineState === 'installed' && JSON.stringify(fixture.saves()) === '[{"chatEngine":"mlx"}]'`);
+      await check('Find new models follows: MLX checkpoints first', `${format} && ${format}.value === 'mlx'`);
+      await capture('mac-mlx-in-use-dark', 1280, 1100, 'dark');
       await machine('mac-no-mlx');
-      await check('The fastest engine not yet installed carries the primary Install and its size', `${row('mlx')}.querySelector('button.btn-primary').textContent === 'Install' && ${row('mlx')}.querySelector('[data-engine-meta]').textContent.includes('420')`);
+      await check('An engine not yet installed offers Install with its size', `[...${row('mlx')}.querySelectorAll('button')].some(b => b.textContent === 'Install') && ${row('mlx')}.querySelector('[data-engine-meta]').textContent.includes('420')`);
       await capture('mac-install-dark', 1280, 1100, 'dark');
       await machine('linux5090');
       await check('Linux with an RTX 5090 says the Mac engines are macOS only', `${row('mlx')}.innerText.includes('macOS only') && ${row('omlx')}.innerText.includes('macOS only') && ${row('llama')}.dataset.engineState === 'in-use'`);

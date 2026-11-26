@@ -19,7 +19,10 @@ export interface EngineRow {
   runtime?: EngineRuntime;
   /** `use` puts an installed engine in use; `install` downloads one this machine can run. */
   action: 'use' | 'install' | null;
-  /** The one primary button: the fastest engine this machine can run and does not have yet. */
+  /**
+   * The one primary button: the fastest engine this machine can run and does not have yet.
+   * Never llama.cpp's row: while it is missing, the model server's own install card below is the page's primary.
+   */
   primary: boolean;
   /** Only an install Nekko made is removed here. */
   removable: boolean;
@@ -56,7 +59,7 @@ function chatRows(engines: EngineOption[]): EngineRow[] {
       meta: meta(installed, e.version, e.source),
       runtime: usable ? e.runtime : undefined,
       action: !usable ? null : installed ? (e.inUse ? null : 'use') : e.runtime ? 'install' : null,
-      primary: i === next,
+      primary: i === next && e.id !== 'llama',
       removable: installed && e.source === 'managed',
     };
   });
