@@ -6,6 +6,10 @@
 
 In the [Nekko Cloud console](https://nekkoagent.com/console), choose **Nekko Agent** for fleet and operations or **Hypergate → Settings** for portable Hypergate setup. The latter is an employee preview; other accounts see **Coming soon**. Publish a setup from **Settings → Nekko Cloud** in Hypergate first. Saving in the browser changes no running computer: refresh, review, and apply on each device. Billing and organizations are shared workspace pages, not product settings.
 
+## GitHub in a Hypergate-paired chat
+
+With Hypergate enabled, Nekko instructs native chat models to use it from the first GitHub request, including issue lookups, fetches and pushes. If the gateway cannot grant access, approve or renew the credential in Hypergate instead of signing `gh` in separately. Reading files and running local `git status` or `git diff` need no credential. This guidance does not block commands at the operating-system level.
+
 ## All connections off
 
 Turn on **All connections off** to disable Nekko-managed network access:

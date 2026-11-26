@@ -12,6 +12,10 @@ const bridge: any = {
   onComputersUpdated: () => () => {},
   updateSettings: async (p: any) => Object.assign(settings, p),
   getSettings: async () => settings,
+  // Pairing without pasting: one computer on this network with its link open.
+  nearbyComputers: async () => [{ name: 'Studio', lobby: '0123456789abcdef0123456789abcdef', relay: 'ws://192.168.1.20:4400' }],
+  joinComputerLobby: async () => ({ code: '482 913' }),
+  onComputerLobby: (cb: (e: unknown) => void) => { (window as any).lobbyEmit = cb; return () => {}; },
 };
 Object.assign(window, { nekko: new Proxy(bridge, { get(t, k: string) { if (k in t) return t[k]; if (k.startsWith('on')) return () => () => {}; return () => Promise.resolve(null); } }) });
 useStore.setState({ settings, refreshSettings: async () => useStore.setState({ settings: { ...settings } }) } as any);

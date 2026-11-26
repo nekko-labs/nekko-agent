@@ -267,6 +267,36 @@ from an org admin, since for anyone else GitHub answers 403 and every run goes t
 request), an API error or a timeout all give the hosted runner. Nekko Agent's own
 `ios-native.yml` uses it.
 
+**Pick through Nekko Cloud** (Pro or Enterprise). In the runner's settings, tick **Let the Nekko
+Cloud picker send jobs here**: this Mac then tells Nekko Cloud, every 30 seconds, its runner label,
+the repos it serves and how many VMs could take a job right now (none while it waits for you).
+Give the picker the Cloud address and let the job ask GitHub for an ID token; no secret is needed:
+
+```yaml
+jobs:
+  pick:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    outputs:
+      runs-on: ${{ steps.pick.outputs.runs-on }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: pick
+        uses: ./.github/actions/pick-runner
+        with:
+          cloud: https://nekko-agent-api.fly.dev
+  build:
+    needs: pick
+    runs-on: ${{ fromJSON(needs.pick.outputs.runs-on) }}
+```
+
+Nekko Cloud answers only for a repo a Mac with live status serves, holds the VM it hands out for
+3 minutes so two jobs at once do not both get it, and otherwise says to use the hosted runner. If
+Cloud cannot answer, the picker carries on with the token check above, then hosted. A fork pull
+request gets no ID token, so it goes hosted. If Cloud refuses this Mac (no plan, signed out), the
+reason shows under the setting.
+
 **On a public repo, the picker does not keep fork code off your Mac.** A pull request runs its
 own copy of the workflow file, so a fork could name your runner directly. Before you point a
 public repo's jobs at this Mac, turn on **Require approval for all external contributors** in the

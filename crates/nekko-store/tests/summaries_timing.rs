@@ -121,6 +121,8 @@ fn time_pr_session_list_on_a_large_chat() {
     let after = time(&|| {
         let _ = store.summary(&id);
     });
-    println!("pr:sessionList read per call: before (get + collect + summaries) median {before:.2} ms, after summary(id) median {after:.3} ms");
+    println!(
+        "pr:sessionList read per call: before (get + collect + summaries) median {before:.2} ms, after summary(id) median {after:.3} ms"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }

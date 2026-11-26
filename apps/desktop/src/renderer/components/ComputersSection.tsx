@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { COMPUTER_ICONS, parsePairingLink, pairingLink, relayRoute, type ComputerState, type ComputerStatus, type NekkoApi } from '@nekko-agent/shared';
+import { COMPUTER_ICONS, type ComputerLobbyEvent, type NearbyComputer, parsePairingLink, pairingLink, relayRoute, type ComputerState, type ComputerStatus, type NekkoApi } from '@nekko-agent/shared';
 import { COMPUTER_ICON_GLYPHS } from '../icons.js';
 import { useStore } from '../store.js';
 import { ComputerGlyph } from './ComputerChip.js';
@@ -84,14 +84,45 @@ export function ComputersSection() {
   const [renameText, setRenameText] = useState('');
   const [link, setLink] = useState('');
   const [linkNote, setLinkNote] = useState<string | null>(null);
+  // Pairing without pasting (CC8): computers here whose link is open, and the code being compared.
+  const [nearby, setNearby] = useState<NearbyComputer[] | null>(null);
+  const [joining, setJoining] = useState<{ name: string; code: string } | null>(null);
+  // On this side: a computer on the network asking for the open link.
+  const [asking, setAsking] = useState<{ name: string; code: string } | null>(null);
 
   useEffect(() => {
     let live = true;
     const load = () => void window.nekko.listComputers().then((list) => live && setComputers(list)).catch(() => {});
     load();
     const off = window.nekko.onComputersUpdated(load);
-    return () => { live = false; off(); };
+    const offLobby = window.nekko.onComputerLobby((e: ComputerLobbyEvent) => {
+      if (e.state === 'asking') return setAsking({ name: e.name, code: e.code });
+      if (e.role === 'host') {
+        setAsking(null);
+        if (e.paired) setLinkNote('Paired. That computer can now connect here.');
+        return;
+      }
+      setJoining(null);
+      if (e.paired) { setAdding(false); setNearby(null); } else if (e.error) setError(e.error);
+    });
+    // The lobby asks here, so it closes with this page; a made link still works if pasted.
+    return () => { live = false; off(); offLobby(); void window.nekko.closeComputerLobby().catch(() => {}); };
   }, []);
+
+  const lookNearby = async () => {
+    setNearby(null);
+    setNearby(await window.nekko.nearbyComputers().catch(() => []));
+  };
+
+  const join = async (found: NearbyComputer) => {
+    setError(null);
+    try {
+      const { code } = await window.nekko.joinComputerLobby(found);
+      setJoining({ name: found.name, code });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   const add = async () => {
     const parsed = parsePairingLink(paste);
@@ -134,13 +165,16 @@ export function ComputersSection() {
     const made = await computerLink(window.nekko);
     setLinkNote('note' in made ? made.note : null);
     setLink('link' in made ? made.link : '');
+    const parsed = 'link' in made ? parsePairingLink(made.link) : null;
+    // Best effort: the link works pasted even when no lobby opens.
+    if (parsed) void window.nekko.openComputerLobby(parsed).catch(() => {});
   };
 
   return (
     <SettingsSection
       title="Computers"
       help="See and run agents on your other computers from here. Each one stays on its own machine, with its own files, models and accounts."
-      actions={<button className="btn btn-primary py-1 text-xs" onClick={() => { setAdding(!adding); setError(null); }}>Add a computer</button>}
+      actions={<button className="btn btn-primary py-1 text-xs" onClick={() => { if (!adding) void lookNearby(); setAdding(!adding); setError(null); }}>Add a computer</button>}
     >
 
       {adding && (
@@ -149,6 +183,28 @@ export function ComputersSection() {
           <div className="mt-(--q-inline) flex gap-2">
             <input id="computer-link" className="quiet-field min-w-0 flex-1 py-1.5 text-sm" placeholder="nekko-agent-pair:?relay=…" value={paste} onChange={(e) => setPaste(e.target.value)} />
             <button className="btn btn-primary py-1 text-xs" onClick={() => void add()} disabled={busy || !paste.trim()}>{busy ? 'Connecting…' : 'Connect'}</button>
+          </div>
+          <div className="mt-(--q-group)" data-nearby>
+            <div className="flex items-baseline gap-2">
+              <h3 className="text-sm font-medium">On this network</h3>
+              <button className="btn btn-ghost py-0.5 text-xs" onClick={() => void lookNearby()} disabled={nearby === null}>Look again</button>
+            </div>
+            {joining ? (
+              <p className="mt-(--q-inline) text-sm" data-nearby-code>Check that {joining.name} shows <strong className="tabular-nums">{joining.code}</strong>, then tap Pair there.</p>
+            ) : nearby === null ? (
+              <p className="mt-(--q-inline) text-xs text-ink-faint">Looking…</p>
+            ) : nearby.length === 0 ? (
+              <p className="mt-(--q-inline) text-xs text-ink-faint">None found. On the other computer, open Settings, Computers, and make a link: while it works, that computer is listed here.</p>
+            ) : (
+              <ul className="-mx-2 mt-(--q-tight)">
+                {nearby.map((n) => (
+                  <li key={n.lobby} className="quiet-row min-h-(--q-row) gap-3 px-2! text-sm">
+                    <span className="min-w-0 flex-1 truncate font-medium">{n.name}</span>
+                    <button className="btn btn-ghost py-1 text-xs" onClick={() => void join(n)}>Connect</button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           {error && <p role="alert" className="mt-(--q-inline) text-xs text-danger-text">{error}</p>}
         </div>
@@ -194,11 +250,20 @@ export function ComputersSection() {
         </p>
         <button className="btn btn-ghost mt-(--q-inline) py-1 text-xs" onClick={() => void makeLink()}>Make a link</button>
         {linkNote && <p className="mt-(--q-inline) text-xs text-ink-soft">{linkNote}</p>}
+        {asking && (
+          <div role="alertdialog" aria-label={`Pair ${asking.name}?`} className="mt-(--q-inline) rounded-lg bg-surface-2 p-3 text-sm" data-lobby-asking>
+            <p>{asking.name} on this network wants to connect. Pair only if it shows <strong className="tabular-nums">{asking.code}</strong>.</p>
+            <div className="mt-(--q-inline) flex gap-2">
+              <button className="btn btn-primary py-1 text-xs" onClick={() => { setAsking(null); void window.nekko.answerComputerLobby(true); }}>Pair</button>
+              <button className="btn btn-ghost py-1 text-xs" onClick={() => { setAsking(null); void window.nekko.answerComputerLobby(false); }}>Don't pair</button>
+            </div>
+          </div>
+        )}
         {link && (
           <div className="mt-(--q-inline)">
             <code className="block break-all rounded-lg bg-surface-2 p-2 text-2xs">{link}</code>
             <button className="btn btn-ghost mt-(--q-inline) py-1 text-xs" onClick={() => void navigator.clipboard?.writeText(link)}>Copy</button>
-            <p className="mt-(--q-tight) text-xs text-ink-faint">Works once, for 10 minutes. It holds this computer's keys, so keep it private.</p>
+            <p className="mt-(--q-tight) text-xs text-ink-faint">Works once, for 10 minutes. It holds this computer's keys, so keep it private. Meanwhile a computer on this network can also find this one under Add a computer, and you compare a code here.</p>
           </div>
         )}
       </div>
