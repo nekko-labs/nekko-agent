@@ -173,6 +173,18 @@ fn picker_row(v: &RunnerView) -> Value {
     })
 }
 
+fn fleet_row(v: &RunnerView) -> nekko_cloud::RunnerSummary {
+    let busy = v.slots.iter().filter(|s| matches!(s.state, SlotState::Running | SlotState::Draining)).count();
+    let busy = u8::try_from(busy).unwrap_or(u8::MAX);
+    nekko_cloud::RunnerSummary {
+        label: v.config.label.clone(),
+        state: serde_json::to_value(v.state).ok().and_then(|s| s.as_str().map(str::to_string)).unwrap_or_default(),
+        busy,
+        // A busy VM still holds its slot, so it counts in what this runner has.
+        slots: v.available.saturating_add(v.linux_available).max(busy),
+    }
+}
+
 /// The last `max` bytes of `text`, from the start of a line.
 fn tail(text: &str, max: usize) -> &str {
     if text.len() <= max {
@@ -589,6 +601,12 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
         }
         let views = self.views.lock().map(|v| v.clone()).unwrap_or_default();
         self.publish(views);
+    }
+
+    /// What this Mac's runners tell its organizations (decision 0064): label,
+    /// state and how many VMs are busy out of those it may run now.
+    pub fn fleet_summary(&self) -> Vec<nekko_cloud::RunnerSummary> {
+        self.views.lock().map(|v| v.iter().map(fleet_row).collect()).unwrap_or_default()
     }
 
     pub async fn route(&self, channel: &str, args: &[Value]) -> Result<Value, String> {

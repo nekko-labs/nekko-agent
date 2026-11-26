@@ -228,6 +228,75 @@ async fn admission_switches_provider_effort_without_sending_the_inherited_unsupp
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn chatgpt_subscription_sends_the_closed_edit_file_schema() {
+    let rig = turn_rig(
+        "chatgpt-edit-schema",
+        json!({
+            "id":"s_edit_schema", "title":"Named", "titleAuto":false, "workspaceId":"w1",
+            "messages":[], "createdAt":1, "updatedAt":1
+        }),
+    );
+    let (sent, mut received) = tokio::sync::mpsc::unbounded_channel();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let app = axum::Router::new().route(
+        "/codex/responses",
+        axum::routing::post(move |axum::Json(request): axum::Json<Value>| async move {
+            sent.send(request).unwrap();
+            (
+                [("content-type", "text/event-stream")],
+                format!(
+                    "data: {}\n\ndata: {}\n\n",
+                    json!({"type":"response.output_text.delta", "delta":"hello"}),
+                    json!({"type":"response.completed", "response":{"usage":{"input_tokens":1,"output_tokens":1}}})
+                ),
+            )
+        }),
+    );
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    write_settings(
+        &rig,
+        json!({"providers":[{
+            "id":"loopback", "kind":"chatgpt", "enabled":true, "apiKey":"test", "accountId":"test",
+            "baseUrl":format!("http://127.0.0.1:{port}")
+        }]}),
+    )
+    .await;
+    let opts = json!({"sessionId":"s_edit_schema","providerId":"loopback","modelId":"synthetic","text":"go"});
+    let (status, body) = post(rig.d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let request = received.try_recv().expect("the daemon POSTed to the Codex Responses route");
+    let tools = request["tools"].as_array().expect("top-level Responses tools");
+    let mut edits = tools.iter().filter(|t| t["name"] == "edit_file");
+    let edit = edits.next().expect("edit_file is offered to ChatGPT");
+    assert!(edits.next().is_none(), "one edit_file tool");
+    let builtin = nekko_tools::builtin_tools().into_iter().find(|t| t.name == "edit_file").unwrap();
+    assert_eq!(edit["type"], "function");
+    assert_eq!(edit["description"], builtin.description);
+    assert_eq!(edit["parameters"], builtin.parameters, "the catalog and ported tool must agree on the wire");
+    assert_eq!(
+        edit["parameters"],
+        json!({
+            "type": "object",
+            "properties": {
+                "path": {"type":"string"},
+                "edits": {
+                    "type":"array", "minItems":1, "maxItems":100,
+                    "description":"Ordered literal replacements; all must succeed before the file is written.",
+                    "items": {
+                        "type":"object",
+                        "properties":{"old_string":{"type":"string","minLength":1},"new_string":{"type":"string"}},
+                        "required":["old_string","new_string"], "additionalProperties":false
+                    }
+                }
+            },
+            "required":["path","edits"], "additionalProperties":false
+        })
+    );
+    server.abort();
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn admission_resolves_inherited_and_saved_effort_from_the_picker_catalog() {
     use std::sync::{
         Arc, Mutex,

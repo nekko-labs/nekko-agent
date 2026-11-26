@@ -86,6 +86,22 @@ pub struct LocalModel {
     pub size_bytes: Option<u64>,
 }
 
+/// A CI runner on this computer, as its org's members see it (CI runners P4,
+/// decision 0064). Coarse on purpose: no repos, jobs, networks or reasons.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RunnerSummary {
+    pub label: String,
+    /// A runner state: off, waiting, ready, running, draining, cleaning or error.
+    pub state: String,
+    /// VMs running or draining a job.
+    pub busy: u8,
+    /// VMs this runner may run now, macOS and Linux together.
+    pub slots: u8,
+}
+
+pub const RUNNER_STATES: &[&str] = &["off", "waiting", "ready", "running", "draining", "cleaning", "error"];
+const MAX_RUNNERS: usize = 8;
+
 /// At most this many models go in a descriptor (it must stay well under the API's 16 KiB).
 pub const MAX_MODELS: usize = 40;
 
@@ -131,6 +147,7 @@ pub struct HostFacts {
     pub host_key: String,
     /// How its own account's devices reach it, when remote access is on.
     pub connect: Option<ConnectFacts>,
+    pub runners: Vec<RunnerSummary>,
 }
 
 impl HostFacts {
@@ -162,6 +179,14 @@ impl HostFacts {
             "models": models,
             "hostKey": self.host_key,
         });
+        if !self.runners.is_empty() {
+            v["runners"] = self
+                .runners
+                .iter()
+                .take(MAX_RUNNERS)
+                .map(|r| json!({ "label": clip(&r.label, 64), "state": r.state, "busy": r.busy, "slots": r.slots }))
+                .collect();
+        }
         if let Some(at) = published_at {
             v["publishedAt"] = json!(at);
         }
@@ -222,6 +247,7 @@ pub struct Descriptor {
     pub published_at: String,
     /// The sealed connect block and the account key epoch it is sealed under.
     pub connect: Option<(u32, String)>,
+    pub runners: Vec<RunnerSummary>,
 }
 
 impl Descriptor {
@@ -270,6 +296,25 @@ impl Descriptor {
                 .filter(|k| *k >= 1)
                 .zip(v["connect"]["blob"].as_str().filter(|b| !b.is_empty() && b.len() <= MAX_CONNECT_BLOB))
                 .map(|(k, b)| (k, b.to_string())),
+            // Optional too; an unknown state or a bad count drops that runner.
+            runners: v["runners"]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .take(MAX_RUNNERS)
+                        .filter_map(|r| {
+                            let n = |k: &str| r[k].as_u64().and_then(|x| u8::try_from(x).ok());
+                            Some(RunnerSummary {
+                                label: clip(r["label"].as_str()?, 64),
+                                state: r["state"].as_str().filter(|s| RUNNER_STATES.contains(s))?.to_string(),
+                                busy: n("busy")?,
+                                slots: n("slots")?,
+                            })
+                        })
+                        .filter(|r| !r.label.is_empty())
+                        .collect()
+                })
+                .unwrap_or_default(),
         })
     }
 }
@@ -295,6 +340,7 @@ mod tests {
             ],
             host_key: b64_encode(&[4u8; 65]),
             connect: None,
+            runners: Vec::new(),
         }
     }
 
@@ -353,6 +399,26 @@ mod tests {
         let mut g = facts();
         g.name = "Desk 2".into();
         assert_ne!(g.digest(), d, "a name change does");
+    }
+
+    #[test]
+    fn runners_round_trip_and_bad_ones_are_dropped() {
+        let mut f = facts();
+        let d0 = f.digest();
+        f.runners = vec![RunnerSummary { label: "nekko-cloud-mac".into(), state: "running".into(), busy: 1, slots: 2 }];
+        assert_ne!(f.digest(), d0, "a runner change republishes");
+        let d = Descriptor::parse(&f.plaintext("2026-11-26T10:00:00Z", None)).unwrap();
+        assert_eq!(d.runners, f.runners);
+        assert!(Descriptor::parse(&facts().plaintext("t", None)).unwrap().runners.is_empty(), "none when absent");
+        let mut v: Value = serde_json::from_slice(&f.plaintext("t", None)).unwrap();
+        v["runners"] = json!([
+            { "label": "a", "state": "hacked", "busy": 0, "slots": 1 },
+            { "label": "b", "state": "ready", "busy": 900, "slots": 1 },
+            { "label": "", "state": "ready", "busy": 0, "slots": 1 },
+            { "label": "c", "state": "ready", "busy": 0, "slots": 2 },
+        ]);
+        let d = Descriptor::parse(&serde_json::to_vec(&v).unwrap()).unwrap();
+        assert_eq!(d.runners.iter().map(|r| r.label.as_str()).collect::<Vec<_>>(), ["c"]);
     }
 
     #[test]

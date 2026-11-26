@@ -182,6 +182,17 @@ export function reachNote(c: Pick<FleetComputerView, 'you' | 'online' | 'reach' 
   }
 }
 
+/** One line per CI runner on an online computer, or none (decision 0064). */
+export function runnerLines(c: Pick<FleetComputerView, 'online' | 'runners'>): string[] {
+  if (!c.online) return [];
+  return (c.runners ?? []).map((r) => {
+    const what = r.busy > 0
+      ? `running ${r.busy === 1 ? 'a job' : `${r.busy} jobs`} (${r.busy} of ${Math.max(r.slots, r.busy)} VMs)`
+      : { off: 'off', waiting: 'waiting', ready: `ready (${r.slots} ${r.slots === 1 ? 'VM' : 'VMs'})`, running: 'starting a job', draining: 'finishing a job', cleaning: 'cleaning up', error: 'needs attention' }[r.state] ?? r.state;
+    return `CI runner ${r.label}: ${what}`;
+  });
+}
+
 /** The slice of `window.nekko` that opens a chat on a listed computer. */
 export type FleetOpenApi = Pick<NekkoApi, 'connectFleetComputer' | 'createSessionOn'>;
 

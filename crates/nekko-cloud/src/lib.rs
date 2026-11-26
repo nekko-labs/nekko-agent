@@ -56,7 +56,7 @@ use zeroize::Zeroize;
 
 pub use fleet_link::{ConnectInfo, FleetAdmitted, FleetTarget, HelloBinding};
 pub use http::client;
-pub use org_records::LocalModel;
+pub use org_records::{LocalModel, RunnerSummary};
 pub use orgs::{HEARTBEAT, HostInfo, ModelFuture};
 
 pub const CHANNELS: &[&str] = &[

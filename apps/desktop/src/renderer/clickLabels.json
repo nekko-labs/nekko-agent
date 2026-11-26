@@ -397,6 +397,7 @@
   "org-remove-member",
   "org-retry",
   "org-role",
+  "org-runner",
   "org-sent-invites",
   "org-settings",
   "org-share",
