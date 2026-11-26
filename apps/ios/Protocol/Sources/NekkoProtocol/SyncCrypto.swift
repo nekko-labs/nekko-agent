@@ -23,8 +23,8 @@ public protocol SyncAgreementKey {
 ///   fresh 32-byte salt, the account, epoch, collection, object id and
 ///   revision bound as associated data, and the plaintext Padmé-padded. A
 ///   version 2 blob holds the raw deflate of the plaintext, with
-///   `deflateAAD` added to the associated data (decision 0121,
-///   `docs/decisions/0121-compress-chat-records-before-sealing.md`); the
+///   `deflateAAD` added to the associated data (decision 0122,
+///   `docs/decisions/0122-compress-chat-records-before-sealing.md`); the
 ///   iPhone opens both versions;
 /// - the keyring **wrapped** to each device's P-256 key (ECIES; on the iPhone
 ///   the private key is a Secure Enclave key), authenticated by the sending

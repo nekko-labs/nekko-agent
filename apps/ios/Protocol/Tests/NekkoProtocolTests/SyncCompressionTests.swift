@@ -2,7 +2,7 @@ import Foundation
 import XCTest
 @testable import NekkoProtocol
 
-/// Compressed records (decision 0121). Deflate output differs between Apple's Compression
+/// Compressed records (decision 0122). Deflate output differs between Apple's Compression
 /// framework and flate2, so `Fixtures/sync-compressed.json` holds blobs each side made and each
 /// side opens both. `UPDATE_SWIFT_VECTORS=1` rewrites the `swift` list (and the Rust copy).
 final class SyncCompressionTests: XCTestCase {

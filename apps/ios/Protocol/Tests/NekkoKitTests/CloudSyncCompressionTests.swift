@@ -3,7 +3,7 @@ import XCTest
 @testable import NekkoKit
 @testable import NekkoProtocol
 
-/// The iPhone's side of compressed records (decision 0121): the account record keeps device
+/// The iPhone's side of compressed records (decision 0122): the account record keeps device
 /// capabilities, the phone advertises that it reads them, and a phone that predates them pulls once
 /// from the start when the account has used them.
 extension CloudSyncTests {

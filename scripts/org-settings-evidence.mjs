@@ -79,6 +79,7 @@ try {
           writeFileSync(join(out, `${tag}-connecting.png`), Buffer.from((await cdp.send('Page.captureScreenshot', { format: 'png', clip: { ...hover, scale: 1 }, captureBeyondViewport: true })).data, 'base64'));
           await sleep(700);
           if (state === 'fleet') {
+            check(`${tag}: a CI runner line on the online Mac only`, await cdp.evaluate("(() => { const l = [...document.querySelectorAll('[data-testid=org-runner]')]; return l.length === 1 && l[0].textContent === 'CI runner nekko-cloud-mac: running a job (1 of 2 VMs)'; })()"));
             check(`${tag}: connects with no code, then starts a chat there`, await cdp.evaluate("JSON.stringify(window.__calls) === JSON.stringify([['computers:connectFleet','org1','f2'],['computers:createSession','f7e1f0a9c2b3']])"));
           } else {
             check(`${tag}: the refusal says why, on its row`, await cdp.evaluate("document.querySelector('[data-reach=ready] [data-testid=org-reach-note]')?.textContent === 'gomi stopped sharing with this organization.'"));

@@ -253,7 +253,7 @@ pub fn updated_at(chat: &Value) -> f64 {
 }
 
 /// The capability a device lists in the sealed account record once it opens deflated chat records
-/// (blob version 2, decision 0121). A writer compresses only when every device lists it.
+/// (blob version 2, decision 0122). A writer compresses only when every device lists it.
 pub const CAP_DEFLATE: &str = "z1";
 
 /// A device the account trusts, as the sealed account record lists it.
@@ -281,7 +281,7 @@ pub struct AccountRecord {
     pub recovery_public: String,
     pub devices: Vec<TrustedDevice>,
     /// A device has sealed a deflated record for this account. A device that could not read them
-    /// before it was updated pulls again from the start when it sees this (decision 0121).
+    /// before it was updated pulls again from the start when it sees this (decision 0122).
     pub compressed: bool,
 }
 

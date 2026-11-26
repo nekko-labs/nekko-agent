@@ -186,6 +186,29 @@ describe('wall dock presentation', () => {
     expect(html).toContain('Unavailable');
     expect(html).not.toContain('>Minimize</button>');
   });
+  it('resizes a side dock across and a top or bottom dock up and down, from the edge facing the wall', () => {
+    const props = { setState: vi.fn(), tasks: [], running: new Set<string>(), now: 0, sessions: [], providers: [], usage: null, onOpenChat: vi.fn(), onOpenModels: vi.fn() };
+    const at = (side: 'left' | 'right' | 'top' | 'bottom') => renderToStaticMarkup(<MonitorsDock {...props} state={{ ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, side } }} />);
+    for (const side of ['left', 'right'] as const) {
+      const html = at(side);
+      expect(html.match(/aria-label="Resize monitors"/g)).toHaveLength(1);
+      expect(html).toMatch(/aria-label="Resize monitors" aria-orientation="vertical"/);
+    }
+    for (const side of ['top', 'bottom'] as const) {
+      const html = at(side);
+      expect(html.match(/aria-label="Resize monitors"/g)).toHaveLength(1);
+      expect(html).toMatch(/aria-label="Resize monitors" aria-orientation="horizontal" aria-valuemin="120" aria-valuemax="360" aria-valuenow="360"/);
+      expect(html).toContain('--dock-height:360px');
+    }
+    const css = stylesheet('components/monitorsDock.css');
+    // The dragged height is the dock's ceiling: it stays as tall as its monitors below it.
+    expect(cssRule(css, '.monitors-dock[data-dock-side="top"]')['max-height']).toBe('var(--dock-height,360px)');
+    const edge = '.monitors-dock:is([data-dock-side="top"],[data-dock-side="bottom"]) .monitors-dock__resize';
+    expect(cssRule(css, edge)).toMatchObject({ bottom: '-9px', height: '10px', cursor: 'row-resize' });
+    expect(cssRule(css, '.monitors-dock[data-dock-side="bottom"] .monitors-dock__resize')).toMatchObject({ top: '-9px', bottom: 'auto' });
+    // The grip sits past the dock's edge, so an open top or bottom dock does not clip it.
+    expect(cssRule(css, '.monitors-dock:is([data-dock-side="top"],[data-dock-side="bottom"])[data-panel-open="true"]')['clip-path']).toBe('inset(-10px)');
+  });
   it('replaces a minimized panel with a restore icon in the top row', () => {
     const html = render(true);
     expect(html).toContain('aria-label="Minimized monitors"');

@@ -56,7 +56,7 @@ use zeroize::Zeroize;
 
 pub use fleet_link::{ConnectInfo, FleetAdmitted, FleetTarget, HelloBinding};
 pub use http::client;
-pub use org_records::LocalModel;
+pub use org_records::{LocalModel, RunnerSummary};
 pub use orgs::{HEARTBEAT, HostInfo, ModelFuture};
 
 pub const CHANNELS: &[&str] = &[
@@ -1582,7 +1582,7 @@ impl Cloud {
         Ok(())
     }
 
-    /// After a pull has read the account record (decision 0121): pull again from the start once if
+    /// After a pull has read the account record (decision 0122): pull again from the start once if
     /// this computer predates deflated records and the account has used them (true then), and list
     /// that this computer opens them. Listing it is a one-time write that never fails a pass.
     async fn compression_step(&self, token: &str) -> Result<bool, String> {

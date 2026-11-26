@@ -1,7 +1,7 @@
 //! Sealed records: the only thing Nekko Cloud stores for a synced chat.
 //!
 //! A blob is `version ‖ salt (32) ‖ AES-256-GCM ciphertext and tag`. Version 1
-//! seals the plaintext as it is. Version 2 (decision 0121) seals the raw
+//! seals the plaintext as it is. Version 2 (decision 0122) seals the raw
 //! deflate (RFC 1951) of the plaintext, and its associated data ends with
 //! [`DEFLATE_AAD`], so the version byte can't be flipped by the server: a
 //! version 2 blob does not open as version 1 or the other way round. The key and
@@ -238,7 +238,7 @@ pub(crate) fn inflate(deflated: &[u8]) -> Result<Vec<u8>, Error> {
 
 /// [`seal_record`] that deflates the plaintext first when that makes the sealed record smaller
 /// (a version 2 blob), and seals it as it is otherwise (version 1). Only for a record every
-/// device of the account can read (decision 0121): an older build does not open a version 2 blob.
+/// device of the account can read (decision 0122): an older build does not open a version 2 blob.
 pub fn seal_record_compressed(
     keyring: &Keyring,
     account_id: &str,

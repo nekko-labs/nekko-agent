@@ -1,4 +1,4 @@
-//! Deflated records and the account record's capabilities (decision 0121), against a stub Nekko
+//! Deflated records and the account record's capabilities (decision 0122), against a stub Nekko
 //! Cloud: this computer lists that it opens them (once), and an update from a build that could not
 //! reads the account again from the start when the account has used them.
 

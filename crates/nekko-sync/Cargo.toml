@@ -10,7 +10,7 @@ publish.workspace = true
 [dependencies]
 aes-gcm = "0.10"
 base64.workspace = true
-# Raw deflate (RFC 1951) for compressed records (decision 0121). MIT or Apache-2.0, pure Rust backend.
+# Raw deflate (RFC 1951) for compressed records (decision 0122). MIT or Apache-2.0, pure Rust backend.
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 getrandom.workspace = true
 hkdf = "0.12"

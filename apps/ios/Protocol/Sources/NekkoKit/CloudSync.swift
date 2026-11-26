@@ -108,7 +108,7 @@ public final class CloudSync {
         var cursor: Int64 = 0
         var revisions: [String: Int64] = [:]
         var waiting = false
-        /// This build can read deflated records (decision 0121) and has looked at the state it started from.
+        /// This build can read deflated records (decision 0122) and has looked at the state it started from.
         /// Optional so a state saved before this decodes.
         var zReady: Bool?
         /// An iPhone that was already syncing before it could read them pulls once from the start if the
@@ -546,7 +546,7 @@ public final class CloudSync {
         var epoch: UInt32
         var recoveryPublic: String
         var devices: [TrustedDevice]
-        /// A device has sealed a deflated record for this account (decision 0121).
+        /// A device has sealed a deflated record for this account (decision 0122).
         var compressed = false
 
         func trusts(_ id: String) -> Bool { devices.contains { $0.id == id } }

@@ -4,7 +4,7 @@ import Compression
 #endif
 
 /// Raw deflate (RFC 1951, no zlib header or checksum) for compressed sync records
-/// (decision 0121). Apple's `COMPRESSION_ZLIB` is raw deflate, the same stream
+/// (decision 0122). Apple's `COMPRESSION_ZLIB` is raw deflate, the same stream
 /// `flate2::DeflateEncoder` makes on the computer. The checksum is not needed:
 /// the record is authenticated by AES-GCM around it.
 ///
