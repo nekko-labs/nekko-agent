@@ -14,7 +14,7 @@ import { hasNotices, OpenSourceLicenses } from '../components/OpenSourceLicenses
 import { ThemePresetPicker } from '../components/ThemePresetPicker.js';
 import { pixelWaveFor } from '../components/PixelWaveBackground.js';
 import { DEFAULT_SPEC_METHODOLOGY, SPEC_METHODOLOGIES, ORCHESTRATION_STRATEGIES, DEFAULT_ORCHESTRATION, MAX_OUTPUT_TOKENS_RANGE, clampMaxOutputTokens, ONBOARDING_VERSION, updateChecks, DEFAULT_TURN_WRAPPER } from '@nekko-agent/shared';
-import { CloudIcon, GlobeIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, RobotIcon, UserIcon, WandIcon, WrenchIcon } from '../icons.js';
+import { ArchiveIcon, CloudIcon, GlobeIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, RobotIcon, UserIcon, WandIcon, WrenchIcon } from '../icons.js';
 import { VoiceSettings } from '../components/VoiceSettings.js';
 import { RemoteAccess } from '../components/RemoteAccess.js';
 import { ComputersSection } from '../components/ComputersSection.js';
@@ -40,7 +40,7 @@ import { ProjectManagementToggles, PullRequestToggles } from '../components/Work
 import { WallLayoutSettings } from './WallLayoutSettings.js';
 import { AnimationsSection, DesktopBehaviorSection, FunSection } from './DesktopBehaviorSections.js';
 import { SkillsColorIcon, ConnectorsColorIcon } from '../navIcons.js';
-import { HistorySettings } from '../components/HistorySettings.js';
+import { StorageSettings, formatBytes } from '../components/StorageSettings.js';
 import { DeleteEverythingDialog, wipeEverything } from '../components/DeleteEverythingDialog.js';
 import { StyleSection } from './StyleSection.js';
 import { openCustomize } from '../components/CustomizeExperience.js';
@@ -79,6 +79,7 @@ export const SETTINGS_GROUPS = [
   { id: 'customize', label: 'Appearance', icon: SlidersIcon, section: 'Nekko Agent' },
   { id: 'agents', label: 'Agents', icon: RobotIcon, section: 'Nekko Agent' },
   { id: 'tools', label: 'Tools', icon: WrenchIcon, section: 'Nekko Agent' },
+  { id: 'storage', label: 'Storage', icon: ArchiveIcon, section: 'Nekko Agent' },
   { id: 'safety', label: 'Safety', icon: ShieldIcon, section: 'Privacy and devices' },
   { id: 'connections', label: 'Connections', icon: GlobeIcon, section: 'Privacy and devices' },
   { id: 'phone', label: 'Phone and computers', icon: PhoneIcon, section: 'Privacy and devices' },
@@ -321,7 +322,9 @@ export function SettingsView() {
                 />
               </SettingsSection>
               <ErrorBoundary label="Voice settings"><VoiceSettings /></ErrorBoundary>
-              <ErrorBoundary label="Chat history"><HistorySettings openSync={() => goTo('cloud')} refreshSessions={() => useStore.getState().refreshSessions()} /></ErrorBoundary>
+              <SettingsSection id="chat-history" title="Chat history">
+                <SettingRow title="Chat history moved to Storage." detail="Its size and cleanup sit beside everything else Nekko keeps on this computer." control={<button type="button" className="btn btn-ghost py-1 text-xs" onClick={() => goTo('storage')}>Open Storage</button>} />
+              </SettingsSection>
               <section className="card mt-5 p-5" data-repo-folder>
                 <h2 className="font-semibold">Repositories folder</h2>
                 <p className="mt-1 text-xs text-ink-soft">Where a repository added to a chat is cloned when no copy is already on this computer. Repositories already added stay where they are.</p>
@@ -475,6 +478,9 @@ export function SettingsView() {
               <ErrorBoundary label="Terminal"><TerminalSection settings={settings} update={update} /></ErrorBoundary>
               <ErrorBoundary label="MCP servers"><McpSection settings={settings} update={update} reload={reload} /></ErrorBoundary>
               </AdvancedFold>
+            </SettingsGroup>
+            <SettingsGroup id="storage">
+              <ErrorBoundary label="Storage"><StorageSettings goTo={(g) => goTo(g as SettingsGroupId)} openView={(v) => useStore.getState().setView(v)} refreshSessions={() => useStore.getState().refreshSessions()} /></ErrorBoundary>
             </SettingsGroup>
             <SettingsGroup id="system">
               <ErrorBoundary label="Nekko Agent service"><ServiceManagement settings={settings} update={update} /></ErrorBoundary>
@@ -994,6 +1000,7 @@ export function WorktreeGroups({ worktrees, busy, onRemove }: { worktrees: ChatW
               w.branch ?? 'detached',
               w.dirtyCount ? `${w.dirtyCount} uncommitted` : 'clean',
               w.unmergedCount ? `${w.unmergedCount} unmerged commit${w.unmergedCount === 1 ? '' : 's'}` : 'no new commits',
+              w.bytes != null && formatBytes(w.bytes),
             ].filter(Boolean).join(' · ');
             return (
               <div key={w.root} className="quiet-row min-h-(--q-row) justify-between gap-4" data-quiet-row>
