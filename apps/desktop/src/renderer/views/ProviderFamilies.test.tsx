@@ -39,6 +39,15 @@ describe('provider families on the Models page', () => {
     expect(html.match(/data-provider-family=/g)).toHaveLength(2);
     expect(html).not.toContain('sk-never-render');
   });
+  it('starts each enabled family with a separately labeled, closed model list', () => {
+    const toggles = [...html.matchAll(/aria-expanded="false" aria-controls="([^"]+)" aria-label="(Claude|OpenAI) models"/g)];
+    expect(toggles.map(([, , family]) => family)).toEqual(['Claude', 'OpenAI']);
+    expect(toggles[0][1]).not.toBe(toggles[1][1]);
+    for (const [, id] of toggles) expect(html).toContain(`id="${id}" hidden=""`);
+    const disabled = renderToStaticMarkup(<ProviderFamilies providers={[{ ...providers[0], enabled: false }]} onAdd={() => {}} renderDetails={() => null} />);
+    expect(disabled).not.toContain('data-family-models');
+    expect(disabled).toContain('role="switch" aria-checked="false"');
+  });
   it('offers Add account per family, opening the setup that adds one there', () => {
     expect(html.match(/\+ Add account/g)).toHaveLength(2);
     expect(addKindFor({ id: 'claude', name: 'Claude', providers: [] })).toBe('anthropic');

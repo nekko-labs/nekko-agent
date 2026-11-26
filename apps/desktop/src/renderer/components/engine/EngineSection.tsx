@@ -187,7 +187,7 @@ export function EngineSection({
       <div className="min-w-0">
       {/* The header is the server's whole state: the dot and the Serving
           switch say whether it is up, the address is what other apps point
-          at, and Configure holds everything else. There used to be a
+          at, and Configure (beside the title) holds everything else. There used to be a
           "Running" row under it repeating the switch. */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2" data-model-server>
         <StatusDot running={running && installed} busy={busy !== null} />
@@ -198,9 +198,22 @@ export function EngineSection({
             <ChevronIcon className={`h-3.5 w-3.5 text-ink-faint transition-transform duration-150 ${serverOpen ? 'rotate-90' : ''}`} aria-hidden="true" />
           </button>
         </h2>
-        {installed && running && <AddressPill address={address} />}
+        <button
+          type="button"
+          className={`btn btn-ghost gap-2 text-xs ${configOpen ? 'text-accent' : ''}`}
+          aria-expanded={configOpen}
+          aria-controls="model-server-configure"
+          title="Server settings, runtimes and logs"
+          data-icon-hover
+          data-model-server-configure
+          onClick={() => setConfigOpen((o) => !o)}
+        >
+          <SettingsIcon className="h-4 w-4" />
+          Configure
+        </button>
         {!serverOpen && status.resident.length > 0 && <span className="text-xs text-ink-faint">{status.resident.length} loaded</span>}
         <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-2">
+          {installed && running && <AddressPill address={address} />}
           <ServerPowerSwitch
             running={running}
             busy={busy !== null}
@@ -219,19 +232,6 @@ export function EngineSection({
               label="Start the model server with Nekko"
             />
           </label>
-          <button
-            type="button"
-            className={`btn btn-ghost gap-2 text-xs ${configOpen ? 'text-accent' : ''}`}
-            aria-expanded={configOpen}
-            aria-controls="model-server-configure"
-            title="Server settings, runtimes and logs"
-            data-icon-hover
-            data-model-server-configure
-            onClick={() => setConfigOpen((o) => !o)}
-          >
-            <SettingsIcon className="h-4 w-4" />
-            Configure
-          </button>
         </div>
       </div>
 
