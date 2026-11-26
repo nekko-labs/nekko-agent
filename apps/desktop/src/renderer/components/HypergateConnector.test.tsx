@@ -13,6 +13,14 @@ const row = (phase: HypergatePhase, saved: boolean, info: HypergateInfo | null |
   );
 
 describe('the Hypergate row', () => {
+  it('carries the Nekko Labs tag in every phase', () => {
+    for (const phase of ['idle', 'missing', 'stopped'] as const) {
+      const html = row(phase, false, null);
+      expect(html).toContain('>Nekko Labs<');
+      expect(html).toContain('title="Made by Nekko Labs"');
+    }
+  });
+
   it('starts as one Connect button that checks first', () => {
     const html = row('idle', false, null);
     expect(html).toContain('>Connect<');

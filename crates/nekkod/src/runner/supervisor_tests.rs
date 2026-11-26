@@ -2049,3 +2049,28 @@ async fn the_build_reads_no_runner_vms_once_the_last_runner_is_gone() {
     assert_eq!(h.vm.live(), 0, "{:?}", h.log.lock().unwrap());
     assert_eq!(slot.runner_vms(), 0);
 }
+
+#[tokio::test(start_paused = true)]
+async fn picker_presence_names_full_repos_and_counts_only_vms_that_could_take_a_job() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 2)]);
+    h.sup.start().await;
+    h.tick_for(5).await;
+    let mut v = h.view();
+    v.repos = vec!["app".into(), "other/lib".into()];
+    let row = crate::runner::picker_row(&v);
+    assert_eq!(row["label"], "nekko-cloud-mac");
+    assert_eq!(row["repos"], json!(["acme/app", "other/lib"]));
+    assert_eq!(row["free"]["macos"], json!(v.available), "nothing is running yet");
+    // A running job holds its VM.
+    h.running().await;
+    let busy = h.view();
+    let row = crate::runner::picker_row(&busy);
+    assert_eq!(row["free"]["macos"], json!(busy.available - 1));
+    // A gate holding the runner, or the runner switched off, offers nothing.
+    let mut held = busy.clone();
+    held.reasons = vec![Reason::UserActive];
+    assert_eq!(crate::runner::picker_row(&held)["free"]["macos"], 0);
+    held.reasons.clear();
+    held.config.settings.enabled = false;
+    assert_eq!(crate::runner::picker_row(&held)["free"]["macos"], 0);
+}
