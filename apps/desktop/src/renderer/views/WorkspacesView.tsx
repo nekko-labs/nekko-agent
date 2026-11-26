@@ -636,7 +636,8 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     let cancelled = false;
     void prefetchSessionPrs(visiblePrIds.split('\0'), () => freshSessionPrs(useStore.getState().prsBySession, prReadAt.current),
       (id) => { prReadAt.current.set(id, Date.now()); return useStore.getState().refreshSessionPrs(id); },
-      prReadsInFlight.current, () => cancelled);
+      prReadsInFlight.current, () => cancelled,
+      (batch) => { const now = Date.now(); for (const id of batch) prReadAt.current.set(id, now); return useStore.getState().refreshSessionPrsMany(batch); });
     return () => { cancelled = true; };
   }, [sessions, visiblePrIds, prTick]);
 

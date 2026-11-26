@@ -58,6 +58,12 @@ public protocol ChatListCache: AnyObject {
     func load(_ computerId: String) -> SavedChatList?
     func save(_ computerId: String, _ list: SavedChatList)
     func remove(_ computerId: String)
+    /// Hand any write still waiting to the background queue now (the app is going to the background).
+    func flush()
+}
+
+extension ChatListCache {
+    public func flush() {}
 }
 
 /// The offline switches (*Keep the chat list when offline*, *Keep recent

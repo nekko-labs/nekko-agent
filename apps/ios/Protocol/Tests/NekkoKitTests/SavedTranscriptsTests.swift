@@ -4,21 +4,28 @@ import XCTest
 @testable import NekkoProtocol
 
 /// Saved chats in memory, per computer.
-@MainActor
-final class MemoryTranscriptCache: TranscriptCache {
-    var files: [String: Data] = [:]
-    var writes = 0
-    var wipes = 0
-    func load(_ computerId: String, _ name: String) -> Data? { files["\(computerId)/\(name)"] }
+final class MemoryTranscriptCache: TranscriptCache, @unchecked Sendable {
+    private let lock = NSLock()
+    private var store: [String: Data] = [:]
+    private var writeCount = 0
+    private var wipeCount = 0
+    var files: [String: Data] { lock.withLock { store } }
+    var writes: Int { lock.withLock { writeCount } }
+    var wipes: Int { lock.withLock { wipeCount } }
+    func load(_ computerId: String, _ name: String) -> Data? { lock.withLock { store["\(computerId)/\(name)"] } }
     func save(_ computerId: String, _ name: String, _ data: Data) {
-        writes += 1
-        files["\(computerId)/\(name)"] = data
+        lock.withLock {
+            writeCount += 1
+            store["\(computerId)/\(name)"] = data
+        }
     }
-    func removeFile(_ computerId: String, _ name: String) { files["\(computerId)/\(name)"] = nil }
-    func removeComputer(_ computerId: String) { files = files.filter { !$0.key.hasPrefix("\(computerId)/") } }
+    func removeFile(_ computerId: String, _ name: String) { lock.withLock { store["\(computerId)/\(name)"] = nil } }
+    func removeComputer(_ computerId: String) { lock.withLock { store = store.filter { !$0.key.hasPrefix("\(computerId)/") } } }
     func removeAll() {
-        wipes += 1
-        files = [:]
+        lock.withLock {
+            wipeCount += 1
+            store = [:]
+        }
     }
     /// The chat files of one computer (not its index).
     func chats(_ computerId: String) -> [String] {
@@ -67,6 +74,7 @@ final class SavedTranscriptsTests: XCTestCase {
         let files = MemoryTranscriptCache()
         let t = make(files)
         t.save(session("s", messages: 3, images: 2))
+        await t.flush()
         let raw = try XCTUnwrap(files.chats("pc").first.flatMap { files.files[$0] })
         let text = String(decoding: raw, as: UTF8.self)
         XCTAssertFalse(text.contains("base64"), "photo data is never written")
@@ -95,28 +103,33 @@ final class SavedTranscriptsTests: XCTestCase {
         ]
         let s = try XCTUnwrap(Session.from(raw))
         let files = MemoryTranscriptCache()
-        make(files).save(s)
+        let writer = make(files)
+        writer.save(s)
+        await writer.flush()
         let back = try XCTUnwrap(make(files).saved("s")).session
         XCTAssertEqual(back.messages, s.messages)
     }
 
-    func testTheLeastRecentlyOpenedGoesPastTheCount() {
+    func testTheLeastRecentlyOpenedGoesPastTheCount() async {
         let files = MemoryTranscriptCache()
         let t = make(files, maxChats: 3)
         for id in ["a", "b", "c"] { t.save(session(id)) }
+        await t.flush()
         t.touch("a")
         t.save(session("d"))
+        await t.flush()
         XCTAssertEqual(Set(t.chatIds), ["a", "c", "d"], "b was opened longest ago")
         XCTAssertNil(t.saved("b"))
         XCTAssertEqual(files.chats("pc").count, 3, "its file is gone too")
         XCTAssertEqual(make(files, maxChats: 3).chatIds, ["d", "a", "c"], "the order survives a restart")
     }
 
-    func testTheLeastRecentlyOpenedGoesPastTheByteCap() {
+    func testTheLeastRecentlyOpenedGoesPastTheByteCap() async {
         let files = MemoryTranscriptCache()
         let one = SavedTranscripts.encode(SavedTranscript(savedAt: 1, session: session("a", size: 2_000)), limit: .max)!.data.count
         let t = make(files, maxBytes: one * 2 + one / 2, maxChatBytes: one * 2)
         for id in ["a", "b", "c"] { t.save(session(id, size: 2_000)) }
+        await t.flush()
         XCTAssertEqual(t.chatIds, ["c", "b"])
         XCTAssertLessThanOrEqual(t.totalBytes, t.maxBytes)
         XCTAssertEqual(files.chats("pc").count, 2)
@@ -126,6 +139,7 @@ final class SavedTranscriptsTests: XCTestCase {
         let files = MemoryTranscriptCache()
         let t = make(files, maxChatBytes: 20_000)
         t.save(session("s", messages: 40, size: 1_000))
+        await t.flush()
         let back = try XCTUnwrap(t.saved("s")).session
         XCTAssertLessThan(back.messages.count, 40)
         XCTAssertEqual(back.messages.last?.id, "s-m39", "the newest message stays")
@@ -133,27 +147,113 @@ final class SavedTranscriptsTests: XCTestCase {
         XCTAssertLessThanOrEqual(t.totalBytes, 20_000)
         // One message bigger than a chat may be: no copy rather than a misleading part.
         t.save(session("s", messages: 1, size: 30_000))
+        await t.flush()
         XCTAssertNil(t.saved("s"))
         XCTAssertTrue(files.chats("pc").isEmpty)
     }
 
-    func testTheSameChatIsNotWrittenAgain() {
+    func testTheSameChatIsNotWrittenAgain() async {
         let files = MemoryTranscriptCache()
         let t = make(files)
         t.save(session("s"))
+        await t.flush()
         let writes = files.writes
         t.save(session("s"))
+        await t.flush()
         XCTAssertEqual(files.writes, writes + 1, "only the index (the order) is written")
         t.save(session("s", messages: 3))
-        XCTAssertEqual(files.writes, writes + 3)
+        await t.flush()
+        XCTAssertEqual(files.writes, writes + 3, "the chat and the index")
     }
 
-    func testRemoveAndKeepOnly() {
+    func testABurstOfSavesIsOneWrite() async {
+        let files = MemoryTranscriptCache()
+        let t = make(files)
+        for n in 1...12 { t.save(session("s", messages: n)) }
+        XCTAssertEqual(files.writes, 0, "nothing is written on the main thread, and not yet")
+        XCTAssertNil(t.saved("zzz"))
+        XCTAssertEqual(t.saved("s")?.session.messages.count, 12, "a read sees the newest copy before it is on disk")
+        await t.flush()
+        XCTAssertEqual(files.chats("pc").count, 1)
+        XCTAssertEqual(files.writes, 2, "one chat file and one index for twelve saves")
+        XCTAssertEqual(t.saved("s")?.session.messages.count, 12)
+        XCTAssertEqual(t.chatIds, ["s"])
+    }
+
+    func testAChatRemovedWhileItsWriteWaitsStaysGone() async {
+        let files = MemoryTranscriptCache()
+        let t = make(files)
+        t.save(session("a"))
+        t.save(session("b"))
+        t.remove("a")
+        await t.flush()
+        XCTAssertEqual(t.chatIds, ["b"])
+        XCTAssertEqual(files.chats("pc").count, 1)
+        XCTAssertNil(t.saved("a"))
+    }
+
+    func testSwitchingComputersKeepsWhatWasStillWaiting() async {
+        let files = MemoryTranscriptCache()
+        let t = make(files)
+        t.save(session("a"))
+        t.load("other")
+        XCTAssertTrue(t.chatIds.isEmpty)
+        t.load("pc")
+        XCTAssertEqual(t.chatIds, ["a"], "the first computer's save landed, in its index, before the switch")
+        XCTAssertNotNil(t.saved("a"))
+    }
+
+    func testAWipeDropsWhatWasStillWaiting() async {
+        let files = MemoryTranscriptCache()
+        let t = make(files)
+        t.save(session("a"))
+        t.wipeAll(files)
+        await t.flush()
+        XCTAssertTrue(files.files.isEmpty, "a queued save does not bring a wiped chat back")
+        XCTAssertTrue(t.chatIds.isEmpty)
+    }
+
+    /// The main thread's share of a save of a changed 300-message chat: file it away.
+    /// Recorded for perf-history; the sessions are built before the clock starts.
+    func testMeasureMainThreadCostOfASave() {
+        let sessions = (0..<5).map { session("s\($0)", messages: 300, size: 2_000) }
+        let options = XCTMeasureOptions()
+        options.iterationCount = 5
+        options.invocationOptions = [.manuallyStart, .manuallyStop]
+        measure(metrics: [XCTClockMetric()], options: options) {
+            let t = make(MemoryTranscriptCache())
+            startMeasuring()
+            for s in sessions { t.save(s) }
+            stopMeasuring()
+            let done = expectation(description: "flushed")
+            Task { @MainActor in await t.flush(); done.fulfill() }
+            wait(for: [done], timeout: 30)
+        }
+    }
+
+    /// The same chat saved again with nothing new (a reload after the turn ended).
+    func testMeasureMainThreadCostOfAnUnchangedSave() async {
+        let s = session("s", messages: 300, size: 2_000)
+        let t = make(MemoryTranscriptCache())
+        t.save(s)
+        await t.flush()
+        measure(metrics: [XCTClockMetric()]) { for _ in 0..<10 { t.save(s) } }
+    }
+
+    /// What it was: encode and hash the same chat on the main thread (the old `save`).
+    func testMeasureEncodeAndHashOfASave() {
+        let long = SavedTranscript(savedAt: 1, session: session("s", messages: 300, size: 2_000))
+        measure(metrics: [XCTClockMetric()]) { for _ in 0..<5 { _ = SavedTranscripts.encode(long, limit: 1024 * 1024) } }
+    }
+
+    func testRemoveAndKeepOnly() async {
         let files = MemoryTranscriptCache()
         let t = make(files)
         for id in ["a", "b", "c"] { t.save(session(id)) }
+        await t.flush()
         t.remove("a")
         t.keepOnly(["c", "zzz"])
+        await t.flush()
         XCTAssertEqual(t.chatIds, ["c"])
         XCTAssertEqual(files.chats("pc").count, 1)
     }
@@ -208,6 +308,7 @@ extension StoreTests {
         chat.start()
         await settle()
         XCTAssertNil(chat.savedAt)
+        await s.transcripts.flush()
         XCTAssertEqual(s.transcripts.chatIds, ["s1"])
         chat.stop()
 
@@ -252,13 +353,14 @@ extension StoreTests {
         chat.start()
         await settle()
         chat.stop()
+        await s.transcripts.flush()
         XCTAssertFalse(files.chats(id).isEmpty)
 
         s.forget(id)
         XCTAssertTrue(files.files.keys.allSatisfy { !$0.hasPrefix("\(id)/") }, "Forget deletes the computer's saved chats")
         XCTAssertTrue(s.transcripts.chatIds.isEmpty)
 
-        files.files["other/chat-1"] = Data("{}".utf8)
+        files.save("other", "chat-1", Data("{}".utf8))
         s.transcriptCache = nil
         XCTAssertEqual(files.wipes, 1)
         XCTAssertTrue(files.files.isEmpty, "off deletes the copies on every computer")
@@ -279,9 +381,11 @@ extension StoreTests {
             await settle()
             chat.stop()
         }
+        await s.transcripts.flush()
         XCTAssertEqual(Set(s.transcripts.chatIds), ["s1", "gone"])
         // The next full read of the list doesn't have "gone".
         await s.refresh()
+        await s.transcripts.flush()
         XCTAssertEqual(s.transcripts.chatIds, ["s1"])
         XCTAssertEqual(files.chats(id).count, 1)
         // Opening one the computer says is deleted drops its copy.
@@ -308,11 +412,13 @@ extension StoreTests {
         chat.start()
         await settle()
         chat.stop()
+        await s.transcripts.flush()
         XCTAssertTrue(s.transcripts.chatIds.isEmpty)
         // Turned on: the next answer is kept.
         let files = MemoryTranscriptCache()
         s.transcriptCache = files
         await chat.reload()
+        await s.transcripts.flush()
         XCTAssertEqual(s.transcripts.chatIds, ["s1"])
     }
 }

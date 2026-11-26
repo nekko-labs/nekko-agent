@@ -280,6 +280,8 @@ export const IpcChannels = {
   changeAcceptAll: 'changes:acceptAll',
 
   prSessionList: 'pr:sessionList',
+  /** `pr:sessionList` for several chats at once: `{ [chatId]: PrInfo[] }`. */
+  prSessionListMany: 'pr:sessionListMany',
   prDiff: 'pr:diff',
   prAction: 'pr:action',
   prContinueStack: 'pr:continueStack',
@@ -1219,6 +1221,8 @@ export interface NekkoApi {
 
   /** Live PR state for every GitHub PR URL referenced in a chat's transcript. */
   listSessionPrs(sessionId: string, force?: boolean): Promise<import('./pr.js').PrInfo[]>;
+  /** [`listSessionPrs`] for several of this computer's chats in one call (a board of cards), keyed by chat id. At most 64 chats. */
+  listSessionPrsMany(sessionIds: string[], force?: boolean): Promise<Record<string, import('./pr.js').PrInfo[]>>;
   /** A PR's changed files + patches (for the diff pane). */
   getPrDiff(url: string): Promise<import('./pr.js').PrDiff>;
   /** Approve / decline / merge / reopen a PR. Always user-initiated. */
