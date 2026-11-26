@@ -13,11 +13,12 @@ async function main() {
   // Nekko Cloud Relay (decision 0116): the public half of the Cloud API's ticket signing key.
   const ticketText = brandEnv('RELAY_TICKET_KEY');
   const ticketKey = ticketText ? parseTicketKey(ticketText) : undefined;
-  const { app } = buildRelay({ authzUrl, allowUnauthenticated, ticketKey });
+  const { app } = buildRelay({ authzUrl, allowUnauthenticated, ticketKey, presenceSecret: brandEnv('RELAY_PRESENCE_SECRET') || undefined });
   await app.listen({ port: PORT, host: HOST });
   console.log(`\n🐾 Nekko Agent relay listening on ws://${HOST}:${PORT}/relay`);
   console.log(`   access: ${authzUrl ? `gated (agents authorized via ${authzUrl})` : allowUnauthenticated ? 'WARNING: unauthenticated agent enrollment explicitly enabled' : 'agent enrollment disabled (set NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1 only for trusted deployments)'}`);
   console.log(`   Nekko Cloud Relay tickets: ${ticketKey ? 'checked (account channel on /account)' : 'off (set NEKKO_RELAY_TICKET_KEY)'}`);
+  console.log(`   internal presence (/presence): ${brandEnv('RELAY_PRESENCE_SECRET') ? 'on' : 'off (set NEKKO_RELAY_PRESENCE_SECRET)'}`);
   console.log(`   push: ${process.env.APNS_KEY_P8 || process.env.FCM_SERVICE_ACCOUNT ? 'configured (APNs/FCM)' : 'disabled (set APNS_* and/or FCM_SERVICE_ACCOUNT)'}\n`);
 }
 

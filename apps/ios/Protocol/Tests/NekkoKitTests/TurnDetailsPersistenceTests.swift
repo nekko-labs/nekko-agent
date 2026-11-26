@@ -17,7 +17,7 @@ struct TurnDetailsPersistenceTests {
     ]
 
     @Test("Metrics survive consented offline persistence, unknown metadata does not")
-    func savedRoundTrip() throws {
+    func savedRoundTrip() async throws {
         let files = MemoryTranscriptCache()
         let cache = SavedTranscripts()
         cache.use(files, computerId: "pc")
@@ -26,6 +26,7 @@ struct TurnDetailsPersistenceTests {
         let restored = try #require(cache.saved("s"))
         #expect(restored.session.messages == s.messages)
         #expect(restored.session.messages.last?.turnStats?.modelId == "used-model")
+        await cache.flush()
         let raw = files.files.values.map { String(decoding: $0, as: UTF8.self) }.joined()
         #expect(raw.contains("turnStats"))
         #expect(!raw.contains("NEVER-SAVE-THIS"))

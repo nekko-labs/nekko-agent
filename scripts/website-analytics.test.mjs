@@ -172,6 +172,8 @@ test('undecided visitors get equal reject and allow controls without loading Pos
   const page = runAnalytics();
   assert.equal(page.window.NekkoAnalytics.choice(), 'undecided');
   assert.equal(page.document.insertedScripts.length, 1, 'only the test anchor script exists');
+  assert.equal(page.root.querySelector('[data-privacy-copy]').textContent, 'We never sell or share this data for advertising.');
+  assert.equal(page.root.querySelector('[data-privacy-note]').hidden, true);
   const actions = page.root.querySelector('[data-privacy-actions]');
   assert.deepEqual(actions.children.map((button) => button.textContent), ['Reject analytics', 'Allow analytics']);
   assert.ok(actions.children.every((button) => button.className === 'privacy-choice'));

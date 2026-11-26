@@ -261,6 +261,7 @@
     var note = panel.querySelector('[data-privacy-note]');
     var actions = panel.querySelector('[data-privacy-actions]');
     var close = panel.querySelector('[data-privacy-close]');
+    note.hidden = choice === 'undecided';
     actions.textContent = '';
     close.hidden = choice === 'undecided' || choice === 'signal';
 
@@ -286,8 +287,8 @@
       manageButton.textContent = 'Privacy choices · analytics off';
     } else {
       title.textContent = 'Help us improve Nekko Agent?';
-      copy.textContent = 'If you allow analytics, PostHog will measure visits, button clicks and Core Web Vitals with a random session identity.';
-      note.textContent = 'Session recording is disabled. Rejecting will not change the site. We never sell or share this data for advertising.';
+      copy.textContent = 'We never sell or share this data for advertising.';
+      note.textContent = '';
       actions.appendChild(button('Reject analytics', function () { setChoice('rejected'); }));
       actions.appendChild(button('Allow analytics', function () { setChoice('accepted'); }));
       manageButton.textContent = 'Privacy choices';

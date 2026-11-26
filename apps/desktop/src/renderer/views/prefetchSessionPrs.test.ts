@@ -52,6 +52,34 @@ describe('visible sidebar PR prefetch', () => {
   });
 });
 
+describe('batched PR prefetch', () => {
+  it('reads the visible cards together, 24 to a request, skipping loaded and in-flight ones', async () => {
+    const loaded: Record<string, unknown> = { cached: [] };
+    const inFlight = new Map<string, Promise<void>>([['busy', Promise.resolve()]]);
+    const ids = ['', 'cached', 'busy', 's0', ...Array.from({ length: 29 }, (_, i) => `s${i + 1}`), 's0'];
+    const calls: string[][] = [];
+    await prefetchSessionPrs(ids, () => loaded, async () => { throw Error('not one by one'); }, inFlight, () => false, async (batch) => {
+      calls.push(batch);
+      expect([...batch].every((id) => inFlight.has(id))).toBe(true);
+    });
+    expect(calls.map((c) => c.length)).toEqual([24, 6]);
+    expect(calls.flat()).toEqual(Array.from({ length: 30 }, (_, i) => `s${i}`));
+    expect(inFlight.has('s0')).toBe(false);
+    expect(inFlight.size).toBe(1);
+  });
+
+  it('stops between requests when cancelled and releases a failed request', async () => {
+    let cancelled = false;
+    const inFlight = new Map<string, Promise<void>>();
+    const calls: string[][] = [];
+    await prefetchSessionPrs(Array.from({ length: 60 }, (_, i) => `s${i}`), () => ({}), async () => {}, inFlight, () => cancelled, async (batch) => {
+      calls.push(batch); cancelled = true; throw Error('unavailable');
+    });
+    expect(calls).toHaveLength(1);
+    expect(inFlight.size).toBe(0);
+  });
+});
+
 describe('agent cards re-read PRs that can still change', () => {
   const info = (state: 'open' | 'merged' | 'closed') => ({ url: 'u', owner: 'o', repo: 'r', number: 1, title: 't', state, isDraft: false, additions: 0, deletions: 0, changedFiles: 0, checks: 'none', source: 'gh' }) as PrInfo;
   it('treats final PRs and recently read open PRs as loaded, and drops stale open ones', () => {
