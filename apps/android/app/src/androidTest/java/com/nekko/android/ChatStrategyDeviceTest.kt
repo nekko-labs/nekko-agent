@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasText
@@ -43,16 +44,20 @@ class ChatStrategyDeviceTest {
         val rows = transcriptRows(messages.map { it.id to it }, true, false, emptySet(), strategies = mapOf("u1" to direct, "u2" to direct, "u3" to coordinator))
         compose.setContent {
             NekkoTheme(dark = false) {
-                Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     for (row in rows) when (row) {
                         is TranscriptRow.Strategy -> TurnStrategyRow(row.strategy)
-                        is TranscriptRow.Run -> (row.run as? PurposeRun.Single)?.let { BlockView(it.item.second) }
+                        is TranscriptRow.Run -> when (val run = row.run) {
+                            is PurposeRun.Single -> BlockView(run.item.second)
+                            is PurposeRun.Group -> run.items.forEach { BlockView(it.second) }
+                        }
                         else -> Unit
                     }
                 }
             }
         }
         compose.waitForIdle()
+        compose.onAllNodes(hasText("The ledgers agree with the audit totals.")).assertCountEquals(1)
         compose.onAllNodes(hasText("Strategy")).assertCountEquals(2)
         compose.onAllNodes(hasText("Tool list · Direct")).assertCountEquals(1)
         compose.onAllNodes(hasText("Code mode · Orchestration")).assertCountEquals(1)
