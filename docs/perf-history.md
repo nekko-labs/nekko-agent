@@ -137,6 +137,21 @@ Conditions: Apple M1 Max, macOS 27.2, Node v26.8.1, vitest 5.0.5 with jsdom, Rea
 | p95 per delta | 32.93, 34.35, 38.98, 36.95, 87.59 ms | 9.52, 11.03, 8.86, 10.41, 4.65 ms |
 
 Why: `ChatMarkdown` rebuilt its render context from `text` on every delta, so no finished `TextSegment` ever held its `React.memo`; the context now depends only on stable inputs and the verification evidence is kept by value. A unit test counts renders of a finished block across deltas (3 before, 1 after). Not measured: real-browser frame time and the Electron harness; the new long-reply probes in `scripts/perf` had not landed.
+## pr:sessionList reads PR URLs from the summaries, and a batch channel (2026-11-26)
+Area: engine daemon
+Result: improvement (the store read behind each call)
+Conditions: Apple M1 Max, macOS 27.2, release `nekko-store` test build, machine busy with other builds (load average 43 while measuring), so read the ratio only. Synthetic chats in a temp data dir: 500 small chats and one large one (2,000 messages of 10 KB text and 20 screenshots, a 20.1 MB file). `crates/nekko-store/tests/summaries_timing.rs`, `time_pr_session_list_on_a_large_chat` (ignored by default); median of 9 calls.
+
+| Metric | Before | After |
+|---|---|---|
+| Store read per `pr:sessionList` call, large chat | 21.29 ms (`get` of the whole chat, PR URLs collected from its transcript, then a list for the sub-agents' PRs) | 0.058 ms (`summary(id)`) |
+
+The "before" list call is the kept-list `summaries()` of the store after the previous change, which is faster than the one `pr:sessionList` called when this was written (see the entry below: 5.077 ms per find at 500 chats, 50.908 ms at 2,000), so the real before is higher than 21.29 ms.
+
+Why: `pr:sessionList` read, parsed and restored the pictures of the whole chat on every PR poll and prefetch only to collect PR URLs the summaries already hold (rolled up from sub-agent chats). It now reads them from `SessionStore::summary(id)`, and `pr:sessionListMany` answers for up to 64 chats in one call, which the board's PR prefetch and the cards' shared 20 s poll use. Source: this PR.
+
+Unmeasured: the call's end-to-end time over IPC with `gh` or the GitHub API in it (the PR state itself is cached per URL by the daemon as before), and the request count per minute with many cards on screen, before and after.
+
 ## Chat listings keep the file list and stop writing running chats (2026-11-26)
 Area: engine daemon
 Result: improvement (warm listing, one chat's summary, a listing while a chat runs)
