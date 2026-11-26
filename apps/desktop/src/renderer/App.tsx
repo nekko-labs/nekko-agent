@@ -8,7 +8,7 @@ import { startSessionSummaryRefresh } from './sessionSummaryRefresh.js';
 import { startAgentSubscription } from './agentSubscription.js';
 import { startDesktopNotifications } from './notifications.js';
 import { startCompactionStatus } from './compactionStatus.js';
-import { useT } from './i18n.js';
+import { useT, type MessageKey } from './i18n.js';
 import { SHORTCUTS } from './shortcuts.js';
 import { loadStartup } from './startupLoad.js';
 import { hasAppChrome } from './chrome.js';
@@ -64,7 +64,7 @@ import {
 // The nav rail's Agents cat is a plain silhouette: no eyes, so it reads as an icon beside the others rather than a face.
 const AgentCatIcon = (_p: { className?: string }) => <NekkoAvatar size={22} stationary eyes={false} />;
 
-const NAV: Array<{ view: View; labelKey: string; Icon: (p: { className?: string }) => React.JSX.Element }> = [
+const NAV: Array<{ view: View; labelKey: MessageKey; Icon: (p: { className?: string }) => React.JSX.Element }> = [
   { view: 'command', labelKey: 'nav.command', Icon: AgentCatIcon },
   { view: 'artifacts', labelKey: 'nav.artifacts', Icon: ArtifactsColorIcon },
   { view: 'skills', labelKey: 'nav.skills', Icon: SkillsColorIcon },
