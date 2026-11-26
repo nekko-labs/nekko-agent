@@ -11,8 +11,9 @@ app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const js = value => JSON.stringify(value).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
 const strict = process.env.NEKKO_MODELS_ASSERT === '1';
+const checkDisclosure = process.env.NEKKO_MODELS_DISCLOSURE === '1';
 const report = { captures: [], metrics: [], errors: [], assertions: [] };
-const assert = (value, label) => { report.assertions.push({ label, passed: !!value }); if (!value && strict) throw Error(label); };
+const assert = (value, label, required = strict) => { report.assertions.push({ label, passed: !!value }); if (!value && required) throw Error(label); };
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((d, done) => done({ cancel: !/^(file:|data:|blob:|devtools:)/.test(d.url) }));
   session.defaultSession.setPermissionRequestHandler((_w, _p, done) => done(false));
@@ -20,6 +21,15 @@ app.whenReady().then(async () => {
   win.on('focus', () => report.errors.push('took focus'));
   win.webContents.on('console-message', e => { if (e.level === 'error') report.errors.push(e.message.slice(0, 400)); });
   const run = source => win.webContents.executeJavaScript(source, true);
+  // Hidden macOS Electron can paint CSS animations without ticking their timeline.
+  const seekDisclosure = time => run(`(() => {
+    for (const el of document.querySelectorAll('[data-family-models]')) {
+      for (const animation of el.getAnimations({subtree:true})) {
+        animation.pause();
+        animation.currentTime = Math.min(${time}, animation.effect.getComputedTiming().endTime);
+      }
+    }
+  })()`);
   const shot = async name => { const file = path.join(out, name + '.png'); fs.writeFileSync(file, (await win.capturePage(undefined, { stayHidden: true, stayAwake: true })).toPNG()); report.captures.push(file); };
   const nav = async id => {
     await run(`(() => { const ids = ['cloud','local','library','connections']; const buttons = document.querySelectorAll('[aria-label="Models sections"] button'); buttons[ids.indexOf(${js(id)})]?.click(); })()`);
@@ -71,6 +81,31 @@ app.whenReady().then(async () => {
       assert(!metric.overflow && !metric.pageOverflow, 'no overflow at ' + width);
       assert(Math.abs(metric.scrollerRight - width) < 1, 'scrollbar at the window edge at ' + width);
       assert(metric.columns === (width === 1920 ? 3 : width === 1440 ? 2 : 1), 'responsive columns at ' + width);
+      if (checkDisclosure) {
+        const row = family => `[data-provider-family="${family}"] [data-family-models] button[aria-controls]`;
+        const claude = js(row('claude'));
+        assert(await run(`(() => {
+          const toggles = [...document.querySelectorAll('[data-family-models] button[aria-controls]')];
+          return toggles.length === 4 && toggles.every(b => b.getAttribute('aria-expanded') === 'false' && document.getElementById(b.getAttribute('aria-controls')).hidden && b.textContent === 'Models10') && !document.querySelector('[data-family-model]');
+        })()`), 'every provider starts collapsed with a visible model count at ' + width, true);
+        assert(await run(`(() => {
+          const b = document.querySelector('[data-account-row="claude"] button[aria-expanded]');
+          return b.getBoundingClientRect().height === 32 && !!document.querySelector('[data-account-row="claude"] [role="switch"]');
+        })()`), 'cloud account row is compact and keeps its switch at ' + width, true);
+        await run(`document.querySelector(${claude}).click()`);
+        await sleep(250);
+        assert(await run(`(() => {
+          const b = document.querySelector(${claude});
+          const panel = document.getElementById(b.getAttribute('aria-controls'));
+          return b.getAttribute('aria-expanded') === 'true' && !panel.hidden && panel.querySelectorAll('[data-family-model]').length === 10 && !!panel.querySelector('input') && !!panel.querySelector('button[aria-pressed]') && document.querySelector(${js(row('openai'))}).getAttribute('aria-expanded') === 'false';
+        })()`), 'expansion reveals only Claude models, including search and favorite controls, at ' + width, true);
+        if ([1440, 390].includes(width)) {
+          await seekDisclosure(200);
+          await shot('cloud-expanded-' + width);
+        }
+        await run(`document.querySelector(${claude}).click()`);
+        assert(await run(`document.querySelector(${claude}).getAttribute('aria-expanded') === 'false' && !document.querySelector('[data-family-model]')`), 'closing a provider hides its rows again at ' + width, true);
+      }
       if (width >= 1440) assert(metric.nav.y > 160 && metric.nav.height < 360, 'floating centre-left navigation at ' + width);
       for (const id of ['local','library','connections']) {
         await nav(id);
@@ -110,14 +145,19 @@ app.whenReady().then(async () => {
     await sleep(300);
     report.manual = await run(`(() => {const r=document.querySelector('.models-workspace');return {selected:document.querySelector('[aria-label="Models sections"] [aria-current]')?.textContent,scrollTop:r.scrollTop,height:r.clientHeight,total:r.scrollHeight,targets:[...r.querySelectorAll('[data-models-section]')].map(e=>({id:e.dataset.modelsSection,top:e.getBoundingClientRect().top})),rootTop:r.getBoundingClientRect().top};})()`);
     assert(report.manual.selected === 'Cloud providers', 'manual scrolling resumes section tracking');
-    // Record the real smooth-scroll journey as hidden renderer frames.
+    // Record the disclosure or the smooth-scroll journey as hidden renderer frames.
     const modules = process.env.NEKKO_TEST_MODULES || path.join(__dirname, '../../../node_modules');
     const { PNG } = require(path.join(modules, 'pngjs'));
     const { GifWriter } = require(path.join(modules, 'omggif'));
     const frames=[];
-    for (let i=0;i<20;i++) {
-      if (i===0 || i===10) await run(`document.querySelectorAll('[aria-label="Models sections"] button')[${i===0?3:0}].click()`);
-      await sleep(100);
+    for (let i=0;i<24;i++) {
+      if (checkDisclosure) {
+        if (i === 4 || i === 17) await run(`document.querySelector('[data-provider-family="claude"] [data-family-models] button[aria-controls]').click()`);
+      } else if (i===0 || i===10) {
+        await run(`document.querySelectorAll('[aria-label="Models sections"] button')[${i===0?3:0}].click()`);
+      }
+      await sleep(checkDisclosure ? 50 : 100);
+      if (checkDisclosure && i >= 4) await seekDisclosure((i - (i < 17 ? 4 : 17)) * 50);
       frames.push(PNG.sync.read((await win.capturePage(undefined,{stayHidden:true,stayAwake:true})).resize({width:960}).toPNG()));
     }
     const counts=new Map();
@@ -127,8 +167,9 @@ app.whenReady().then(async () => {
     while(colors.length<256) colors.push(0);
     const indices=new Map([...counts.keys()].map(k=>{const rgb=[(k>>10)*8,((k>>5)&31)*8,(k&31)*8];let best=0,distance=Infinity;colors.forEach((c,i)=>{const d=(rgb[0]-(c>>16))**2+(rgb[1]-((c>>8)&255))**2+(rgb[2]-(c&255))**2;if(d<distance){distance=d;best=i;}});return [k,best];}));
     const buffer=Buffer.alloc(20*1024*1024), gif=new GifWriter(buffer,frames[0].width,frames[0].height,{palette:colors,loop:0});
-    for(const f of frames){const pixels=new Uint8Array(f.width*f.height);for(let i=0;i<pixels.length;i++) pixels[i]=indices.get(key(f.data,i*4));gif.addFrame(0,0,f.width,f.height,pixels,{delay:10});}
-    fs.writeFileSync(path.join(out,'navigation.gif'),buffer.subarray(0,gif.end()));
+    for(const f of frames){const pixels=new Uint8Array(f.width*f.height);for(let i=0;i<pixels.length;i++) pixels[i]=indices.get(key(f.data,i*4));gif.addFrame(0,0,f.width,f.height,pixels,{delay:checkDisclosure ? 8 : 10});}
+    fs.writeFileSync(path.join(out, checkDisclosure ? 'cloud-disclosure.gif' : 'navigation.gif'),buffer.subarray(0,gif.end()));
+    if (checkDisclosure) assert(await run(`document.querySelector('[data-gentleface-icon="brain-circuit"] path')?.getAttribute('transform') === 'rotate(90 8 8)'`), 'Models rail glyph rotates clockwise', true);
     report.background={visible:win.isVisible(),focusable:win.isFocusable(),bounds:win.getBounds()};
     assert(!win.isVisible()&&!win.isFocusable(),'verification remains hidden and nonfocusable');
   } catch(e) {report.failed=true;report.errors.push(String(e.stack||e));}
