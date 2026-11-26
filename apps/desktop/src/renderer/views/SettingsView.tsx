@@ -27,7 +27,8 @@ import { GitHubStarSupport } from '../components/GitHubStarSupport.js';
 import { EXPERIMENTAL_FLAGS, saveSettings, SETTINGS_TARGET_EVENT, takeSettingsTarget } from '../settingsIndex.js';
 import { DelegationRouteSettings } from '../components/DelegationRouteSettings.js';
 import { PictureModelSettings } from '../components/PictureModelSettings.js';
-import { useT, LANGUAGES } from '../i18n.js';
+import { useT } from '../i18n.js';
+import { LanguagePicker } from '../components/LanguagePicker.js';
 import { loadWallState, saveWallState, toWallSetting } from '../commandWall.js';
 import { hasAppChrome } from '../chrome.js';
 import { ServiceLoadState } from '../components/ServiceLoadState.js';
@@ -247,7 +248,7 @@ export function SettingsView() {
                   aria-current={active === g.id ? 'page' : undefined}
                   onClick={() => goTo(g.id)}
                 >
-                  <g.icon className="h-4 w-4 shrink-0" />{g.id === 'phone' ? phoneLabel ?? g.label : g.label}
+                  <g.icon className="h-4 w-4 shrink-0" />{g.id === 'general' ? tr('settings.general') : g.id === 'phone' ? phoneLabel ?? g.label : g.label}
                 </button>
               </React.Fragment>
             );
@@ -274,7 +275,7 @@ export function SettingsView() {
               {/* Account first; Sync, Fleet management and the danger zone appear once signed in. */}
               <ErrorBoundary label="Nekko Cloud"><SyncSettings fleet={<ErrorBoundary label="Fleet management"><OrganizationSettings /></ErrorBoundary>} /></ErrorBoundary>
             </SettingsGroup>
-            <SettingsGroup id="general">
+            <SettingsGroup id="general" label={tr('settings.general')}>
               <ErrorBoundary label="Notifications"><NotificationsSection settings={settings} update={update} /></ErrorBoundary>
               <SettingsSection id="chats" title="Chats">
                 <SettingRow
@@ -304,23 +305,19 @@ export function SettingsView() {
                 <SettingRow title="Confirm deletions" control={<Toggle aria-label="Confirm deletions" on={settings.skipDeleteConfirmation !== true} onChange={(v) => update({ skipDeleteConfirmation: !v })} />} />
               </SettingsSection>
               <ErrorBoundary label="Desktop behavior"><DesktopBehaviorSection settings={settings} update={update} /></ErrorBoundary>
-              <SettingsSection id="language-and-help" title="Language and help">
+              <SettingsSection id="language-and-help" title={tr('settings.languageAndHelp')}>
                 <SettingRow
                   htmlFor="settings-language"
                   title={tr('settings.language')}
                   detail={tr('settings.languageHint')}
-                  control={
-                    <select id="settings-language" className="quiet-field w-[180px] py-1" value={settings.language ?? ''} onChange={(e) => update({ language: e.target.value || undefined })}>
-                      <option value="">{tr('settings.systemDefault')}</option>
-                      {LANGUAGES.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
-                    </select>
-                  }
+                  detailId="settings-language-hint"
+                  control={<LanguagePicker id="settings-language" describedBy="settings-language-hint" />}
                 />
-                <SettingRow title="Show tips" control={<Toggle aria-label="Show tips" on={settings.showTips !== false} onChange={(v) => update({ showTips: v })} />} />
+                <SettingRow title={tr('settings.showTips')} control={<Toggle aria-label={tr('settings.showTips')} data-testid="Show tips" on={settings.showTips !== false} onChange={(v) => update({ showTips: v })} />} />
                 <SettingRow
-                  title="Setup wizard"
-                  detail="Reopen the first-run walkthrough."
-                  control={<button className="btn btn-ghost py-1 text-xs" onClick={() => void replaySetup()}>Replay setup</button>}
+                  title={tr('settings.setupWizard')}
+                  detail={tr('settings.setupWizardHint')}
+                  control={<button className="btn btn-ghost py-1 text-xs" onClick={() => void replaySetup()}>{tr('settings.replaySetup')}</button>}
                 />
               </SettingsSection>
               <ErrorBoundary label="Voice settings"><VoiceSettings /></ErrorBoundary>
@@ -1336,8 +1333,8 @@ export function UpdatesSection({ settings, update }: { settings: AppSettings; up
  * `.quiet-switch`, the same look as `primitives/Toggle`, so Settings and
  * Automations draw the same slider.
  */
-export function Toggle({ on, onChange, ...aria }: { on: boolean; onChange: (v: boolean) => void } & Pick<React.AriaAttributes, 'aria-label' | 'aria-describedby'>) {
-  return <button type="button" role="switch" {...aria} aria-checked={on} className="quiet-switch" onClick={() => onChange(!on)} />;
+export function Toggle({ on, onChange, ...attrs }: { on: boolean; onChange: (v: boolean) => void; 'data-testid'?: string } & Pick<React.AriaAttributes, 'aria-label' | 'aria-describedby'>) {
+  return <button type="button" role="switch" {...attrs} aria-checked={on} className="quiet-switch" onClick={() => onChange(!on)} />;
 }
 
 /**

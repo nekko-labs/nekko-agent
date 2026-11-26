@@ -37,3 +37,11 @@ This fixes prompts such as `Nekko agent` + newline + `- Fix chat names` appearin
 ## Title style: short labels (2026-11-11)
 
 `[implemented]` Automatic titles are 2-4 word labels for what the chat is for, not a paraphrase of the prompt. When the request names an issue, PR or ticket, the title leads with it ("Issue #2391"). The model is told never to copy the opening words of the request. Applies to all three paths: the completion-sideband title request, Claude Code's in-turn `set_chat_title` note and tool description, and native turns' `set_chat_title` tool description and default turn wrapper (catalog.json, `DEFAULT_TURN_WRAPPER`). The 64-character cap is unchanged. Chats that cannot be auto-named still show the prompt-prefix placeholder (see limitations above); that placeholder follows the task-based rules above. Verified with the `nekko-turn` golden tests and the full `nekkod` daemon suite; live model output not checked.
+
+## A cut placeholder says so (2026-11-26)
+
+`[implemented]` A placeholder longer than the 48 UTF-16-unit budget ends in "…" (47 units of the prompt, trailing space trimmed, then "…"), so a one-line row shows there is more instead of stopping mid-sentence as though the prompt ended there. A prompt that fits is unchanged. Image chats' placeholders follow the same rule and are now whitespace-folded too.
+
+Saved chats are not rewritten. The sidebar card instead recognises an older cut title: one of at least 40 characters that is a strict prefix of the chat's first message (whitespace folded). It shows that title ending in "…" and its hover shows the first message, up to 600 characters. Titles the user or the model chose are not prefixes of the prompt (the model is told never to copy its opening words), so they are left alone. Only the desktop sidebar card does this; the phone and other title surfaces show the saved title as it is.
+
+Verified with `nekko-turn` unit and golden tests, the `cutTitle` unit tests, and the sidebar in a hidden Electron window (dark theme, status view, a chat group).

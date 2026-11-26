@@ -1,3 +1,4 @@
+import { useOnboardingT } from '../../onboardingMessages.js';
 import React, { useEffect, useState } from 'react';
 import type { AppSettings } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
@@ -16,6 +17,7 @@ export function WorkTrackingStep({
   /** Set to the step's commit action; the wizard runs it on Next. */
   commitRef?: React.MutableRefObject<(() => Promise<void | boolean>) | null>;
 } = {}) {
+  const t = useOnboardingT();
   const settings = useStore((s) => s.settings);
   const [pm, setPm] = useState<NonNullable<AppSettings['projectManagement']>>(() => ({
     createIssue: true,
@@ -45,7 +47,7 @@ export function WorkTrackingStep({
 
   return (
     <div className="w-full">
-      <h1 className="text-center text-2xl font-semibold tracking-tight">Track the work</h1>
+      <h1 className="text-center text-2xl font-semibold tracking-tight">{t('tracking')}</h1>
       <p className="mx-auto mt-2 max-w-md text-center text-sm text-ink-soft">
         When an agent chat opens a PR, it files an issue for the change first and links the PR to it. Choose what of yours goes in them. You can change this later in Settings.
       </p>

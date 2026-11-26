@@ -3,7 +3,6 @@ package com.nekko.android.data
 import com.nekko.protocol.ProtocolCheck
 import com.nekko.protocol.Activity
 import com.nekko.protocol.DenyReason
-import com.nekko.protocol.Appearance
 import com.nekko.protocol.ModelInfo
 import com.nekko.protocol.PublicProvider
 import com.nekko.protocol.RelayState
@@ -90,8 +89,6 @@ data class ComputersState(
     val defaults: RemoteDefaults = RemoteDefaults(),
     /** The computer's phone-settable settings (Settings → On <computer>); defaults until it answers. */
     val pcSettings: PcSettings = PcSettings(),
-    /** The connected computer's theme, for "Same as computer"; null until it has said. */
-    val appearance: Appearance? = null,
     val models: Map<String, List<ModelInfo>> = emptyMap(),
     /** Why a provider's models could not be listed, by provider id. */
     val modelErrors: Map<String, String> = emptyMap(),
