@@ -1,3 +1,4 @@
+import { useOnboardingT } from '../../onboardingMessages.js';
 import React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../../store.js';
@@ -8,22 +9,23 @@ import { SetupNekko } from './AboutYouSteps.js';
  * moves. Each card finishes the wizard and jumps straight to the thing.
  */
 export function DoneStep({ onFinish }: { onFinish: (after?: () => void) => void }) {
+  const t = useOnboardingT();
   const { newChat, setView, name } = useStore(useShallow((s) => ({ newChat: s.newChat, setView: s.setView, name: s.settings?.userName?.trim() })));
 
   const items: Array<{ title: string; desc: string; action: () => void }> = [
     {
-      title: 'Start your first chat',
-      desc: 'Open a new agent session in the Agent tab.',
+      title: t('doneChat'),
+      desc: t('doneChatHint'),
       action: () => void newChat(),
     },
     {
-      title: 'Connect a model provider',
-      desc: 'Bring a subscription, an API key, or a local server in Models.',
+      title: t('doneProvider'),
+      desc: t('doneProviderHint'),
       action: () => setView('models'),
     },
     {
-      title: 'Wire up your apps',
-      desc: 'Link GitHub, Slack, and more in Connectors.',
+      title: t('doneApps'),
+      desc: t('doneAppsHint'),
       action: () => setView('connectors'),
     },
   ];
@@ -31,9 +33,9 @@ export function DoneStep({ onFinish }: { onFinish: (after?: () => void) => void 
   return (
     <div className="w-full">
       <div className="flex justify-center"><SetupNekko size={72} happy /></div>
-      <h1 className="mt-4 text-center text-2xl font-semibold tracking-tight">{name ? `Nice to meet you, ${name}!` : "You're set"}</h1>
+      <h1 className="mt-4 text-center text-2xl font-semibold tracking-tight">{name ? t('doneNamed', { name }) : t('done')}</h1>
       <p className="mx-auto mt-2 max-w-md text-center text-sm leading-relaxed text-ink-soft">
-        Here are three things to try first. Pick one to jump right in, or hit Finish.
+        {t('doneHint')}
       </p>
       <div className="mt-6 grid gap-2">
         {items.map((item) => (
