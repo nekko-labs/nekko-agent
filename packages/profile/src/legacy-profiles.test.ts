@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, truncateSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -360,6 +360,33 @@ describe('CI runners and other data folders', () => {
     expect(json(join(env.target, 'runners', 'secrets.json'))).toEqual({ 'github-app-1': 'target key', 'github-app-2': 'other key' });
   });
 
+  it('counts an old runner file that names old paths as merged once its entries are rewritten into the target', () => {
+    const { env } = world(); const s = seed(env);
+    put(join(s.main, 'runners', 'mounts.json'), [{ path: join(s.main, 'runners', 'images', 'custom') }]);
+    expect(unmerged(s.main, env.target)).toContain('runners/mounts.json');
+
+    consolidate(detectLegacy(env), env);
+    expect(json(join(env.target, 'runners', 'mounts.json'))).toEqual([{ path: join(env.target, 'runners', 'images', 'custom') }]);
+    expect(unmerged(s.main, env.target)).not.toContain('runners/mounts.json');
+  });
+
+  it('counts no runners for a runner record file that does not parse', () => {
+    const { env } = world(); const s = seed(env);
+    put(join(s.main, 'runners', 'runners.json'), 'not json');
+
+    const report = consolidate(detectLegacy(env), env);
+    expect(readFileSync(join(env.target, 'runners', 'runners.json'), 'utf8')).toBe('not json');
+    expect(report.roots.find((r) => r.source === s.main)?.runners).toBe(0);
+  });
+
+  it('still reports a root JSON file it copied, even an empty one', () => {
+    const { env } = world(); const s = seed(env);
+    put(join(s.main, 'design.json'), {});
+
+    const report = consolidate(detectLegacy(env), env);
+    expect(report.roots.find((r) => r.source === s.main)?.files).toContain('design.json');
+  });
+
   it('does not keep an old folder for a runner VM log that clashes', () => {
     const { env } = world(); const s = seed(env);
     put(join(s.main, 'runners', 'logs', 'vm-1.log'), 'old console');
@@ -410,6 +437,17 @@ describe('what cleanup counts as merged', () => {
     } finally {
       chmodSync(join(s.main, 'skills', 'a', 'SKILL.md'), 0o600);
     }
+  });
+
+  // Sparse files: no disk is written. Identical bytes, yet too large to read at launch.
+  it.skipIf(process.platform === 'win32')('keeps an old folder holding a clashing file too large to compare', () => {
+    const { env } = world(); const s = seed(env);
+    const size = 256 * 1024 * 1024 + 1;
+    for (const root of [s.main, env.target]) {
+      put(join(root, 'sandboxes', 'box', 'disk.img'), '');
+      truncateSync(join(root, 'sandboxes', 'box', 'disk.img'), size);
+    }
+    expect(unmerged(s.main, env.target)).toContain('sandboxes/box/disk.img');
   });
 
   it('still compares model downloads by size', () => {

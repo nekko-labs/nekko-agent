@@ -330,12 +330,16 @@ const sameSize = (a: string, b: string): boolean => isFile(b) && statSync(a).siz
 
 const COMPARE_CHUNK = 1024 * 1024;
 
+/** Larger clashing files (VM disks, sandbox state) are not read: cleanup runs before the window opens. */
+const MAX_COMPARE_BYTES = 256 * 1024 * 1024;
+
 /**
  * `b` is a file with exactly the bytes of `a`. Read in chunks, so a large file
- * is never held whole. One that cannot be read is not the same.
+ * is never held whole. One that cannot be read, or is too large to read
+ * quickly, is not the same: the old folder is kept and names it.
  */
 function sameFile(a: string, b: string): boolean {
-  if (!sameSize(a, b)) return false;
+  if (!sameSize(a, b) || statSync(a).size > MAX_COMPARE_BYTES) return false;
   let fa: number | undefined, fb: number | undefined;
   try {
     fa = openSync(a, 'r');
@@ -357,11 +361,11 @@ function sameFile(a: string, b: string): boolean {
 
 /**
  * `dst` holds every entry of the JSON file `src`, as `mergeJsonFile` merges
- * them: array items by id, object keys at the top. A file that does not parse
- * is only covered by an identical one.
+ * them: array items by id, object keys at the top, after the same path
+ * rewrite. A file that does not parse is only covered by an identical one.
  */
-function jsonCovered(src: string, dst: string): boolean {
-  const a = readJson(src), b = readJson(dst);
+function jsonCovered(src: string, dst: string, pairs: Pairs, ci: boolean): boolean {
+  const a = remap(readJson(src), pairs, ci), b = readJson(dst);
   if (Array.isArray(a)) return Array.isArray(b) && a.every((x) => b.some((y) => itemKey(y) === itemKey(x)));
   if (isObj(a)) return isObj(b) && Object.keys(a).every((k) => Object.hasOwn(b, k));
   return sameFile(src, dst);
@@ -390,7 +394,7 @@ function mergeJsonFile(from: string, to: string, pairs: Pairs, ci: boolean): num
   if (!existsSync(to)) {
     copyJson(from, to, pairs, ci);
     const v = readJson(to);
-    return Array.isArray(v) ? v.length : isObj(v) ? Object.keys(v).length : 1;
+    return Array.isArray(v) ? v.length : isObj(v) ? Object.keys(v).length : 0;
   }
   const a = readJson(to), b = remap(readJson(from), pairs, ci);
   let added = 0;
@@ -588,7 +592,8 @@ function mergeRoot(src: string, target: string, ci: boolean): RootReport {
       if (e.name === 'usage.jsonl') report.usageRecords += added;
       if (added) report.files.push(e.name);
     } else if (e.name.endsWith('.json') && !SKIP_JSON.has(e.name)) {
-      if (mergeJsonFile(from, to, allPairs, ci)) report.files.push(e.name);
+      const had = existsSync(to);
+      if (mergeJsonFile(from, to, allPairs, ci) || !had) report.files.push(e.name);
     }
   }
 
@@ -691,7 +696,7 @@ function leftover(dir: string, rel: string, target: string, bySize = false): str
 }
 
 /** What in a root's `runners/` the target does not have yet. */
-function runnersLeft(src: string, target: string): string[] {
+function runnersLeft(src: string, target: string, pairs: Pairs, ci: boolean): string[] {
   const dst = join(target, 'runners');
   const missing: string[] = [];
   for (const e of dirEntries(src)) {
@@ -706,7 +711,7 @@ function runnersLeft(src: string, target: string): string[] {
       // The merge keeps the target's own unfinished setup and drops this one.
       if (!existsSync(to)) missing.push(rel);
     } else if (e.isFile() && e.name.endsWith('.json')) {
-      if (!jsonCovered(from, to)) missing.push(rel);
+      if (!jsonCovered(from, to, pairs, ci)) missing.push(rel);
     } else if (e.isDirectory()) {
       missing.push(...leftover(from, rel, target));
     } else if (e.isFile() && !sameFile(from, to)) {
@@ -719,9 +724,10 @@ function runnersLeft(src: string, target: string): string[] {
 /**
  * Files in a data root that the target does not already have. Empty means the
  * root is safe to delete. `otherRoots`: the item's other data roots, checked
- * on their own, so a folder that is one is not reported here.
+ * on their own, so a folder that is one is not reported here. `ci`: paths
+ * compare case-insensitively, as on Windows and macOS.
  */
-export function unmerged(root: string, target: string, otherRoots: string[] = []): string[] {
+export function unmerged(root: string, target: string, otherRoots: string[] = [], ci = process.platform === 'win32' || process.platform === 'darwin'): string[] {
   const missing: string[] = [];
   for (const e of dirEntries(root)) {
     const from = join(root, e.name), to = join(target, e.name);
@@ -740,7 +746,7 @@ export function unmerged(root: string, target: string, otherRoots: string[] = []
     } else if (e.isDirectory() && e.name === 'engine' && hasEngine(target)) {
       // A superseded engine build: the target downloaded its own, so nothing here is lost.
     } else if (e.isDirectory() && e.name === 'runners') {
-      missing.push(...runnersLeft(from, target));
+      missing.push(...runnersLeft(from, target, [[root, target]], ci));
     } else if (e.isDirectory() && (DISPOSABLE_DIRS.has(e.name) || CHROMIUM_DIRS.has(e.name))) {
       // Caches and running state: deleted with the old folder.
     } else if (e.isDirectory() && LEGACY_PROFILE_ENTRIES.has(e.name)) {
@@ -788,7 +794,7 @@ export function cleanup(items: LegacyItem[], env: LegacyEnv = legacyEnv(), opts:
   const ci = env.platform === 'win32' || env.platform === 'darwin';
   for (const item of items) {
     if (inside(item.path, env.target, ci) || inside(env.target, item.path, ci)) continue;
-    const left = item.dataRoots.filter((r) => !same(r, env.target, ci)).flatMap((r) => unmerged(r, env.target, item.dataRoots).map((f) => `${basename(r)}/${f}`));
+    const left = item.dataRoots.filter((r) => !same(r, env.target, ci)).flatMap((r) => unmerged(r, env.target, item.dataRoots, ci).map((f) => `${basename(r)}/${f}`));
     if (left.length) { report.kept.push({ path: item.path, reason: `${left.length} item(s) not yet in ${env.target}, e.g. ${left.slice(0, 3).join(', ')}` }); continue; }
     try {
       if (item.kind === 'install') (opts.uninstall ?? defaultUninstall)(item);
