@@ -1,3 +1,4 @@
+import { useOnboardingT } from '../../onboardingMessages.js';
 import React, { useEffect, useState } from 'react';
 import { TELEMETRY_PROMISES, telemetryChoice } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
@@ -13,6 +14,7 @@ export function HelpImproveStep({
   /** Set to the step's commit action; the wizard runs it on Next. */
   commitRef?: React.MutableRefObject<(() => Promise<void | boolean>) | null>;
 } = {}) {
+  const t = useOnboardingT();
   const settings = useStore((s) => s.settings);
   const [on, setOn] = useState(settings?.telemetry?.enabled === true);
 
@@ -30,7 +32,7 @@ export function HelpImproveStep({
 
   return (
     <div className="w-full">
-      <h1 className="text-center text-2xl font-semibold tracking-tight">Help improve Nekko Agent?</h1>
+      <h1 className="text-center text-2xl font-semibold tracking-tight">{t('help')}</h1>
       <p className="mx-auto mt-2 max-w-md text-center text-sm text-ink-soft">
         Optional. Anonymous reports of which features get used and what breaks help us fix bugs and decide what to build.
       </p>

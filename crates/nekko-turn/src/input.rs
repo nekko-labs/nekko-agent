@@ -99,7 +99,17 @@ fn placeholder_title(text: &str) -> String {
     } else {
         text
     };
-    js::slice16(js::trim(&js::fold_space(source)), 48).to_string()
+    cut_title(source)
+}
+
+/// At most 48 UTF-16 units on one line; a cut ends in "…" so the sidebar shows there is more.
+pub(crate) fn cut_title(text: &str) -> String {
+    let folded = js::fold_space(text);
+    let line = js::trim(&folded);
+    if js::len16(line) <= 48 {
+        return line.to_string();
+    }
+    format!("{}…", js::slice16(line, 47).trim_end())
 }
 
 /// `titlePrompt(messages)`: the title request, or `None` with nothing to name the chat from.
@@ -170,6 +180,15 @@ mod title_tests {
         assert_eq!(placeholder_title("  \n  "), "");
         assert_eq!(placeholder_title("Nekko agent"), "Nekko agent");
         assert!(placeholder_title(&"😺".repeat(100)).encode_utf16().count() <= 48);
+    }
+
+    #[test]
+    fn a_cut_placeholder_says_there_is_more() {
+        let long = "these side icons are miss aligned from how they look in the other panel";
+        assert_eq!(placeholder_title(long), "these side icons are miss aligned from how they…");
+        assert!(placeholder_title(long).encode_utf16().count() <= 48);
+        let exact = "a".repeat(48);
+        assert_eq!(placeholder_title(&exact), exact, "a title that fits is not marked");
     }
 
     #[test]

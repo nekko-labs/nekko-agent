@@ -1,3 +1,4 @@
+import { useOnboardingT } from '../../onboardingMessages.js';
 import React, { useEffect, useId, useState } from 'react';
 import { useStore } from '../../store.js';
 import { useExpertMode, useSimpleChoices } from '../../simpleMode.js';
@@ -148,6 +149,7 @@ export function DetailChoices({ level, onChange, recommended }: { level: DetailL
  * closes the Monitors panel in both modes.
  */
 export function DetailStep({ commitRef }: { commitRef: CommitRef }) {
+  const t = useOnboardingT();
   const profile = useStore((s) => s.settings?.workProfile);
   const [expert, setExpert] = useExpertMode();
   const [choices, setChoice] = useSimpleChoices();
@@ -174,8 +176,8 @@ export function DetailStep({ commitRef }: { commitRef: CommitRef }) {
   return (
     <div className="flex w-full items-center gap-8">
       <div className="flex w-80 shrink-0 flex-col">
-        <h1 id="setup-detail" className="text-2xl font-semibold tracking-tight">How much detail do you like?</h1>
-        <p className="mt-2 text-sm text-ink-soft">Same answer, three ways. Try each one.</p>
+        <h1 id="setup-detail" className="text-2xl font-semibold tracking-tight">{t('detail')}</h1>
+        <p className="mt-2 text-sm text-ink-soft">{t('detailHint')}</p>
         <div className="mt-5"><DetailChoices level={level} onChange={next => { setLevel(next); setMonitorsPick(null); }} recommended={profile ? recommended : undefined} /></div>
         <label className="mt-4 flex items-center gap-3 border-t border-line pt-4">
           <span className="flex-1">

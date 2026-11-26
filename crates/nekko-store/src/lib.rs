@@ -14,6 +14,7 @@ pub mod blobs;
 pub mod client_ids;
 pub mod finder;
 pub mod meta;
+mod meta_event;
 mod phase;
 pub mod pr;
 mod review;
@@ -92,6 +93,9 @@ pub struct SessionStore {
     holds: std::sync::atomic::AtomicU64,
     /// Each chat's finder view, valid while its file stands as it did ([`finder`]).
     finder: Mutex<finder::ViewCache>,
+    /// The small fields a `session_meta` event carries, as of each chat's last
+    /// write here ([`meta_event`]).
+    meta_fields: Mutex<HashMap<String, Value>>,
 }
 
 /// Session ids are `s_<time>_<random>` (base36 and base64url). Anything else
@@ -182,6 +186,7 @@ impl SessionStore {
             index: Mutex::new(Index::default()),
             rescan: RESCAN_EVERY,
             holds: std::sync::atomic::AtomicU64::new(0),
+            meta_fields: Mutex::new(HashMap::new()),
             all: RwLock::new(()),
             chats: Mutex::new(HashMap::new()),
             deferred: Mutex::new(HashMap::new()),
