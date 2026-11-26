@@ -69,10 +69,21 @@ fun Pill(label: String, tone: Tone, icon: ImageVector? = null) {
     }
 }
 
+/**
+ * Set by Settings for the quiet design (#2940, the iPhone's #2929): cards become plain groups,
+ * with no surface or rule, told apart by their label. A card given its own [NCard] border
+ * (a warning) stays a card.
+ */
+val LocalQuietCards = androidx.compose.runtime.staticCompositionLocalOf { false }
+
 /** A bordered surface card, the Expo kit's `Card`. */
 @Composable
 fun NCard(modifier: Modifier = Modifier, border: Color? = null, content: @Composable ColumnScope.() -> Unit) {
     val p = Nekko.palette
+    if (LocalQuietCards.current && border == null) {
+        Column(modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
+        return
+    }
     Column(
         modifier
             .fillMaxWidth()

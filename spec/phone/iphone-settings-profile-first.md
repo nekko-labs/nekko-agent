@@ -22,3 +22,12 @@ Philip (2026-11-17, from app 0.10.1005): reorganise Settings like Apple's own Se
 ## Status
 
 Unverified on a device: the build, Dynamic Type, VoiceOver, light and dark. Not moved yet: the inner pages (Computers list, Cloud, Customize) keep their older grouped style. The Computers list keeps its older rows. Screenshots need `node scripts/ios-evidence-local.mjs` on a Mac. Android: [#2940](https://github.com/nekko-labs/nekko-agent/issues/2940).
+
+## Android (#2940)
+
+`[implemented 2026-11-26 on Android, without the profile; JVM tests and lint pass; not yet seen on an emulator or a phone]`
+
+- **Computers** opens Settings: each paired computer as an avatar row (its icon, a dot for whether it can be reached, its name, "Online · Internet relay") opening its page, **Add a computer** (plus) for pairing, and **Manage computers** for the list. Open at launch stays under New chats, where Android already had it.
+- **Models on This phone** comes second: each of the phone's providers as an avatar row with its mark (off and failing ones say so), and **Add a provider** (plus). Both open the phone's providers; Add opens the add form straight away. Android has no page per provider yet.
+- The whole screen is quiet: cards become plain groups told apart by their label; a card with its own warning border stays a card.
+- **Not yet: the profile row.** Android has no Nekko Cloud sign-in ([#2835](https://github.com/nekko-labs/nekko-agent/issues/2835)); the row goes on top once it does.
