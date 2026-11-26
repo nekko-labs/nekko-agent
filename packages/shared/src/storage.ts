@@ -21,3 +21,21 @@ export interface StorageUsage {
   /** Each worktree's size from the last walk, by root. */
   worktreeBytes: Record<string, number>;
 }
+
+/** Why "Remove idle worktrees" keeps a worktree (decision 0121). */
+export type KeptReason = 'recent' | 'dirty' | 'unpushed' | 'running' | 'locked' | 'open';
+
+export interface IdleWorktree {
+  root: string;
+  projectName?: string;
+  branch?: string | null;
+  head: string;
+  /** From the last measurement; `null` when not measured yet. */
+  bytes: number | null;
+  /** Every commit is on a remote, or its branch's PR merged at this head. */
+  reason: 'pushed' | 'merged';
+}
+
+export interface IdlePreview { idle: IdleWorktree[]; kept: Partial<Record<KeptReason, number>> }
+
+export interface RemoveWorktreesResult { removed: string[]; freed: number; failed: { root: string; error: string }[] }

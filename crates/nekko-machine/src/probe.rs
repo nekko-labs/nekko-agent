@@ -466,3 +466,15 @@ async fn backends() -> Vec<String> {
     let vk = run_ok("vulkaninfo", &["--summary"], Duration::from_secs(4)).await;
     parse::gpu_backends(smi.as_deref(), vk.as_deref())
 }
+
+/// Every process's working directory this user can read, canonical.
+pub fn process_cwds() -> Vec<std::path::PathBuf> {
+    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+    let mut sys = System::new();
+    sys.refresh_processes_specifics(
+        ProcessesToUpdate::All,
+        true,
+        ProcessRefreshKind::nothing().with_cwd(UpdateKind::Always),
+    );
+    sys.processes().values().filter_map(|p| p.cwd()).filter_map(|d| std::fs::canonicalize(d).ok()).collect()
+}

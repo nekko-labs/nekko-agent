@@ -38,3 +38,63 @@ async fn measures_each_category_in_the_background() {
     drop(d);
     std::fs::remove_dir_all(data).ok();
 }
+
+fn git(dir: &std::path::Path, args: &[&str]) -> String {
+    let out = std::process::Command::new("git").args(args).current_dir(dir).output().unwrap();
+    assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+    String::from_utf8_lossy(&out.stdout).into_owned()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn removes_idle_worktrees_and_keeps_their_branches() {
+    let base = std::env::temp_dir().join(format!("nekkod-storage-wt-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let (data, repo) = (base.join("data"), base.join("repo"));
+    std::fs::create_dir_all(&data).unwrap();
+    std::fs::create_dir_all(&repo).unwrap();
+    for args in [
+        &["init", "-q"][..],
+        &["config", "user.email", "t@example.com"],
+        &["config", "user.name", "T"],
+        &["config", "commit.gpgsign", "false"],
+        &["commit", "-q", "--allow-empty", "-m", "init"],
+    ] {
+        git(&repo, args);
+    }
+    let (idle, busy) = (repo.join(".worktrees/idle"), repo.join(".worktrees/busy"));
+    git(&repo, &["worktree", "add", "-q", "-b", "idle", idle.to_str().unwrap()]);
+    git(&repo, &["worktree", "add", "-q", "-b", "busy", busy.to_str().unwrap()]);
+    git(&repo, &["update-ref", "refs/remotes/origin/idle", "idle"]);
+    git(&repo, &["update-ref", "refs/remotes/origin/busy", "busy"]);
+    // Only `idle` has been quiet for 73 hours.
+    let then = std::time::SystemTime::now() - std::time::Duration::from_secs(73 * 3600);
+    let gitdir = git(&idle, &["rev-parse", "--absolute-git-dir"]);
+    for p in ["HEAD", "index", "logs/HEAD"]
+        .map(|f| std::path::Path::new(gitdir.trim()).join(f))
+        .into_iter()
+        .chain([idle.clone()])
+    {
+        std::fs::File::open(p).unwrap().set_modified(then).unwrap();
+    }
+    let d = start_with(&data);
+    let ws = json!({ "workspaces": [{ "id": "w1", "name": "project", "path": repo.to_string_lossy(), "addedAt": 1 }] });
+    assert_eq!(post(d.port, "settings:update", json!([ws]), Some(TOKEN)).await.0, 200);
+
+    let (status, preview) = post(d.port, "storage:idleWorktrees", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{preview}");
+    let roots: Vec<&str> = preview["idle"].as_array().unwrap().iter().filter_map(|w| w["root"].as_str()).collect();
+    assert_eq!(roots.len(), 1, "{preview}");
+    assert!(roots[0].ends_with("idle"), "{preview}");
+    assert_eq!(preview["idle"][0]["reason"], "pushed");
+    assert_eq!(preview["kept"]["recent"], 1, "{preview}");
+
+    let busy_root = busy.to_string_lossy().into_owned();
+    let (status, done) = post(d.port, "storage:removeWorktrees", json!([[roots[0], busy_root]]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{done}");
+    assert_eq!(done["removed"].as_array().map(Vec::len), Some(1), "{done}");
+    assert_eq!(done["failed"][0]["error"], "It was used in the last 3 days.", "{done}");
+    assert!(!idle.exists() && busy.exists());
+    assert_eq!(git(&repo, &["branch", "--list", "idle"]).trim(), "idle");
+    drop(d);
+    std::fs::remove_dir_all(base).ok();
+}

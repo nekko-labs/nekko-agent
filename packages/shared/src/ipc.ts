@@ -254,6 +254,8 @@ export const IpcChannels = {
   chatWorktreesRemove: 'chatWorktrees:remove',
   storageUsage: 'storage:usage',
   storageDisk: 'storage:disk',
+  storageIdleWorktrees: 'storage:idleWorktrees',
+  storageRemoveWorktrees: 'storage:removeWorktrees',
 
   fileRead: 'file:read',
   fileWrite: 'file:write',
@@ -1161,6 +1163,10 @@ export interface NekkoApi {
   getStorageUsage(refresh?: boolean): Promise<import('./storage.js').StorageUsage>;
   /** Total and free bytes of the data folder's volume; no folder walk. */
   getDiskSpace(): Promise<import('./storage.js').DiskSpace | null>;
+  /** What "Remove idle worktrees" would remove (clean, quiet 3 days, fully pushed or merged), and what it keeps. */
+  previewIdleWorktrees(): Promise<import('./storage.js').IdlePreview>;
+  /** Remove these worktrees, each checked again first; branches are always kept. */
+  removeWorktrees(roots: string[]): Promise<import('./storage.js').RemoveWorktreesResult>;
 
   /** Read a file as text (for the in-app viewer/editor). */
   readFile(path: string): Promise<FileContent>;

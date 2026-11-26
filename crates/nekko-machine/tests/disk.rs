@@ -12,3 +12,9 @@ fn disk_space_reads_total_and_free() {
 fn disk_space_of_a_missing_path_is_none() {
     assert_eq!(nekko_machine::probe::disk_space(std::path::Path::new("/no/such/nekko/path")), None);
 }
+
+#[test]
+fn process_cwds_include_this_process() {
+    let here = std::fs::canonicalize(std::env::current_dir().unwrap()).unwrap();
+    assert!(nekko_machine::probe::process_cwds().contains(&here));
+}

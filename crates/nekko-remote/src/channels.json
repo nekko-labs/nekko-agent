@@ -270,6 +270,8 @@
  "ssh:hosts",
  "ssh:open",
  "storage:disk",
+ "storage:idleWorktrees",
+ "storage:removeWorktrees",
  "storage:usage",
  "sync:approve",
  "sync:confirmRecoveryKey",
