@@ -29,6 +29,9 @@ app.whenReady().then(async () => {
     await sleep(900);
     await run(`(() => { const w = document.querySelector('.models-workspace'); const t = document.querySelector('[data-models-section=' + ${js(section)} + ']'); w.scrollTo({ top: w.scrollTop + t.getBoundingClientRect().top - w.getBoundingClientRect().top, behavior: 'instant' }); })()`);
     await sleep(450);
+    // A hidden window can hand back the frame from before the scroll: ask for one, then take the next.
+    await win.capturePage(undefined, { stayHidden: true });
+    await sleep(150);
     const file = path.join(out, `${name}.png`);
     fs.writeFileSync(file, (await win.capturePage(undefined, { stayHidden: true })).toPNG());
     report.captures.push(file);
@@ -63,9 +66,12 @@ app.whenReady().then(async () => {
       await sleep(600);
       await capture('mac-open-dark', 1280, 1100, 'dark');
       await capture('mac-open-narrow-dark', 390, 1100, 'dark', 'engines');
+      // Light: the page is mounted again in the theme, since a hidden window leaves colour transitions half way.
+      const themed = async (theme) => { await run(`fixture.theme(${js(theme)}); fixture.remount()`); await wait(`!!${ENGINES} && !${ENGINES}.open`); await run(`${ENGINES}.open = true`); await wait(`!!${row('squid5090')}`); };
+      await themed('light');
       await capture('mac-open-light', 1280, 1100, 'light');
       await capture('mac-open-narrow-light', 390, 1100, 'light', 'engines');
-      await run("fixture.theme('dark')");
+      await themed('dark');
       // Choosing another installed engine.
       await run(`[...${row('llama')}.querySelectorAll('button')].find(b => b.textContent === 'Use').click()`);
       await check('Use puts llama.cpp in use and saves the choice', `${row('llama')}.dataset.engineState === 'in-use' && ${row('mlx')}.dataset.engineState === 'installed' && JSON.stringify(fixture.saves()) === '[{"chatEngine":"llama"}]'`);

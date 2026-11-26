@@ -67,10 +67,13 @@ const bridge = {
 };
 Object.assign(window, { nekko: new Proxy(bridge, { get(t, k: string) { if (k in t) return Reflect.get(t, k); if (k.startsWith('on')) return () => () => {}; return () => Promise.resolve(null); } }) });
 const root = createRoot(document.getElementById('root')!);
-const mount = () => { useStore.setState({ settings: { ...saved }, view: 'models', activeModelId: 'cloud-fixture' }); root.render(<ModelsWorkspace key={machine} />); };
+let mounts = 0;
+const mount = () => { useStore.setState((state) => ({ settings: { ...saved, theme: state.settings?.theme, themePreset: state.settings?.themePreset }, view: 'models', activeModelId: 'cloud-fixture' })); root.render(<ModelsWorkspace key={`${machine}-${mounts++}`} />); };
 Object.assign(window, { fixture: {
   machine: (name: string) => { machine = name; chosen = undefined; mount(); },
   saves: () => saves,
+  // A fresh page in the current theme: a hidden window does not finish a theme's colour transitions.
+  remount: () => mount(),
   theme: (theme: 'dark' | 'light') => { useStore.setState(state => ({ settings: { ...state.settings!, theme, themePreset: theme === 'dark' ? 'x-plum-dark' : 'x-plum-white' } })); useStore.getState().applyTheme(); },
 } });
 mount();
