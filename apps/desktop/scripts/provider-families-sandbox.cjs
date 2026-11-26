@@ -45,7 +45,9 @@ app.whenReady().then(async () => {
       check('one login row for the shared email', await run('document.querySelectorAll("[data-provider-family=\\"claude\\"] [data-login-row]").length === 1 && document.querySelector("[data-login=\\"alex@example.test\\"]").querySelectorAll("[data-account-row]").length === 2'));
       check('each account says which it is', await run('document.querySelector("[data-login]").innerText.includes("Personal plan · Max") && document.querySelector("[data-login]").innerText.includes("Organization · Team")'));
       check('family summary leaves the email to the login row', await run('!document.querySelector("[data-provider-family=\\"claude\\"] [data-family-summary]").textContent.includes("alex@example.test")'));
+      await run('document.querySelector("[data-family-models] button[aria-controls]").click()');
       check('Opus lists both subscription accounts', await run('document.querySelector("[data-family-model=\\"opus\\"]").innerText.includes("Personal · Acme Inc")'));
+      await run('document.querySelector("[data-family-models] button[aria-controls]").click()');
       check('no card inside the family', await run('!document.querySelector("[data-provider-families] .card")'));
       await run('document.querySelector("[data-account-row=\\"acme\\"] button[aria-expanded]").click()');
       await sleep(500);
