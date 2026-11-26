@@ -18,7 +18,6 @@ app.whenReady().then(async () => {
   win.on('show', () => report.errors.push('Window became visible'));
   win.webContents.on('console-message', e => { if (e.level === 'error') report.errors.push(e.message.slice(0, 300)); });
   const run = code => win.webContents.executeJavaScript(code, true);
-  const click = label => run(`(() => { const b = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === ${JSON.stringify(label)}); if (b) b.click(); return !!b; })()`);
   const shot = async name => {
     await sleep(500);
     for (let i = 0; i < 2; i++) { win.webContents.invalidate(); await sleep(400); await win.capturePage(undefined, { stayHidden: true }); }
@@ -28,7 +27,11 @@ app.whenReady().then(async () => {
   try {
     await win.loadFile(path.join(out, 'index.html'));
     await sleep(1200);
-    await click('Add a computer');
+    await run(`(() => {
+      const button = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Add a computer');
+      if (!button) throw new Error('Add a computer button not found');
+      button.click();
+    })()`);
     const list = await shot('lobby-nearby');
     report.checks.push({ name: 'Add a computer lists Studio on this network', pass: /On this network/.test(list) && /Studio/.test(list) });
     await run(`document.querySelector('[data-nearby] li button').click()`);
