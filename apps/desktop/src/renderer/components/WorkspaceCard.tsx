@@ -173,6 +173,8 @@ function WorkspaceCardImpl({
   now,
   projects,
   subAgentCount = 0,
+  subagentsHidden = false,
+  onToggleSubagents,
   showMetadata = true,
   showModel = true,
   showContext = true,
@@ -202,6 +204,10 @@ function WorkspaceCardImpl({
   projects: WorkspaceFolder[];
   /** How many sub-agents this chat has spawned. */
   subAgentCount?: number;
+  /** The sub-agent tree under the card is folded away. */
+  subagentsHidden?: boolean;
+  /** Fold or unfold that tree; absent, the count is plain text. */
+  onToggleSubagents?: () => void;
   /** The lines under the title; off, the card is its title row alone. */
   showMetadata?: boolean;
   showModel?: boolean;
@@ -444,7 +450,21 @@ function WorkspaceCardImpl({
           card for a plain one-window chat should not carry an empty row. */}
       {spawnLine && (
         <div className="flex items-center gap-1 pl-3 text-2xs leading-[15px] text-ink-faint">
-          {showSubagents && subAgentCount > 0 && (
+          {showSubagents && subAgentCount > 0 && (onToggleSubagents ? (
+            <button
+              type="button"
+              data-subagent-fold
+              aria-expanded={!subagentsHidden}
+              className="-mx-1 inline-flex shrink-0 items-center rounded px-1 hover:bg-surface-2"
+              title={subagentsHidden ? "Show this chat's sub-agents" : "Hide this chat's sub-agents"}
+              onClick={(e) => { e.stopPropagation(); onToggleSubagents(); }}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              <Fact tone="var(--accent-2)" icon={<RobotIcon className="h-2.5 w-2.5 shrink-0" />}>
+                {subAgentCount} sub-agent{subAgentCount === 1 ? '' : 's'}
+              </Fact>
+            </button>
+          ) : (
             <Fact
               tone="var(--accent-2)"
               icon={<RobotIcon className="h-2.5 w-2.5 shrink-0" />}
@@ -452,7 +472,7 @@ function WorkspaceCardImpl({
             >
               {subAgentCount} sub-agent{subAgentCount === 1 ? '' : 's'}
             </Fact>
-          )}
+          ))}
           {showWindows && windows > 1 && <span className="shrink-0">{windows} windows</span>}
           {prChip('spawn')}
         </div>

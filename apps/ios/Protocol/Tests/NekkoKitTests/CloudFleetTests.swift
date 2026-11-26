@@ -19,7 +19,7 @@ final class CloudFleetTests: XCTestCase {
             secrets.set("cloud.state", String(decoding: try! JSONEncoder().encode(state), as: UTF8.self))
         }
         return CloudSync(api: URL(string: "https://api.test")!, http: http, secrets: secrets, files: nil,
-                         deviceLabel: "iPhone", retryWaits: [.milliseconds(1), .milliseconds(1)], key: { SyncCrypto.SoftwareKey() })
+                         deviceLabel: "iPhone", retry: .instant, key: { SyncCrypto.SoftwareKey() })
     }
 
     func testGateRequiresEnabledSignedInAndConnected() {
