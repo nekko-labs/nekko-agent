@@ -425,7 +425,8 @@ private fun ProviderButton(label: String, brand: Brand, enabled: Boolean, onClic
         when (brand) {
             Brand.APPLE -> {}
             Brand.GITHUB -> Icon(painterResource(R.drawable.connector_github), contentDescription = null, tint = content, modifier = Modifier.size(20.dp))
-            Brand.GOOGLE -> Icon(painterResource(R.drawable.provider_google), contentDescription = null, tint = Color.Unspecified, modifier = Modifier.size(20.dp))
+            // The app's Google mark is one colour: drawn in the words' colour, so it shows on dark themes too.
+            Brand.GOOGLE -> Icon(painterResource(R.drawable.provider_google), contentDescription = null, tint = content, modifier = Modifier.size(20.dp))
         }
         if (brand != Brand.APPLE) Spacer(Modifier.size(8.dp))
         Text(label, color = content.copy(alpha = if (enabled) 1f else 0.5f), fontWeight = FontWeight.Medium)
