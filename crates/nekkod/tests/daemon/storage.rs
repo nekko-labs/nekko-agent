@@ -98,3 +98,26 @@ async fn removes_idle_worktrees_and_keeps_their_branches() {
     drop(d);
     std::fs::remove_dir_all(base).ok();
 }
+
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn lists_and_removes_a_leftover_runner_image() {
+    let data = std::env::temp_dir().join(format!("nekkod-storage-runners-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    for (dir, bytes) in [("runners/images/default", 30usize), ("runners/old-image", 12)] {
+        std::fs::create_dir_all(data.join(dir)).unwrap();
+        std::fs::write(data.join(dir).join("disk.img"), vec![0u8; bytes]).unwrap();
+    }
+    let d = start_with(&data);
+    let (status, list) = post(d.port, "storage:runnerImages", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{list}");
+    let old = list.as_array().unwrap().iter().find(|i| i["name"] == "old-image").cloned().unwrap();
+    assert_eq!((old["inUse"].clone(), old["bytes"].clone()), (json!(false), json!(12)));
+    let (_, refused) = post(d.port, "storage:removeRunnerImage", json!(["images/default"]), Some(TOKEN)).await;
+    assert!(refused.to_string().contains("in use"), "{refused}");
+    let (status, done) = post(d.port, "storage:removeRunnerImage", json!(["old-image"]), Some(TOKEN)).await;
+    assert_eq!((status, done), (200, json!({ "freed": 12 })));
+    assert!(!data.join("runners/old-image").exists() && data.join("runners/images/default/disk.img").exists());
+    drop(d);
+    std::fs::remove_dir_all(data).ok();
+}

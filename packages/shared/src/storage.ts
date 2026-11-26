@@ -39,3 +39,14 @@ export interface IdleWorktree {
 export interface IdlePreview { idle: IdleWorktree[]; kept: Partial<Record<KeptReason, number>> }
 
 export interface RemoveWorktreesResult { removed: string[]; freed: number; failed: { root: string; error: string }[] }
+
+/** A folder in `<data>/runners` holding a VM image (`storage:runnerImages`). */
+export interface RunnerImage {
+  /** Path relative to the runners folder, e.g. `images/default` or `old-image-tart-2026-10-29`. */
+  name: string;
+  bytes: number;
+  modifiedAt: number;
+  /** Runners use it, a build can resume from it, or a runner names it: never removable. */
+  inUse: boolean;
+  kind: 'macos' | 'linux' | 'cache' | 'unfinished' | 'previous' | 'other';
+}

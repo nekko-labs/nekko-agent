@@ -311,6 +311,8 @@ const api: NekkoApi = {
   getDiskSpace: () => inv(IpcChannels.storageDisk),
   previewIdleWorktrees: () => inv(IpcChannels.storageIdleWorktrees),
   removeWorktrees: (roots) => inv(IpcChannels.storageRemoveWorktrees, roots),
+  listRunnerImages: () => inv(IpcChannels.storageRunnerImages),
+  removeRunnerImage: (name) => inv(IpcChannels.storageRemoveRunnerImage, name),
 
   readFile: (path) => inv(IpcChannels.fileRead, path),
   // The main process serves these on loopback, not the engine (main/htmlPreview.ts).

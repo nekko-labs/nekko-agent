@@ -616,6 +616,10 @@ impl Table {
             }),
         );
         t.add(
+            crate::storage_runners::CHANNELS,
+            handler!(|ctx, channel, args| crate::storage_runners::route(ctx, channel, &args).await),
+        );
+        t.add(
             crate::storage::CHANNELS,
             handler!(|ctx, channel, args| crate::storage::route(ctx, channel, &args).await),
         );

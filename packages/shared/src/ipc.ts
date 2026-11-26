@@ -256,6 +256,8 @@ export const IpcChannels = {
   storageDisk: 'storage:disk',
   storageIdleWorktrees: 'storage:idleWorktrees',
   storageRemoveWorktrees: 'storage:removeWorktrees',
+  storageRunnerImages: 'storage:runnerImages',
+  storageRemoveRunnerImage: 'storage:removeRunnerImage',
 
   fileRead: 'file:read',
   fileWrite: 'file:write',
@@ -1167,6 +1169,10 @@ export interface NekkoApi {
   previewIdleWorktrees(): Promise<import('./storage.js').IdlePreview>;
   /** Remove these worktrees, each checked again first; branches are always kept. */
   removeWorktrees(roots: string[]): Promise<import('./storage.js').RemoveWorktreesResult>;
+  /** The CI runner image folders and which are in use. */
+  listRunnerImages(): Promise<import('./storage.js').RunnerImage[]>;
+  /** Remove one leftover runner image (refused for any in use). */
+  removeRunnerImage(name: string): Promise<{ freed: number }>;
 
   /** Read a file as text (for the in-app viewer/editor). */
   readFile(path: string): Promise<FileContent>;

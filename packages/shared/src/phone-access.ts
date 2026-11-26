@@ -266,6 +266,7 @@ export const PHONE_DENIED_FOREVER: PhoneDeniedGroup = {
     'providers:save',
     'settings:reset',
     // Removes checkouts on the computer to free its disk: only the person at it decides that.
+    'storage:removeRunnerImage',
     'storage:removeWorktrees',
   ],
   // `cloud:` / `sync:`: the computer's Nekko Cloud token and sync keys. A phone signs in to Nekko Cloud itself.
