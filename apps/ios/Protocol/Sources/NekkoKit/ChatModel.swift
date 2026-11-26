@@ -151,6 +151,8 @@ public final class ChatModel {
     /// Events and answers so far, so a re-read can tell whether the cards changed while it waited.
     private var cardChanges = 0
     private var agentStateTask: Task<Void, Never>?
+    private var agentStateRead: Task<Void, Never>?
+    private var agentStateDirty = false
     private var lastConn: RelayState = .idle
 
     public init(sessionId: String, store: ComputersStore, now: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }) {
@@ -186,6 +188,30 @@ public final class ChatModel {
         }
     }
 
+    /// Whether this tool result can change the watches or the child chats: it
+    /// belongs to a watch, a clip or a sub-agent call. The result's call is already
+    /// in `blocks`; a result whose call we never saw (joined mid-turn) is read, to be safe.
+    func changesAgentState(_ result: ToolResult) -> Bool {
+        guard let name = blocks.lazy.compactMap({ block -> String? in
+            if case .tool(let id, let name, _, _, _, _) = block, id == result.toolCallId { return name } else { return nil }
+        }).first else { return true }
+        return name == AgentRows.watchTool || name == AgentRows.subagentTool || AgentRows.clipTools.contains(name)
+    }
+
+    /// Ask for a re-read of the agent state. One runs at a time; a burst of results
+    /// while it is in flight is answered by one more read after it, not one each.
+    func requestAgentStateRefresh() {
+        agentStateDirty = true
+        guard agentStateRead == nil else { return }
+        agentStateRead = Task { @MainActor [weak self] in
+            while let self, self.agentStateDirty, !Task.isCancelled {
+                self.agentStateDirty = false
+                await self.refreshAgentState()
+            }
+            self?.agentStateRead = nil
+        }
+    }
+
     /// Re-read what the agent-work rows show beyond the transcript: the watches,
     /// and the child chats when the transcript delegates. Failures keep the last state.
     public func refreshAgentState() async {
@@ -213,6 +239,9 @@ public final class ChatModel {
         subscription = nil
         agentStateTask?.cancel()
         agentStateTask = nil
+        agentStateRead?.cancel()
+        agentStateRead = nil
+        agentStateDirty = false
     }
 
     /// The connection came back: re-read, in case events were missed.
@@ -370,8 +399,9 @@ public final class ChatModel {
         }
         switch e {
         case .done, .error, .sessionMeta: scheduleReload()
-        // A watch is armed or cancelled at a tool result; a delegation's child appears then too.
-        case .toolResult: Task { await refreshAgentState() }
+        // A watch is armed or cancelled at a tool result, and a delegation's child appears then.
+        // Any other tool's result cannot change either, so it reads nothing.
+        case .toolResult(_, let result) where changesAgentState(result): requestAgentStateRefresh()
         default: break
         }
     }
