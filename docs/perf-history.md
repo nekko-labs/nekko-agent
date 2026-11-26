@@ -39,6 +39,52 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Warm chat switch: parked panes hold their animations without a stylesheet rule (#712, PR #3486, 2026-11-26)
+Area: renderer
+Result: improvement (fixes a regression)
+Conditions: a cloud Linux container, Intel Xeon @ 2.10GHz (4 threads), Chrome 158.0.8127.36 headless, `--no-gpu`, the production `build:web` renderer, a release `nekkod`. `node scripts/perf/run.mjs --only latency --no-gpu --report-only`, 40 warm switches per run, on `main` at `c92eac969`. Sequential runs on one machine, not interleaved, so compare the bands, not single runs.
+
+| Metric | `main` (runs 1, 2) | `main` without the rule (runs 1, 2) | This change (runs 1, 2) |
+|---|---|---|---|
+| Switch to a warm chat, to paint, p50 | 25.0 / 26.0 ms | 16.3 / 15.7 ms | 15.1 / 16.0 ms |
+| Switch to a warm chat, to paint, p95 | 32.0 / 37.7 ms | 24.7 / 24.1 ms | 23.2 / 22.7 ms |
+| Switch to a cold chat, frame painted, p50 | 30.2 ms (run 1) | - | 29.3 / 30.6 ms |
+
+CI's own numbers show when it started. The PR speed contract's warm switch read 11 to 15 ms p50 (14 to 19 ms p95) on every runner type up to the 22:47 UTC run on 2026-11-25, and 18 to 26 ms p50 (24 to 33 ms p95) from 23:44 on, over the 30 ms gate on unchanged base about half the time. The nightly perf job on `main` read 10 to 16 ms p50 from 2026-11-06 to 2026-11-25. Of the four PRs merged between those runs, #3407 was the only renderer change.
+
+Why: #3407 paused a parked pane's animations with `[data-pane-hidden] * { animation-play-state: paused !important }`. `data-pane-hidden` flips on both panes in every warm switch, and a rule that matches every descendant makes the browser restyle each pane's whole transcript inside the switch. The rule is gone. `useParkedAnimations` (`parkedAnimations.ts`) pauses the animations that are actually running through the Web Animations API one frame after the pane parks, and plays them when it is shown. `data-pane-hidden` stays for the decor clock, which no stylesheet rule reads now. What it gives up: an animation that starts inside a parked pane runs until the pane parks again. Source: #712, PR #3486.
+
+## Renderer code splitting: non-default tabs, QR and Remotion load after first paint (#3445, PR #3455, 2026-11-26)
+Area: renderer
+Result: improvement (startup); no effect on chat switching or keypress
+Conditions: Apple M1 Max (10 cores, 64 GB), macOS 27.2.1, Node v26.8.1, Chrome for Testing (Playwright chromium-1248) headless, `--no-gpu`, the production `build:web` renderer, a debug `nekkod` (`NEKKOD_PATH`; the startup probe does not exercise it). Before: `main` at `cde5e98da` built in its own worktree. After: the same commit plus this change. Three runs of `node scripts/perf/run.mjs --only startup --no-gpu` each, alternating before, after, before, after, before, after (`--app <before worktree>` for before). Each run is 5 cold-profile loads (new browser, empty profile), on a scratch data dir and a scripted model, never the user's app. Other agents were building and testing on the same machine, so absolute numbers drift between runs (an earlier non-alternating pass read about 40 ms lower on both sides); only the alternating pairs are compared.
+
+Each cell is run 1 / 2 / 3.
+
+| Metric (startup probe) | Before | After |
+|---|---|---|
+| JavaScript loaded by the time the main view is interactive | 6475 KiB in 5 files, all three runs | 4332 KiB in 24 files, all three runs |
+| Main view interactive, median of 5 loads | 333.7 / 334.5 / 320.3 ms | 282.6 / 256.3 / 277.5 ms |
+| Main view interactive, slowest of 5 | 368.5 / 355.0 / 371.8 ms | 312.4 / 275.9 / 291.6 ms |
+| First contentful paint, median of 5 loads | 224 / 208 / 208 ms | 184 / 116 / 168 ms |
+| Entry chunk `index`, raw | 5,488,286 bytes | 2,781,791 bytes (695,431 gzip, from 1,324,131) |
+| Renderer JavaScript total (all chunks) | 18506 KiB raw, 4232 KiB gzip, 117 chunks | 18546 KiB raw, 4265 KiB gzip, 153 chunks |
+
+Chat switching and typing, from `node scripts/perf/run.mjs --only latency --no-gpu --report-only`, p50 / p95 per run, before 1 / 2 / 3 then after 1 / 2 (a third quiet after-run did not complete: it hung and was killed, and its two reruns landed while another agent's `cargo build` had the machine at a load average of 50 to 80):
+
+| Metric | Before | After |
+|---|---|---|
+| Keypress to paint, chat composer | 3.6 / 3.7 / 3.7 ms, p95 5.0 / 5.5 / 5.4 ms | 3.6 / 3.8 ms, p95 6.1 / 5.3 ms |
+| Switch to a warm chat | 8.2 / 8.1 / 8.1 ms, p95 8.9 / 9.2 / 8.9 ms | 8.1 / 8.2 ms, p95 9.1 / 9.1 ms |
+| Switch to a cold chat, frame painted | 14.5 / 13.8 / 13.7 ms, p95 17.8 / 15.9 / 16.1 ms | 14.3 / 15.0 ms, p95 16.9 / 16.8 ms |
+| Same three, a back-to-back pair under load (load average 76), before then after | keypress 6.7 ms, warm 16.5 ms, cold frame 32.6 ms | keypress 6.9 ms, warm 16.4 ms, cold frame 32.7 ms |
+
+Tab switching, which the speed contract has no probe for, measured with a throwaway script (click each rail item, time to the second `requestAnimationFrame`, 3 fresh browsers, 5 tabs, vsync 60 Hz so 33 ms is the floor for two frames; not committed): after the prefetch had finished (6 s after load) every tab read 21.8 to 33.3 ms in the after build, the same band as before except Automations, which read 126.3 to 133.2 ms before and 32.7 to 33.3 ms after (cause not isolated). A click at 0.7 s after load, before any prefetch (it starts 1.5 s after load), also read 30.6 to 37.8 ms on the after build, so a not-yet-loaded tab did not cost a visible frame on loopback.
+
+Why: `App.tsx` imported ten views eagerly, which pulled Remotion (through the Automations first-workflow wizard), the whole Settings tree and every other tab into the entry chunk. They are now `React.lazy` chunks (`lazyViews.ts`) with no Suspense fallback (nothing shows, no spinner), fetched one per idle slice starting 1.5 s after the page loads so they never compete with first paint; `qrcode` is imported where a code is drawn. Starting the prefetch after two frames instead of 1.5 s read 6447 KiB loaded and about 270 ms interactive in a first pass, because the fetches landed before the probe's "interactive" mark: the delay is what makes the saving real.
+
+What did not change. The 24 files loaded by interactive are the entry (2716 KiB, of which about 400 KiB is `react-dom/server`, used by the composer's `MarkdownEditor` to highlight on every keystroke), `store` (858 KiB, mostly `react-dom/client`), and 22 small shared chunks (about 750 KiB: `AutomationsPane` 274, the icon set 225, terminal and artifact helpers) that the Agents view itself imports and that used to be folded into the entry. The total JavaScript grew 40 KiB because shared code is now emitted once per chunk boundary; nothing a user loads grew. No `manualChunks`: the files are local, so there is no long-lived HTTP cache for a vendor split to protect, and the parse cost is the same either way. Source: #3445. Reproduce with the commands above.
+
 ## iPhone delegating chats stop re-reading the chat list on every tool result (#3384, 2026-11-26)
 Area: renderer
 Result: improvement (reads per turn)

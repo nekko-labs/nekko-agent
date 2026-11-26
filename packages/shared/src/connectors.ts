@@ -14,6 +14,8 @@ export interface ConnectorMeta {
   description: string;
   /** Where the Connectors page lists it. Project management feeds the Agent Monitor's Tasks section. */
   group: ConnectorGroup;
+  /** A Nekko Labs product: the Connectors page marks it "Nekko Labs". Set by hand, never inferred from the name. */
+  nekkoLabs?: boolean;
 }
 
 /** A heading on the Connectors page (`CONNECTOR_GROUPS` holds the order and labels). */
@@ -74,7 +76,7 @@ export const CONNECTOR_CATALOG: ConnectorMeta[] = [
   { kind: 'todoist', label: 'Todoist', auth: 'token', group: 'projects', description: 'Active tasks via a Todoist API token.' },
   { kind: 'clickup', label: 'ClickUp', auth: 'token', group: 'projects', description: 'Open tasks in a workspace via a ClickUp personal API token.' },
   { kind: 'tasksfile', label: 'Tasks file', auth: 'token', group: 'projects', description: 'A local Markdown checklist (TASKS.md, todo.md): every "- [ ]" line is a task. No account needed.' },
-  { kind: 'floop', label: 'Floop', auth: 'token', group: 'projects', description: "Your open tasks on your team's Floop server, where people and agents track work in separate streams (server URL + API token)." },
+  { kind: 'floop', label: 'Floop', auth: 'token', group: 'projects', nekkoLabs: true, description: "Your open tasks on your team's Floop server, where people and agents track work in separate streams (server URL + API token)." },
 ];
 
 /** Connector kinds that are task-management systems. */

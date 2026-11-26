@@ -218,6 +218,16 @@ export interface OrgDetail extends OrgSummary {
 
 export type FleetOs = 'windows' | 'macos' | 'linux';
 
+/** A CI runner on a shared Mac (decision 0064): no repos, jobs or reasons. */
+export interface FleetRunner {
+  label: string;
+  state: 'off' | 'waiting' | 'ready' | 'running' | 'draining' | 'cleaning' | 'error';
+  /** VMs running or draining a job. */
+  busy: number;
+  /** VMs it may run now, macOS and Linux together. */
+  slots: number;
+}
+
 /** A local model a shared computer can serve. No URLs, ports or paths. */
 export interface FleetModel {
   id: string;
@@ -233,6 +243,8 @@ export interface FleetComputerView {
   arch: string;
   appVersion: string;
   models: FleetModel[];
+  /** Its CI runners. Absent from an older engine. */
+  runners?: FleetRunner[];
   online: boolean;
   /** When the computer last checked in (epoch milliseconds, or an RFC 3339 string). */
   seenAt: number | string | null;

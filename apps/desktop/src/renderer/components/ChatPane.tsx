@@ -45,6 +45,7 @@ import { anchorLiveRun, beginResumedRun, clearLiveRun, engineLost, getLiveRun, o
 import { getCachedSession, holdTranscript, loadSession, putCachedSession, withSummaryFields } from '../sessionCache.js';
 import { retryUntilAnswered } from '../retryUntilAnswered.js';
 import { usePaneVisible } from '../paneVisibility.js';
+import { useParkedAnimations } from '../parkedAnimations.js';
 import { useVisibleInterval } from '../visibleInterval.js';
 import { watchEventFilter } from '../agentWatches.js';
 import { reportAgentWorking } from '../workingAgents.js';
@@ -1457,6 +1458,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // windows are all full chats, so surface alone cannot choose one. A legacy
   // composer-only pane hands Ctrl+F to the transcript window it drives.
   const paneShown = usePaneVisible();
+  // A parked pane holds its animations; data-pane-hidden below is for the decor clock only (#712).
+  useParkedAnimations(paneRef, paneShown);
   const searchTargetRef = useRef({ surface, selected, paneShown });
   searchTargetRef.current = { surface, selected, paneShown };
   useEffect(() => {

@@ -17,15 +17,23 @@ export function AboutYouSection({ settings, update }: { settings: AppSettings; u
   const [emailDraft, setEmailDraft] = useState<string>();
   const email = emailDraft ?? defaultEmail;
   const [note, setNote] = useState('');
+  const unsent = !!savedEmail && (settings.userEmailPending ?? '').trim().toLowerCase() === savedEmail.toLowerCase();
   const commitEmail = async () => {
     if (emailDraft === undefined) return;
     const clean = emailDraft.trim();
-    if (clean === defaultEmail || clean === savedEmail) { setEmailDraft(undefined); return; }
+    // The same address again only does something while it has yet to reach Nekko Cloud.
+    if ((clean === defaultEmail || clean === savedEmail) && !(unsent && clean === savedEmail)) { setEmailDraft(undefined); return; }
     if (clean && !validEmail(clean)) { setNote("That doesn't look like an email yet."); return; }
     const error = await saveEmail(clean, settings.userName);
     setEmailDraft(draft => draft === emailDraft ? undefined : draft);
-    setNote(error ? `Saved here, but it didn't reach Nekko Cloud: ${error}` : clean ? "Saved. We'll send one email to confirm." : 'Saved address removed.');
+    setNote(error ? `Saved here, but it didn't reach Nekko Cloud: ${error}`
+      : clean ? "Saved. We'll send one email to confirm."
+      // Clearing can't unsubscribe: anyone could type an address here, so only the link in its emails can.
+      : savedEmail ? 'Removed here. To stop update emails, use the unsubscribe link in any of them.' : 'Saved address removed.');
   };
+  const detail = note
+    || (unsent && emailDraft === undefined ? "Saved here, but it hasn't reached Nekko Cloud yet. Nekko will try again." : '')
+    || (!savedEmail && cloudEmail && emailDraft === undefined ? 'From Nekko Cloud. Signing in doesn’t sign you up for updates.' : 'At most one email a month about new features and important fixes. Never sold or shared; unsubscribe from any email.');
   return (
     <SettingsSection id="about-you" title="About you">
       <SettingRow title="What Nekko calls you" htmlFor="settings-user-name" className="mt-(--q-inline)" control={
@@ -33,7 +41,7 @@ export function AboutYouSection({ settings, update }: { settings: AppSettings; u
           onChange={(e) => setName(e.target.value)} onBlur={() => void update({ userName: name.trim() })} />
       } />
       <SettingRow title="Email for updates" htmlFor="settings-user-email" detailId="settings-user-email-note"
-        detail={<span aria-live="polite">{note || (!savedEmail && cloudEmail && emailDraft === undefined ? 'From Nekko Cloud. Signing in doesn’t sign you up for updates.' : 'At most one email a month about new features and important fixes. Never sold or shared; unsubscribe from any email.')}</span>}
+        detail={<span aria-live="polite">{detail}</span>}
         control={
           <input id="settings-user-email" type="email" className="quiet-field max-w-[220px] py-1.5" placeholder="Optional" value={email}
             onChange={(e) => { setEmailDraft(e.target.value); setNote(''); }} onBlur={() => void commitEmail()}
