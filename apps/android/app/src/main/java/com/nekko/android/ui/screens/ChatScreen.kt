@@ -366,7 +366,9 @@ private fun ChatScreenContent(
     // Adjacent calls with one purpose fold into one card (spec/chat/tool-calls-grouped-by-purpose.md).
     // Simple folds each turn's reasoning and tool steps into one line that opens in place (the approval card still asks).
     var openTurns by remember(vm.sessionId) { mutableStateOf(setOf<String>()) }
-    val rows = remember(keyed, showSteps, chat.running, openTurns, chat.footers) { transcript.rows(transcriptRows(keyed, showSteps, chat.running, openTurns, chat.footers)) }
+    val rows = remember(keyed, showSteps, chat.running, openTurns, chat.footers, chat.strategies) {
+        transcript.rows(transcriptRows(keyed, showSteps, chat.running, openTurns, chat.footers, chat.strategies))
+    }
     // How each reply reads in its turn: a note, something left for you, or the reply (spec/chat/thinking-and-replies.md).
     val voices = remember(keyed, chat.running) { keyed.map { it.first }.zip(ReplyTopics.voices(chat.blocks, chat.running, transcript::midTurnVoice)).toMap() }
     val lastIndex = headerCount + rows.size + footerCount - 1
@@ -652,6 +654,7 @@ private fun ChatScreenContent(
                                 CompositionLocalProvider(LocalAgentContext provides agentContext, com.nekko.android.ui.chat.LocalSessionPhoto provides vm::photo, com.nekko.android.ui.chat.LocalEditPicture provides vm::editPicture) {
                                     when {
                                         // A finished reply's metrics and, when it completed, its check (#2112).
+                                        row is TranscriptRow.Strategy -> com.nekko.android.ui.chat.TurnStrategyRow(row.strategy)
                                         row is TranscriptRow.Footer -> com.nekko.android.ui.chat.TurnDetailsRow(row.details)
                                         row is TranscriptRow.Steps -> StepsLine(row.steps.steps, row.steps.running, row.steps.durationMs, row.steps.open) {
                                             openTurns = if (row.steps.open) openTurns - row.steps.turn else openTurns + row.steps.turn
@@ -1101,6 +1104,7 @@ internal sealed interface TranscriptRow {
     data class Steps(val steps: TurnSteps.Row.Summary<Pair<String, Block>>) : TranscriptRow
     /** A finished reply's metrics, after the block it follows; it ends a purpose group. */
     data class Footer(val details: com.nekko.protocol.TurnDetails) : TranscriptRow
+    data class Strategy(val promptKey: String, val strategy: com.nekko.protocol.TurnStrategy) : TranscriptRow
 }
 
 internal fun transcriptRows(
@@ -1109,6 +1113,7 @@ internal fun transcriptRows(
     running: Boolean,
     open: Set<String>,
     footers: Map<String, com.nekko.protocol.TurnDetails> = emptyMap(),
+    strategies: Map<String, com.nekko.protocol.TurnStrategy> = emptyMap(),
 ): List<TranscriptRow> {
     // Each footer goes right after its block, or (that block folded away in Simple) right after
     // the last thing shown before the next one, so it shows whether the steps are open or not.
@@ -1129,9 +1134,16 @@ internal fun transcriptRows(
             out += TranscriptRow.Footer(at.pollFirstEntry().value)
         }
     }
+    fun strategyBefore(item: Pair<String, Block>) {
+        val user = item.second as? Block.User ?: return
+        val strategy = strategies[user.id] ?: return
+        flush()
+        out += TranscriptRow.Strategy(item.first, strategy)
+    }
     if (showSteps) {
         keyed.forEachIndexed { i, item ->
             footersBefore(i)
+            strategyBefore(item)
             pendingOpen = true
             pending += item
         }
@@ -1141,6 +1153,7 @@ internal fun transcriptRows(
                 is TurnSteps.Row.Summary -> { footersBefore(index[r.turn] ?: 0); flush(); out += TranscriptRow.Steps(r) }
                 is TurnSteps.Row.Item -> {
                     footersBefore(index[r.item.first] ?: 0)
+                    strategyBefore(r.item)
                     if (r.stepsOpen != pendingOpen) flush()
                     pendingOpen = r.stepsOpen
                     pending += r.item
@@ -1156,6 +1169,7 @@ internal fun transcriptRows(
 /** A list key for a transcript row: the block's own key, its first block's for a purpose group, or its turn's for folded steps. */
 internal fun rowKey(row: TranscriptRow): String = when (row) {
     is TranscriptRow.Footer -> "footer:" + row.details.id
+    is TranscriptRow.Strategy -> "strategy:" + row.promptKey
     is TranscriptRow.Steps -> "steps:" + row.steps.turn
     is TranscriptRow.Run -> when (val run = row.run) {
         is PurposeRun.Single -> run.item.first
