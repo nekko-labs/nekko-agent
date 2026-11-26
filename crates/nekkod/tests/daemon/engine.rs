@@ -458,6 +458,49 @@ pub(crate) fn fake_llama() -> std::path::PathBuf {
     path
 }
 
+/// The Engines block's rows come with the status: every engine is listed, the
+/// installed one is in use, and a choice is saved with the server's settings.
+#[tokio::test(flavor = "multi_thread")]
+async fn status_lists_the_engines_and_keeps_the_chosen_one() {
+    let root = std::env::temp_dir().join(format!("nekkod-engines-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let data = root.join("data");
+    std::fs::create_dir_all(&data).unwrap();
+    std::fs::write(
+        data.join("settings.json"),
+        json!({ "engineBinPath": fake_llama(), "engine": { "port": free_port(), "modelFolders": [] } }).to_string(),
+    )
+    .unwrap();
+    let d = start_with_env(&data, json!({}), &[]);
+
+    let (status, s) = post(d.port, "engine:status", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{s}");
+    let rows = s["engines"].as_array().unwrap();
+    let mut ids: Vec<&str> = rows.iter().map(|r| r["id"].as_str().unwrap()).collect();
+    ids.sort_unstable();
+    assert_eq!(ids, ["basalt", "llama", "mlx", "omlx", "squid5090"], "{s}");
+    let row = |id: &str| rows.iter().find(|r| r["id"] == id).unwrap();
+    assert_eq!(
+        (row("llama")["state"].clone(), row("llama")["installed"].clone(), row("llama")["source"].clone()),
+        (json!("usable"), json!(true), json!("external")),
+        "{s}"
+    );
+    // Whatever this machine is, an engine it cannot run or Nekko cannot start says why.
+    for r in rows.iter().filter(|r| r["state"] != "usable") {
+        assert!(r["reason"].as_str().is_some_and(|w| !w.is_empty()), "{r}");
+        assert!(r.get("inUse").is_none() && r.get("labels").is_none(), "{r}");
+    }
+    assert_eq!(rows.iter().filter(|r| r["inUse"] == true).count(), 1, "{s}");
+
+    let (_, saved) = post(d.port, "engine:settings", json!([{ "chatEngine": "llama" }]), Some(TOKEN)).await;
+    assert_eq!(saved["chatEngine"], "llama", "{saved}");
+    let (_, s) = post(d.port, "engine:status", json!([]), Some(TOKEN)).await;
+    assert_eq!(s["settings"]["chatEngine"], "llama");
+    assert_eq!(s["engines"].as_array().unwrap().iter().find(|r| r["inUse"] == true).unwrap()["id"], "llama", "{s}");
+    drop(d);
+    std::fs::remove_dir_all(root).ok();
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn runs_the_model_server_itself() {
     let root = std::env::temp_dir().join(format!("nekkod-server-{}", std::process::id()));

@@ -103,6 +103,37 @@ export interface EngineInstall {
   recommended?: EngineBuild;
 }
 
+/** The engines that can run a chat model. */
+export type ChatEngineId = 'llama' | 'mlx' | 'omlx' | 'basalt' | 'squid5090';
+
+/**
+ * One row of the Models page's Engines block, as the daemon decides it for
+ * this machine (`nekko-engine`'s `engines::list`): usable engines fastest
+ * first, then the ones this machine cannot run, each with the reason.
+ */
+export interface EngineOption {
+  id: ChatEngineId;
+  name: string;
+  /** One line: what it is and what it runs. */
+  detail: string;
+  /**
+   * `usable`: this machine can run it. `unsupported`: it cannot, and `reason`
+   * says why in a few words ("macOS only"). `planned`: the hardware could,
+   * but this version of Nekko cannot start it yet.
+   */
+  state: 'usable' | 'unsupported' | 'planned';
+  reason?: string;
+  /** Among the usable engines; absent when there is only one to pick from. */
+  labels?: Array<'fastest' | 'stable'>;
+  /** The install channel's runtime id, when Nekko installs this engine itself. */
+  runtime?: 'llama' | 'mlx';
+  installed?: boolean;
+  version?: string;
+  source?: EngineSource;
+  /** The engine every model it can run is loaded on. Only ever an installed one. */
+  inUse?: boolean;
+}
+
 export interface EngineInstallPreview {
   runtime: 'llama' | 'diffusion' | 'mlx';
   version: string;
@@ -207,6 +238,12 @@ export interface EngineSettings {
   overloadGuard?: boolean;
   /** How much overload protection keeps free, in MB. 500 when unset. */
   overloadReserveMB?: number;
+  /**
+   * The engine chosen for chat models. Unset, the fastest engine this machine
+   * can run and has installed is in use. A choice this machine cannot run, or
+   * one that is not installed yet, waits; it never blocks a load.
+   */
+  chatEngine?: ChatEngineId;
 }
 
 /** Overload protection's reserve when the settings name none. */
@@ -262,6 +299,8 @@ export interface EngineStatus {
   diffusionInstall?: EngineInstall;
   /** MLX (Apple Silicon only); `available` is empty on any other machine. */
   mlxInstall?: EngineInstall;
+  /** The chat engines, for the Engines block. Absent from a daemon older than the block. */
+  engines?: EngineOption[];
   running: boolean;
   startedAt?: number;
   resident: ResidentModel[];

@@ -119,6 +119,7 @@ export function ModelsHome({
   onChanged,
   onFind,
   mlx = false,
+  preferMlx = false,
 }: {
   providerId: string;
   /** Which half of the page this is: what is on disk, or finding something new. */
@@ -136,6 +137,8 @@ export function ModelsHome({
   onFind?: () => void;
   /** An Apple Silicon Mac, where the catalog also offers MLX checkpoints. */
   mlx?: boolean;
+  /** The engine in use reads MLX folders, so finding a model starts on those. */
+  preferMlx?: boolean;
 }) {
   const [query, setQuery] = useState('');
   const [catalog, setCatalog] = useState<CatalogModel[]>([]);
@@ -143,7 +146,9 @@ export function ModelsHome({
   const [error, setError] = useState('');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [repoId, setRepoId] = useState<string | null>(null);
-  const [format, setFormat] = useState<'gguf' | 'mlx'>('gguf');
+  const [format, setFormat] = useState<'gguf' | 'mlx'>(mlx && preferMlx ? 'mlx' : 'gguf');
+  // The engine in use changed (or its first status arrived): offer its models first.
+  useEffect(() => { setFormat(mlx && preferMlx ? 'mlx' : 'gguf'); }, [mlx, preferMlx]);
   const [kind, setKind] = useState<'all' | FamilyKind>('all');
   const [recs, setRecs] = useState<Recommendations | null>(null);
   const [showMore, setShowMore] = useState(false);

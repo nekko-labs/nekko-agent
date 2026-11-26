@@ -317,15 +317,36 @@ impl Server {
         let gpu = self.machine.gpu_stats().await.map(|s| s.to_value());
         let (total, _) = nekko_machine::probe::memory_now();
         let mut m = Map::new();
+        let mlx = self.installs.detect("mlx").await;
+        let settings = engine_settings(&self.library.settings());
+        // The Engines block's rows: what this machine can run, and which is in use.
+        let machine = nekko_engine::engines::Machine {
+            platform: crate::installs::platform().into(),
+            arch: crate::installs::arch().into(),
+            gpus: gpu
+                .as_ref()
+                .and_then(|g| g.get("devices"))
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|d| d.get("name").and_then(Value::as_str).map(str::to_string))
+                .collect(),
+        };
+        let engines = nekko_engine::engines::list(
+            &machine,
+            &json!({ "llama": install, "mlx": mlx }),
+            settings.get("chatEngine").and_then(Value::as_str),
+        );
         m.insert("install".into(), install);
         m.insert("diffusionInstall".into(), self.installs.detect("diffusion").await);
-        m.insert("mlxInstall".into(), self.installs.detect("mlx").await);
+        m.insert("mlxInstall".into(), mlx);
+        m.insert("engines".into(), engines);
         for k in ["running", "startedAt", "resident", "loading", "log", "port"] {
             if let Some(v) = state.get(k) {
                 m.insert(k.into(), v.clone());
             }
         }
-        m.insert("settings".into(), Value::Object(engine_settings(&self.library.settings())));
+        m.insert("settings".into(), Value::Object(settings));
         m.insert("memory".into(), launch::engine_memory(gpu.as_ref(), total));
         Value::Object(m)
     }

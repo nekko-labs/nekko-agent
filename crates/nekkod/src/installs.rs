@@ -24,7 +24,7 @@ pub struct Installs {
     engine: Arc<crate::engine::Engine>,
 }
 
-fn platform() -> &'static str {
+pub(crate) fn platform() -> &'static str {
     if cfg!(windows) {
         "win32"
     } else if cfg!(target_os = "macos") {
@@ -34,7 +34,7 @@ fn platform() -> &'static str {
     }
 }
 
-fn arch() -> &'static str {
+pub(crate) fn arch() -> &'static str {
     if cfg!(target_arch = "aarch64") { "arm64" } else { "x64" }
 }
 

@@ -1,14 +1,20 @@
 import { ResourceQueueSection } from '../components/server/ResourceQueueSection.js';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useReducer, useState } from 'react';
 import type { EngineMemory, LocalModel } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { SystemModels } from '../components/engine/SystemModels.js';
+import { Engines } from '../components/engine/Engines.js';
 import { EngineSection } from '../components/engine/EngineSection.js';
 import { ModelDetail } from '../components/engine/ModelDetail.js';
 import { hasAppChrome } from '../chrome.js';
 
 /** Built-in engine surface, embedded in Models or used by standalone fixtures. */
-export function ModelServerView({ embedded = false }: { embedded?: boolean }) {
+export function ModelServerView({ embedded = false, engineEpoch = 0 }: {
+  embedded?: boolean;
+  /** Bumped when the Engines block above an embedded view changes the engine in use. */
+  engineEpoch?: number;
+}) {
+  const [ownEpoch, engineChanged] = useReducer((n: number) => n + 1, 0);
   const queueEnabled = useStore((s) => s.settings?.experimental?.resourceQueue === true);
   const refreshProviders = useStore((s) => s.refreshProviders);
   // The catalog model being read, if any. Held here rather than in the engine
@@ -51,9 +57,10 @@ export function ModelServerView({ embedded = false }: { embedded?: boolean }) {
         {!embedded && !hasAppChrome && <h1 className="view-title">Model Server</h1>}
 
 
-        {!embedded && <div className="mt-7"><SystemModels /></div>}
+        {!embedded && <div className="mt-7 space-y-(--q-inline)"><Engines onChanged={engineChanged} /><SystemModels /></div>}
         <div className={embedded ? "" : "mt-7"}>
           <EngineSection
+            refreshKey={engineEpoch + ownEpoch}
             onProvidersChanged={refreshProviders}
             onOpenModel={(id) => {
               void refreshModels();

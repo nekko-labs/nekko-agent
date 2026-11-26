@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { isLocalProvider, type ProviderConfig } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { hasAppChrome } from '../chrome.js';
@@ -6,6 +6,7 @@ import { CloudIcon, ComputerIcon } from '../icons.js';
 import { ModelsView } from './ModelsView.js';
 import { ModelServerView } from './ModelServerView.js';
 import { SystemModels } from '../components/engine/SystemModels.js';
+import { Engines } from '../components/engine/Engines.js';
 import { FirstLocalModel } from '../components/engine/FirstLocalModel.js';
 import { forwardWheelToContent } from '../railWheel.js';
 
@@ -17,6 +18,7 @@ import { forwardWheelToContent } from '../railWheel.js';
 export const MODELS_SECTIONS = [
   { id: 'cloud', label: 'Cloud providers', Icon: CloudIcon },
   { id: 'local', label: 'Local model server', Icon: ComputerIcon },
+  { id: 'engines', label: 'Engines', parent: 'local' },
   { id: 'system', label: 'System models', parent: 'local' },
   { id: 'library', label: 'Models', parent: 'local' },
   { id: 'connections', label: 'Connected servers', parent: 'local' },
@@ -57,7 +59,7 @@ export function ModelsWorkspace() {
     const id = find(to) ? to : 'local';
     const target = find(id);
     if (!target) return;
-    // A folded section (System models) opens when asked for by name.
+    // A folded section (Engines, System models) opens when asked for by name.
     if (target instanceof HTMLDetailsElement) target.open = true;
     setActive(id);
     jumping.current = true;
@@ -82,11 +84,13 @@ export function ModelsWorkspace() {
     shown.current = view;
   }, [view, goTo]);
   const fullLocal = firstRun.value === false;
+  // A change of engine re-reads the model server below it, which offers that engine's models.
+  const [engineEpoch, engineChanged] = useReducer((n: number) => n + 1, 0);
   return <div className="models-layout" onWheel={(e) => { releaseJump(); forwardWheelToContent(e, scrollRef.current); }}>
     <aside className="models-rail">
       {!hasAppChrome && <h1 className="view-title">Models</h1>}
       <nav aria-label="Models sections" className="models-navigation">
-        {MODELS_SECTIONS.filter((s) => !('parent' in s) || s.id === 'system' || fullLocal).map((s) => (
+        {MODELS_SECTIONS.filter((s) => !('parent' in s) || s.id === 'engines' || s.id === 'system' || fullLocal).map((s) => (
           <button
             key={s.id}
             type="button"
@@ -111,9 +115,9 @@ export function ModelsWorkspace() {
       </section>
       <section data-models-section="local" className="models-section models-section-local" aria-labelledby="models-local-title">
         <h2 id="models-local-title" className="models-section-heading"><ComputerIcon className="h-6 w-6 shrink-0" /> Local model server</h2>
-        <div className="mb-(--q-section)"><SystemModels /></div>
+        <div className="mb-(--q-section) space-y-(--q-inline)"><Engines onChanged={engineChanged} /><SystemModels /></div>
         {firstRun.value === null ? null : firstRun.value ? <FirstLocalModel onShowAll={showAll} /> : <>
-          <ModelServerView embedded />
+          <ModelServerView embedded engineEpoch={engineEpoch} />
           <div data-models-section="connections" className="models-local-connections">
             <h3 className="models-section-title">Connected servers</h3>
             <ModelsView localOnly />

@@ -16,8 +16,7 @@ import { DownloadsPanel } from './DownloadsPanel.js';
 import { groupDownloads, isActive } from './downloadGroups.js';
 import { EngineServerSettings } from './EngineServerSettings.js';
 import { ModelFolders } from './ModelFolders.js';
-import { DiffusionInstallCard } from './DiffusionInstallCard.js';
-import { MlxInstallCard } from './MlxInstallCard.js';
+import { prefersMlx } from './engineRows.js';
 import { DecisionModels } from './DecisionModels.js';
 import { ServerPowerSwitch } from '../server/ServerPowerSwitch.js';
 import { ServiceLoadState } from '../ServiceLoadState.js';
@@ -48,7 +47,10 @@ type Tab = ModelsMode | 'downloads' | 'folders';
 export function EngineSection({
   onProvidersChanged,
   onOpenModel,
+  refreshKey = 0,
 }: {
+  /** Changes when the Engines block above changed something this section shows. */
+  refreshKey?: number;
   onProvidersChanged: () => void;
   /** Open one catalog model's own page, which the whole view takes over for. */
   onOpenModel: (id: string) => void;
@@ -101,7 +103,7 @@ export function EngineSection({
     refresh();
     const t = setInterval(refresh, POLL_MS);
     return () => clearInterval(t);
-  }, [refresh]);
+  }, [refresh, refreshKey]);
 
   // Progress arrives as events, so the panel stays live between polls; a finished
   // download also means a new model, hence the library refresh.
@@ -224,7 +226,7 @@ export function EngineSection({
             className={`btn btn-ghost gap-2 text-xs ${configOpen ? 'text-accent' : ''}`}
             aria-expanded={configOpen}
             aria-controls="model-server-configure"
-            title="Server settings, runtimes and logs"
+            title="Server settings and logs"
             data-icon-hover
             data-model-server-configure
             onClick={() => setConfigOpen((o) => !o)}
@@ -235,7 +237,7 @@ export function EngineSection({
         </div>
       </div>
 
-      {/* Server settings, runtimes and logs: what you reach for when setting
+      {/* Server settings and logs: what you reach for when setting
           the server up or when a start fails, folded behind Configure. It
           opens itself when a start fails, on the logs. */}
       <div id="model-server-configure" className="library-fold" data-open={configOpen ? '' : undefined} inert={!configOpen}>
@@ -249,16 +251,6 @@ export function EngineSection({
                 </div>
               </section>
             </Shown>
-            {/* Which image and MLX runtimes are installed matters to few
-                people. The first card's divider would sit right under the
-                label, so it goes. */}
-            <section>
-              <h3 className="quiet-group-label">Runtimes</h3>
-              <div className="[&>div:first-child]:mt-(--q-heading) [&>div:first-child]:border-t-0 [&>div:first-child]:pt-0">
-                <ErrorBoundary label="Image runtime"><DiffusionInstallCard install={status.diffusionInstall} onChanged={refresh} /></ErrorBoundary>
-                <ErrorBoundary label="MLX runtime"><MlxInstallCard install={status.mlxInstall} onChanged={refresh} /></ErrorBoundary>
-              </div>
-            </section>
             {/* The engine's own output: when a start fails this is where you look. */}
             <section ref={logRef}>
               <h3 className="quiet-group-label">Server logs</h3>
@@ -384,6 +376,7 @@ export function EngineSection({
               onOpenModel={onOpenModel}
               onFind={() => setTab('find')}
               mlx={Boolean(status.mlxInstall?.available.length)}
+              preferMlx={prefersMlx(status)}
             />
           )}
           {shown === 'downloads' && <DownloadsPanel jobs={modelJobs} onChanged={refresh} />}

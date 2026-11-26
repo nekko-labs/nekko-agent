@@ -103,7 +103,28 @@ Nekko's own engine daemon, need the Microsoft Visual C++ Runtime (`MSVCP140.dll`
 the engine before it starts. If an engine still dies for a missing DLL, the error says so
 and links Microsoft's 25 MB redistributable.
 
-**System models** is a separate section above the local library, even before you download a chat model. It holds the on-device speech engines for dictation. Selecting a speech engine here does not change your default chat model.
+### Engines
+
+An engine is the program that runs a model. **Models > Local model server > Engines** lists every engine Nekko knows, one group per kind of model. It starts folded and names the engine in use; click it, or **Engines** in the side menu, to open it.
+
+| Engine | Runs on | Runs |
+| --- | --- | --- |
+| llama.cpp | Every computer | Any GGUF model |
+| MLX | Apple Silicon Macs | MLX models |
+| oMLX | Apple Silicon Macs | MLX models, with batching and a prompt cache kept on disk |
+| Basalt | NVIDIA RTX 50 series cards | Its own model packs |
+| squid5090 | Linux with an NVIDIA RTX 5090 | Inkling 2 Mini |
+| stable-diffusion.cpp | Most computers | Photo and video models |
+
+- The engine **in use** has a green dot. Nekko loads a model on it whenever it can run that model; a model only another engine can run still loads on that one, so a GGUF file keeps working while MLX is in use.
+- **Use** switches to another installed engine. **Install** downloads one your computer can run, and shows the size first. **Uninstall** (on hover) removes an engine Nekko installed; your models stay.
+- An engine your computer cannot run stays in the list with the reason: "macOS only", "NVIDIA RTX 50 series only", "NVIDIA RTX 5090 only".
+- **Fastest** and **Most stable** compare the engines your computer can run. They are a guide, not a measurement of your models. If you never choose, the fastest installed engine is in use.
+- oMLX, Basalt and squid5090 are listed but cannot be started by Nekko yet; on a computer that could run them they say "Not in this version of Nekko yet".
+
+Finding a new model follows the engine in use: with MLX in use, **Find new models** opens on MLX checkpoints.
+
+**System models** is a separate section below Engines and above the local library, even before you download a chat model. It holds the on-device speech engines for dictation. Selecting a speech engine here does not change your default chat model.
 
 **On this machine, or Find new models.** Under **Models**, the switch picks between the models you have and getting a new one from Hugging Face. Each installed row shows what it does, the parameter count when known, the disk size, and whether it fits on your GPU. A failed load shows a warning and its explanation. Use the **star** to put a model in your chat picker’s favorites, or the **check** to make a chat or vision model the default for new chats. The **trash** deletes files managed by Nekko that the engine can remove; files borrowed from another app stay untouched. When a family has more than one variant, choose the family and use the controls on the exact variant. Select a model for GPU and context details. Models currently in memory appear above the library under **Loaded models**. The agent server (for the CLI and MCP) is in **Settings > Server**.
 

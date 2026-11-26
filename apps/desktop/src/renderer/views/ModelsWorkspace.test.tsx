@@ -35,10 +35,15 @@ describe('Models workspace', () => {
     expect(html).toContain('data-providers="cloud"');
     // Local's own sections are not listed until the full local page is shown.
     expect(html).not.toContain('>Connected servers</button>');
+    // Engines and System models are there from the start, Engines first, both folded.
+    expect(html.indexOf('data-models-section="engines"')).toBeGreaterThan(-1);
+    expect(html.indexOf('data-models-section="engines"')).toBeLessThan(html.indexOf('data-models-section="system"'));
+    expect(html.indexOf('>Engines</button>')).toBeLessThan(html.indexOf('>System models</button>'));
+    expect(html).not.toMatch(/<details[^>]* open/);
   });
   it('lists the local sections in page order under Local model server', () => {
     const ids = MODELS_SECTIONS.map((s) => s.id);
-    expect(ids).toEqual(['cloud', 'local', 'system', 'library', 'connections']);
+    expect(ids).toEqual(['cloud', 'local', 'engines', 'system', 'library', 'connections']);
     expect(MODELS_SECTIONS.filter((s) => 'parent' in s).every((s) => s.parent === 'local')).toBe(true);
   });
   it('spies the section at the top of the page, and the last one at the end', () => {

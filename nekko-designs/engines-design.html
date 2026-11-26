@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Engines · pick what runs local models</title>
+<style>
+:root{font:14px/1.4 Geist,system-ui,sans-serif;color:#2e2330;background:#f3edf3;--paper:#fcf8fb;--line:#e5d7e3;--ink:#2e2330;--soft:#6e5d6f;--faint:#9a8a9b;--accent:#773460;--wash:#f4eaf2;--info:#1f6680;--success:#2f7d57;--danger:#a23a3a}
+*{box-sizing:border-box}body{margin:24px}h1{font-size:22px;margin:0 0 4px}.lede{color:var(--soft);margin:0 0 24px;max-width:860px}
+.canvas{display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start}
+figure{margin:0;width:620px}figure.narrow{width:390px}figure.wide{width:760px}
+figcaption{font-size:12px;font-weight:600;color:var(--soft);margin:0 0 8px}
+figcaption small{display:block;font-weight:400;color:var(--faint);margin-top:2px}
+article{background:var(--paper);border-radius:14px;padding:20px;box-shadow:0 1px 0 var(--line)}
+.fold{border:1px solid var(--line);border-radius:12px;padding:12px 16px}
+.fold+.fold{margin-top:12px}
+.sum{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:600}
+.sum .chev{width:14px;color:var(--faint);font-size:11px}
+.sum .inuse{margin-left:auto;font-size:12px;font-weight:400;color:var(--faint)}
+.group{font-size:12px;font-weight:500;color:var(--soft);margin:20px 0 8px}
+.group:first-of-type{margin-top:12px}
+.help{font-size:12px;color:var(--faint);margin:4px 0 0}
+.row{display:flex;align-items:center;gap:8px;min-height:40px;padding:8px;margin:0 -8px;border-radius:8px}
+.row:hover{background:var(--wash)}
+.row .main{flex:1;min-width:0}
+.row .name{font-weight:500}
+.row .detail{font-size:12px;color:var(--faint);margin-top:4px}
+.row.on .name{color:var(--accent)}
+.row.off .name{color:var(--faint)}
+.row.off:hover{background:none}
+.tag{margin-left:8px;font-size:12px;font-weight:400;color:var(--info)}
+.use{margin-left:8px;font-size:12px;font-weight:400;color:var(--soft)}
+.use::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--success);margin-right:6px}
+.meta{font:12px "Geist Mono",ui-monospace,monospace;color:var(--faint)}
+button{font:500 12px inherit;height:28px;padding:0 12px;border:0;border-radius:8px;background:var(--wash);color:var(--ink)}
+button.primary{background:var(--accent);color:#fff}
+button.quiet{background:none;color:var(--faint)}
+button.danger{background:none;color:var(--danger)}
+.bar{height:4px;border-radius:2px;background:var(--line);width:120px;overflow:hidden}.bar i{display:block;height:100%;width:42%;background:var(--accent)}
+.page h2{font-size:16px;margin:0 0 12px}.page .muted{color:var(--faint);font-size:12px}
+.note{font-size:12px;color:var(--soft);margin:10px 2px 0;max-width:620px}
+.drawer h3{font-size:14px;margin:0 0 4px}.drawer .line{display:flex;align-items:center;gap:12px;min-height:40px}
+.drawer .line .main{flex:1}.switch{width:36px;height:20px;border-radius:10px;background:var(--accent);position:relative}.switch::after{content:"";position:absolute;right:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#fff}
+.switch.offs{background:var(--line)}.switch.offs::after{right:auto;left:2px}
+table{border-collapse:collapse;font-size:12px;width:100%}td,th{text-align:left;padding:6px 8px;border-top:1px solid var(--line);vertical-align:top}th{color:var(--soft);font-weight:500;border-top:0}
+</style>
+<h1>Engines · pick what runs local models</h1>
+<p class="lede">A folded block above System models. Each kind of model has its engines listed, one in use. An engine this machine cannot run stays in the list with the reason. With no choice made, the fastest one is in use.</p>
+<div class="canvas">
+
+<figure><figcaption>01 / Folded, the default<small>One line above System models. Says which engine is in use without opening.</small></figcaption><article class="page">
+<h2>Local model server</h2>
+<div class="fold"><div class="sum"><span class="chev">▸</span>Engines<span class="inuse">oMLX in use</span></div></div>
+<div class="fold"><div class="sum"><span class="chev">▸</span>System models</div></div>
+<p class="muted" style="margin-top:20px">● Model server &nbsp; http://127.0.0.1:11500/v1 &emsp; Models · On this machine 12 · Find new models</p>
+</article></figure>
+
+<figure><figcaption>02 / Open on an Apple Silicon Mac<small>Fastest and Most stable are worked out among what this machine can run.</small></figcaption><article>
+<div class="fold"><div class="sum"><span class="chev">▾</span>Engines</div>
+<p class="help">What runs your models. Nekko uses the one in use for every model it can run.</p>
+<div class="group">Chat models</div>
+<div class="row on"><div class="main"><div class="name">oMLX<span class="tag">Fastest</span><span class="use">In use</span></div><div class="detail">MLX with batching and a prompt cache kept on disk.</div></div><span class="meta">0.8.3</span><button class="danger">Uninstall</button></div>
+<div class="row"><div class="main"><div class="name">MLX<span class="tag">Most stable</span></div><div class="detail">Apple's own framework. Runs MLX models.</div></div><span class="meta">mlx-lm 0.31.3</span><button>Use</button></div>
+<div class="row"><div class="main"><div class="name">llama.cpp</div><div class="detail">Runs any GGUF model, on every computer.</div></div><span class="meta">b12532</span><button>Use</button></div>
+<div class="row off"><div class="main"><div class="name">Basalt</div><div class="detail">NVIDIA RTX 50 series only</div></div></div>
+<div class="row off"><div class="main"><div class="name">squid5090</div><div class="detail">NVIDIA RTX 5090 only</div></div></div>
+<div class="group">Photo and video models</div>
+<div class="row on"><div class="main"><div class="name">stable-diffusion.cpp<span class="use">In use</span></div><div class="detail">Runs SD3.5, FLUX and other image models.</div></div><span class="meta">master-492</span><button class="danger">Uninstall</button></div>
+</div>
+</article><p class="note">A GGUF model still runs on llama.cpp while oMLX is in use: the engine in use takes every model it can run, and the rest go to the engine that can.</p></figure>
+
+<figure><figcaption>03 / Linux with an RTX 5090<small>squid5090 is the fastest; llama.cpp the most stable. Mac engines stay, disabled.</small></figcaption><article>
+<div class="fold"><div class="sum"><span class="chev">▾</span>Engines</div>
+<div class="group">Chat models</div>
+<div class="row"><div class="main"><div class="name">squid5090<span class="tag">Fastest</span></div><div class="detail">Built for one RTX 5090. Runs Inkling 2 Mini.</div></div><button>Set up</button></div>
+<div class="row on"><div class="main"><div class="name">Basalt<span class="use">In use</span></div><div class="detail">Built for RTX 50 series cards. Runs its own model packs.</div></div><span class="meta">0.5.7</span><button class="danger">Uninstall</button></div>
+<div class="row"><div class="main"><div class="name">llama.cpp<span class="tag">Most stable</span></div><div class="detail">Runs any GGUF model, on every computer.</div></div><span class="meta">b12532</span><button>Use</button></div>
+<div class="row off"><div class="main"><div class="name">MLX</div><div class="detail">macOS only</div></div></div>
+<div class="row off"><div class="main"><div class="name">oMLX</div><div class="detail">macOS only</div></div></div>
+</div>
+</article><p class="note">squid5090 publishes no downloads, so Nekko cannot install it by itself. Set up points Nekko at one you built. Until then the fastest engine Nekko can install is in use.</p></figure>
+
+<figure><figcaption>04 / Windows with an RTX 5090<small>Same card, different reason: squid5090 is Linux only.</small></figcaption><article>
+<div class="fold"><div class="sum"><span class="chev">▾</span>Engines</div>
+<div class="group">Chat models</div>
+<div class="row"><div class="main"><div class="name">Basalt<span class="tag">Fastest</span></div><div class="detail">Built for RTX 50 series cards. Runs its own model packs.</div></div><span class="meta">0.5.7 · 410 MB</span><button class="primary">Install</button></div>
+<div class="row on"><div class="main"><div class="name">llama.cpp<span class="tag">Most stable</span><span class="use">In use</span></div><div class="detail">Runs any GGUF model, on every computer.</div></div><span class="meta">b12532</span></div>
+<div class="row off"><div class="main"><div class="name">squid5090</div><div class="detail">Linux only</div></div></div>
+<div class="row off"><div class="main"><div class="name">MLX</div><div class="detail">macOS only</div></div></div>
+<div class="row off"><div class="main"><div class="name">oMLX</div><div class="detail">macOS only</div></div></div>
+</div>
+</article><p class="note">Install is the one primary button: it is on the fastest engine this machine can run and does not have yet. With no choice made, it takes over once it is installed; a choice already made stays, and the new engine offers Use.</p></figure>
+
+<figure><figcaption>05 / A PC with no RTX 50 series card<small>One usable engine, so no Fastest or Most stable: there is nothing to compare.</small></figcaption><article>
+<div class="fold"><div class="sum"><span class="chev">▾</span>Engines</div>
+<div class="group">Chat models</div>
+<div class="row on"><div class="main"><div class="name">llama.cpp<span class="use">In use</span></div><div class="detail">Runs any GGUF model, on every computer.</div></div><span class="meta">b12532</span></div>
+<div class="row off"><div class="main"><div class="name">Basalt</div><div class="detail">NVIDIA RTX 50 series only</div></div></div>
+<div class="row off"><div class="main"><div class="name">squid5090</div><div class="detail">NVIDIA RTX 5090 only</div></div></div>
+<div class="row off"><div class="main"><div class="name">MLX</div><div class="detail">macOS only</div></div></div>
+<div class="row off"><div class="main"><div class="name">oMLX</div><div class="detail">macOS only</div></div></div>
+</div>
+</article></figure>
+
+<figure><figcaption>06 / Installing<small>The row carries its own progress. Use appears when it lands.</small></figcaption><article>
+<div class="fold"><div class="sum"><span class="chev">▾</span>Engines</div>
+<div class="group">Chat models</div>
+<div class="row"><div class="main"><div class="name">oMLX<span class="tag">Fastest</span></div><div class="detail">Downloading, 176 MB of 420 MB</div></div><span class="bar"><i></i></span><button class="quiet">Cancel</button></div>
+<div class="row on"><div class="main"><div class="name">MLX<span class="tag">Most stable</span><span class="use">In use</span></div><div class="detail">Apple's own framework. Runs MLX models.</div></div><span class="meta">mlx-lm 0.31.3</span></div>
+<div class="row"><div class="main"><div class="name">llama.cpp</div><div class="detail">Runs any GGUF model, on every computer.</div></div><span class="meta">b12532</span><button>Use</button></div>
+</div>
+</article></figure>
+
+<figure class="narrow"><figcaption>07 / Narrow, 390<small>Version drops under the name; the action stays on the right.</small></figcaption><article>
+<div class="fold"><div class="sum"><span class="chev">▾</span>Engines</div>
+<div class="group">Chat models</div>
+<div class="row on"><div class="main"><div class="name">MLX<span class="tag">Most stable</span><span class="use">In use</span></div><div class="detail">Apple's own framework. Runs MLX models.</div></div></div>
+<div class="row"><div class="main"><div class="name">llama.cpp</div><div class="detail">Runs any GGUF model, on every computer.</div></div><button>Use</button></div>
+<div class="row off"><div class="main"><div class="name">Basalt</div><div class="detail">NVIDIA RTX 50 series only</div></div></div>
+<div class="row off"><div class="main"><div class="name">squid5090</div><div class="detail">NVIDIA RTX 5090 only</div></div></div>
+</div>
+</article></figure>
+
+<figure><figcaption>08 / Model options: DFlash 2 in the load drawer<small>Offered only on a model that has a drafter. One switch; the drafter downloads on first use.</small></figcaption><article class="drawer">
+<h3>Qwen3.8-27B · Q4_K_M</h3>
+<p class="help">Loading on llama.cpp</p>
+<div class="group">Speed-ups</div>
+<div class="line"><div class="main"><div class="name" style="font-weight:500">DFlash 2<span class="tag">About 1.8x faster</span></div><div class="detail" style="font-size:12px;color:var(--faint)">A small drafter guesses a few words ahead; the model checks them. Same answers. 1.1 GB.</div></div><span class="switch"></span></div>
+<div class="line"><div class="main"><div class="name" style="font-weight:500">Guess from the chat</div><div class="detail" style="font-size:12px;color:var(--faint)">Reuses text already in the chat. Helps edits and quotes most.</div></div><span class="switch"></span></div>
+</article><p class="note">Other models show only the options they have: a model with no drafter shows no DFlash row.</p></figure>
+
+<figure class="wide"><figcaption>09 / The rules behind the list</figcaption><article>
+<table>
+<tr><th>Engine</th><th>Usable on</th><th>Otherwise says</th><th>Runs</th><th>Speed order</th><th>Stability order</th></tr>
+<tr><td>squid5090</td><td>Linux, RTX 5090</td><td>NVIDIA RTX 5090 only · Linux only</td><td>Inkling 2 Mini</td><td>1</td><td>5</td></tr>
+<tr><td>Basalt</td><td>Linux or Windows, RTX 50 series</td><td>NVIDIA RTX 50 series only</td><td>Its .basalt packs</td><td>2</td><td>4</td></tr>
+<tr><td>oMLX</td><td>Apple Silicon, macOS 15+</td><td>macOS only · macOS 15 or later only</td><td>MLX models</td><td>3</td><td>3</td></tr>
+<tr><td>MLX</td><td>Apple Silicon</td><td>macOS only · Apple Silicon only</td><td>MLX models</td><td>4</td><td>1</td></tr>
+<tr><td>llama.cpp</td><td>Everything</td><td></td><td>Any GGUF</td><td>5</td><td>2</td></tr>
+</table>
+</article><p class="note">In use, with no choice made: the fastest usable engine that is installed; with nothing installed, the fastest one Nekko can install. A choice sticks until changed.</p></figure>
+
+</div></html>

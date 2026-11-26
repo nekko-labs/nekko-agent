@@ -6,6 +6,7 @@ pub mod builds;
 pub mod capacity;
 pub mod catalog;
 pub mod download;
+pub mod engines;
 pub mod folders;
 pub mod gguf;
 pub mod gpu_adapters;

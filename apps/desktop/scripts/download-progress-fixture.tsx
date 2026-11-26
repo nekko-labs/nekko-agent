@@ -4,7 +4,8 @@ import { createRoot } from 'react-dom/client';
 import { ModelDetail } from '../src/renderer/components/engine/ModelDetail';
 import { EngineInstallCard } from '../src/renderer/components/engine/EngineInstallCard';
 import { DiffusionInstallCard } from '../src/renderer/components/engine/DiffusionInstallCard';
-import { MlxInstallCard } from '../src/renderer/components/engine/MlxInstallCard';
+import { EngineGroups } from '../src/renderer/components/engine/Engines';
+import { engineGroups } from '../src/renderer/components/engine/engineRows';
 import { RecommendationList } from '../src/renderer/components/engine/RecommendedModels';
 import { DecisionModels } from '../src/renderer/components/engine/DecisionModels';
 import recommendationFixtures from '../src/renderer/components/engine/recommendations.fixture.json';
@@ -40,4 +41,4 @@ Object.assign(window, { nekko: bridge, downloadFixture: { emit, calls } });
 const noop = () => {};
 const recs = { ...recommendationFixtures.m5max, tasks: [ { ...recommendationFixtures.m5max.tasks[0], pick: { ...recommendationFixtures.m5max.tasks[0].pick, repo: model.id, downloadLabel: 'Q4_K_M' } } ] };
 
-createRoot(document.getElementById('root')!).render(<main className="bg-paper min-h-screen p-5 text-ink"><div className="mx-auto max-w-4xl space-y-4"><h1 className="text-xl font-semibold">Model server</h1><div data-fixture="model"><ModelDetail embedded modelId={model.id} installed={[]} onBack={noop} onQueued={noop} /></div><div data-fixture="llama"><EngineInstallCard install={install as any} onChanged={noop} /></div><div className="card p-4"><div data-fixture="diffusion"><DiffusionInstallCard install={install as any} onChanged={noop} /></div><div data-fixture="mlx"><MlxInstallCard install={install as any} onChanged={noop} /></div></div><div className="card p-4" data-fixture="recommendation"><RecommendationList recs={recs as any} models={[]} open onDownload={noop} onRecheck={noop} /></div><div className="card p-4" data-fixture="decision"><DecisionModels /></div></div></main>);
+createRoot(document.getElementById('root')!).render(<main className="bg-paper min-h-screen p-5 text-ink"><div className="mx-auto max-w-4xl space-y-4"><h1 className="text-xl font-semibold">Model server</h1><div data-fixture="model"><ModelDetail embedded modelId={model.id} installed={[]} onBack={noop} onQueued={noop} /></div><div data-fixture="llama"><EngineInstallCard install={install as any} onChanged={noop} /></div><div className="card p-4"><div data-fixture="diffusion"><DiffusionInstallCard install={install as any} onChanged={noop} /></div><div data-fixture="mlx"><EngineGroups groups={engineGroups({ engines: [{ id: 'mlx', name: 'MLX', detail: "Apple's own framework. Runs MLX models.", state: 'usable', runtime: 'mlx' }] })} onChanged={noop} /></div></div><div className="card p-4" data-fixture="recommendation"><RecommendationList recs={recs as any} models={[]} open onDownload={noop} onRecheck={noop} /></div><div className="card p-4" data-fixture="decision"><DecisionModels /></div></div></main>);
