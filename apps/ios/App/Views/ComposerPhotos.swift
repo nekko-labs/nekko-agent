@@ -1,3 +1,4 @@
+import NekkoKit
 import SwiftUI
 import UIKit
 
@@ -61,6 +62,6 @@ private struct ComposerPhoto: View {
             .accessibilityLabel("Remove photo \(index + 1)")
             .accessibilityIdentifier("composer.removePhoto.\(index)")
         }
-        .task(id: source) { thumbnail = DataURLImage.thumbnail(source) }
+        .task(id: source) { thumbnail = await PhotoThumbnails.shared.load(source).map { UIImage(cgImage: $0) } }
     }
 }

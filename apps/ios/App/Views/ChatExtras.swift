@@ -170,17 +170,51 @@ struct PhotoStrip: View {
     var body: some View {
         HStack(spacing: 6) {
             ForEach(Array(photos.enumerated()), id: \.offset) { i, p in
-                if let image = DataURLImage.thumbnail(p) {
-                    Button { open(i) } label: {
-                        Image(uiImage: image).resizable().scaledToFill().frame(width: 64, height: 64)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Photo \(i + 1) of \(photos.count)")
-                    .accessibilityHint("Opens it full screen")
-                    .accessibilityIdentifier("chat.photo")
-                }
+                PhotoStripThumb(source: p, index: i, count: photos.count) { open(i) }
             }
+        }
+    }
+}
+
+/// One thumbnail in a `PhotoStrip`. It reads the shared cache when it appears and
+/// otherwise decodes off the main thread, so `body` never touches the base64.
+private struct PhotoStripThumb: View {
+    let source: String
+    let index: Int
+    let count: Int
+    let open: () -> Void
+    @Environment(\.palette) private var palette
+    @State private var image: UIImage?
+    /// The photo was tried and cannot be shown (withheld by the computer).
+    @State private var unreadable = false
+
+    init(source: String, index: Int, count: Int, open: @escaping () -> Void) {
+        self.source = source; self.index = index; self.count = count; self.open = open
+        if let hit = PhotoThumbnails.shared.cached(source) {
+            _image = State(initialValue: hit.map { UIImage(cgImage: $0) })
+            _unreadable = State(initialValue: hit == nil)
+        }
+    }
+
+    var body: some View {
+        Group {
+            if let image {
+                Button(action: open) {
+                    Image(uiImage: image).resizable().scaledToFill().frame(width: 64, height: 64)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Photo \(index + 1) of \(count)")
+                .accessibilityHint("Opens it full screen")
+                .accessibilityIdentifier("chat.photo")
+            } else if !unreadable {
+                RoundedRectangle(cornerRadius: 10).fill(palette.surface2).frame(width: 64, height: 64)
+                    .accessibilityHidden(true)
+            }
+        }
+        .task(id: source) {
+            guard image == nil else { return }
+            if let cg = await PhotoThumbnails.shared.load(source) { image = UIImage(cgImage: cg) } else { unreadable = true }
         }
     }
 }
@@ -521,15 +555,7 @@ enum DataURLImage {
     /// Decode only a small preview for a selected full-size photo. ImageIO
     /// honours EXIF orientation without rasterising the entire attachment.
     static func thumbnail(_ url: String) -> UIImage? {
-        guard url.hasPrefix("data:image/"), let comma = url.firstIndex(of: ","),
-              let data = Data(base64Encoded: String(url[url.index(after: comma)...])),
-              let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceThumbnailMaxPixelSize: 240,
-              ] as CFDictionary) else { return nil }
-        return UIImage(cgImage: image)
+        PhotoThumbnails.decode(url).map { UIImage(cgImage: $0) }
     }
 
     /// A `data:image/…;base64,` URL's image, or nil (`""` is a photo the computer kept back).
