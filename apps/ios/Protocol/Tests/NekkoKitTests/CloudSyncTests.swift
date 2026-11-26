@@ -625,7 +625,7 @@ final class CloudSyncTests: XCTestCase {
         let clock = Clock()
         let key = SyncCrypto.SoftwareKey()
         let p = CloudSync(api: URL(string: "https://api.example")!, http: counting, secrets: MemorySecrets(), files: nil, deviceLabel: "iPhone",
-                          retryWaits: [.milliseconds(1), .milliseconds(1)], key: { key })
+                          retry: .instant, key: { key })
         p.now = { clock.date }
         try await p.verifyCode(email: "ada@example.com", code: "123456")
         try await p.restore(recoveryKey: mac.recovery.text)
