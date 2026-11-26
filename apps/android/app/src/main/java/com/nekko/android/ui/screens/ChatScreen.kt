@@ -108,6 +108,7 @@ import com.nekko.protocol.Block
 import com.nekko.protocol.Purpose
 import com.nekko.protocol.ReplyTopics
 import com.nekko.protocol.PurposeRun
+import com.nekko.protocol.TurnStrategy
 import com.nekko.android.chat.TurnSteps
 import com.nekko.android.ui.chat.StepsLine
 import java.util.Locale
@@ -1134,9 +1135,12 @@ internal fun transcriptRows(
             out += TranscriptRow.Footer(at.pollFirstEntry().value)
         }
     }
+    var lastStrategy: TurnStrategy? = null
     fun strategyBefore(item: Pair<String, Block>) {
         val user = item.second as? Block.User ?: return
         val strategy = strategies[user.id] ?: return
+        if (strategy == lastStrategy) return
+        lastStrategy = strategy
         flush()
         out += TranscriptRow.Strategy(item.first, strategy)
     }
