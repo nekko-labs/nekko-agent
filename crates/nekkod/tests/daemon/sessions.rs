@@ -386,6 +386,17 @@ async fn a_chat_lists_the_prs_its_sub_agents_opened() {
         !seen.lock().unwrap().iter().any(|c| c[1] == "repos/owner/repo/pulls/13"),
         "the failed create is never read"
     );
+    // The batch answers for several chats at once, each as `pr:sessionList` would; an unknown chat has none.
+    let (status, many) =
+        post(d.port, "pr:sessionListMany", json!([["s_parent", "s_child", "s_failed", "s_none"], true]), Some(TOKEN))
+            .await;
+    assert_eq!(status, 200, "{many}");
+    let urls_of = |id: &str| -> Vec<String> {
+        many[id].as_array().unwrap().iter().filter_map(|p| p["url"].as_str().map(str::to_string)).collect()
+    };
+    assert_eq!(urls_of("s_parent"), vec![url(12)]);
+    assert_eq!(urls_of("s_child"), vec![url(12)]);
+    assert!(urls_of("s_failed").is_empty() && urls_of("s_none").is_empty(), "{many}");
     drop(d);
     let _ = std::fs::remove_dir_all(&data);
 }

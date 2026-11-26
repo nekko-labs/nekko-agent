@@ -210,6 +210,11 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let engine = Arc::new(engine::Engine::new());
     let data_dir = std::path::PathBuf::from(&cfg.data_dir);
     let sessions = Arc::new(nekko_store::SessionStore::new(&cfg.data_dir));
+    {
+        // `session_meta` events carry the chat's changed fields (title, plan, updatedAt, ...).
+        let sessions = sessions.clone();
+        hub.set_meta_fields(Arc::new(move |id| sessions.meta_event_fields(id)));
+    }
     let mcp: Arc<mcp::Mcp> = Arc::default();
     let changes = Arc::new(nekko_tools::ChangeTracker::persistent(sessions.clone()));
     {

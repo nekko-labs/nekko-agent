@@ -36,6 +36,7 @@ import {
   TITLEBAR_OVERLAY_CHANNEL,
   type TitleBarOverlayTheme,
   type WindowChromeBridge,
+  SYSTEM_LANGUAGES_ARG,
 } from '../windowChrome.js';
 import {
   DISPLAY_ARG, DISPLAYS_CHANGED_EVENT, DISPLAYS_CLAIM_CHANNEL, DISPLAYS_LIST_CHANNEL, DISPLAYS_PLACED_EVENT,
@@ -332,6 +333,7 @@ const api: NekkoApi = {
   acceptAllChanges: (sessionId) => inv(IpcChannels.changeAcceptAll, sessionId),
 
   listSessionPrs: (sessionId, force) => inv(IpcChannels.prSessionList, sessionId, force),
+  listSessionPrsMany: (sessionIds, force) => inv(IpcChannels.prSessionListMany, sessionIds, force),
   getPrDiff: (url) => inv(IpcChannels.prDiff, url),
   prAction: (url, action) => inv(IpcChannels.prAction, url, action),
   continuePrStack: (sessionId, url) => inv(IpcChannels.prContinueStack, sessionId, url),
@@ -681,6 +683,7 @@ const chrome: WindowChromeBridge = {
   reportNotificationVisibility: report => { if (process.isMainFrame) ipcRenderer.send(NOTIFICATION_VISIBILITY_CHANNEL, report); },
   deepLinksReady: () => { if (process.isMainFrame) ipcRenderer.send(DEEP_LINKS_READY_CHANNEL); },
   platform: process.platform,
+  systemLanguages: process.argv.find((a) => a.startsWith(SYSTEM_LANGUAGES_ARG))?.slice(SYSTEM_LANGUAGES_ARG.length).split(',').filter(Boolean) ?? [],
   titleBarHeight: TITLEBAR_HEIGHT,
   setTitleBarOverlay: (theme: TitleBarOverlayTheme) => ipcRenderer.send(TITLEBAR_OVERLAY_CHANNEL, theme),
   setPageZoom: (factor) => { if (Number.isFinite(factor) && factor >= 0.8 && factor <= 1.5) webFrame.setZoomFactor(factor); },

@@ -16,9 +16,9 @@
     <link rel="stylesheet" href="styles.css?v=18" />
     <link rel="stylesheet" href="fonts.css?v=1" />
     <style>
-      /* A tiny landing meant to disappear in a blink: we fire analytics, pick
-         the right asset and redirect. Only visible if the redirect fails or
-         the visitor is on a phone. */
+      /* A tiny landing meant to disappear in a blink: after an existing opt-in
+         we report the download, then pick the right asset and redirect. It is
+         only visible if the redirect fails or the visitor is on a phone. */
       .dl-redirect {
         min-height: 100vh;
         display: flex; align-items: center; justify-content: center;
@@ -33,7 +33,8 @@
       }
       .dl-redirect .dl-actions { margin-top: 28px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
     </style>
-    <script defer src="analytics.js?v=2"></script>
+    <script src="/analytics-config.js?v=1" defer></script>
+    <script src="/analytics.js?v=4" defer></script>
   </head>
   <body>
     <main class="dl-redirect">
@@ -51,8 +52,8 @@
 
     <script>
       // nekkoagent.com/download: short, shareable URL that detects the visitor's
-      // OS, reports the hit to PostHog (via analytics.js on this page), and
-      // redirects to the correct installer asset. Falls through to the GitHub
+      // OS, reports the hit only after analytics consent, and redirects to the
+      // correct installer asset. Falls through to the GitHub
       // Releases page if detection or the release manifest comes up empty.
       (function () {
         var RELEASES = 'https://github.com/nekko-labs/nekko-agent/releases/latest';
@@ -93,9 +94,6 @@
         }
 
         function track(target) {
-          // analytics.js is deferred, so PostHog may not be ready yet. Queue the
-          // event until it is; drop it if the loader hasn't arrived in 1200ms so
-          // the redirect still lands quickly.
           var props = {
             os: os || 'unknown',
             arch: arch,
@@ -104,27 +102,10 @@
             url: target && target.url ? target.url : RELEASES,
             source: 'direct-download-url',
           };
-          return new Promise(function (resolve) {
-            var done = false;
-            function fire() {
-              if (done) return; done = true;
-              try {
-                if (window.posthog && typeof window.posthog.capture === 'function') {
-                  window.posthog.capture('download_start', props);
-                }
-              } catch (_) {}
-              resolve();
-            }
-            var waited = 0;
-            var tick = setInterval(function () {
-              waited += 50;
-              if (window.posthog && typeof window.posthog.capture === 'function') {
-                clearInterval(tick); fire();
-              } else if (waited >= 1200) {
-                clearInterval(tick); fire();
-              }
-            }, 50);
-          });
+          try {
+            if (window.NekkoAnalytics) window.NekkoAnalytics.capture('download_start', props);
+          } catch (_) {}
+          return Promise.resolve();
         }
 
         var headingEl = document.getElementById('dlHeading');

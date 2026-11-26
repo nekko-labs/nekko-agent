@@ -28,3 +28,27 @@ it('shares timers, skips hidden windows, avoids overlapping polls and disposes l
   await vi.advanceTimersByTimeAsync(40_000);
   expect(refresh).toHaveBeenCalledTimes(2);
 });
+
+it('polls every subscribed chat in one batch on one shared timer', async () => {
+  vi.useFakeTimers();
+  const doc = Object.assign(new EventTarget(), { hidden: false });
+  vi.stubGlobal('document', doc); vi.stubGlobal('window', new EventTarget());
+  const one = vi.fn(async () => {});
+  const many = vi.fn(async () => {});
+  const offs = ['a', 'b', 'c'].map((id) => subscribePrPolling(id, one, many));
+  await vi.advanceTimersByTimeAsync(20_000);
+  expect(many).toHaveBeenCalledTimes(1);
+  expect(many).toHaveBeenCalledWith(['a', 'b', 'c']);
+  expect(one).not.toHaveBeenCalled();
+  offs[1]!();
+  await vi.advanceTimersByTimeAsync(20_000);
+  expect(many).toHaveBeenLastCalledWith(['a', 'c']);
+  offs[0]!();
+  await vi.advanceTimersByTimeAsync(20_000);
+  // One chat left: its own read.
+  expect(many).toHaveBeenCalledTimes(2);
+  expect(one).toHaveBeenCalledTimes(1);
+  offs[2]!();
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(one).toHaveBeenCalledTimes(1);
+});

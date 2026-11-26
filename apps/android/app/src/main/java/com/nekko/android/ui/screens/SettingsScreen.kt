@@ -42,9 +42,12 @@ fun SettingsScreen(deps: SettingsDeps, onBack: () -> Unit) {
             )
         },
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
-            SettingsSections.forEach { section -> section(deps) }
-            Spacer(Modifier.size(32.dp))
+        // The quiet design (#2940): space instead of cards and rules, groups told apart by their label.
+        androidx.compose.runtime.CompositionLocalProvider(com.nekko.android.ui.components.LocalQuietCards provides true) {
+            Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
+                SettingsSections.forEach { section -> section(deps) }
+                Spacer(Modifier.size(32.dp))
+            }
         }
     }
 }

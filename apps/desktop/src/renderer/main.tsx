@@ -11,6 +11,7 @@ import '@fontsource-variable/geist';
 import '@fontsource-variable/geist-mono';
 import './styles.css';
 import { useStore } from './store.js';
+import { syncDocumentLanguage } from './i18n.js';
 import { fadeInReloadCover, playReloadCover } from './splash.js';
 import { transcriptsLoaded } from './sessionCache.js';
 import { windowChrome } from './chrome.js';
@@ -23,6 +24,7 @@ if (presenter) startPresenterMode(presenter);
 
 // Resolve the system preference before mounting even the loading or login UI.
 useStore.getState().applyTheme();
+syncDocumentLanguage();
 
 // A quiet cover in the app's own background holds over the app and lifts once
 // settings, providers and the open chats have loaded, so it opens onto the real

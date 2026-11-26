@@ -1,3 +1,4 @@
+import { useOnboardingT } from '../../onboardingMessages.js';
 import React, { useEffect, useState } from 'react';
 import type { AppSettings, WorkProfile } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
@@ -56,6 +57,7 @@ function Heading({ title, sub, htmlFor }: { title: string; sub: string; htmlFor?
 
 /** "What should I call you?" Saved on Next; the chat welcome and greetings use it. */
 export function NameStep({ commitRef, onSubmit }: { commitRef: CommitRef; onSubmit: () => void }) {
+  const t = useOnboardingT();
   const [name, setName] = useState(() => useStore.getState().settings?.userName ?? '');
   const trimmed = name.trim();
   useEffect(() => {
@@ -65,12 +67,12 @@ export function NameStep({ commitRef, onSubmit }: { commitRef: CommitRef; onSubm
   return (
     <div className="flex w-full flex-col items-center">
       <SetupNekko size={80} happy={!!trimmed} />
-      <Heading title="What should I call you?" sub="Your name, a nickname, anything you like." htmlFor="setup-name" />
+      <Heading title={t('name')} sub={t('nameHint')} htmlFor="setup-name" />
       <input
         id="setup-name"
         className="input mt-7 h-14 w-full max-w-sm text-center text-xl font-medium"
         autoComplete="given-name"
-        placeholder="Your name"
+        placeholder={t('namePlaceholder')}
         maxLength={60}
         value={name}
         onChange={(e) => setName(e.target.value)}
@@ -79,7 +81,7 @@ export function NameStep({ commitRef, onSubmit }: { commitRef: CommitRef; onSubm
       />
       <div className="mt-6 inline-flex items-center gap-2 rounded-full bg-surface-2 px-4 py-2 text-sm text-ink-soft">
         <SetupNekko size={16} />
-        <span>Hi {trimmed || 'there'}, what should we work on?</span>
+        <span>{trimmed ? t('greetingNamed', { name: trimmed }) : t('greeting')}</span>
       </div>
     </div>
   );
@@ -90,6 +92,7 @@ export function NameStep({ commitRef, onSubmit }: { commitRef: CommitRef; onSubm
  * address is given and Next is pressed; No thanks (skip) sends nothing.
  */
 export function EmailStep({ commitRef, onSubmit }: { commitRef: CommitRef; onSubmit: () => void }) {
+  const t = useOnboardingT();
   const settings = useStore((s) => s.settings);
   const [email, setEmail] = useState(() => settings?.userEmail ?? '');
   const [tried, setTried] = useState(false);
@@ -99,14 +102,14 @@ export function EmailStep({ commitRef, onSubmit }: { commitRef: CommitRef; onSub
     commitRef.current = async () => {
       if (bad) { setTried(true); return false; }
       const error = await saveEmail(email, settings?.userName);
-      if (error) useStore.getState().pushToast('error', `Saved your email here, but it didn't reach Nekko Cloud: ${error}`);
+      if (error) useStore.getState().pushToast('error', t('emailSavedLocally', { error }));
     };
     return () => { commitRef.current = null; };
-  }, [commitRef, email, bad, settings?.userName]);
+  }, [commitRef, email, bad, settings?.userName, t]);
   return (
     <div className="flex w-full flex-col items-center">
       <SetupNekko size={80} />
-      <Heading title={name ? `What's your email, ${name}?` : "What's your email?"} sub="Optional. Only if you'd like to hear about big updates." htmlFor="setup-email" />
+      <Heading title={name ? t('emailNamed', { name }) : t('email')} sub={t('emailHint')} htmlFor="setup-email" />
       <input
         id="setup-email"
         type="email"
@@ -122,15 +125,15 @@ export function EmailStep({ commitRef, onSubmit }: { commitRef: CommitRef; onSub
         autoFocus
       />
       <p id="setup-email-error" role="alert" className="mt-2 h-5 text-xs text-danger">
-        {tried && bad ? "That doesn't look like an email yet." : ''}
+        {tried && bad ? t('invalidEmail') : ''}
       </p>
       <div id="setup-email-note" className="mt-3 flex w-full max-w-sm items-start gap-3 rounded-xl border border-line bg-surface p-4 text-left">
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-accent" style={{ background: 'var(--accent-soft)' }}><ShieldCheckIcon className="h-5 w-5" /></span>
         <span>
-          <span className="block text-sm font-semibold">We never sell, share or spam.</span>
+          <span className="block text-sm font-semibold">{t('emailPromise')}</span>
           <span className="mt-1 block text-xs leading-relaxed text-ink-soft">
-            At most one email a month about new features and important fixes. We'll send one email to confirm, and you can unsubscribe in one click.{' '}
-            <a className="underline" href="https://nekkoagent.com/privacy.html" target="_blank" rel="noreferrer">Privacy policy</a>
+            {t('emailPolicy')}{' '}
+            <a className="underline" href="https://nekkoagent.com/privacy.html" target="_blank" rel="noreferrer">{t('privacy')}</a>
           </span>
         </span>
       </div>
@@ -144,6 +147,7 @@ const PROFILE_ICONS: Record<WorkProfile, (p: { className?: string }) => React.Re
 
 /** "What do you mostly do?" Six cards; the pick only seeds the next step's detail level. */
 export function WorkStep({ commitRef }: { commitRef: CommitRef }) {
+  const t = useOnboardingT();
   const [picked, setPicked] = useState<WorkProfile | undefined>(() => useStore.getState().settings?.workProfile);
   const name = useStore((s) => s.settings?.userName?.trim());
   useEffect(() => {
@@ -152,8 +156,8 @@ export function WorkStep({ commitRef }: { commitRef: CommitRef }) {
   }, [commitRef, picked]);
   return (
     <div className="w-full">
-      <h1 id="setup-work" className="text-center text-2xl font-semibold tracking-tight">What do you mostly do{name ? `, ${name}` : ''}?</h1>
-      <p className="mx-auto mt-2 max-w-md text-center text-sm text-ink-soft">Pick the closest. It only sets where I start, and you can change anything later.</p>
+      <h1 id="setup-work" className="text-center text-2xl font-semibold tracking-tight">{name ? t('workNamed', { name }) : t('work')}</h1>
+      <p className="mx-auto mt-2 max-w-md text-center text-sm text-ink-soft">{t('workHint')}</p>
       <div role="radiogroup" aria-labelledby="setup-work" className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3">
         {PROFILES.map((p) => {
           const on = p.id === picked;
@@ -171,9 +175,9 @@ export function WorkStep({ commitRef }: { commitRef: CommitRef }) {
                 <span className={`grid h-10 w-10 place-items-center rounded-xl ${on ? 'bg-accent text-on-accent' : 'bg-surface-2'}`}><Icon className="h-5 w-5" /></span>
                 {on && <span className="grid h-5 w-5 place-items-center rounded-full bg-accent text-on-accent"><CheckIcon className="h-3 w-3" /></span>}
               </span>
-              <span className="mt-3 text-sm font-semibold">{p.title}</span>
-              <span className="mt-0.5 text-xs text-ink-soft">{p.desc}</span>
-              <span className="mt-2 font-mono text-2xs text-ink-faint">Starts {p.level[0].toUpperCase() + p.level.slice(1)}{p.level === 'detailed' ? ' · Monitors on' : ''}</span>
+              <span className="mt-3 text-sm font-semibold">{t(p.id)}</span>
+              <span className="mt-0.5 text-xs text-ink-soft">{t(`${p.id}Desc`)}</span>
+              <span className="mt-2 font-mono text-2xs text-ink-faint">{t(p.level === 'detailed' ? 'startsMonitors' : 'starts', { level: t(p.level) })}</span>
             </button>
           );
         })}
