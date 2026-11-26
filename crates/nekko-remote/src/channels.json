@@ -153,6 +153,7 @@
  "pr:info",
  "pr:linkStack",
  "pr:sessionList",
+ "pr:sessionListMany",
  "preview:fetch",
  "providers:discover",
  "providers:importCliAuth",

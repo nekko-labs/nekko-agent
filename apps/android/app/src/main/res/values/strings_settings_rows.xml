@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Settings: Computers first and Models on This phone, as avatar rows with a plus (#2940, the iPhone's #2929). -->
+<resources>
+    <string name="settings_add_computer">Add a computer</string>
+    <string name="settings_manage_computers">Manage computers</string>
+    <string name="settings_models_on">Models on %1$s</string>
+    <string name="settings_phone_provider_off">Off</string>
+</resources>

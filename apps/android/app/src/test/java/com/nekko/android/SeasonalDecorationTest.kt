@@ -5,7 +5,6 @@ import com.nekko.android.ui.theme.ThemeChoice
 import com.nekko.android.ui.theme.ThemePreset
 import com.nekko.android.ui.theme.ThemeResolver
 import com.nekko.android.ui.theme.WinterFlakes
-import com.nekko.protocol.Appearance
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -19,12 +18,9 @@ class SeasonalDecorationTest {
         assertEquals(SeasonalDecoration.NONE, SeasonalDecoration.from(null))
     }
 
-    @Test fun matchedComputerAndLocalChoiceUseTheSameDecoration() {
+    @Test fun aChosenSeasonalPresetDecorates() {
         for ((id, expected) in listOf("winter" to SeasonalDecoration.WINTER, "autumn" to SeasonalDecoration.SPOOKY, "dark" to SeasonalDecoration.NONE)) {
-            val computer = ThemeResolver.resolve(ThemeChoice.COMPUTER, Appearance(preset = id), false)
-            val local = ThemeResolver.resolve(ThemeChoice(id), null, false)
-            assertEquals(expected, SeasonalDecoration.from(computer.preset))
-            assertEquals(expected, SeasonalDecoration.from(local.preset))
+            assertEquals(expected, SeasonalDecoration.from(ThemeResolver.resolve(ThemeChoice(id), false).preset))
         }
     }
 

@@ -1,4 +1,4 @@
-import type { Session } from '@nekko-agent/shared';
+import type { Session, SessionSummary } from '@nekko-agent/shared';
 
 /**
  * Transcripts of the chats opened most recently, kept in memory so opening one
@@ -79,6 +79,38 @@ export async function loadSession(id: string): Promise<Session | null> {
   if (s) putCachedSession(s);
   else dropCachedSession(id);
   return s;
+}
+
+/** What a summary carries beyond a session's own fields (session-summary.ts). */
+const SUMMARY_ONLY = new Set<string>([
+  'activeWatchCount', 'backgroundWatchCount', 'messageCount', 'exchangeCount', 'firstUserText', 'lastReplyText',
+  'lastReplyAt', 'transcriptTokens', 'stalled', 'recentTurns', 'prUrls', 'imageCount', 'phase',
+]);
+
+const sameValue = (a: unknown, b: unknown) => a === b || JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * A session carrying the fields its summary has now (a new plan, a fresh title,
+ * a cleared notice), with its own transcript kept: the summary is every field
+ * of the chat except `messages`, so a change to the record alone needs no
+ * transcript fetch. Null when the summary counts a different number of messages
+ * than this copy holds, since then the transcript changed too and has to be
+ * read. The same object comes back when nothing differs.
+ */
+export function withSummaryFields(session: Session, summary: SessionSummary): Session | null {
+  if (summary.messageCount !== session.messages.length) return null;
+  const next: Record<string, unknown> = { ...session };
+  let changed = false;
+  for (const [key, value] of Object.entries(summary)) {
+    if (SUMMARY_ONLY.has(key) || key === 'messages') continue;
+    if (!sameValue(next[key], value)) { next[key] = value; changed = true; }
+  }
+  for (const key of Object.keys(session)) {
+    if (key === 'messages' || SUMMARY_ONLY.has(key) || key in summary) continue;
+    delete next[key];
+    changed = true;
+  }
+  return changed ? next as unknown as Session : session;
 }
 
 /**

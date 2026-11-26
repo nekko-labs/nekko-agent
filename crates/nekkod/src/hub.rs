@@ -18,7 +18,7 @@ use axum::extract::ws::Utf8Bytes;
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
 
@@ -100,7 +100,13 @@ pub struct Hub {
     /// its API server and its automation.
     remote: broadcast::Sender<Event>,
     sessions: Arc<Mutex<Sessions>>,
+    /// Where a `session_meta` event gets the chat's changed fields from
+    /// ([`Hub::set_meta_fields`]); unset in tests and before the store exists.
+    meta_fields: Arc<OnceLock<MetaFields>>,
 }
+
+/// A chat's small record fields (title, plan, `updatedAt`, ...), read without I/O.
+pub type MetaFields = Arc<dyn Fn(&str) -> Option<Value> + Send + Sync>;
 
 impl Default for Hub {
     fn default() -> Self {
@@ -157,7 +163,7 @@ impl Hub {
         // behind is told `daemon:lagged` and resyncs, as before.
         let (tx, _) = broadcast::channel(HUB_FRAMES);
         let (remote, _) = broadcast::channel(HUB_FRAMES);
-        Self { tx, remote, sessions: Arc::default() }
+        Self { tx, remote, sessions: Arc::default(), meta_fields: Arc::default() }
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<Event> {
@@ -189,12 +195,38 @@ impl Hub {
 
     /// Serialized with `channel` as the first key (serde_json keeps insertion
     /// order, and `channel` is written first), which `?only=` filtering relies on.
-    pub fn publish(&self, channel: &str, payload: Value, term_data: bool) {
+    pub fn publish(&self, channel: &str, mut payload: Value, term_data: bool) {
+        if channel == "agent:event" {
+            self.add_meta_fields(&mut payload);
+        }
         let frame: Utf8Bytes = serde_json::json!({ "channel": channel, "payload": payload }).to_string().into();
         if channel == "agent:event" {
             self.track_agent(frame, &payload, &self.tx);
         } else {
             let _ = self.tx.send(Event { text: frame, term_data, scope: Scope::Global });
+        }
+    }
+
+    /// Where `session_meta` events get their chat's fields from. Set once.
+    pub fn set_meta_fields(&self, source: MetaFields) {
+        let _ = self.meta_fields.set(source);
+    }
+
+    /// A `session_meta` event says the chat record changed; attach the fields
+    /// that changed (`summary`: title, plan, `updatedAt`, ... as the chat now
+    /// has them, `null` for a field it does not have) so a window can apply
+    /// them without reading the chat list again. Additive: a listener that
+    /// ignores `summary` behaves as before. Not for an event that already has one.
+    fn add_meta_fields(&self, payload: &mut Value) {
+        let Some(source) = self.meta_fields.get() else { return };
+        if payload.get("type").and_then(Value::as_str) != Some("session_meta") || payload.get("summary").is_some() {
+            return;
+        }
+        let Some(id) = payload.get("sessionId").and_then(Value::as_str) else { return };
+        if let Some(fields) = source(id)
+            && let Some(obj) = payload.as_object_mut()
+        {
+            obj.insert("summary".into(), fields);
         }
     }
 
@@ -435,6 +467,31 @@ mod tests {
             ],
         );
         assert_eq!(got, [true, true, false, false, true, true, false, true, true, false, true, true, true]);
+    }
+
+    #[test]
+    fn a_session_meta_event_carries_the_chats_changed_fields_when_a_source_is_set() {
+        let hub = Hub::new();
+        let mut rx = hub.subscribe();
+        let body = |rx: &mut broadcast::Receiver<Event>| -> Value {
+            let v: Value = serde_json::from_str(rx.try_recv().unwrap().text.as_str()).unwrap();
+            v["payload"].clone()
+        };
+        hub.publish("agent:event", json!({ "type": "session_meta", "sessionId": "s1" }), false);
+        assert_eq!(body(&mut rx), json!({ "type": "session_meta", "sessionId": "s1" }), "no source: as before");
+        hub.set_meta_fields(Arc::new(|id| (id == "s1").then(|| json!({ "title": "T", "plan": null, "updatedAt": 5 }))));
+        hub.publish(
+            "agent:event",
+            json!({ "type": "session_meta", "sessionId": "s1", "connectivityNotice": { "a": 1 } }),
+            false,
+        );
+        let p = body(&mut rx);
+        assert_eq!(p["summary"], json!({ "title": "T", "plan": null, "updatedAt": 5 }));
+        assert_eq!(p["connectivityNotice"], json!({ "a": 1 }), "existing fields are untouched");
+        hub.publish("agent:event", json!({ "type": "session_meta", "sessionId": "s2" }), false);
+        assert!(body(&mut rx).get("summary").is_none(), "a chat the store has not written: the window re-reads");
+        hub.publish("agent:event", json!({ "type": "done", "sessionId": "s1" }), false);
+        assert!(body(&mut rx).get("summary").is_none(), "only session_meta carries it");
     }
 
     #[test]
