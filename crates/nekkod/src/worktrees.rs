@@ -799,7 +799,11 @@ fn worktree_counts(c: &Candidate) -> (usize, f64) {
 }
 
 /// `f` over every item, on up to `threads` threads, results in input order.
-fn parallel_map<T: Sync, R: Send + Default + Clone>(items: &[T], threads: usize, f: impl Fn(&T) -> R + Sync) -> Vec<R> {
+pub(crate) fn parallel_map<T: Sync, R: Send + Default + Clone>(
+    items: &[T],
+    threads: usize,
+    f: impl Fn(&T) -> R + Sync,
+) -> Vec<R> {
     use std::sync::atomic::{AtomicUsize, Ordering};
     let threads = threads.clamp(1, items.len().max(1));
     if threads == 1 {
@@ -831,6 +835,11 @@ fn parallel_map<T: Sync, R: Send + Default + Clone>(items: &[T], threads: usize,
 /// them apart: only those are ever removed automatically.
 pub fn list(settings: &Value, lookup: &dyn Fn(&str) -> Option<Owner>) -> Vec<Value> {
     list_with(settings, lookup, &|_| true, LIST_THREADS)
+}
+
+/// Every listed worktree's root, without reading any worktree's status.
+pub fn roots(settings: &Value) -> Vec<String> {
+    candidates(settings, &|_| None).into_iter().map(|c| c.root).collect()
 }
 
 fn list_with(
@@ -1092,6 +1101,19 @@ pub async fn sweep_merged(ctx: &crate::routes::Ctx) -> Vec<(String, String)> {
     removed
 }
 
+/// Each entry with `bytes` from the last storage walk, when it measured that root.
+fn with_sizes(entries: Vec<Value>, sizes: &std::collections::HashMap<String, u64>) -> Vec<Value> {
+    entries
+        .into_iter()
+        .map(|mut w| {
+            if let Some(b) = sizes.get(s(&w, "root")) {
+                w["bytes"] = json!(b);
+            }
+            w
+        })
+        .collect()
+}
+
 pub async fn route(ctx: &crate::routes::Ctx, channel: &str, args: &[Value]) -> Result<Value, String> {
     let settings = crate::settings::current(ctx).await;
     let store = ctx.sessions.clone();
@@ -1104,7 +1126,9 @@ pub async fn route(ctx: &crate::routes::Ctx, channel: &str, args: &[Value]) -> R
         let sessions = store.list_meta();
         let lookup = |r: &str| owner_in(&sessions, &running, r);
         match channel.as_str() {
-            "chatWorktrees:list" => Ok(Value::Array(list(&settings, &lookup))),
+            "chatWorktrees:list" => {
+                Ok(Value::Array(with_sizes(list(&settings, &lookup), &crate::storage::worktree_bytes())))
+            }
             _ => remove(&settings, &root, &lookup),
         }
     })
@@ -1119,6 +1143,14 @@ mod tests {
     /// A timed-out command returns on time even when something it started
     /// still holds its output, and that something is ended too.
     #[cfg(unix)]
+    #[test]
+    fn listed_worktrees_carry_their_measured_size() {
+        let sizes = std::collections::HashMap::from([("/r/a".to_string(), 42u64)]);
+        let out = with_sizes(vec![json!({ "root": "/r/a" }), json!({ "root": "/r/b" })], &sizes);
+        assert_eq!(out[0]["bytes"], 42);
+        assert!(out[1].get("bytes").is_none(), "unmeasured has no size");
+    }
+
     #[test]
     fn a_timeout_returns_and_ends_the_whole_group() {
         let marker = std::env::temp_dir().join(format!("nekkod-run-group-{}", std::process::id()));

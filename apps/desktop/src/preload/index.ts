@@ -307,6 +307,8 @@ const api: NekkoApi = {
   getGitStatus: (id, force) => inv(IpcChannels.workspaceGitStatus, id, force),
   listChatWorktrees: () => inv(IpcChannels.chatWorktreesList),
   removeChatWorktree: (root) => inv(IpcChannels.chatWorktreesRemove, root),
+  getStorageUsage: (refresh) => inv(IpcChannels.storageUsage, { refresh: !!refresh }),
+  getDiskSpace: () => inv(IpcChannels.storageDisk),
 
   readFile: (path) => inv(IpcChannels.fileRead, path),
   // The main process serves these on loopback, not the engine (main/htmlPreview.ts).

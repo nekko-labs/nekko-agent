@@ -269,6 +269,8 @@
  "spec:toggleTask",
  "ssh:hosts",
  "ssh:open",
+ "storage:disk",
+ "storage:usage",
  "sync:approve",
  "sync:confirmRecoveryKey",
  "sync:deleteAll",

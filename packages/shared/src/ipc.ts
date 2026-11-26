@@ -252,6 +252,8 @@ export const IpcChannels = {
   sandboxApplyDiff: 'sandbox:applyDiff',
   chatWorktreesList: 'chatWorktrees:list',
   chatWorktreesRemove: 'chatWorktrees:remove',
+  storageUsage: 'storage:usage',
+  storageDisk: 'storage:disk',
 
   fileRead: 'file:read',
   fileWrite: 'file:write',
@@ -1155,6 +1157,10 @@ export interface NekkoApi {
    * has uncommitted changes; the branch is deleted only when fully merged.
    */
   removeChatWorktree(root: string): Promise<{ branchDeleted: boolean }>;
+  /** The last storage measurement at once; starts a new one when it is over 10 minutes old or `refresh`. */
+  getStorageUsage(refresh?: boolean): Promise<import('./storage.js').StorageUsage>;
+  /** Total and free bytes of the data folder's volume; no folder walk. */
+  getDiskSpace(): Promise<import('./storage.js').DiskSpace | null>;
 
   /** Read a file as text (for the in-app viewer/editor). */
   readFile(path: string): Promise<FileContent>;
