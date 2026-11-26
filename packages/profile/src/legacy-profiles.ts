@@ -4,7 +4,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import { spawnSync } from 'node:child_process';
 import { CLI_LINK_FILE, modelModality } from '@nekko-agent/shared';
 import { writeTextAtomic } from './secure-file.js';
-import { defaultUserDataDir } from './user-data.js';
+import { defaultUserDataDir, LEGACY_PROFILE_ENTRIES } from './user-data.js';
 import { applyToDataRoot, planDedupe, providerIdentity, type AccountOf, type FolderLike, type Plan, type ProviderLike } from './profile-repair.js';
 
 /**
@@ -56,6 +56,24 @@ const BROWSER_DIRS = new Set(['Cache', 'Code Cache', 'GPUCache', 'Local Storage'
 /** Root files that describe one machine's running state; never merged. */
 const SKIP_JSON = new Set(['window-state.json', 'cli-link.json', 'migration.json', 'keystore-scope.json']);
 const MAX_JSON_BYTES = 32 * 1024 * 1024;
+
+/** Data folders `mergeRoot` merges on their own terms. */
+const MERGED_DIRS = new Set(['sessions', 'models', 'memory', 'engine', 'runners']);
+
+/**
+ * One machine's caches, downloads and running state, never something a person
+ * made: left behind and deleted with the old folder. A browser profile cannot
+ * be merged into another one.
+ */
+const DISPOSABLE_DIRS = new Set(['desktop', 'run', 'logs', 'bin', 'runtime', 'fonts', 'agent-browser']);
+
+/** Per-install state under `runners/`: the target keeps its own. */
+const RUNNER_LOCAL = new Set(['install-id', 'memory.json', 'vms']);
+
+/** The other known data folders in a root: they move file by file, and any left behind keeps the old folder. */
+const otherDataDirs = (root: string): string[] => dirEntries(root)
+  .filter((e) => e.isDirectory() && LEGACY_PROFILE_ENTRIES.has(e.name) && !MERGED_DIRS.has(e.name) && !DISPOSABLE_DIRS.has(e.name))
+  .map((e) => e.name);
 
 export function legacyEnv(over: Partial<LegacyEnv> = {}): LegacyEnv {
   const home = over.home ?? homedir();
@@ -208,10 +226,12 @@ function writeJson(path: string, value: unknown, pretty = true): void {
 /** Copy one JSON file, rewriting paths that pointed into the old root. Raw copy when it will not parse. */
 function copyJson(src: string, dst: string, pairs: Pairs, ci: boolean): void {
   mkdirSync(dirname(dst), { recursive: true, mode: 0o700 });
-  if (statSync(src).size > MAX_JSON_BYTES) return void copyFileSync(src, dst);
+  // A rewrite in place leaves a file it cannot rewrite exactly as it is.
+  const raw = () => { if (resolve(src) !== resolve(dst)) copyFileSync(src, dst); };
+  if (statSync(src).size > MAX_JSON_BYTES) return raw();
   const text = readFileSync(src, 'utf8');
   let value: unknown;
-  try { value = JSON.parse(text.replace(/^\uFEFF/, '')); } catch { return void copyFileSync(src, dst); }
+  try { value = JSON.parse(text.replace(/^\uFEFF/, '')); } catch { return raw(); }
   writeTextAtomic(dst, JSON.stringify(remap(value, pairs, ci), null, text.includes('\n  ') ? 2 : undefined));
 }
 
@@ -230,6 +250,16 @@ function copyMissing(src: string, dst: string, pairs: Pairs, ci: boolean): numbe
   return copied;
 }
 
+/** Move one file or folder to a path that does not exist yet, copying across filesystems. */
+function moveOne(from: string, to: string): void {
+  mkdirSync(dirname(to), { recursive: true, mode: 0o700 });
+  try { renameSync(from, to); } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'EXDEV') throw err;
+    cpSync(from, to, { recursive: true });
+    rmSync(from, { recursive: true, force: true });
+  }
+}
+
 /** Move what the target lacks. Same-name files are conflicts and stay in the source. */
 function moveMissing(src: string, dst: string, moved: string[], conflicts: string[]): void {
   mkdirSync(dst, { recursive: true, mode: 0o700 });
@@ -237,11 +267,7 @@ function moveMissing(src: string, dst: string, moved: string[], conflicts: strin
     if (e.isSymbolicLink()) continue;
     const from = join(src, e.name), to = join(dst, e.name);
     if (!existsSync(to)) {
-      try { renameSync(from, to); } catch (err) {
-        if ((err as NodeJS.ErrnoException).code !== 'EXDEV') throw err;
-        cpSync(from, to, { recursive: true });
-        rmSync(from, { recursive: true, force: true });
-      }
+      moveOne(from, to);
       moved.push(to);
     } else if (e.isDirectory() && isDir(to)) moveMissing(from, to, moved, conflicts);
     else conflicts.push(from);
@@ -270,6 +296,14 @@ function unionLines(src: string, dst: string): number {
   return added.length;
 }
 
+/** Every line of `src` is already in `dst`. */
+function linesCovered(src: string, dst: string): boolean {
+  const have = new Set(lines(dst));
+  return lines(src).every((l) => have.has(l));
+}
+
+const sameSize = (a: string, b: string): boolean => isFile(b) && statSync(a).size === statSync(b).size;
+
 type Json = Record<string, unknown>;
 const isObj = (v: unknown): v is Json => !!v && typeof v === 'object' && !Array.isArray(v);
 
@@ -282,6 +316,31 @@ const itemKey = (item: unknown): string => {
 function unionArray(a: unknown[], b: unknown[]): unknown[] {
   const seen = new Set(a.map(itemKey));
   return [...a, ...b.filter((x) => !seen.has(itemKey(x)) && (seen.add(itemKey(x)), true))];
+}
+
+/**
+ * A JSON file of independent entries: copied when the target has none, else
+ * arrays union by id and objects gain the keys the target lacks (the target
+ * wins). Returns how many entries the target gained.
+ */
+function mergeJsonFile(from: string, to: string, pairs: Pairs, ci: boolean): number {
+  if (!existsSync(to)) {
+    copyJson(from, to, pairs, ci);
+    const v = readJson(to);
+    return Array.isArray(v) ? v.length : isObj(v) ? Object.keys(v).length : 1;
+  }
+  const a = readJson(to), b = remap(readJson(from), pairs, ci);
+  let added = 0;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    const u = unionArray(a, b);
+    added = u.length - a.length;
+    if (added) writeJson(to, u);
+  } else if (isObj(a) && isObj(b)) {
+    const u = { ...b, ...a };
+    added = Object.keys(u).length - Object.keys(a).length;
+    if (added) writeJson(to, u);
+  }
+  return added;
 }
 
 /** Settings arrays that are lists of independent things; the rest follow "target wins". */
@@ -325,6 +384,8 @@ export interface RootReport {
   source: string;
   sessions: number;
   usageRecords: number;
+  /** CI runner records the target gained. */
+  runners: number;
   files: string[];
   moved: string[];
   conflicts: string[];
@@ -381,6 +442,11 @@ function backupSmallFiles(dirs: Array<{ label: string; dir: string }>, backupDir
       const from = join(dir, e.name), to = join(backupDir, label, e.name);
       if (e.isFile()) { mkdirSync(dirname(to), { recursive: true }); copyFileSync(from, to); }
       else if (e.isDirectory() && (e.name === 'sessions' || e.name === 'memory')) cpSync(from, to, { recursive: true });
+      // The runner records are small and the one part of a runner nobody can rebuild.
+      else if (e.isDirectory() && e.name === 'runners' && isFile(join(from, 'runners.json'))) {
+        mkdirSync(to, { recursive: true });
+        copyFileSync(join(from, 'runners.json'), join(to, 'runners.json'));
+      }
     }
   }
 }
@@ -405,7 +471,7 @@ export function consolidate(items: LegacyItem[], env: LegacyEnv = legacyEnv(), o
 }
 
 function mergeRoot(src: string, target: string, ci: boolean): RootReport {
-  const report: RootReport = { source: src, sessions: 0, usageRecords: 0, files: [], moved: [], conflicts: [] };
+  const report: RootReport = { source: src, sessions: 0, usageRecords: 0, runners: 0, files: [], moved: [], conflicts: [] };
   const pairs: Pairs = [[src, target]];
   const modelMoves: Pairs = [];
   const srcModels = join(src, 'models');
@@ -459,10 +525,7 @@ function mergeRoot(src: string, target: string, ci: boolean): RootReport {
       if (e.name === 'usage.jsonl') report.usageRecords += added;
       if (added) report.files.push(e.name);
     } else if (e.name.endsWith('.json') && !SKIP_JSON.has(e.name)) {
-      if (!existsSync(to)) { copyJson(from, to, allPairs, ci); report.files.push(e.name); continue; }
-      const a = readJson(to), b = remap(readJson(from), allPairs, ci);
-      if (Array.isArray(a) && Array.isArray(b)) { const u = unionArray(a, b); if (u.length !== a.length) { writeJson(to, u); report.files.push(e.name); } }
-      else if (isObj(a) && isObj(b)) { const u = { ...b, ...a }; if (Object.keys(u).length !== Object.keys(a).length) { writeJson(to, u); report.files.push(e.name); } }
+      if (mergeJsonFile(from, to, allPairs, ci)) report.files.push(e.name);
     }
   }
 
@@ -493,7 +556,100 @@ function mergeRoot(src: string, target: string, ci: boolean): RootReport {
     for (const path of moved.flatMap(jsonFilesUnder)) copyJson(path, path, allPairs, ci);
     report.moved.push(...moved);
   }
+
+  mergeRunners(join(src, 'runners'), join(target, 'runners'), allPairs, ci, report);
+
+  for (const name of otherDataDirs(src)) {
+    const moved: string[] = [];
+    moveMissing(join(src, name), join(target, name), moved, report.conflicts);
+    for (const path of moved.flatMap(jsonFilesUnder)) copyJson(path, path, allPairs, ci);
+    report.moved.push(...moved);
+  }
   return report;
+}
+
+/**
+ * `runners/`: the CI runner records and what they run. Records union by id
+ * (the target's win), logs by line, and an image moves only when the target
+ * has none of that name (one it has supersedes it, like an engine build). An
+ * unfinished GitHub App setup moves only when the target has none. The rest
+ * moves when missing; per-install state stays behind.
+ */
+function mergeRunners(src: string, dst: string, pairs: Pairs, ci: boolean, report: RootReport): void {
+  if (!isDir(src)) return;
+  const moved: string[] = [];
+  for (const e of dirEntries(src)) {
+    if (e.isSymbolicLink() || RUNNER_LOCAL.has(e.name)) continue;
+    const from = join(src, e.name), to = join(dst, e.name);
+
+    if (e.name === 'runners.json') {
+      report.runners += mergeJsonFile(from, to, pairs, ci);
+    } else if (e.name === 'images' && e.isDirectory()) {
+      for (const image of dirEntries(from)) {
+        const target = join(to, image.name);
+        if (image.isSymbolicLink() || existsSync(target)) continue;
+        moveOne(join(from, image.name), target);
+        moved.push(target);
+      }
+    } else if (e.name === 'pending-app.json') {
+      if (!existsSync(to)) copyJson(from, to, pairs, ci);
+    } else if (e.isFile() && e.name.endsWith('.jsonl')) {
+      unionLines(from, to);
+    } else if (e.isFile() && e.name.endsWith('.json')) {
+      mergeJsonFile(from, to, pairs, ci);
+    } else if (e.isDirectory()) {
+      moveMissing(from, to, moved, report.conflicts);
+    } else if (!existsSync(to)) {
+      moveOne(from, to);
+      moved.push(to);
+    } else if (!sameSize(from, to)) {
+      report.conflicts.push(from);
+    }
+  }
+  for (const path of moved.flatMap(jsonFilesUnder)) copyJson(path, path, pairs, ci);
+  report.moved.push(...moved);
+}
+
+/** Files under `dir` (at `rel` in a data root) whose counterpart in `target` is missing or a different size. */
+function leftover(dir: string, rel: string, target: string): string[] {
+  return dirEntries(dir).flatMap((f) => {
+    if (f.isSymbolicLink()) return [];
+    const p = join(dir, f.name);
+    if (f.isDirectory()) return leftover(p, `${rel}/${f.name}`, target);
+    if (rel === 'models' && f.name === 'library.json') return [];
+    return sameSize(p, join(target, rel, f.name)) ? [] : [`${rel}/${f.name}`];
+  });
+}
+
+/** What in a root's `runners/` the target does not have yet. */
+function runnersLeft(src: string, target: string): string[] {
+  const dst = join(target, 'runners');
+  const missing: string[] = [];
+  for (const e of dirEntries(src)) {
+    if (e.isSymbolicLink() || RUNNER_LOCAL.has(e.name)) continue;
+    const from = join(src, e.name), to = join(dst, e.name), rel = `runners/${e.name}`;
+
+    if (e.name === 'runners.json') {
+      const records = readJson(from);
+      const have = readJson(to);
+      // A file that does not parse is only covered by an identical one.
+      const covered = Array.isArray(records)
+        ? Array.isArray(have) && records.every((r) => have.some((h) => itemKey(h) === itemKey(r)))
+        : sameSize(from, to);
+      if (!covered) missing.push(rel);
+    } else if (e.name === 'images' && e.isDirectory()) {
+      for (const image of dirEntries(from)) if (!image.isSymbolicLink() && !existsSync(join(to, image.name))) missing.push(`${rel}/${image.name}`);
+    } else if (e.isFile() && e.name.endsWith('.jsonl')) {
+      if (!linesCovered(from, to)) missing.push(rel);
+    } else if (e.isFile() && e.name.endsWith('.json')) {
+      if (!existsSync(to)) missing.push(rel);
+    } else if (e.isDirectory()) {
+      missing.push(...leftover(from, rel, target));
+    } else if (e.isFile() && !sameSize(from, to)) {
+      missing.push(rel);
+    }
+  }
+  return missing;
 }
 
 /** Files in a data root that the target does not already have. Empty means the root is safe to delete. */
@@ -503,8 +659,7 @@ export function unmerged(root: string, target: string): string[] {
     const from = join(root, e.name), to = join(target, e.name);
     if (e.isFile()) {
       if (e.name.endsWith('.jsonl')) {
-        const have = new Set(lines(to));
-        if (lines(from).some((l) => !have.has(l))) missing.push(e.name);
+        if (!linesCovered(from, to)) missing.push(e.name);
       } else if (e.name === 'settings.json') {
         const a = readJson(from), b = readJson(to);
         if (isObj(a) && (!isObj(b) || !coversSettings(a, b))) missing.push(e.name);
@@ -516,15 +671,12 @@ export function unmerged(root: string, target: string): string[] {
       for (const f of dirEntries(from)) if (f.isFile() && !existsSync(join(to, f.name))) missing.push(`sessions/${f.name}`);
     } else if (e.isDirectory() && e.name === 'engine' && hasEngine(target)) {
       // A superseded engine build: the target downloaded its own, so nothing here is lost.
-    } else if (e.isDirectory() && (e.name === 'models' || e.name === 'engine' || e.name === 'memory')) {
-      const leftover = (dir: string, rel: string): string[] => dirEntries(dir).flatMap((f) => {
-        const p = join(dir, f.name);
-        if (f.isDirectory()) return leftover(p, `${rel}/${f.name}`);
-        if (e.name === 'models' && rel === 'models' && f.name === 'library.json') return [];
-        const counterpart = join(target, rel, f.name);
-        return isFile(counterpart) && statSync(counterpart).size === statSync(p).size ? [] : [`${rel}/${f.name}`];
-      });
-      missing.push(...leftover(from, e.name));
+    } else if (e.isDirectory() && e.name === 'runners') {
+      missing.push(...runnersLeft(from, target));
+    } else if (e.isDirectory() && LEGACY_PROFILE_ENTRIES.has(e.name) && !DISPOSABLE_DIRS.has(e.name)) {
+      // models, engine and memory, and every other known data folder: a file
+      // the merge could not place keeps the old folder.
+      missing.push(...leftover(from, e.name, target));
     }
   }
   return missing;

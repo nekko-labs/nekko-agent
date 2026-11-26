@@ -23,7 +23,10 @@ two old installs, four updater caches and ~4,600 `kotrain-*` temp folders.
 | Spec | `SPEC.md`, "Consolidating earlier installs" | Status labelled implemented / unverified. |
 
 Design rules, all covered by tests: additive only; target wins on conflict; usage logs unioned by line; delete
-only what `unmerged()` proves is already in the target; a failed or refused merge deletes nothing; a backup of
+only what `unmerged()` proves is already in the target, which walks every known data folder (`LEGACY_PROFILE_ENTRIES`
+in `user-data.ts`) except caches and running state, so a folder the merge does not know keeps the old copy
+([#3482](https://github.com/nekko-labs/nekko-agent/issues/3482): `runners/` was once deleted unmerged); CI runner
+records merge by id; a failed or refused merge deletes nothing; a backup of
 changed files is written before the first change; refuse while another Nekko process serves from an involved folder.
 
 ## Verified

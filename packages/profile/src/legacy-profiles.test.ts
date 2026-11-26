@@ -236,3 +236,85 @@ describe('cleanup', () => {
     expect(unmerged(s.main, env.target)).toContain('usage.jsonl');
   });
 });
+
+describe('CI runners and other data folders', () => {
+  /** An old profile with a CI runner, as the desktop app leaves it, and a target with one of its own. */
+  function seedRunner(env: LegacyEnv) {
+    const s = seed(env);
+    const runners = join(s.main, 'runners');
+    put(join(runners, 'runners.json'), [
+      { id: 'r-old', label: 'nekko-cloud-mac', github: { appId: 1, installationId: 2 }, image: join(runners, 'images', 'custom') },
+      { id: 'r-both', label: 'from-source' },
+    ]);
+    put(join(runners, 'images', 'default', 'disk.img'), 'old image');
+    put(join(runners, 'images', 'custom', 'disk.img'), 'custom image');
+    put(join(runners, 'audit.jsonl'), jsonl([{ ts: 1, event: 'job' }]));
+    put(join(runners, 'logs', 'job-1.log'), 'log');
+    put(join(runners, 'install-id'), 'oldid000');
+    put(join(runners, 'memory.json'), { samples: [1] });
+    put(join(runners, 'vms', 'vm-1', 'disk.img'), 'clone');
+    put(join(s.main, 'plugins', 'cat', 'manifest.json'), { name: 'cat', root: join(s.main, 'plugins', 'cat') });
+
+    put(join(env.target, 'runners', 'runners.json'), [{ id: 'r-both', label: 'from-target' }]);
+    put(join(env.target, 'runners', 'images', 'default', 'disk.img'), 'the image this Mac built');
+    put(join(env.target, 'runners', 'install-id'), 'newid000');
+    return { ...s, runners };
+  }
+
+  it('merges runner records by id, the target winning, with the images they use', () => {
+    const { env } = world(); const s = seedRunner(env);
+    const report = consolidate(detectLegacy(env), env);
+    const records = json(join(env.target, 'runners', 'runners.json')) as Array<{ id: string; label: string; image?: string }>;
+    expect(records.map((r) => r.id)).toEqual(['r-both', 'r-old']);
+    expect(records[0].label).toBe('from-target');
+    expect(records[1].image).toBe(join(env.target, 'runners', 'images', 'custom'));
+    expect(readFileSync(join(env.target, 'runners', 'images', 'custom', 'disk.img'), 'utf8')).toBe('custom image');
+    expect(readFileSync(join(env.target, 'runners', 'images', 'default', 'disk.img'), 'utf8')).toBe('the image this Mac built');
+    expect(readFileSync(join(env.target, 'runners', 'install-id'), 'utf8')).toBe('newid000');
+    expect(existsSync(join(env.target, 'runners', 'vms'))).toBe(false);
+    expect(existsSync(join(env.target, 'runners', 'logs', 'job-1.log'))).toBe(true);
+    expect(readFileSync(join(env.target, 'runners', 'audit.jsonl'), 'utf8')).toContain('"event":"job"');
+    expect(report.roots.find((r) => r.source === s.main)?.runners).toBe(1);
+    expect(json(join(report.backupDir, 'source-1-.agent-nekko', 'runners', 'runners.json'))).toHaveLength(2);
+  });
+
+  it('moves any other known data folder, rewriting paths into it', () => {
+    const { env } = world(); seedRunner(env);
+    consolidate(detectLegacy(env), env);
+    expect(json(join(env.target, 'plugins', 'cat', 'manifest.json')).root).toBe(join(env.target, 'plugins', 'cat'));
+  });
+
+  it('reports runner records and data folders the target lacks', () => {
+    const { env } = world(); const s = seedRunner(env);
+    const left = unmerged(s.main, env.target);
+    expect(left).toContain('runners/runners.json');
+    expect(left).toContain('runners/images/custom');
+    expect(left).toContain('plugins/cat/manifest.json');
+    expect(left.filter((f) => /install-id|memory\.json|vms/.test(f))).toEqual([]);
+  });
+
+  it('keeps an old folder whose runners were not merged, and removes it once they are', () => {
+    const { env } = world(); seedRunner(env);
+    const items = detectLegacy(env);
+    const before = cleanup(items, env, { uninstall: () => {} });
+    expect(before.kept.map((k) => k.path)).toContain(join(env.home, '.agent-nekko'));
+    expect(existsSync(join(env.home, '.agent-nekko', 'runners', 'runners.json'))).toBe(true);
+
+    consolidate(items, env);
+    const after = cleanup(items, env, { uninstall: () => {} });
+    expect(after.kept).toEqual([]);
+    expect(after.removed).toContain(join(env.home, '.agent-nekko'));
+    expect((json(join(env.target, 'runners', 'runners.json')) as unknown[])).toHaveLength(2);
+  });
+
+  it('keeps an old folder holding a file that clashes with a different one in the target', () => {
+    const { env } = world(); const s = seed(env);
+    put(join(s.main, 'skills', 'a', 'SKILL.md'), 'old text');
+    put(join(env.target, 'skills', 'a', 'SKILL.md'), 'newer, different text');
+    const items = detectLegacy(env);
+    consolidate(items, env);
+    const report = cleanup(items, env, { uninstall: () => {} });
+    expect(report.kept.map((k) => k.path)).toEqual([join(env.home, '.agent-nekko')]);
+    expect(report.kept[0].reason).toContain('skills/a/SKILL.md');
+  });
+});

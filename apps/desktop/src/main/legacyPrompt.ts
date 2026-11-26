@@ -56,8 +56,9 @@ export function offerLegacyCleanup(deps: LegacyPromptDeps): boolean {
   if (choice === 'later') return false;
   try {
     const merged = (deps.merge ?? consolidate)(items, env, { ignorePids: [process.pid] });
-    const counts = merged.roots.reduce((a, r) => ({ s: a.s + r.sessions, u: a.u + r.usageRecords }), { s: 0, u: 0 });
-    let report = `Merged ${counts.s} chats and ${counts.u} usage records. Backup: ${merged.backupDir}`;
+    const counts = merged.roots.reduce((a, r) => ({ s: a.s + r.sessions, u: a.u + r.usageRecords, c: a.c + r.runners }),{ s: 0, u: 0, c: 0 });
+    const runners = counts.c ? `, ${counts.c} CI runner${counts.c === 1 ? '' : 's'}` : '';
+    let report = `Merged ${counts.s} chats${runners} and ${counts.u} usage records. Backup: ${merged.backupDir}`;
     let error = false;
     if (choice === 'merge-clean') {
       const cleaned = (deps.clean ?? cleanup)(items, env);
