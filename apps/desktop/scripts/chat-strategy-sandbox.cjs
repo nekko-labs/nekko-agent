@@ -21,7 +21,7 @@ app.whenReady().then(async () => {
     for (let i = 0; i < 50 && !await run('!!window.layoutFixture'); i++) await sleep(100);
     await run('layoutFixture.showStrategy()');
     for (let i = 0; i < 50 && !await run(`document.body.innerText.includes('Read the project brief.')`); i++) await sleep(100);
-    const strategies = await run(`Array.from(document.querySelectorAll('section[aria-label="Strategy"]')).map(e => e.innerText.split(String.fromCharCode(10)).filter(Boolean).join(String.fromCharCode(10)))`);
+    const strategies = await run(`Array.from(document.querySelectorAll('section[data-turn-strategy]')).map(e => e.innerText.split(String.fromCharCode(10)).filter(Boolean).join(String.fromCharCode(10)))`);
     assert.deepEqual(strategies, process.env.NEKKO_BEFORE === '1' ? [] : ['Strategy\nTool list · Direct · No coordination needed', 'Strategy\nCode mode · Orchestration · Coordination requested']);
     report.checks.push({ strategies });
     assert(await run('document.documentElement.scrollWidth <= innerWidth'));

@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import type { TurnStrategy } from '@nekko-agent/shared';
 
 const tools = { code: 'Code mode', list: 'Tool list', none: 'No tools', 'claude-code': 'Claude Code' };
@@ -11,9 +12,10 @@ const reasons = {
 };
 
 export function TurnStrategyRow({ strategy }: { strategy: TurnStrategy }) {
+  const headingId = useId();
   return (
-    <section aria-label="Strategy" className="rounded-md border border-line px-3 py-2 text-xs">
-      <h3 className="m-0 font-medium">Strategy</h3>
+    <section aria-labelledby={headingId} data-turn-strategy className="rounded-md border border-line px-3 py-2 text-xs">
+      <h3 id={headingId} className="m-0 font-medium">Strategy</h3>
       <p className="m-0 mt-1 text-ink-muted">
         {strategy.orchestration === 'external' ? orchestra.external : `${tools[strategy.tools]} · ${orchestra[strategy.orchestration]}`}
         {strategy.reason && <> · {reasons[strategy.reason]}</>}
