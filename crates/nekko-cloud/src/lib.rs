@@ -1582,7 +1582,7 @@ impl Cloud {
         Ok(())
     }
 
-    /// After a pull has read the account record (decision 0122): pull again from the start once if
+    /// After a pull has read the account record (decision 0124): pull again from the start once if
     /// this computer predates deflated records and the account has used them (true then), and list
     /// that this computer opens them. Listing it is a one-time write that never fails a pass.
     async fn compression_step(&self, token: &str) -> Result<bool, String> {

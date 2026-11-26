@@ -3,7 +3,7 @@ status: accepted
 date: 2026-11-26
 ---
 
-# 0122. Chat records are deflated before they are sealed, once every device of the account can read them
+# 0124. Chat records are deflated before they are sealed, once every device of the account can read them
 
 ## Context
 

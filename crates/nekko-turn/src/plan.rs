@@ -315,6 +315,9 @@ pub fn repo_suffix(workspace: &Value) -> String {
     }
 }
 
+/// Applies to the agent's use of tools, not to ordinary local git operations.
+pub const HYPERGATE_GITHUB: &str = "GitHub access for this chat goes through Hypergate, starting with the first read. Use its GitHub tools if offered. Treat repository examples such as `gh issue list` as shorthand, not permission to run bare gh. For CLI access, use Hypergate's clis_list and credentials_list; run `hypergate run --agent nekko-agent --with <allowed-github-credential-id> -- <reported-gh-path> ...`. For a GitHub fetch or push, use HTTPS with the scoped gh credential helper, not the SSH remote or a cached login. Local git status, diff and commits need no gateway. If the gateway or grant is unavailable, report it and request access in Hypergate; do not try a direct API call, sign in separately, or retrieve a raw token.";
+
 pub fn turn_system_prompt(input: &Value) -> String {
     let c = catalog();
     let settings = input.get("settings").unwrap_or(&Value::Null);
@@ -348,7 +351,8 @@ pub fn turn_system_prompt(input: &Value) -> String {
         .and_then(|id| c.work_mode_prompts.get(id))
         .and_then(Value::as_str);
     let tracking = if sandbox { String::new() } else { work_tracking(settings) };
-    let instructions = [own, watch, work_mode, Some(tracking.as_str())]
+    let github = (!sandbox && settings["hypergateEnabled"].as_bool() == Some(true)).then_some(HYPERGATE_GITHUB);
+    let instructions = [own, watch, work_mode, Some(tracking.as_str()), github]
         .into_iter()
         .flatten()
         .filter(|s| !s.is_empty())
@@ -515,6 +519,20 @@ mod tests {
         assert!(!t.contains("chat context"));
         let turn = turn_system_prompt(&serde_json::json!({ "settings": { "pullRequests": { "linkIssue": false } } }));
         assert!(turn.contains("- Do not link PRs to issues."));
+    }
+
+    #[test]
+    fn paired_github_guidance_precedes_any_tool_result() {
+        for profile in ["small", "medium", "large"] {
+            let mut input = serde_json::json!({ "promptProfile": profile, "tools": [], "settings": {} });
+            assert!(!turn_system_prompt(&input).contains(HYPERGATE_GITHUB));
+            input["settings"]["hypergateEnabled"] = serde_json::json!(true);
+            let paired = turn_system_prompt(&input);
+            assert!(paired.contains("hypergate run --agent nekko-agent --with <allowed-github-credential-id>"));
+            assert!(!paired.contains("gh auth login"));
+            input["sandbox"] = serde_json::json!(true);
+            assert!(!turn_system_prompt(&input).contains(HYPERGATE_GITHUB));
+        }
     }
 
     #[test]

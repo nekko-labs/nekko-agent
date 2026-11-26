@@ -178,7 +178,7 @@ pub struct State {
     pub account_record: Option<String>,
     /// The pull cursor.
     pub cursor: u64,
-    /// This build can read deflated records (decision 0122) and has looked at the state it started
+    /// This build can read deflated records (decision 0124) and has looked at the state it started
     /// from. A state file from before this reads as false.
     pub z_ready: bool,
     /// This computer was already syncing before it could read deflated records: once the account

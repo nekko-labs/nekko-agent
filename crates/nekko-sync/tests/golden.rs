@@ -152,7 +152,7 @@ fn every_vector_opens() {
     assert_eq!(unframe(&framed).unwrap(), v["donation"]["payload"].as_str().unwrap().as_bytes());
 }
 
-// Compressed records (decision 0122). Deflate output is not the same across implementations (the
+// Compressed records (decision 0124). Deflate output is not the same across implementations (the
 // iPhone uses Apple's Compression framework, the computer flate2), so these are not compared byte
 // for byte: `sync-compressed.json` holds blobs each side made, and each side must open both. The
 // `rust` list is rewritten by `UPDATE_GOLDEN=1`; the `swift` list is written by the iPhone's
