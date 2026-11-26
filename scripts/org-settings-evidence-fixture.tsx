@@ -29,12 +29,14 @@ const computers: FleetComputerView[] = [
 
 // The laptop's view: this MacBook, the desk PC it can open, a box with remote access off, a teammate's PC, one offline.
 const fleetComputers: FleetComputerView[] = [
-  { deviceId: 'f1', name: 'Philip MacBook Pro', os: 'macos', arch: 'aarch64', appVersion: '0.9.8', online: true, seenAt: now - 4_000, you: true, verified: true, reach: 'you', models: [model('Llama 3.1 8B', 6)] },
+  { deviceId: 'f1', name: 'Philip MacBook Pro', os: 'macos', arch: 'aarch64', appVersion: '0.9.8', online: true, seenAt: now - 4_000, you: true, verified: true, reach: 'you', models: [model('Llama 3.1 8B', 6)],
+    runners: [{ label: 'nekko-cloud-mac', state: 'running', busy: 1, slots: 2 }] },
   { deviceId: 'f2', name: 'gomi', os: 'windows', arch: 'x86_64', appVersion: '0.9.8', online: true, seenAt: now - 8_000, you: false, verified: true, reach: 'ready',
     models: [model('Qwen 3 Coder 30B', 1), model('Gemma 3 27B', 2), model('Llama 3.3 70B', 3)] },
   { deviceId: 'f3', name: 'Studio Linux box', os: 'linux', arch: 'x86_64', appVersion: '0.9.8', online: true, seenAt: now - 20_000, you: false, verified: true, reach: 'no-remote', models: [model('Phi 4 14B', 5)] },
   { deviceId: 'f4', name: 'Sam-PC', os: 'windows', arch: 'x86_64', appVersion: '0.9.8', online: true, seenAt: now - 12_000, you: false, verified: false, reach: 'other-account', ownerEmail: 'sam@nekkolabs.com', models: [] },
-  { deviceId: 'f5', name: 'Old laptop', os: 'macos', arch: 'aarch64', appVersion: '0.9.6', online: false, seenAt: now - 3 * 3600_000, you: false, verified: true, reach: 'no-remote', models: [] },
+  { deviceId: 'f5', name: 'Old laptop', os: 'macos', arch: 'aarch64', appVersion: '0.9.6', online: false, seenAt: now - 3 * 3600_000, you: false, verified: true, reach: 'no-remote', models: [],
+    runners: [{ label: 'nekko-cloud-mac', state: 'ready', busy: 0, slots: 1 }] },
 ];
 const fleetState = state === 'fleet' || state === 'fleet-refused';
 

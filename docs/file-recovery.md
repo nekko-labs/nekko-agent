@@ -52,7 +52,7 @@ An agent can call `edit_file` with a path and **1–100 ordered literal replacem
 }
 ```
 
-All replacements validate before snapshot recording or writing. A missing or ambiguous later match leaves the file unchanged by that call. Replacements are literal, not regular expressions. Do not combine `edits` with top-level `old_string`/`new_string`. Single replacements still use those top-level fields; a missing `new_string` is an error, not the text `undefined`.
+All replacements validate before snapshot recording or writing. A missing or ambiguous later match leaves the file unchanged by that call. Replacements are literal, not regular expressions. For a single replacement, use one entry in `edits`. Models are offered only this array form. Direct callers can still use the legacy top-level `old_string` and `new_string` pair, but cannot combine it with `edits`. A missing `new_string` is an error.
 
 The batch uses the same approval, read-only-folder, path-containment and Git-configuration gates as a single edit. The sandbox helper validates batches too, but durable host recovery is limited to the native tool path; a valid sandbox batch is not evidence of a host snapshot.
 

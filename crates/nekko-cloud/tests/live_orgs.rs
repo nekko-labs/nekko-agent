@@ -47,6 +47,7 @@ fn device(url: &str, label: &str, models: Vec<LocalModel>) -> Device {
             Box::pin(async move { list })
         }),
         connect: None,
+        runners: None,
     });
     Device { cloud, models, name, dir }
 }
