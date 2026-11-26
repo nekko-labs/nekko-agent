@@ -3,7 +3,6 @@ import React, { useEffect, useState } from 'react';
 import type { AppSettings, WorkProfile } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
 import { CapIcon, CheckIcon, CodeIcon, CompassIcon, DocTextIcon, PencilIcon, ShieldCheckIcon, SlidersIcon } from '../../icons.js';
-import { LanguagePicker } from '../LanguagePicker.js';
 import { PROFILES, validEmail } from './aboutYou.js';
 
 type CommitRef = React.MutableRefObject<(() => Promise<void | boolean>) | null>;
@@ -80,7 +79,6 @@ export function NameStep({ commitRef, onSubmit }: { commitRef: CommitRef; onSubm
         onKeyDown={(e) => { if (e.key === 'Enter') onSubmit(); }}
         autoFocus
       />
-      <div className="mt-4"><LanguagePicker id="setup-language" /></div>
       <div className="mt-6 inline-flex items-center gap-2 rounded-full bg-surface-2 px-4 py-2 text-sm text-ink-soft">
         <SetupNekko size={16} />
         <span>{trimmed ? t('greetingNamed', { name: trimmed }) : t('greeting')}</span>

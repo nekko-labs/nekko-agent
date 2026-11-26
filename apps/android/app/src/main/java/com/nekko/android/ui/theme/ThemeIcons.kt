@@ -13,9 +13,6 @@ import com.nekko.android.R
  * of their own. iOS keeps the same table in ThemeIcons.swift.
  */
 object ThemeIcons {
-    /** Match my computer. */
-    @DrawableRes val computer: Int = R.drawable.theme_laptop
-
     val byId: Map<String, Int> = mapOf(
         "system" to R.drawable.theme_sun_moon,
         "light" to R.drawable.theme_sun,
@@ -56,7 +53,7 @@ object ThemeIcons {
     fun of(preset: ThemePreset?): Int? = preset?.let { p -> p.family?.let(byFamily::get) ?: byId[p.id] }
 
     /**
-     * The icon's colour: the theme's accent (or the computer's, for that row) when it
+     * The icon's colour: the theme's accent when it
      * reads on [background] at 3:1. A pale accent on a light phone (or a deep one on a
      * dark phone) gives way to the theme's own page colour when that is a colour of its
      * own (Blueberry Dark's navy), else to the accent deepened toward black (or lightened
