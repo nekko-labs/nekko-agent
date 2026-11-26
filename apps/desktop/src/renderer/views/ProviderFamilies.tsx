@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useId, useMemo, useState } from 'react';
 import type { ModelInfo, ProviderConfig, SubscriptionLimits } from '@nekko-agent/shared';
 import { formatModelPriceLabel, isLocalProvider, limitsKeyFor, modelPricing } from '@nekko-agent/shared';
 import { useProviderLimitsPortfolio } from '../useLimits.js';
@@ -74,7 +74,7 @@ function FamilySection({ family, identities, limits, onAdd, renderDetails }: {
   const custom = family.id.startsWith('provider:');
   return (
     <section className="min-w-0" aria-label={family.name} data-provider-family={family.id}>
-      <div className="mb-4 flex min-w-0 items-center gap-3">
+      <div className="mb-2 flex min-w-0 items-center gap-2">
         <ProviderMark kind={markKind} tile />
         <div className="min-w-0">
           <h3 className="truncate text-base font-semibold text-ink">{family.name}</h3>
@@ -86,7 +86,7 @@ function FamilySection({ family, identities, limits, onAdd, renderDetails }: {
           + Add account
         </button>}
       </div>
-      <Group title={<span className="quiet-group-label">Accounts</span>} className="mb-6">
+      <Group as="div" label="Accounts" role="group" className="provider-family-accounts mb-2">
         {entries.map((entry) => {
           const account = (p: ProviderConfig, login?: string) => (
             <AccountRow
@@ -105,6 +105,7 @@ function FamilySection({ family, identities, limits, onAdd, renderDetails }: {
           return (
             <div key={`login:${entry.email}`} className="min-w-0" data-login={entry.email}>
               <Row
+                dense
                 leading={<span className="w-2" aria-hidden="true" />}
                 title={entry.email}
                 titleClassName="font-medium"
@@ -176,6 +177,7 @@ function AccountRow({ provider, identity, sharedEmail: loginEmail, inLogin, limi
   return (
     <div className={`min-w-0${inLogin ? ' pl-5' : ''}`} id={`provider-${provider.id}`} data-account-row={provider.id}>
       <Row
+        dense
         leading={<StatusDot tone={status.tone} size={8} title={status.word} />}
         title={identity.name}
         detail={detail || undefined}
@@ -202,6 +204,8 @@ function FamilyModels({ family, identities, several }: { family: AccountFamily; 
   const enabled = family.providers.filter((p) => p.enabled !== false);
   const [lists, setLists] = useState<Record<string, ModelInfo[] | null>>({});
   const [query, setQuery] = useState('');
+  const [expanded, setExpanded] = useState(false);
+  const modelsId = useId();
   const [menu, setMenu] = useState<{ x: number; y: number; m: MergedModel } | null>(null);
   const key = enabled.map((p) => `${p.id}:${p.tokenKey ?? ''}`).join('|');
   useEffect(() => {
@@ -249,45 +253,57 @@ function FamilyModels({ family, identities, several }: { family: AccountFamily; 
   const isDefault = (m: MergedModel) => m.offeredBy.some((p) => settings?.defaultProviderId === p.id && settings?.defaultModelId === m.id);
   if (!enabled.length) return null;
   return (
-    <Group
-      title={<span className="quiet-group-label">Models</span>}
-      meta={merged.length ? String(merged.length) : undefined}
-      data-family-models
-    >
-      {filtering && <input className="quiet-field mb-2 text-xs" placeholder={`Search ${family.name} models`} aria-label={`Search ${family.name} models`} value={query} onChange={(e) => setQuery(e.target.value)} />}
-      {!merged.length && <p className="px-3 py-2 text-xs text-ink-faint">{loading ? 'Loading models…' : 'No models reported yet. Open an account above to check its connection.'}</p>}
-      {merged.length > 0 && !shown.length && <p className="px-3 py-2 text-xs text-ink-faint">No models match.</p>}
-      {menu && <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
-        {menu.m.offeredBy.map((p) => <ContextAction key={p.id} onClick={() => { setDefault(p, menu.m); setMenu(null); }}>{menu.m.offeredBy.length > 1 ? `Set as default on ${nameOf(p)}` : 'Set as default'}</ContextAction>)}
-      </ContextMenu>}
-      {/* No overscroll containment: at the list's end the wheel scrolls the page on. */}
-      <div className="max-h-96 overflow-y-auto">
-        {shown.map((m) => {
-          const first = m.offeredBy[0];
-          const price = formatModelPriceLabel({ modelId: m.id, auth: first.auth, isLocal: false, pricing: modelPricing(m.sample) });
-          const starred = keysOf(m).some((k) => favs.has(k));
-          return (
-            <div key={m.id} onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, m }); }} data-family-model={m.id}>
-              <Row
-                dense
-                title={m.name}
-                detail={several ? m.offeredBy.map(nameOf).join(' · ') : undefined}
-                meta={isDefault(m) ? <span className="text-accent">Default</span> : price || undefined}
-                trailing={<button
-                  type="button"
-                  className={`rounded-md p-2 ${starred ? 'text-accent' : 'text-ink-faint opacity-0 hover:text-ink focus-visible:opacity-100 group-hover/row:opacity-100 touch:opacity-100'}`}
-                  aria-pressed={starred}
-                  aria-label={starred ? `Unstar ${m.name}` : `Star ${m.name}`}
-                  title={starred ? 'Unstar' : several ? 'Star (pin to the top of the model picker on every account that offers it)' : 'Star (pin to the top of the model picker)'}
-                  onClick={() => void toggleStar(m)}
-                >
-                  <StarIcon className="h-3.5 w-3.5" filled={starred} />
-                </button>}
-              />
-            </div>
-          );
-        })}
+    <div className="min-w-0" data-family-models>
+      <button
+        type="button"
+        className="quiet-row provider-family-models-toggle"
+        aria-expanded={expanded}
+        aria-controls={modelsId}
+        aria-label={`${family.name} models${merged.length ? `, ${merged.length} available` : ''}`}
+        onClick={() => { setMenu(null); setExpanded(!expanded); }}
+      >
+        <ChevronIcon className="h-3.5 w-3.5 shrink-0 text-ink-faint" aria-hidden="true" />
+        <span className="quiet-group-label">Models</span>
+        {merged.length > 0 && <span className="text-xs text-ink-faint">{merged.length}</span>}
+      </button>
+      <div id={modelsId} hidden={!expanded}>
+        {expanded && <>
+          {filtering && <input className="quiet-field mb-2 text-xs" placeholder={`Search ${family.name} models`} aria-label={`Search ${family.name} models`} value={query} onChange={(e) => setQuery(e.target.value)} />}
+          {!merged.length && <p className="px-3 py-2 text-xs text-ink-faint">{loading ? 'Loading models…' : 'No models reported yet. Open an account above to check its connection.'}</p>}
+          {merged.length > 0 && !shown.length && <p className="px-3 py-2 text-xs text-ink-faint">No models match.</p>}
+          {menu && <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
+            {menu.m.offeredBy.map((p) => <ContextAction key={p.id} onClick={() => { setDefault(p, menu.m); setMenu(null); }}>{menu.m.offeredBy.length > 1 ? `Set as default on ${nameOf(p)}` : 'Set as default'}</ContextAction>)}
+          </ContextMenu>}
+          {/* No overscroll containment: at the list's end the wheel scrolls the page on. */}
+          <div className="max-h-96 overflow-y-auto">
+            {shown.map((m) => {
+              const first = m.offeredBy[0];
+              const price = formatModelPriceLabel({ modelId: m.id, auth: first.auth, isLocal: false, pricing: modelPricing(m.sample) });
+              const starred = keysOf(m).some((k) => favs.has(k));
+              return (
+                <div key={m.id} onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, m }); }} data-family-model={m.id}>
+                  <Row
+                    dense
+                    title={m.name}
+                    detail={several ? m.offeredBy.map(nameOf).join(' · ') : undefined}
+                    meta={isDefault(m) ? <span className="text-accent">Default</span> : price || undefined}
+                    trailing={<button
+                      type="button"
+                      className={`rounded-md p-2 ${starred ? 'text-accent' : 'text-ink-faint opacity-0 hover:text-ink focus-visible:opacity-100 group-hover/row:opacity-100 touch:opacity-100'}`}
+                      aria-pressed={starred}
+                      aria-label={starred ? `Unstar ${m.name}` : `Star ${m.name}`}
+                      title={starred ? 'Unstar' : several ? 'Star (pin to the top of the model picker on every account that offers it)' : 'Star (pin to the top of the model picker)'}
+                      onClick={() => void toggleStar(m)}
+                    >
+                      <StarIcon className="h-3.5 w-3.5" filled={starred} />
+                    </button>}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </>}
       </div>
-    </Group>
+    </div>
   );
 }
