@@ -24,7 +24,6 @@ import com.nekko.android.ui.theme.Nekko
 import com.nekko.android.ui.theme.NekkoTheme
 import com.nekko.android.ui.theme.ThemeChoice
 import com.nekko.android.ui.theme.ThemeResolver
-import com.nekko.protocol.Appearance
 import java.io.File
 import org.junit.Assert.*
 import org.junit.Rule
@@ -46,8 +45,7 @@ class WinterThemeTest {
         val preset = mutableStateOf("winter")
         var refreshes = 0
         compose.setContent {
-            val look = ThemeResolver.resolve(ThemeChoice.COMPUTER,
-                Appearance(Appearance.ThemeMode.DARK, preset = preset.value), systemDark = false)
+            val look = ThemeResolver.resolve(ThemeChoice(preset.value), systemDark = true)
             NekkoTheme(dark = look.dark, accent = look.accent, preset = look.preset) {
                 Column(Modifier.fillMaxSize().background(Nekko.palette.paper).padding(20.dp).testTag("winter.fixture")) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -110,7 +108,7 @@ class WinterThemeTest {
         try {
             scale(0f)
             compose.setContent {
-                val look = ThemeResolver.resolve(ThemeChoice("winter"), null, false)
+                val look = ThemeResolver.resolve(ThemeChoice("winter"), false)
                 NekkoTheme(dark = look.dark, preset = look.preset) {
                     Box(Modifier.fillMaxSize().background(Nekko.palette.paper).testTag("winter.static")) {
                         ChatMascot(false, false, {}, Modifier.align(Alignment.TopStart).padding(20.dp))

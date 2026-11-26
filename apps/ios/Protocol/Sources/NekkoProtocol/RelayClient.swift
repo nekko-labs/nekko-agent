@@ -132,6 +132,18 @@ public struct RelayConfig: Sendable {
     public var retryBase: TimeInterval = 1
     public var retryMax: TimeInterval = 30
     public var offlinePoll: TimeInterval = 15
+    /// Up to this fraction is added to each backoff delay, at random, so phones and
+    /// computers that lost the relay together do not all redial in the same instant.
+    public var retryJitter: Double = 0.5
+    /// A number in 0..<1 for the jitter; tests fix it.
+    public var jitterSource: @Sendable () -> Double = { Double.random(in: 0..<1) }
+
+    /// The wait before redial number `attempt` (0 is the first): 1s, 2s, 4s ... capped at
+    /// `retryMax`, then 0 to `retryJitter` more.
+    public func retryDelay(attempt: Int) -> TimeInterval {
+        let base = min(retryMax, retryBase * pow(2, Double(min(attempt, 20))))
+        return base * (1 + max(0, retryJitter) * min(max(jitterSource(), 0), 1))
+    }
     /// The device key every HELLO is signed with (protocol 5). Without one the
     /// HELLO goes unsigned and the computer asks this phone to pair again.
     public var helloSigner: HelloSigner?
@@ -856,8 +868,8 @@ public final class RelayClient: @unchecked Sendable {
     private func scheduleRetry(_ detail: String?, offline: Bool = false) {
         let plan: (gen: Int, delay: TimeInterval)? = locked {
             if stopped { return nil }
-            // 1s, 2s, 4s … capped; an offline computer is polled at a fixed pace.
-            let delay = offline ? config.offlinePoll : min(config.retryMax, config.retryBase * pow(2, Double(min(retry, 20))))
+            // 1s, 2s, 4s … capped, plus jitter; an offline computer is polled at a fixed pace.
+            let delay = offline ? config.offlinePoll : config.retryDelay(attempt: retry)
             if !offline { retry += 1 }
             retryGeneration += 1
             retryPending = true

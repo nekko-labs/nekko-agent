@@ -14,7 +14,9 @@ import com.nekko.protocol.RelayState
 import com.nekko.protocol.RemoteDefaults
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonArray
@@ -285,5 +287,84 @@ class OutboxTest {
         assertEquals("Mac is offline.\nPrompts you send wait on this phone.", ui.sendsLater)
         val unpaired = ChatController.project(com.nekko.android.chat.ChatState(), ChatEnv(RelayState.DENIED, null, RemoteDefaults(), "Mac", canQueue = true))
         assertEquals("This phone is no longer paired.", unpaired.blocked)
+    }
+
+    /** A chat whose turn is long: chat:send waits on [gate], and the chat lists the prompt only once [listed] is set. */
+    private class LongTurn {
+        val gate = CompletableDeferred<JsonElement>()
+        @Volatile var listed = false
+        val caller = FakeCaller { c ->
+            when (c.channel) {
+                Channels.SESSION_GET -> buildJsonObject {
+                    put("id", "s1")
+                    put("messages", JsonArray(emptyList()))
+                    put("clientMessageIds", JsonArray(if (listed) listOf(JsonPrimitive("id-1")) else emptyList()))
+                }
+                Channels.CHAT_SEND -> gate.await()
+                else -> JsonNull
+            }
+        }
+        fun gets() = caller.calls.count { it.channel == Channels.SESSION_GET }
+    }
+
+    private fun TestScope.longTurnOutbox(turn: LongTurn): Outbox {
+        val files = Files()
+        val drafts = DraftStore(files, backgroundScope, debounceMs = 0).also { it.load("c1") }
+        return Outbox(files, drafts, { turn.caller }, { RemoteDefaults("openai", "gpt-x") }, backgroundScope, newId = { "id-1" }, now = { 7L })
+            .also { it.load("c1") }
+    }
+
+    @Test
+    fun `waiting for the chat to list a prompt backs off instead of re-reading twice a second`() = runTest {
+        val turn = LongTurn()
+        val outbox = longTurnOutbox(turn)
+        outbox.add("s1", "hello")
+        val flush = launch { outbox.flush() }
+        runCurrent()
+        // One read to look before sending; then 0.5, 1.5, 3.5 and 7.5 s into the wait.
+        assertEquals(1, turn.gets())
+        advanceTimeBy(10_000)
+        assertEquals(5, turn.gets())
+        flush.cancel()
+    }
+
+    @Test
+    fun `the computer's first event for the chat wakes the confirmation at once, once`() = runTest {
+        val turn = LongTurn()
+        val outbox = longTurnOutbox(turn)
+        outbox.add("s1", "hello")
+        val flush = launch { outbox.flush() }
+        runCurrent()
+        assertEquals(1, turn.gets())
+        // The turn started: the computer lists the prompt and its first event arrives, well before 0.5 s.
+        turn.listed = true
+        advanceTimeBy(100)
+        outbox.onEvent(AgentEvent.Text("other-chat", "not ours"))
+        advanceTimeBy(1)
+        assertEquals("another chat's event does not wake it", 1, turn.gets())
+        outbox.onEvent(AgentEvent.Text("s1", "Hel"))
+        runCurrent()
+        assertEquals(2, turn.gets())
+        flush.join()
+        assertTrue(outbox.state.value.items.isEmpty())
+        // The streaming reply's later events find nobody waiting.
+        outbox.onEvent(AgentEvent.Text("s1", "lo"))
+        runCurrent()
+        assertEquals(2, turn.gets())
+    }
+
+    @Test
+    fun `chat send answering wakes the confirmation too`() = runTest {
+        val turn = LongTurn()
+        val outbox = longTurnOutbox(turn)
+        outbox.add("s1", "hello")
+        val flush = launch { outbox.flush() }
+        runCurrent()
+        turn.listed = true
+        turn.gate.complete(JsonNull)
+        runCurrent()
+        assertEquals(2, turn.gets())
+        flush.join()
+        assertTrue(outbox.state.value.items.isEmpty())
     }
 }

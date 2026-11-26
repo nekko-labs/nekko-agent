@@ -34,8 +34,9 @@ test('both phones give every theme the same icon, and the desktop nine match its
   const ios = Object.fromEntries([...swift.matchAll(/"([^"]+)": "theme-([a-z-]+)"/g)].map((m) => [m[1], m[2]]));
   assert.ok(Object.keys(android).length > 20);
   assert.deepEqual(ios, android);
-  assert.match(kotlin, /computer: Int = R\.drawable\.theme_laptop/);
+  // Only the iPhone still offers "Match my computer"; Android dropped it (its laptop drawable stays in the shared set).
   assert.match(swift, /computer = "theme-laptop"/);
+  assert.doesNotMatch(kotlin, /theme_laptop/);
   // The desktop's picker (theme-icons.tsx THEME_ICON) and the phones agree on its nine.
   const desktop = Object.fromEntries([...read('apps/desktop/src/renderer/theme-icons.tsx').matchAll(/^  '?([a-z-]+)'?: '([a-z-]+)',$/gm)].map((m) => [m[1], m[2]]));
   const phone = { 'x-plum-white': ios.Nekko, nebula: ios.nebula, terminal: ios.terminal, nord: ios.nord, ember: ios.ember,

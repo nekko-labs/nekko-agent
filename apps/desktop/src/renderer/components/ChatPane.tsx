@@ -42,7 +42,7 @@ import { useModelCatalogVersion } from '../modelCatalog.js';
 import { SubagentBanner } from './SubagentBanner.js';
 import { useGitStatus } from '../useGitStatus.js';
 import { anchorLiveRun, beginResumedRun, clearLiveRun, engineLost, getLiveRun, onRunOrphaned, takeFinishedRun, useLiveRun, type LiveRun } from '../liveRuns.js';
-import { getCachedSession, holdTranscript, loadSession, putCachedSession } from '../sessionCache.js';
+import { getCachedSession, holdTranscript, loadSession, putCachedSession, withSummaryFields } from '../sessionCache.js';
 import { retryUntilAnswered } from '../retryUntilAnswered.js';
 import { usePaneVisible } from '../paneVisibility.js';
 import { useVisibleInterval } from '../visibleInterval.js';
@@ -1312,16 +1312,28 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           // A prompt sent from this pane got its reply: it counts, and the 10th
           // and 50th carry the GitHub star ask under them.
           if (userPromptRef.current) { userPromptRef.current = false; if (starAskAfterReply()) setStarAsk(true); }
-          endTurn();
+          const settled = endTurn();
           refreshCtx();
-          void requestSuggestions();
+          void requestSuggestions(settled);
           break;
         case 'session_meta':
           if (e.connectivityNotice) setLiveConnectivity((notices) => mergeConnectivityNotices(notices, [e.connectivityNotice!]));
-          // The session record changed mid-turn — a new agent plan, or a fresh
-          // title — so re-read it and refresh the sidebar/boards alongside.
-          loadSession(sessionId).then((s) => { if (s) setSession(s); }).catch(() => {});
-          void refreshSessions();
+          // The session record changed mid-turn (a new agent plan, or a fresh
+          // title). The sidebar list is refreshed anyway, and it carries every
+          // field of the chat but its transcript, so the record is updated from
+          // it; only a changed transcript (the summary counts other messages
+          // than this copy holds) is read back whole.
+          void refreshSessions().then(() => {
+            const summary = useStore.getState().sessions.find((x) => x.id === sessionId);
+            const current = latestSessionRef.current;
+            const merged = summary && current ? withSummaryFields(current, summary) : null;
+            if (!merged) {
+              loadSession(sessionId).then((s) => { if (s) setSession(s); }).catch(() => {});
+            } else if (merged !== current) {
+              putCachedSession(merged);
+              setSession(merged);
+            }
+          }).catch(() => { loadSession(sessionId).then((s) => { if (s) setSession(s); }).catch(() => {}); });
           break;
       }
     });
@@ -1388,7 +1400,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     // Hold the streamed reply on screen until its persisted copy is in state,
     // then clear the held copy in the same commit, so the end of a reply never
     // flashes the answer out and back in.
-    loadSession(sessionId).then((s) => {
+    const loaded = loadSession(sessionId);
+    loaded.then((s) => {
       finalizingReply.current = false;
       setSession(s);
       if (heldRef.current === final) {
@@ -1399,6 +1412,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     refreshSessions();
     // A reply may have created or updated a PR (e.g. `gh pr create`).
     useStore.getState().refreshSessionPrs(sessionId);
+    // The transcript this turn ended with, for what else wants it (the suggestions), so it is read once.
+    return loaded;
   };
 
   /**
@@ -1407,20 +1422,21 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
    * session with nothing to suggest from, or a malformed reply all just mean
    * no placeholder suggestion this turn.
    */
-  const requestSuggestions = async () => {
+  const requestSuggestions = async (settled: Promise<Session | null>) => {
     try {
-      const before = await window.nekko.getSession(sessionId);
+      // The transcript the turn's end already fetched; asking the host for it again, twice, was the rest of the cost.
+      const before = await settled;
       const reply = before?.messages[before.messages.length - 1];
       if (!reply || reply.role !== 'assistant') return;
       const res = await window.nekko.suggestReplies(sessionId);
       if (!res) return;
       const options = followUpOptions(res.options, res.next);
       if (!options.length) return;
-      const fresh = await window.nekko.getSession(sessionId);
-      const last = fresh?.messages[fresh.messages.length - 1];
       // A turn that started while the call was in flight (a queued prompt, a
-      // send from another pane) makes the suggestions stale; drop them.
-      if (!last || last.role !== 'assistant' || last.id !== reply.id) return;
+      // send from another pane) makes the suggestions stale; drop them. The pane's own
+      // copy shows a prompt sent from anywhere here, and a run in flight shows the rest.
+      const last = latestSessionRef.current?.messages.at(-1);
+      if (streamingRef.current || getLiveRun(sessionId) || !last || last.role !== 'assistant' || last.id !== reply.id) return;
       setSuggestions({ forId: last.id, next: res.next, options });
     } catch {
       /* suggestions are nice-to-have */

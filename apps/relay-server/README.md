@@ -33,7 +33,24 @@ relay POSTs it to this URL, expecting `{ok:true}`),
 `NEKKO_RELAY_TICKET_KEY` (Nekko Cloud Relay, decision 0116: the Cloud API's Ed25519
 public key, 32 bytes base64url; the API README shows how to make the pair. Agents then present
 `access=nkr1.…` tickets the relay checks itself, renew them with
-`{type:'access'}`, and the account channel opens on `/account`).
+`{type:'access'}`, and the account channel opens on `/account`),
+`NEKKO_RELAY_PRESENCE_SECRET` (optional: turns on the internal `GET /presence`
+below; unset, that route is 404).
+
+**Liveness.** Every room socket and `/account` socket is pinged every 25 s.
+One that sends nothing (no pong, no frame) for 55 s is terminated, within 60 s
+at worst, so a sleeping laptop or a dropped network goes offline as on a clean
+close: `agent-offline` to the room's phones, presence `online:false` to the
+account's other devices. Browsers, `URLSession`, OkHttp and tungstenite answer
+pings by themselves, so no client needs a change. Tests shorten the timings with
+`buildRelay({ liveness: { pingMs, deadlineMs } })`.
+
+**Internal presence** (for the Cloud API only, not for clients):
+`GET /presence?acct=<hash>&acct=<hash>` (at most 100) with
+`authorization: Bearer <NEKKO_RELAY_PRESENCE_SECRET>` answers
+`{"online": {"<acctHash>": ["<devId>", ...]}}`, listing only accounts with a
+device online. A wrong or missing secret is 401, more than 100 `acct` is 400.
+It reads the account map the relay already keeps: no kinds, addresses or times.
 
 The managed instance lives at `wss://nekko-agent-relay.fly.dev`
 (`fly deploy -c apps/relay-server/fly.toml --dockerfile apps/relay-server/Dockerfile .` from

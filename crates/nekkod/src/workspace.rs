@@ -32,6 +32,7 @@ pub const CHANNELS: &[&str] = &[
     "workspace:snippets",
     "workspace:gitStatus",
     "pr:sessionList",
+    "pr:sessionListMany",
     "pr:diff",
     "pr:action",
     // IO-33 FA-2: git in the workspace's folder, and PRs from it.
@@ -166,6 +167,26 @@ async fn session_meta(ctx: &Ctx, id: &str) -> Value {
     blocking(move || store.meta(&id).map(nekko_store::Meta::into_value).unwrap_or(Value::Null))
         .await
         .unwrap_or(Value::Null)
+}
+
+/// The most chats one `pr:sessionListMany` answers for.
+const SESSION_LIST_MANY_MAX: usize = 64;
+
+/// The PR URLs a chat and its sub-agents' chats created, from the summaries
+/// the store keeps (no transcript is read or parsed): the chat's own first,
+/// then the ones rolled up from its children. Empty for no such chat.
+async fn session_pr_urls(ctx: &Ctx, id: &str) -> Vec<String> {
+    let store = ctx.sessions.clone();
+    let id = id.to_string();
+    let summary = blocking(move || store.summary(&id)).await.ok().flatten();
+    summary
+        .as_ref()
+        .and_then(|v| v.get("prUrls"))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|u| u.as_str().map(str::to_string))
+        .collect()
 }
 
 /// The user's settings.
@@ -379,26 +400,30 @@ async fn route_inner(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, 
         }
         "pr:sessionList" => {
             let id = text(&args, 0);
-            let s = session(ctx, &id).await;
-            let Some(messages) = s.get("messages").and_then(Value::as_array) else { return Ok(json!([])) };
-            let mut urls = nekko_store::pr::collect_session_pr_urls(messages);
-            // Sub-agents run in child chats (`parentSessionId`); the summaries roll their PRs up to this one.
-            let store = ctx.sessions.clone();
-            let below = blocking(move || {
-                store.summaries().into_iter().find(|v| v.get("id").and_then(Value::as_str) == Some(id.as_str()))
-            })
-            .await
-            .ok()
-            .flatten();
-            for u in below.as_ref().and_then(|v| v.get("prUrls")).and_then(Value::as_array).into_iter().flatten() {
-                if let Some(u) = u.as_str().filter(|u| !urls.iter().any(|x| x == u)) {
-                    urls.push(u.to_string());
-                }
-            }
+            let urls = session_pr_urls(ctx, &id).await;
             let token = github_token(&settings(ctx).await);
             Ok(Value::Array(
                 ws.prs.session_prs(&urls, token.as_deref(), arg(&args, 1) == Some(&Value::Bool(true))).await,
             ))
+        }
+        // `pr:sessionListMany(ids, force?)`: `pr:sessionList` for several chats in one call,
+        // `{ [id]: PrInfo[] }`, so a board of cards is one request, not one per card.
+        "pr:sessionListMany" => {
+            let ids: Vec<String> = arg(&args, 0)
+                .and_then(Value::as_array)
+                .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).take(SESSION_LIST_MANY_MAX).collect())
+                .unwrap_or_default();
+            let force = arg(&args, 1) == Some(&Value::Bool(true));
+            let token = github_token(&settings(ctx).await);
+            let reads = ids.into_iter().map(|id| {
+                let token = token.clone();
+                async move {
+                    let urls = session_pr_urls(ctx, &id).await;
+                    let prs = ws.prs.session_prs(&urls, token.as_deref(), force).await;
+                    (id, Value::Array(prs))
+                }
+            });
+            Ok(Value::Object(futures_util::future::join_all(reads).await.into_iter().collect()))
         }
         "pr:diff" => {
             let token = github_token(&settings(ctx).await);

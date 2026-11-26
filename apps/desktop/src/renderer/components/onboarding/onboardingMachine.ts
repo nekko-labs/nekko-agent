@@ -2,7 +2,7 @@ import type { WizardStepDef } from './WizardShell.js';
 
 export type StepOutcome = 'done' | 'skipped';
 
-export const ONBOARDING_STEPS: WizardStepDef[] = [
+export const ONBOARDING_STEPS = [
   { id: 'welcome', title: 'Welcome' },
   { id: 'name', title: 'Name' },
   { id: 'email', title: 'Email' },
@@ -15,7 +15,7 @@ export const ONBOARDING_STEPS: WizardStepDef[] = [
   { id: 'tracking', title: 'Work tracking' },
   { id: 'help', title: 'Help improve' },
   { id: 'done', title: 'All set' },
-];
+] as const satisfies readonly WizardStepDef[];
 
 /** Steps laid out wider than the centred column: card grids and the side-by-side preview. */
 export const WIDE_STEP_IDS = new Set(['work', 'detail']);

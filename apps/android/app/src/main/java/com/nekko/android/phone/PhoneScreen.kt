@@ -1,6 +1,11 @@
 package com.nekko.android.phone
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.material.icons.outlined.Key
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -32,7 +37,7 @@ import kotlinx.coroutines.launch
 /** A separate native destination: no remote controllers, tools or sync. Photos go to models that take them. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PhoneScreen(phone: PhoneChats, startChat: String? = null, onBack: () -> Unit) {
+fun PhoneScreen(phone: PhoneChats, startChat: String? = null, openProviders: Boolean = false, addProvider: Boolean = false, startProvider: String? = null, onBack: () -> Unit) {
     val s by phone.state.collectAsStateWithLifecycle()
     if (!s.ready) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Opening phone chats…") }
@@ -41,8 +46,18 @@ fun PhoneScreen(phone: PhoneChats, startChat: String? = null, onBack: () -> Unit
     val scope = rememberCoroutineScope()
     // Opened from a row of the chat list (#2108): that chat, and Back returns to the list.
     var chatId by rememberSaveable { mutableStateOf(startChat) }
-    var providers by rememberSaveable { mutableStateOf(false) }
-    var adding by remember { mutableStateOf(false) }
+    // Opened from Settings → Models on This phone (#2940): on the providers, or straight on Add provider.
+    var providers by rememberSaveable { mutableStateOf(openProviders) }
+    var adding by remember { mutableStateOf(addProvider) }
+    /** The add form's provider, set by a provider button (#2939); null starts on the first key kind. */
+    var addKind by remember { mutableStateOf<String?>(null) }
+    /** Anthropic's ways in, before its form: the API key, and the subscription it can't use here. */
+    var anthropicChoice by remember { mutableStateOf(false) }
+    /** The provider whose page is open (#2939, the iPhone's provider page). */
+    var detail by rememberSaveable { mutableStateOf(startProvider) }
+    /** A provider's last Test, said on its page, and whether it failed. */
+    var tested by remember { mutableStateOf<Map<String, Pair<String, Boolean>>>(emptyMap()) }
+    var testing by remember { mutableStateOf<String?>(null) }
     var picking by remember { mutableStateOf(false) }
     var keyFor by remember { mutableStateOf<String?>(null) }
     var remove by remember { mutableStateOf<String?>(null) }
@@ -56,8 +71,8 @@ fun PhoneScreen(phone: PhoneChats, startChat: String? = null, onBack: () -> Unit
         try { block() } catch (e: CancellationException) { throw e } catch (_: Exception) { notice = "Could not complete this action. Check the address, key and connection." } finally { busy = false }
     }; Unit }
     Scaffold(containerColor = p.paper, topBar = {
-        TopAppBar(title = { Text(if (providers) "Phone providers" else "This phone") }, colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper), navigationIcon = {
-            TextButton(onClick = { if (providers) providers = false else if (chatId != null && chatId != startChat) chatId = null else onBack() }) { Text("Back") }
+        TopAppBar(title = { Text(if (providers) s.providers.firstOrNull { it.id == detail }?.label ?: "Models on this phone" else "This phone") }, colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper), navigationIcon = {
+            TextButton(onClick = { if (providers && detail != null && detail != startProvider) detail = null else if (detail != null && detail == startProvider) onBack() else if (providers && !openProviders) providers = false else if (chatId != null && chatId != startChat) chatId = null else onBack() }) { Text("Back") }
         }, actions = { if (!providers) TextButton(onClick = { providers = true }, modifier = Modifier.testTag("phone.providers")) { Text("Providers") } })
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
@@ -65,28 +80,51 @@ fun PhoneScreen(phone: PhoneChats, startChat: String? = null, onBack: () -> Unit
                 Text(text, Modifier.weight(1f).padding(horizontal = 20.dp), color = p.inkSoft)
                 TextButton(onClick = { notice = null }) { Text("Dismiss") }
             } }
-            if (providers) {
-                LazyColumn(Modifier.fillMaxSize().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item { Text("Keys stay on this device. Chats go directly to your provider.", color = p.inkSoft) }
-                    item { Button(onClick = { adding = true }, enabled = !busy, modifier = Modifier.testTag("phone.add")) { Text("Add provider") } }
+            val open = s.providers.firstOrNull { it.id == detail }
+            if (providers && open != null) {
+                // A provider's page: on or off, Test, New key, Remove (#2939, the iPhone's #2931).
+                ProviderPage(
+                    provider = open,
+                    status = providerStatus(open, s, tested[open.id]?.first, testing == open.id),
+                    isError = testing != open.id && (tested[open.id]?.second ?: (s.errors[open.id] != null)),
+                    busy = busy,
+                    onEnabled = { on -> action { phone.enabled(open.id, on) } },
+                    onTest = {
+                        testing = open.id
+                        scope.launch {
+                            busy = true
+                            tested = try { tested + (open.id to (phone.test(open.id) to false)) }
+                            catch (e: CancellationException) { throw e }
+                            catch (e: Exception) { tested + (open.id to ((e.message ?: "Test failed.") to true)) }
+                            finally { testing = null; busy = false }
+                        }
+                    },
+                    onNewKey = { keyFor = open.id },
+                    onRemove = { remove = open.id },
+                )
+            } else if (providers) {
+                LazyColumn(Modifier.fillMaxSize().padding(horizontal = 20.dp).testTag("phone.providerList"), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    item { Text("Chats run on this phone itself, with your own key or ChatGPT sign-in, and have no tools. Keys and sign-ins stay on this phone.", color = p.inkSoft, style = MaterialTheme.typography.bodySmall) }
+                    if (s.providers.isNotEmpty()) item { com.nekko.android.ui.components.SectionHeader("Providers") }
                     items(s.providers, key = { it.id }) { provider ->
-                        Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(provider.label, style = MaterialTheme.typography.titleMedium, color = p.ink)
-                                    Text(PhoneProviders.kind(provider.kind)?.label.orEmpty(), color = p.inkSoft)
+                        ProviderAvatarRow(provider, providerStatus(provider, s, tested[provider.id]?.first, false), tested[provider.id]?.second ?: (s.errors[provider.id] != null)) { detail = provider.id }
+                    }
+                    item { com.nekko.android.ui.components.SectionHeader("Add a provider") }
+                    // The providers most people reach for, each starting the add flow set to it.
+                    item {
+                        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalArrangement = Arrangement.spacedBy(16.dp), maxItemsInEachRow = 3) {
+                            POPULAR.forEach { id ->
+                                PhoneProviders.kind(id)?.let { kind ->
+                                    ProviderButton(id, kind.label, enabled = !busy) {
+                                        if (id == "anthropic") anthropicChoice = true else { addKind = id; adding = true }
+                                    }
                                 }
-                                Switch(checked = provider.enabled, onCheckedChange = { action { phone.enabled(provider.id, it) } }, enabled = !busy, modifier = Modifier.testTag("phone.enable.${provider.id}"))
                             }
-                            Row {
-                                if (provider.enabled) TextButton(onClick = { action { notice = phone.test(provider.id) } }, enabled = !busy) { Text("Test") }
-                                TextButton(onClick = { keyFor = provider.id }, enabled = !busy) { Text("New key") }
-                                TextButton(onClick = { remove = provider.id }, enabled = !busy) { Text("Remove") }
-                            }
-                            s.errors[provider.id]?.let { Text(it, color = p.inkSoft) }
                         }
                     }
-                    item { Text("Claude and ChatGPT subscriptions and local model servers need a computer.", color = p.inkSoft, modifier = Modifier.padding(vertical = 20.dp)) }
+                    item {
+                        TextButton(onClick = { addKind = null; adding = true }, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp).testTag("phone.add")) { Text("+  More providers") }
+                    }
                 }
             } else {
                 BoxWithConstraints(Modifier.weight(1f)) {
@@ -131,9 +169,10 @@ fun PhoneScreen(phone: PhoneChats, startChat: String? = null, onBack: () -> Unit
         var failed by remember { mutableStateOf<String?>(null) }
         val context = androidx.compose.ui.platform.LocalContext.current
         ProviderForm(
+            initialKind = addKind ?: PhoneProviders.kinds.first { !it.plan }.id,
             busy = busy || s.signIn == PhoneChats.SignIn.ADDING,
             failed = failed ?: s.signInError,
-            onDismiss = { adding = false; phone.clearSignIn() },
+            onDismiss = { adding = false; addKind = null; phone.clearSignIn() },
             onSignIn = { kind ->
                 failed = null
                 if (kind == "chatgpt") phone.startChatGptSignIn()?.let { open(context, it) }
@@ -145,7 +184,7 @@ fun PhoneScreen(phone: PhoneChats, startChat: String? = null, onBack: () -> Unit
             scope.launch {
                 busy = true
                 // Checked before it is kept: a wrong key is turned down here, with the provider's reason.
-                try { phone.connect(kind, label, url, key, workspace); adding = false; providers = true; notice = "${PhoneProviders.kind(kind)?.label ?: label} connected." }
+                try { phone.connect(kind, label, url, key, workspace); adding = false; addKind = null; providers = true; notice = "${PhoneProviders.kind(kind)?.label ?: label} connected." }
                 catch (e: CancellationException) { throw e }
                 catch (e: Exception) { failed = e.message ?: "Could not check the key. Try again." }
                 finally { busy = false }
@@ -158,8 +197,13 @@ fun PhoneScreen(phone: PhoneChats, startChat: String? = null, onBack: () -> Unit
             OutlinedTextField(key, { key = it }, label = { Text("Key or access token") }, visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.testTag("phone.newKey"))
         }, confirmButton = { TextButton(onClick = { action { phone.setKey(providerId, key); key = ""; keyFor = null } }, enabled = !busy) { Text("Save key") } }, dismissButton = { TextButton(onClick = { key = ""; keyFor = null }) { Text("Cancel") } })
     }
-    remove?.let { id -> AlertDialog(onDismissRequest = { remove = null }, title = { Text("Remove provider and key?") }, text = { Text("Saved chats stay readable, but cannot send with this provider.") }, confirmButton = { TextButton(onClick = { action { phone.remove(id); remove = null } }, enabled = !busy) { Text("Remove provider") } }, dismissButton = { TextButton(onClick = { remove = null }) { Text("Cancel") } }) }
+    remove?.let { id -> AlertDialog(onDismissRequest = { remove = null }, title = { Text("Remove provider and key?") }, text = { Text("Saved chats stay readable, but cannot send with this provider.") }, confirmButton = { TextButton(onClick = { action { phone.remove(id); remove = null; if (detail == id) detail = null } }, enabled = !busy) { Text("Remove provider") } }, dismissButton = { TextButton(onClick = { remove = null }) { Text("Cancel") } }) }
     forget?.let { id -> AlertDialog(onDismissRequest = { forget = null }, title = { Text("Forget this chat?") }, text = { Text("Permanently remove its messages from this device. This does not delete the provider's records.") }, confirmButton = { TextButton(onClick = { action { phone.forget(id); chatId = null; forget = null } }, enabled = !busy) { Text("Forget chat") } }, dismissButton = { TextButton(onClick = { forget = null }) { Text("Cancel") } }) }
+    if (anthropicChoice) AnthropicChoiceSheet(onDismiss = { anthropicChoice = false }) {
+        anthropicChoice = false
+        addKind = "anthropic"
+        adding = true
+    }
     if (picking) {
         LaunchedEffect(Unit) { s.providers.filter { it.enabled }.forEach { phone.models(it.id) } }
         AlertDialog(onDismissRequest = { picking = false }, title = { Text("Choose a model") }, text = {
@@ -211,6 +255,149 @@ private fun PhoneModelRow(model: com.nekko.protocol.PhoneModel, onClick: () -> U
     }
 }
 
+/** The providers most people reach for, in the iPhone's order (#2939). */
+private val POPULAR = listOf("chatgpt", "anthropic", "openai", "gemini", "openrouter", "ollama-cloud")
+
+/** The line under a provider's name: its test or model error, else what it is and how many models it has. */
+private fun providerStatus(provider: com.nekko.protocol.PhoneProvider, s: PhoneChats.State, tested: String?, testing: Boolean): String {
+    if (testing) return "Testing…"
+    (tested ?: s.errors[provider.id])?.let { return it }
+    if (!provider.enabled) return "Off"
+    val kind = PhoneProviders.kind(provider.kind)?.label ?: provider.kind
+    return when (val n = s.models[provider.id]?.size ?: 0) {
+        0 -> kind
+        1 -> "$kind · 1 model"
+        else -> "$kind · $n models"
+    }
+}
+
+/** A provider's mark in a round avatar, or a key for a kind with no mark. */
+@Composable
+private fun ProviderAvatar(kind: String, size: androidx.compose.ui.unit.Dp) {
+    val p = Nekko.palette
+    Box(Modifier.size(size).background(p.surface2, androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) {
+        val mark = com.nekko.android.ui.screens.providerDrawable(com.nekko.protocol.ChatCard.providerMark(kind, null))
+        if (mark != null) Icon(androidx.compose.ui.res.painterResource(mark), contentDescription = null, tint = p.ink, modifier = Modifier.size(size / 2))
+        else Icon(androidx.compose.material.icons.Icons.Outlined.Key, contentDescription = null, tint = p.ink, modifier = Modifier.size(size / 2))
+    }
+}
+
+/** A provider as an avatar row: its mark, its name and one status line; opens its page. */
+@Composable
+private fun ProviderAvatarRow(provider: com.nekko.protocol.PhoneProvider, status: String, isError: Boolean, onClick: () -> Unit) {
+    val p = Nekko.palette
+    Row(
+        Modifier.fillMaxWidth().clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .heightIn(min = 56.dp).padding(vertical = 6.dp).testTag("phone.provider.${provider.id}"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        ProviderAvatar(provider.kind, 40.dp)
+        Column(Modifier.weight(1f)) {
+            Text(provider.label, style = MaterialTheme.typography.bodyLarge, color = if (provider.enabled) p.ink else p.inkFaint)
+            Text(status, style = MaterialTheme.typography.bodySmall, color = if (isError) p.danger else p.inkFaint, maxLines = 2)
+        }
+        Icon(androidx.compose.material.icons.Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(20.dp))
+    }
+}
+
+/** A popular provider's button: its mark and name, starting the add flow set to it. */
+@Composable
+private fun ProviderButton(kind: String, label: String, enabled: Boolean, onClick: () -> Unit) {
+    val p = Nekko.palette
+    Column(
+        Modifier.widthIn(min = 88.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+            .clickable(enabled = enabled, role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .padding(vertical = 8.dp, horizontal = 4.dp).testTag("phone.addKind.$kind"),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        ProviderAvatar(kind, 48.dp)
+        Text(label, style = MaterialTheme.typography.labelMedium, color = p.inkSoft, maxLines = 1)
+    }
+}
+
+/** A provider's page: its mark and status, on or off, Test, New key and Remove. */
+@Composable
+private fun ProviderPage(
+    provider: com.nekko.protocol.PhoneProvider,
+    status: String,
+    isError: Boolean,
+    busy: Boolean,
+    onEnabled: (Boolean) -> Unit,
+    onTest: () -> Unit,
+    onNewKey: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    val p = Nekko.palette
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).testTag("phone.providerPage"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            ProviderAvatar(provider.kind, 72.dp)
+            Text(provider.label, style = MaterialTheme.typography.titleMedium, color = p.ink)
+            Text(status, style = MaterialTheme.typography.bodySmall, color = if (isError) p.danger else p.inkFaint, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.testTag("phone.providerStatus"))
+        }
+        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Use on this phone", Modifier.weight(1f), color = p.ink)
+            Switch(checked = provider.enabled, onCheckedChange = onEnabled, enabled = !busy, modifier = Modifier.testTag("phone.enable.${provider.id}"))
+        }
+        if (provider.enabled) TextButton(onClick = onTest, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) { Text("Test") }
+        TextButton(onClick = onNewKey, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) { Text("New key") }
+        TextButton(onClick = onRemove, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) { Text("Remove", color = p.danger) }
+    }
+}
+
+/**
+ * Anthropic's ways in (#2939, the iPhone's `AnthropicChoiceSheet`). The API key works here. The
+ * Claude subscription is shown dimmed, with a sad Nekko and the reason: Anthropic doesn't allow it
+ * from a phone.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AnthropicChoiceSheet(onDismiss: () -> Unit, onUseKey: () -> Unit) {
+    val p = Nekko.palette
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = p.paper) {
+        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp).testTag("anthropicChoice"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Claude", style = MaterialTheme.typography.titleMedium, color = p.ink)
+            Row(
+                Modifier.fillMaxWidth().clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                    .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onUseKey)
+                    .heightIn(min = 56.dp).padding(vertical = 6.dp).testTag("anthropicChoice.apiKey"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                ProviderAvatar("anthropic", 40.dp)
+                Column(Modifier.weight(1f)) {
+                    Text("API key", style = MaterialTheme.typography.bodyLarge, color = p.ink)
+                    Text("From console.anthropic.com, kept on this phone.", style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+                }
+            }
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 6.dp).testTag("anthropicChoice.subscription")
+                    .unavailableItem(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                com.nekko.android.ui.components.SadNekko(56.dp)
+                Column(Modifier.weight(1f)) {
+                    Text("Claude subscription", style = MaterialTheme.typography.bodyLarge, color = p.inkFaint)
+                    Text(
+                        "Sorry, Anthropic doesn’t allow a Claude subscription to be used from a phone. Use it on a computer, or add an API key here.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = p.inkFaint,
+                    )
+                }
+            }
+            TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) { Text("Cancel") }
+        }
+    }
+}
+
+/** Read as one dimmed, unavailable item: TalkBack says it can't be chosen. */
+private fun Modifier.unavailableItem() = this.then(
+    Modifier.semantics(mergeDescendants = true) { disabled() },
+)
+
 /** A web page in the browser: a provider's key page, or OpenRouter's sign-in, which comes back to the app. */
 private fun open(context: android.content.Context, url: String) {
     try { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) } catch (_: android.content.ActivityNotFoundException) {}
@@ -223,6 +410,7 @@ private fun open(context: android.content.Context, url: String) {
  */
 @Composable
 private fun ProviderForm(
+    initialKind: String,
     busy: Boolean,
     failed: String?,
     onDismiss: () -> Unit,
@@ -230,7 +418,7 @@ private fun ProviderForm(
     onOpen: (String) -> Unit,
     onSave: (String, String, String, String, String) -> Unit,
 ) {
-    var kindId by remember { mutableStateOf("anthropic") }
+    var kindId by remember { mutableStateOf(initialKind) }
     val kind = PhoneProviders.kind(kindId)!!
     var label by remember { mutableStateOf(kind.label) }
     var url by remember { mutableStateOf(kind.defaultUrl) }

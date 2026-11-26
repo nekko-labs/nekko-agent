@@ -1,3 +1,4 @@
+import { useOnboardingT } from '../../onboardingMessages.js';
 import React, { useEffect, useRef, useState } from 'react';
 import type { AgentToolId, AgentToolStatus, SubagentSnippet } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
@@ -25,6 +26,7 @@ export function IntegrationsStep({
   /** Set to the step's commit action; the wizard runs it on Next. */
   commitRef?: React.MutableRefObject<(() => Promise<void | boolean>) | null>;
 } = {}) {
+  const t = useOnboardingT();
   const { pushToast } = useStore(useShallow((s) => ({ pushToast: s.pushToast })));
   const [tools, setTools] = useState<AgentToolStatus[] | null>(null);
   const [installing, setInstalling] = useState<AgentToolId | null>(null);
@@ -113,7 +115,7 @@ export function IntegrationsStep({
 
   return (
     <div className="w-full">
-      <h1 className="text-center text-2xl font-semibold tracking-tight">Meet your tools</h1>
+      <h1 className="text-center text-2xl font-semibold tracking-tight">{t('integrations')}</h1>
       <p className="mx-auto mt-2 max-w-md text-center text-sm leading-relaxed text-ink-soft">
         Nekko Agent can run as a subagent inside the agent CLIs you already use, and plug into your
         apps so chats and scheduled tasks can reach them.

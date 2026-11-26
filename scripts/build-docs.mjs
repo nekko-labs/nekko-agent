@@ -327,11 +327,8 @@ ${rendered.html}
       <ul class="results" role="listbox" aria-label="Results"></ul>
     </dialog>
     <script src="/docs.js?v=${ASSET_VERSION}" defer></script>
-    <script src="/analytics.js?v=1" defer></script>
-    <script>
-      window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
-    </script>
-    <script defer src="/_vercel/insights/script.js"></script>
+    <script src="/analytics-config.js?v=1" defer></script>
+    <script src="/analytics.js?v=4" defer></script>
   </body>
 </html>
 `;
@@ -651,10 +648,8 @@ ${sections}
       <a href="/status">Status</a>
       <a href="/privacy">Privacy</a>
     </footer>
-    <script>
-      window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
-    </script>
-    <script defer src="/_vercel/insights/script.js"></script>
+    <script src="/analytics-config.js?v=1" defer></script>
+    <script src="/analytics.js?v=4" defer></script>
     <script src="/pixelwave.js?v=1" defer></script>
     <script>
       // The rail marks the release being read: the last section whose top has passed the nav.
@@ -682,6 +677,20 @@ function replaceBetween(text, start, end, body) {
   const block = `${start}\n${body}\n${end}`;
   if (a === -1 || b === -1) return `${text.trimEnd()}\n\n${block}\n`;
   return text.slice(0, a) + block + text.slice(b + end.length);
+}
+
+export function analyticsConfig(root = repo) {
+  const source = readFileSync(join(root, 'crates', 'nekkod', 'src', 'telemetry.rs'), 'utf8');
+  const constant = (name) => {
+    const match = source.match(new RegExp(`const ${name}: &str = \"([^\"]+)\";`));
+    if (!match) throw new Error(`telemetry.rs is missing public analytics constant ${name}`);
+    return match[1];
+  };
+  const projectToken = constant('PROJECT_KEY');
+  const parsed = new URL(constant('HOST'));
+  if (!projectToken.startsWith('phc_')) throw new Error('telemetry PROJECT_KEY must be a public PostHog project token');
+  if (parsed.protocol !== 'https:' || parsed.username || parsed.password) throw new Error('telemetry HOST must be an HTTPS origin without credentials');
+  return `window.NekkoAnalyticsConfig = ${JSON.stringify({ projectToken, apiHost: parsed.origin })};\n`;
 }
 
 export function build() {
@@ -719,6 +728,10 @@ export function build() {
   for (const [name, file] of media) files.set(`docs/media/${name}`, readFileSync(file));
   // With initials here; the deploy adds avatars once the contributor cache exists.
   files.set('whatsnew.html', whatsNewPage(loadWhatsNew()));
+
+  // Build the website configuration from the public write-only constants the
+  // app already ships, so production analytics needs no extra Vercel variables.
+  files.set('analytics-config.js', analyticsConfig());
 
   // Copy the shared plan catalog so the pricing page can render from it without
   // drifting from the app's copy. Gitignored: Vercel writes it on every deploy.

@@ -1,6 +1,9 @@
 .vercel
 .env*
 
+# Generated from deploy-time public analytics configuration
+/analytics-config.js
+
 # Generated from GitHub during the website build
 /contributors.json
 /contributors/

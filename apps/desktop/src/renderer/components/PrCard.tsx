@@ -12,7 +12,11 @@ import { BranchIcon, CheckIcon, CloseIcon } from '../icons.js';
 function usePrPolling(sessionId: string | undefined) {
   useEffect(() => {
     if (!sessionId) return;
-    return subscribePrPolling(sessionId, () => useStore.getState().refreshSessionPrs(sessionId));
+    return subscribePrPolling(
+      sessionId,
+      () => useStore.getState().refreshSessionPrs(sessionId),
+      (ids) => useStore.getState().refreshSessionPrsMany(ids),
+    );
   }, [sessionId]);
 }
 
