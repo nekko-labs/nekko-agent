@@ -47,17 +47,18 @@
 
     <main class="legal">
       <h1>Privacy policy</h1>
-      <p class="micro">Version 2026-11-13 · Last updated: 13 November 2026</p>
+      <p class="micro">Version 2026-11-26 · Last updated: 26 November 2026</p>
 
       <p>This page explains, in plain English, what happens to your details when you visit this website, join the Nekko Agent beta, or use a Nekko Cloud account. The Nekko Agent app itself runs on your own computer, and your local chats never leave it.</p>
 
       <h2>Who we are</h2>
       <p>Nekko Agent is made by <strong>Nekko Labs LLC</strong> ("we", "us"), a Wyoming company at 30 North Gould Street, Suite N, Sheridan, WY 82801, United States. We decide what is collected and how it is used. You can reach us at <a href="mailto:hello@nekkoagent.com">hello@nekkoagent.com</a>.</p>
 
-      <h2>Visiting this website</h2>
-      <p>This site sets no cookies and loads no trackers or ads. Its fonts and files come from nekkoagent.com itself, so opening a page contacts no one else. The exceptions are the <a href="/status">status page</a>, where your browser asks our API and Relay (on Fly.io) whether they are up, and the <a href="/pricing">pricing page</a>, where it asks our API for the current price. Those requests carry no details about you beyond what any web request does, and the API and Relay don't log IP addresses. Like any website, our host (Vercel) keeps short-lived request logs, which include your IP address, to serve the site and keep it secure.</p>
-      <p>We use <strong>PostHog</strong> to count page views and clicks on the buttons and links on this site, so we can see which parts help and which do not. Nothing is stored in your browser (no cookies, no local storage), there are no session recordings and no profile is built about you, and PostHog is told to discard your IP address before saving the event. It is loaded from PostHog's US cloud, so visiting a page on nekkoagent.com makes a request there.</p>
-      <p>We also use <strong>Vercel Web Analytics</strong>, our host's own page counter, to count page views. Its script is served from nekkoagent.com itself, it stores nothing in your browser (no cookies, no local storage), and it does not identify you: Vercel tells visits apart with a hash of the request that it discards after 24 hours.</p>
+      <h2 id="website-analytics">Visiting this website and analytics</h2>
+      <p>The site's fonts and files come from nekkoagent.com itself. The exceptions are the <a href="/status">status page</a>, where your browser asks our API and Relay (on Fly.io) whether they are up, and the <a href="/pricing">pricing page</a>, where it asks our API for the current price. Those requests carry no details about you beyond what any web request does, and the API and Relay don't log IP addresses. Like any website, our host (Vercel) keeps short-lived request logs, which include your IP address, to serve the site and keep it secure.</p>
+      <p><strong>Website analytics is optional.</strong> Before you choose, we do not load PostHog or send it an event. Rejecting analytics does not change the site. We store only your choice in this browser's local storage. We also treat <strong>Global Privacy Control</strong> and <strong>Do Not Track</strong> as a rejection, even if you previously accepted.</p>
+      <p>If you choose <strong>Allow analytics</strong>, we load PostHog from its US cloud. It receives page visits; clicks on the site's named buttons and links; browser and device details; the referring and current site and path, with query strings and fragments removed; and the four Core Web Vitals (FCP, LCP, INP and CLS). A random identity and session details let us count visits and understand whether people leave after one page; we never connect that identity to your beta sign-up or Nekko Cloud account. Session recording is disabled. We also disable location enrichment, person profiles, general click and form autocapture, heatmaps, console logs and error capture. PostHog receives your IP address as part of the network request, but the project is configured to discard it before storing the event.</p>
+      <p>After you allow analytics, PostHog stores that random analytics identity and session details in first-party cookies and local storage so visits can form a session. Use the <strong>Privacy choices</strong> button at the bottom of any page to withdraw. Withdrawal stops future events and clears the stored analytics identity; it does not erase information already collected. You can ask us to erase that information as described under <a href="#your-rights">Your rights</a>.</p>
 
       <h2>What the beta form stores</h2>
       <ul>
@@ -88,13 +89,13 @@
         <li>To run Nekko Cloud for you: sign-in, phone access, sync and cloud machines.</li>
         <li>To understand which pages and campaigns bring people to the beta, as totals.</li>
       </ul>
-      <p>For the beta and product updates, our legal basis is your consent, which you can withdraw at any time by unsubscribing or emailing us. For a Nekko Cloud account, it is providing the service you asked for. Keeping our services secure (for example the website's request logs) is in our legitimate interest. We never sell or share your details, and we don't use them for advertising.</p>
+      <p>For website analytics, the beta and product updates, our legal basis is your consent, which you can withdraw at any time. For a Nekko Cloud account, it is providing the service you asked for. Keeping our services secure (for example the website's request logs) is in our legitimate interest. We never sell personal information or share it for cross-context behavioural advertising, and we don't use it for advertising.</p>
 
       <h2>Who handles it, and where</h2>
       <p>These providers process data on our behalf and only to run these services:</p>
       <ul>
         <li><strong>Vercel</strong> hosts this website and keeps its request logs. Vercel is a US company and serves the site from locations around the world.</li>
-        <li><strong>PostHog</strong> receives the page-view and click counts from this website, with your IP address discarded. PostHog Inc. is a US company; we use its US cloud.</li>
+        <li><strong>PostHog</strong>, only after you allow analytics, receives the website events, Core Web Vitals and random session identity described above. It receives but discards your IP address before storage. PostHog Inc. is a US company; we use its US cloud.</li>
         <li><strong>Fly.io</strong> runs the API that receives the form and runs Nekko Cloud, in Virginia, United States (region <code>iad</code>), and the Relay, in Tokyo, Japan (region <code>nrt</code>). A cloud machine runs in the Fly.io region you choose.</li>
         <li><strong>Neon</strong> holds the database, in the United States (AWS <code>us-east-1</code>).</li>
         <li><strong>Resend</strong> sends our emails, so it handles your email address when we write to you. It keeps its records in the United States.</li>
@@ -109,9 +110,10 @@
         <li>If you unsubscribe, we stop emailing you straight away and <strong>delete your details</strong>. We keep only a scrambled (one-way hashed) copy of your email address, so we can make sure we never email it again. To be taken off that list too, email us.</li>
         <li>A confirmed beta sign-up is kept <strong>until the beta ends or you unsubscribe</strong>, whichever comes first, or until you ask us to delete it.</li>
         <li>A Nekko Cloud account is kept until you delete it. <strong>Deleting your account</strong> removes the account, its tokens, its computers and cloud machines, your synced data and your sign-in identity.</li>
+        <li>PostHog analytics events are configured for <strong>84 months</strong>. Your browser keeps the analytics choice until you change it or clear site data.</li>
       </ul>
 
-      <h2>Your rights</h2>
+      <h2 id="your-rights">Your rights</h2>
       <p>Wherever you live, you can ask us to:</p>
       <ul>
         <li><strong>show you</strong> what we hold about you (access),</li>
@@ -144,9 +146,7 @@
       <a href="/status">Status</a>
       <a href="/privacy">Privacy</a>
     </footer>
-    <script>
-      window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
-    </script>
-    <script defer src="/_vercel/insights/script.js"></script>
+    <script src="/analytics-config.js?v=1" defer></script>
+    <script src="/analytics.js?v=4" defer></script>
   </body>
 </html>
