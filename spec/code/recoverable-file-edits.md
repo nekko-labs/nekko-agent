@@ -23,11 +23,11 @@ Before beta, compare established coding/personal agents and implement the most v
 
 ### Validated batches on `edit_file`
 
-- Additive input: `{path, edits: [{old_string, new_string}, ...]}`. The original single-pair form remains supported; missing single `new_string` now errors rather than inserting `undefined`.
+- The model-facing schema requires `{path, edits: [{old_string, new_string}, ...]}` for both single and batch edits. It rejects top-level replacement fields and requires both strings on every entry. Direct callers can still pass the original single pair; missing `new_string` errors rather than inserting `undefined`. See [decision 0121](../../docs/decisions/0121-advertise-one-edit-file-input-shape.md).
 - A batch contains 1–100 ordered replacements. Each search is a non-empty string with one non-overlapping match **at its step**, so later edits may match earlier edits' output. Replacements are literal, including dollar sequences. Empty replacement text is allowed.
 - All replacements validate in memory before any snapshot or write. An invalid, ambiguous, malformed, oversized or mixed-form batch leaves disk and tracking unchanged. Input text, cumulative replacement strings and result each have an 8 MiB limit.
 - It is still `edit_file`: existing disabled-tool/workflow categories, approval rules, project jail, read-only roots, Git configuration guards and hooks apply. The Docker helper implements the same batch contract inside the existing copied-workspace boundary.
-- Native single-pair JavaScript replacement/coercion compatibility is otherwise retained. The schema describes both forms; runtime rejects mixed inputs and missing replacement text.
+- Native single-pair JavaScript replacement/coercion compatibility is retained for direct callers. Model-facing edits use literal replacements even with a single array entry. Runtime still rejects mixed inputs and missing replacement text; provider schema support is not relied on for safety.
 
 ## Acceptance
 
@@ -36,6 +36,7 @@ Before beta, compare established coding/personal agents and implement the most v
 - Deterministically hold a snapshot write while deletion or enabling incognito waits; once the lifecycle action completes there is no sidecar. Cloud deletion uses this same store path.
 - Delete, clear and completed-history deletion remove snapshots; the existing archived-retention purge no-op remains a no-op. Data wipe removes orphaned snapshots.
 - Valid Unicode/CRLF/dependent/literal batches succeed; later failure, malformed forms, ambiguity, size/count limits, approval denial, jail/read-only/Git guards leave source unchanged.
+- Capture a real daemon request to a loopback `/codex/responses` endpoint and verify it offers exactly one `edit_file` function with the closed `path`/`edits` shape. A loopback capture does not verify live provider acceptance or model adherence.
 - Execute the actual Python helper on Unix CI as well as native Rust tests. Windows native tests do not prove Docker execution or Unix permissions.
 
 ## Verification record (2026-11-08 JST)

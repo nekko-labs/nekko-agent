@@ -32,6 +32,8 @@ export interface RunnerSettings {
   allowForkPrs: boolean;
   rerunLostJobs: boolean;
   trustedCache: boolean;
+  /** Tell Nekko Cloud this runner's label, repos and free VMs, so its picker can send jobs here (decision 0064). */
+  cloudPicker: boolean;
   trustedNetworks: string[];
 }
 
@@ -165,6 +167,8 @@ export interface RunnerView {
   acceptWhy?: Reason[];
   /** `null` until the Mac has been read. */
   suggestedSize: SizeSuggestion | null;
+  /** Why Nekko Cloud refused this runner's picker presence, while `cloudPicker` is on. Absent from older daemons. */
+  cloudPickerError?: string | null;
 }
 export type ConnectRequest = GithubConnectRequest | GitlabConnectRequest;
 export interface GithubConnectRequest {
@@ -246,6 +250,7 @@ export const DEFAULT_RUNNER_SETTINGS: RunnerSettings = {
   allowForkPrs: false,
   rerunLostJobs: true,
   trustedCache: true,
+  cloudPicker: false,
   trustedNetworks: [],
 };
 export const DEFAULT_RUNNER_LABEL = 'nekko-cloud-mac';

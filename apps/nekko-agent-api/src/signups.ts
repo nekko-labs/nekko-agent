@@ -15,7 +15,14 @@ export interface SignupInput {
 export type Parsed = { ok: true; value: SignupInput } | { ok: false; error: string };
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const LIST = /^[a-z0-9][a-z0-9-]{0,39}$/;
+/**
+ * The lists a signup may join: the website's beta form and the app's setup
+ * wizard. Fixed on purpose: each (list, address) pair is its own row with its
+ * own daily confirmation email, so letting callers name a list would let a
+ * script send one address any number of emails a day. A new waitlist is
+ * added here.
+ */
+export const LISTS: ReadonlySet<string> = new Set(["beta", "app"]);
 const POLICY_VERSION = /^[A-Za-z0-9._-]{1,32}$/;
 const UTM_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"] as const;
 
@@ -32,7 +39,7 @@ export function parseSignup(body: unknown): Parsed {
   const email = typeof b.email === "string" ? b.email.trim() : "";
   if (email.length > 320 || !EMAIL.test(email)) return { ok: false, error: "Enter a valid email address." };
   const list = b.list === undefined ? "beta" : b.list;
-  if (typeof list !== "string" || !LIST.test(list)) return { ok: false, error: "Unknown list." };
+  if (typeof list !== "string" || !LISTS.has(list)) return { ok: false, error: "Unknown list." };
   // A path only: a full URL could carry someone's query string into the table.
   const rawSource = text(b.source, 200);
   const source = rawSource && rawSource.startsWith("/") ? rawSource.split(/[?#]/)[0] : null;

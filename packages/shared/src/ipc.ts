@@ -438,6 +438,11 @@ export const IpcChannels = {
   computersCreateSession: 'computers:createSession',
   computersStats: 'computers:stats',
   computersConnectFleet: 'computers:connectFleet',
+  computersNearby: 'computers:nearby',
+  computersLobbyOpen: 'computers:lobbyOpen',
+  computersLobbyAnswer: 'computers:lobbyAnswer',
+  computersLobbyClose: 'computers:lobbyClose',
+  computersLobbyJoin: 'computers:lobbyJoin',
   remoteDevices: 'remote:devices',
   remoteRevoke: 'remote:revoke',
   remoteRename: 'remote:rename',
@@ -594,6 +599,7 @@ export const IpcEvents = {
   limitsUpdated: 'limits:updated',
   /** A connected computer's state changed, or the list did. */
   computersUpdated: 'computers:updated',
+  computersLobby: 'computers:lobby',
   /** The look a paired phone mirrors changed: the theme fields of the settings, never anything else. */
   appearanceUpdated: 'appearance:updated',
   downloadsUpdated: 'downloads:updated',
@@ -1447,6 +1453,16 @@ export interface NekkoApi {
   /** Its providers and folders; null when it has never answered. */
   computerCatalog(id: string): Promise<import('./computers.js').ComputerCatalog | null>;
   onComputersUpdated(cb: () => void): () => void;
+  /** Computers on this network with a pairing lobby open (their link is being made). */
+  nearbyComputers(): Promise<import('./computers.js').NearbyComputer[]>;
+  /** While a link is open, let a computer on this network ask for it; it is sent only after Pair. */
+  openComputerLobby(link: import('./computers.js').ComputerPairingLink): Promise<{ lobby: string }>;
+  /** Pair or Don't pair, for the computer the lobby is asking about. */
+  answerComputerLobby(pair: boolean): Promise<void>;
+  closeComputerLobby(): Promise<void>;
+  /** Join a nearby computer's lobby: the code to compare. Pairing follows when its owner taps Pair. */
+  joinComputerLobby(found: import('./computers.js').NearbyComputer): Promise<{ code: string }>;
+  onComputerLobby(cb: (e: import('./computers.js').ComputerLobbyEvent) => void): () => void;
   listRemoteDevices(): Promise<import('./remote.js').RemoteDevice[]>;
   revokeRemoteDevice(deviceId: string): Promise<import('./remote.js').RemoteDevice[]>;
   renameRemoteDevice(deviceId: string, name: string): Promise<import('./remote.js').RemoteDevice[]>;

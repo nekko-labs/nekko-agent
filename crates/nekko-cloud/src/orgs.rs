@@ -24,7 +24,8 @@
 
 use crate::http::HttpError;
 use crate::org_records::{
-    Descriptor, HostFacts, LocalModel, ORG_KEY, OrgKeyRecord, org_key_local_id, this_os, valid_org_id, valid_uuid,
+    Descriptor, HostFacts, LocalModel, ORG_KEY, OrgKeyRecord, RunnerSummary, org_key_local_id, this_os, valid_org_id,
+    valid_uuid,
 };
 use crate::records::AccountRecord;
 use crate::state::{OrgKey, Share, State};
@@ -79,6 +80,8 @@ pub struct HostInfo {
     /// How this account's other devices reach its relay agent, while remote
     /// access is on (decision 0102). Sealed under the account keyring.
     pub connect: Option<Arc<dyn Fn() -> Option<crate::ConnectInfo> + Send + Sync>>,
+    /// This computer's CI runners, coarse (decision 0064); none off a Mac.
+    pub runners: Option<Arc<dyn Fn() -> Vec<RunnerSummary> + Send + Sync>>,
 }
 
 /// How sharing with one org is going, for `fleet:status`.
@@ -727,9 +730,16 @@ impl Cloud {
         let account_id = self.account_id()?;
         let key = self.device_key().ok_or(LOCKED)?;
         let host = lock(&self.host).clone();
-        let (name, models, app_version) = match host {
-            Some(h) => ((h.name)(), (h.models)().await, h.app_version.clone()),
-            None => (lock(&self.state).device_label.clone(), Vec::new(), env!("CARGO_PKG_VERSION").to_string()),
+        let (name, models, app_version, runners) = match host {
+            Some(h) => (
+                (h.name)(),
+                (h.models)().await,
+                h.app_version.clone(),
+                h.runners.as_ref().map(|r| r()).unwrap_or_default(),
+            ),
+            None => {
+                (lock(&self.state).device_label.clone(), Vec::new(), env!("CARGO_PKG_VERSION").to_string(), Vec::new())
+            }
         };
         Ok(HostFacts {
             device_id,
@@ -741,6 +751,7 @@ impl Cloud {
             models,
             host_key: b64_encode(&key.public()),
             connect: self.connect_facts(),
+            runners,
         })
     }
 
@@ -1055,6 +1066,7 @@ impl Cloud {
                     }
                     o
                 }).collect::<Vec<_>>(),
+                "runners": d.runners.iter().map(|r| json!({ "label": r.label, "state": r.state, "busy": r.busy, "slots": r.slots })).collect::<Vec<_>>(),
                 "online": row["online"].as_bool().unwrap_or(false),
                 "seenAt": row["seenAt"],
                 "you": row["you"].as_bool().unwrap_or(false),
@@ -1114,6 +1126,7 @@ mod tests {
             }],
             host_key: HOST.into(),
             connect: None,
+            runners: Vec::new(),
         }
     }
 

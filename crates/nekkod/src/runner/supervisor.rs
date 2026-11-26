@@ -158,6 +158,8 @@ pub struct RunnerView {
     pub accept_why: Vec<Reason>,
     /// The VM size that fits its last jobs; `None` until the Mac has been read.
     pub suggested_size: Option<SizeSuggestion>,
+    /// Why Nekko Cloud refused this runner's picker presence, while `cloudPicker` is on.
+    pub cloud_picker_error: Option<String>,
 }
 
 /// The Mac's facts as one runner sees them, for the settings sheet.
@@ -909,6 +911,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                     })
                     .collect(),
                 accept_why: r.boost_why.clone(),
+                cloud_picker_error: None,
                 suggested_size: self.mac.as_ref().map(|m| {
                     let host = HostFacts {
                         ram_mb: m.ram_mb,
