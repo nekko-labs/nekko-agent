@@ -136,6 +136,18 @@ describe('WizardShell', () => {
     expect(last).not.toContain('>Skip step<');
     expect(last).toContain('>Skip setup<');
   });
+
+  it('keeps the language picker in the header, before Skip setup, on every step', () => {
+    for (const index of [0, 1, 2]) {
+      const html = shell(index);
+      expect(html.match(/id="setup-language"/g)).toHaveLength(1);
+      // Header order: progress dots, then the picker, then Skip setup, all above the step body.
+      const picker = html.indexOf('id="setup-language"');
+      expect(html.indexOf('aria-label="Setup progress"')).toBeLessThan(picker);
+      expect(picker).toBeLessThan(html.indexOf('>Skip setup<'));
+      expect(html.indexOf('>Skip setup<')).toBeLessThan(html.indexOf('step body'));
+    }
+  });
 });
 
 describe('onboarding step content', () => {
