@@ -363,7 +363,7 @@ mod tests {
         let seal = |n: usize| {
             let small = deflate(&vec![b'a'; n]);
             assert!(small.len() < 100_000);
-            seal_blob(&kr, &aad, &small, [9; SALT_LEN], BLOB_VERSION_DEFLATE)
+            seal_blob(&kr, &aad, &small, crate::random(), BLOB_VERSION_DEFLATE)
         };
         let ok = open_record(&kr, "acct", 1, "chat", OID, 1, &seal(MAX_PLAINTEXT)).unwrap();
         assert_eq!(ok.len(), MAX_PLAINTEXT);
@@ -377,7 +377,7 @@ mod tests {
         let aad = format!("{}{DEFLATE_AAD}", record_aad("acct", 1, "chat", OID, 1));
         let full = deflate(&chat_like(50_000));
         for body in [&full[..full.len() / 2], &[0xffu8; 300][..], &[][..]] {
-            let blob = seal_blob(&kr, &aad, body, [9; SALT_LEN], BLOB_VERSION_DEFLATE);
+            let blob = seal_blob(&kr, &aad, body, crate::random(), BLOB_VERSION_DEFLATE);
             assert!(open_record(&kr, "acct", 1, "chat", OID, 1, &blob).is_err());
         }
     }
