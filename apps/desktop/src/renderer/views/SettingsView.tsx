@@ -313,7 +313,7 @@ export function SettingsView() {
                   detailId="settings-language-hint"
                   control={<LanguagePicker id="settings-language" describedBy="settings-language-hint" />}
                 />
-                <SettingRow title={tr('settings.showTips')} control={<Toggle aria-label={tr('settings.showTips')} on={settings.showTips !== false} onChange={(v) => update({ showTips: v })} />} />
+                <SettingRow title={tr('settings.showTips')} control={<Toggle aria-label={tr('settings.showTips')} data-testid="Show tips" on={settings.showTips !== false} onChange={(v) => update({ showTips: v })} />} />
                 <SettingRow
                   title={tr('settings.setupWizard')}
                   detail={tr('settings.setupWizardHint')}
@@ -1333,8 +1333,8 @@ export function UpdatesSection({ settings, update }: { settings: AppSettings; up
  * `.quiet-switch`, the same look as `primitives/Toggle`, so Settings and
  * Automations draw the same slider.
  */
-export function Toggle({ on, onChange, ...aria }: { on: boolean; onChange: (v: boolean) => void } & Pick<React.AriaAttributes, 'aria-label' | 'aria-describedby'>) {
-  return <button type="button" role="switch" {...aria} aria-checked={on} className="quiet-switch" onClick={() => onChange(!on)} />;
+export function Toggle({ on, onChange, ...attrs }: { on: boolean; onChange: (v: boolean) => void; 'data-testid'?: string } & Pick<React.AriaAttributes, 'aria-label' | 'aria-describedby'>) {
+  return <button type="button" role="switch" {...attrs} aria-checked={on} className="quiet-switch" onClick={() => onChange(!on)} />;
 }
 
 /**

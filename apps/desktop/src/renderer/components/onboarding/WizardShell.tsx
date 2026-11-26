@@ -91,6 +91,7 @@ export function WizardShell({
       role="dialog"
       aria-modal="true"
       aria-label={t('setup')}
+      data-testid="Nekko Agent setup"
       onKeyDown={handleKey}
     >
       {/* Header: step dots centered, Skip setup tucked in the trailing corner. */}
