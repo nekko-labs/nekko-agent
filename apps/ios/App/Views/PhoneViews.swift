@@ -399,7 +399,7 @@ private struct SentPhoto: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
-        .task(id: source) { thumbnail = DataURLImage.thumbnail(source) }
+        .task(id: source) { thumbnail = await PhotoThumbnails.shared.load(source).map { UIImage(cgImage: $0) } }
     }
 }
 

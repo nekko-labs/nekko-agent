@@ -151,3 +151,74 @@ fn every_vector_opens() {
     let framed = open_sealed(&research, &ctx, v["donation"]["blob"].as_str().unwrap()).unwrap();
     assert_eq!(unframe(&framed).unwrap(), v["donation"]["payload"].as_str().unwrap().as_bytes());
 }
+
+// Compressed records (decision 0124). Deflate output is not the same across implementations (the
+// iPhone uses Apple's Compression framework, the computer flate2), so these are not compared byte
+// for byte: `sync-compressed.json` holds blobs each side made, and each side must open both. The
+// `rust` list is rewritten by `UPDATE_GOLDEN=1`; the `swift` list is written by the iPhone's
+// `SyncCompressionTests` (`UPDATE_SWIFT_VECTORS=1`) and kept as it is here.
+
+fn chat_text(lines: usize) -> String {
+    let mut s = String::from(r#"{"v":1,"chat":{"id":"s_1729000000000_abc","title":"猫の写真","messages":["#);
+    for i in 0..lines {
+        s.push_str(&format!(
+            r#"{{"role":"tool","name":"bash","content":"line {i}: error[E0308]: mismatched types in src/lib.rs 猫"}},"#
+        ));
+    }
+    s.push_str(r#"{"role":"user","text":"done"}]}}"#);
+    s
+}
+
+fn compressed_vectors(existing_swift: Value) -> Value {
+    let keyring = Keyring::from_bytes(&[seed::<32>("enc"), seed::<32>("id")].concat()).unwrap();
+    let oid = object_id(&keyring, "chat", "s_1729000000000_abc").unwrap();
+    let rust: Vec<Value> = [(chat_text(60), 3u64, "salt-z1"), (chat_text(400), 4, "salt-z2")]
+        .iter()
+        .map(|(text, rev, s)| {
+            let blob =
+                seal_record_compressed_with(&keyring, ACCOUNT, 1, "chat", &oid, *rev, text.as_bytes(), seed(s)).unwrap();
+            json!({ "collection": "chat", "objectId": oid, "revision": rev, "keyId": 1, "plaintext": text, "blob": blob })
+        })
+        .collect();
+    json!({ "account": ACCOUNT, "keyring": b64_encode(&keyring.to_bytes()), "rust": rust, "swift": existing_swift })
+}
+
+#[test]
+fn compressed_vectors_from_both_sides_open() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden/sync-compressed.json");
+    if std::env::var_os("UPDATE_GOLDEN").is_some() {
+        let swift = std::fs::read_to_string(path)
+            .ok()
+            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+            .map(|v| v["swift"].clone())
+            .unwrap_or_else(|| json!([]));
+        std::fs::write(path, serde_json::to_string_pretty(&compressed_vectors(swift)).unwrap() + "\n").unwrap();
+    }
+    let want: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let ios = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../apps/ios/Protocol/Tests/NekkoProtocolTests/Fixtures/sync-compressed.json"
+    );
+    let ios: Value = serde_json::from_str(&std::fs::read_to_string(ios).unwrap()).unwrap();
+    assert_eq!(ios, want, "the iPhone's copy of the compressed vectors is stale");
+
+    let keyring = Keyring::from_bytes(&b64_decode(want["keyring"].as_str().unwrap()).unwrap()).unwrap();
+    assert!(!want["swift"].as_array().unwrap().is_empty(), "the iPhone's compressed records are missing");
+    for side in ["rust", "swift"] {
+        for r in want[side].as_array().unwrap() {
+            let blob = r["blob"].as_str().unwrap();
+            assert_eq!(b64_decode(blob).unwrap()[0], 2, "{side} made a version 2 blob");
+            let opened = open_record(
+                &keyring,
+                ACCOUNT,
+                r["keyId"].as_u64().unwrap() as u32,
+                r["collection"].as_str().unwrap(),
+                r["objectId"].as_str().unwrap(),
+                r["revision"].as_u64().unwrap(),
+                blob,
+            )
+            .unwrap();
+            assert_eq!(String::from_utf8(opened).unwrap(), r["plaintext"].as_str().unwrap(), "{side}");
+        }
+    }
+}
