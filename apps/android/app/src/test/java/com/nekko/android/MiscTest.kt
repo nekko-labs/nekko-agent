@@ -29,6 +29,9 @@ class MiscTest {
         assertEquals(DeepLink.NewChat, DeepLink.from("nekko-agent://new", "nekko-agent", "new", emptyList()))
         // ChatGPT's sign-in page sending the browser back (#3244): the code already came to the listener.
         assertEquals(DeepLink.ChatGptSignedIn, DeepLink.from("nekko-agent://chatgpt-signed-in", "nekko-agent", "chatgpt-signed-in", emptyList()))
+        // Nekko Cloud's browser sign-in coming back (#2835): the whole link, for its code.
+        val callback = "nekko-agent://cloud-callback?code=abc"
+        assertEquals(DeepLink.CloudCallback(callback), DeepLink.from(callback, "nekko-agent", "cloud-callback", emptyList()))
         assertNull(DeepLink.from("https://example.com", "https", "example.com", emptyList()))
     }
 

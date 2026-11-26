@@ -121,6 +121,10 @@ object Routes {
     const val SIMPLE_MODE = "settings/simple"
     const val CUSTOMIZE = "settings/customize"
     const val PERMISSIONS = "settings/permissions"
+    /** Nekko Cloud (#2835): sign in, join sync, devices, synced chats. */
+    const val CLOUD = "settings/cloud"
+    const val CLOUD_CHAT = "settings/cloud/chat/{id}"
+    fun cloudChat(id: String) = "settings/cloud/chat/${Uri.encode(id)}"
 
     fun chat(id: String) = "chat/${Uri.encode(id)}"
     /** This phone's chats, opened on [chat] when one is given (a row of the chat list, #2108). */
@@ -176,6 +180,7 @@ fun NekkoNavHost(
             DeepLink.Share, DeepLink.NewChat -> nav.navigate(Routes.NEW) { launchSingleTop = true }
             DeepLink.Talk -> nav.navigate(Routes.VOICE) { launchSingleTop = true }
             is DeepLink.OpenRouterKey, DeepLink.ChatGptSignedIn -> nav.navigate(Routes.phone()) { launchSingleTop = true }
+            is DeepLink.CloudCallback -> nav.navigate(Routes.CLOUD) { launchSingleTop = true }
             DeepLink.Dashboard -> nav.navigate(Routes.CHATS) { popUpTo(Routes.CHATS) { inclusive = true }; launchSingleTop = true }
             null -> return@LaunchedEffect
         }
@@ -321,21 +326,31 @@ fun NekkoNavHost(
             }
             composable(Routes.SETTINGS) {
                 val phone = phoneChats()
-                val deps = remember(nav, phone) {
-                    SettingsDeps(repo, themePrefs, phonePrefs, haptics, open = { route -> nav.navigate(route) { launchSingleTop = true } }, phone = phone)
+                val cloud = (LocalContext.current.applicationContext as? com.nekko.android.NekkoApp)?.cloud
+                val deps = remember(nav, phone, cloud) {
+                    SettingsDeps(repo, themePrefs, phonePrefs, haptics, open = { route -> nav.navigate(route) { launchSingleTop = true } }, phone = phone, cloud = cloud)
                 }
                 SettingsScreen(deps = deps, onBack = { nav.popBackStack() })
+            }
+            composable(Routes.CLOUD) {
+                val app = LocalContext.current.applicationContext as com.nekko.android.NekkoApp
+                com.nekko.android.ui.cloud.CloudScreen(app.cloud, app.cloudSignIn, app.cloudKeys, onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate(Routes.cloudChat(it)) })
+            }
+            composable(Routes.CLOUD_CHAT, arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
+                val app = LocalContext.current.applicationContext as com.nekko.android.NekkoApp
+                com.nekko.android.ui.cloud.SyncedChatScreen(app.cloud, entry.arguments?.getString("id").orEmpty()) { nav.popBackStack() }
             }
             composable(Routes.CUSTOMIZE) {
                 // Customize (#2426): Settings is opened by going back to it when it is underneath.
                 val phone = phoneChats()
-                val deps = remember(nav, phone) {
+                val cloud = (LocalContext.current.applicationContext as? com.nekko.android.NekkoApp)?.cloud
+                val deps = remember(nav, phone, cloud) {
                     SettingsDeps(repo, themePrefs, phonePrefs, haptics, open = { route ->
                         nav.navigate(route) {
                             if (route == Routes.SETTINGS) popUpTo(Routes.SETTINGS)
                             launchSingleTop = true
                         }
-                    }, phone = phone)
+                    }, phone = phone, cloud = cloud)
                 }
                 com.nekko.android.ui.screens.CustomizeScreen(deps, phoneChats(), onBack = { nav.popBackStack() })
             }

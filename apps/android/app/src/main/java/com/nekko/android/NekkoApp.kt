@@ -39,6 +39,14 @@ class NekkoApp : Application() {
 
     lateinit var phoneChats: com.nekko.android.phone.PhoneChats
     lateinit var connectors: com.nekko.android.data.Connectors
+    /** Nekko Cloud (#2835): sign-in, the account's sync keys and the synced chats to read. */
+    lateinit var cloud: com.nekko.protocol.CloudSync
+        private set
+    /** The browser sign-in's PKCE verifier while the browser is open; memory only. */
+    val cloudSignIn = com.nekko.android.cloud.CloudBrowserSignIn()
+    /** This phone's sync key: Keystore ECDH from API 31, a sealed software key below. */
+    lateinit var cloudKeys: com.nekko.android.cloud.SyncDeviceKeys
+        private set
     lateinit var pullRequests: com.nekko.android.data.PullRequests
         private set
     lateinit var computers: ComputersRepository
@@ -86,6 +94,15 @@ class NekkoApp : Application() {
         // This phone's own connectors (#2109): tokens sealed here, sent only to their service.
         connectors = com.nekko.android.data.Connectors(AndroidSecureStore(this), com.nekko.android.data.DirectConnectorHTTP())
         pullRequests = com.nekko.android.data.PullRequests(connectors, AndroidSecureStore(this))
+        cloudKeys = com.nekko.android.cloud.SyncDeviceKeys(AndroidSecureStore(this))
+        cloud = com.nekko.protocol.CloudSync(
+            api = BuildConfig.NEKKO_CLOUD_URL,
+            http = com.nekko.android.cloud.OkHttpCloudHTTP(),
+            secrets = com.nekko.android.cloud.SecureCloudSecrets(AndroidSecureStore(this)),
+            files = com.nekko.android.cloud.CloudChatFiles(OfflineFileStore(this)),
+            deviceLabel = deviceName(),
+            key = cloudKeys::key,
+        )
         themePrefs = ThemePrefs(this)
         phonePrefs = PhonePrefs(this)
         // Notify me about: each kind starts as the old single switch was.
@@ -121,6 +138,7 @@ class NekkoApp : Application() {
             appLock.status.first { !it.locked }
             // The phone's default computer (Settings → New chats), else the one used last.
             phoneChats.load()
+            cloud.load()
             computers.load(preferredId = newChatDefaults.computerId())
         }
         haptics = AndroidHaptics(this, EventHaptics(phonePrefs), computers)

@@ -17,6 +17,8 @@ class SettingsDeps(
     val open: (route: String) -> Unit,
     /** This phone's own providers (Settings → Models on This phone, #2940); null in previews and tests. */
     val phone: com.nekko.android.phone.PhoneChats? = null,
+    /** Nekko Cloud (the profile row atop Settings, #2835/#2940); null in previews and tests. */
+    val cloud: com.nekko.protocol.CloudSync? = null,
 )
 
 /** One block of the Settings screen, usually a [SettingsGroup] header and its card. */
@@ -27,8 +29,8 @@ typealias SettingsSection = @Composable (SettingsDeps) -> Unit
  * here; keep About last.
  */
 val SettingsSections: List<SettingsSection> = listOf(
-    // Computers first, then this phone's providers (#2940, the iPhone's #2929). The Nekko Cloud
-    // profile goes above them once Android signs in to Nekko Cloud (#2835).
+    // Your Nekko Cloud account first, then Computers and this phone's providers (#2940, the iPhone's #2929).
+    { CloudProfileSection(it) },
     { ComputersSection(it) },
     { PhoneModelsSection(it) },
     { AppearanceSection(it) },
