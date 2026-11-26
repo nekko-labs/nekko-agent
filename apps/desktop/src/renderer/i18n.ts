@@ -1,20 +1,31 @@
 import { useStore } from './store.js';
 
 /** Languages we ship UI translations for. */
-export const LANGUAGES: Array<{ code: string; label: string }> = [
-  { code: 'en', label: 'English' },
-  { code: 'es', label: 'Español' },
-  { code: 'fr', label: 'Français' },
-  { code: 'de', label: 'Deutsch' },
-  { code: 'pt', label: 'Português' },
-  { code: 'ja', label: '日本語' },
-  { code: 'zh', label: '中文' },
-];
+export const LANGUAGES = [
+  { code: 'en', label: 'English', badge: 'EN' },
+  { code: 'es', label: 'Español', badge: 'ES' },
+  { code: 'fr', label: 'Français', badge: 'FR' },
+  { code: 'de', label: 'Deutsch', badge: 'DE' },
+  { code: 'pt', label: 'Português', badge: 'PT' },
+  { code: 'ja', label: '日本語', badge: 'あ' },
+  { code: 'zh', label: '简体中文', badge: '中' },
+] as const;
 
-type Dict = Record<string, string>;
+export type Language = typeof LANGUAGES[number]['code'];
+const languageCodes: ReadonlySet<string> = new Set(LANGUAGES.map(({ code }) => code));
+export const isLanguage = (value: string): value is Language => languageCodes.has(value);
 
-// English is the source of truth; other locales fall back to it per-key.
-const en: Dict = {
+// An empty string survives the settings JSON transport and means follow the system.
+export const languagePatch = (value: Language | '') => ({ language: value });
+
+// English defines the keys each shipped locale must provide.
+const en = {
+  'settings.languageAndHelp': 'Language and help',
+  'settings.showTips': 'Show tips',
+  'settings.setupWizard': 'Setup wizard',
+  'settings.setupWizardHint': 'Reopen the first-run walkthrough.',
+  'settings.replaySetup': 'Replay setup',
+  'settings.general': 'General',
   'nav.breadcrumb': 'Breadcrumb',
   'nav.command': 'Agents',
   'nav.artifacts': 'Library',
@@ -58,7 +69,21 @@ const en: Dict = {
   'theme.system': 'system',
 };
 
+type Dict = Record<keyof typeof en, string>;
+
 const es: Dict = {
+  'nav.breadcrumb': 'Ruta de navegación',
+  'nav.artifacts': 'Biblioteca',
+  'nav.design': 'Diseño',
+  'nav.skills': 'Habilidades',
+  'nav.training': 'Entrenamiento',
+  'nav.workflows': 'Automatizaciones',
+  'settings.languageAndHelp': 'Idioma y ayuda',
+  'settings.showTips': 'Mostrar sugerencias',
+  'settings.setupWizard': 'Asistente de configuración',
+  'settings.setupWizardHint': 'Vuelve a abrir la guía de inicio.',
+  'settings.replaySetup': 'Repetir configuración',
+  'settings.general': 'General',
   'nav.command': 'Agentes',
   'nav.models': 'Modelos',
   'nav.modelserver': 'Servidor de modelos',
@@ -95,6 +120,18 @@ const es: Dict = {
 };
 
 const fr: Dict = {
+  'nav.breadcrumb': 'Fil d’Ariane',
+  'nav.artifacts': 'Bibliothèque',
+  'nav.design': 'Design',
+  'nav.skills': 'Compétences',
+  'nav.training': 'Entraînement',
+  'nav.workflows': 'Automatisations',
+  'settings.languageAndHelp': 'Langue et aide',
+  'settings.showTips': 'Afficher les astuces',
+  'settings.setupWizard': 'Assistant de configuration',
+  'settings.setupWizardHint': 'Rouvrir la visite guidée de démarrage.',
+  'settings.replaySetup': 'Reprendre la configuration',
+  'settings.general': 'Général',
   'nav.command': 'Agents',
   'nav.models': 'Modèles',
   'nav.modelserver': 'Serveur de modèles',
@@ -131,6 +168,18 @@ const fr: Dict = {
 };
 
 const de: Dict = {
+  'nav.breadcrumb': 'Navigationspfad',
+  'nav.artifacts': 'Bibliothek',
+  'nav.design': 'Design',
+  'nav.skills': 'Fähigkeiten',
+  'nav.training': 'Training',
+  'nav.workflows': 'Automatisierungen',
+  'settings.languageAndHelp': 'Sprache und Hilfe',
+  'settings.showTips': 'Tipps anzeigen',
+  'settings.setupWizard': 'Einrichtungsassistent',
+  'settings.setupWizardHint': 'Die Einführung erneut öffnen.',
+  'settings.replaySetup': 'Einrichtung wiederholen',
+  'settings.general': 'Allgemein',
   'nav.command': 'Agenten',
   'nav.models': 'Modelle',
   'nav.modelserver': 'Modellserver',
@@ -167,6 +216,18 @@ const de: Dict = {
 };
 
 const pt: Dict = {
+  'nav.breadcrumb': 'Caminho de navegação',
+  'nav.artifacts': 'Biblioteca',
+  'nav.design': 'Design',
+  'nav.skills': 'Habilidades',
+  'nav.training': 'Treinamento',
+  'nav.workflows': 'Automações',
+  'settings.languageAndHelp': 'Idioma e ajuda',
+  'settings.showTips': 'Mostrar dicas',
+  'settings.setupWizard': 'Assistente de configuração',
+  'settings.setupWizardHint': 'Reabra o guia de primeiros passos.',
+  'settings.replaySetup': 'Refazer configuração',
+  'settings.general': 'Geral',
   'nav.command': 'Agentes',
   'nav.models': 'Modelos',
   'nav.modelserver': 'Servidor de modelos',
@@ -203,6 +264,18 @@ const pt: Dict = {
 };
 
 const ja: Dict = {
+  'nav.breadcrumb': 'パンくずリスト',
+  'nav.artifacts': 'ライブラリ',
+  'nav.design': 'デザイン',
+  'nav.skills': 'スキル',
+  'nav.training': 'トレーニング',
+  'nav.workflows': '自動化',
+  'settings.languageAndHelp': '言語とヘルプ',
+  'settings.showTips': 'ヒントを表示',
+  'settings.setupWizard': 'セットアップウィザード',
+  'settings.setupWizardHint': '初回セットアップの案内を開き直します。',
+  'settings.replaySetup': 'セットアップをやり直す',
+  'settings.general': '一般',
   'nav.command': 'エージェント',
   'nav.models': 'モデル',
   'nav.modelserver': 'モデルサーバー',
@@ -239,6 +312,18 @@ const ja: Dict = {
 };
 
 const zh: Dict = {
+  'nav.breadcrumb': '面包屑导航',
+  'nav.artifacts': '资料库',
+  'nav.design': '设计',
+  'nav.skills': '技能',
+  'nav.training': '训练',
+  'nav.workflows': '自动化',
+  'settings.languageAndHelp': '语言和帮助',
+  'settings.showTips': '显示提示',
+  'settings.setupWizard': '设置向导',
+  'settings.setupWizardHint': '重新打开首次使用指南。',
+  'settings.replaySetup': '重新运行设置',
+  'settings.general': '常规',
   'nav.command': '智能体',
   'nav.models': '模型',
   'nav.modelserver': '模型服务器',
@@ -274,22 +359,54 @@ const zh: Dict = {
   'theme.system': '系统',
 };
 
-const DICTS: Record<string, Dict> = { en, es, fr, de, pt, ja, zh };
+const DICTS: Record<Language, Dict> = { en, es, fr, de, pt, ja, zh };
 
-/** Resolve the active language: explicit setting → system → English. */
-export function resolveLang(setting?: string): string {
-  if (setting && DICTS[setting]) return setting;
-  const sys = (typeof navigator !== 'undefined' ? navigator.language : 'en').slice(0, 2).toLowerCase();
-  return DICTS[sys] ? sys : 'en';
+function preferredLanguages(): readonly string[] {
+  const native = typeof window === 'undefined' ? undefined : window.nekkoChrome?.systemLanguages;
+  if (native?.length) return native;
+  return typeof navigator === 'undefined' ? [] : [...(navigator.languages ?? []), navigator.language];
 }
 
+export function supportedLanguage(tag?: string): Language | undefined {
+  const base = tag?.trim().toLowerCase().split(/[-_]/)[0];
+  return base && isLanguage(base) ? base : undefined;
+}
+
+/** An explicit choice wins, then the first supported computer language, then English. */
+export function resolveLang(setting?: string, preferences = preferredLanguages()): Language {
+  const explicit = supportedLanguage(setting);
+  if (explicit) return explicit;
+  for (const preference of preferences) {
+    const system = supportedLanguage(preference);
+    if (system) return system;
+  }
+  return 'en';
+}
+
+export function useLanguage(): Language {
+  return resolveLang(useStore((s) => s.settings?.language));
+}
+
+export function syncDocumentLanguage() {
+  const apply = (setting?: string) => {
+    const next = resolveLang(setting);
+    if (document.documentElement.lang !== next) document.documentElement.lang = next;
+  };
+  apply(useStore.getState().settings?.language);
+  return useStore.subscribe((state, prev) => {
+    if (state.settings?.language !== prev.settings?.language) apply(state.settings?.language);
+  });
+}
+
+export type MessageKey = keyof Dict;
+
 export function translate(lang: string, key: string): string {
-  const l = DICTS[lang] ?? en;
-  return l[key] ?? en[key] ?? key;
+  const dict = isLanguage(lang) ? DICTS[lang] : en;
+  return Object.hasOwn(dict, key) ? dict[key as MessageKey] : key;
 }
 
 /** Hook: returns a `t(key)` bound to the user's current language. */
-export function useT(): (key: string) => string {
-  const lang = useStore((s) => resolveLang(s.settings?.language));
-  return (key: string) => translate(lang, key);
+export function useT(): (key: MessageKey) => string {
+  const lang = useLanguage();
+  return (key: MessageKey) => translate(lang, key);
 }

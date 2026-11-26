@@ -423,7 +423,7 @@ pub fn start_image_turn(session: &mut Value, opts: &Value, now: u64, seed: u64) 
         list.push(message);
     }
     if s.get("title").and_then(Value::as_str) == Some("New chat") {
-        s.insert("title".into(), json!(js::slice16(&text, 48)));
+        s.insert("title".into(), json!(crate::input::cut_title(&text)));
         s.insert("titleAuto".into(), json!(true));
     }
     s.insert("chatType".into(), json!("image"));

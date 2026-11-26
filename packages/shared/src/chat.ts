@@ -619,8 +619,16 @@ export type AgentEvent =
    * The session record changed outside the event stream (its plan, its title),
    * so anything showing it should re-read it. Emitted mid-turn, which is why it
    * is an event rather than something a listener polls for.
+   *
+   * `summary` (added 2026-11-26) holds the record's small fields as the daemon
+   * last saved them: `title`, `titleAuto`, `plan`, `updatedAt`, `pinned`,
+   * `archivedAt`, `tags`, `order`, the mode, model and workspace fields, and the
+   * rest of the options a user can set. A field the chat does not have is
+   * `null`. Absent when the daemon has not saved the chat since it started
+   * (then re-read it), and never sent to a phone. A listener may apply it to a
+   * summary it already has instead of reading the list again.
    */
-  | { type: 'session_meta'; sessionId: string; connectivityNotice?: ConnectivityNotice }
+  | { type: 'session_meta'; sessionId: string; connectivityNotice?: ConnectivityNotice; summary?: Record<string, unknown> }
   /**
    * A Claude Agent chat's Claude Code now runs `tasks` background tasks (shell
    * commands, sub-agents). It keeps working after the turn's `done` and wakes

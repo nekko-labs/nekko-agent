@@ -1,5 +1,5 @@
 import { AUTO_ARCHIVE_CHOICES, autoArchiveDays, promptCachingEnabled, telemetryChoice, type AppSettings } from '@nekko-agent/shared';
-import { LANGUAGES } from './i18n.js';
+import { LANGUAGES, languagePatch, supportedLanguage } from './i18n.js';
 import { textScaleOf, useStore } from './store.js';
 import { TEXT_SCALES } from './textScale.js';
 
@@ -48,7 +48,7 @@ export const SETTINGS_INDEX: SettingEntry[] = [
     control: toggle((s) => s.sidebarViews?.[view] === true, (v, s) => ({ sidebarViews: { ...s.sidebarViews, [view]: v } })),
   })),
   { id: 'background-animation', label: 'Background animation', group: 'customize', keywords: 'appearance pixel wave power', control: toggle((s) => s.backgroundAnimation !== false, (v) => ({ backgroundAnimation: v })) },
-  { id: 'language', label: 'Language', group: 'general', keywords: 'locale translation', control: { kind: 'select', options: [{ value: '', label: 'System default' }, ...LANGUAGES.map((l) => ({ value: l.code, label: l.label }))], get: (s) => s.language ?? '', set: (v) => ({ language: v || undefined }) } },
+  { id: 'language', label: 'Language', group: 'general', keywords: 'locale translation', control: { kind: 'select', options: [{ value: '', label: 'System default' }, ...LANGUAGES.map((l) => ({ value: l.code, label: l.label }))], get: (s) => supportedLanguage(s.language) ?? '', set: (v) => languagePatch(supportedLanguage(v) ?? '') } },
   { id: 'chat-pane-action', label: 'Chat pane top-right action', group: 'general', keywords: 'archive complete delete close x', control: { kind: 'select', options: [{ value: 'complete', label: 'Archive' }, { value: 'delete', label: 'Delete' }], get: (s) => s.chatPaneAction ?? 'complete', set: (v) => ({ chatPaneAction: v === 'delete' ? 'delete' : 'complete' }) } },
   { id: 'auto-archive', label: 'Archive idle agents after', group: 'general', keywords: 'archive complete inactive', control: { kind: 'select', options: AUTO_ARCHIVE_CHOICES.map((c) => ({ value: String(c.days), label: c.label })), get: (s) => String(autoArchiveDays(s.autoCompleteAfterDays)), set: (v) => ({ autoCompleteAfterDays: Number(v) }) } },
   { id: 'tips', label: 'Show tips', group: 'general', control: toggle((s) => s.showTips !== false, (v) => ({ showTips: v })) },

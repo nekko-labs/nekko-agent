@@ -16,7 +16,7 @@ use std::path::Path;
 use std::sync::Mutex;
 
 /// The fields `setSessionOptions` takes (its `Pick<Session, ...>`).
-const OPTION_KEYS: &[&str] = &[
+pub(crate) const OPTION_KEYS: &[&str] = &[
     "title",
     "turnFailure",
     "pinned",
@@ -154,7 +154,7 @@ fn apply_mode(s: &mut JsObject, options: &Value) {
 
 /// What a running turn's save takes from disk rather than from memory
 /// (`USER_FIELDS` in sessions.ts): the user may change them mid-turn.
-const USER_FIELDS: &[&str] = &[
+pub(crate) const USER_FIELDS: &[&str] = &[
     "pinned",
     "tags",
     "order",
@@ -424,7 +424,9 @@ impl SessionStore {
         if nekko_js::truthy(s.get("incognito")) {
             self.remove_review(id)?;
         }
-        self.write_text(id, &chat_text(&self.dir, s, None)?)
+        self.write_text(id, &chat_text(&self.dir, s, None)?)?;
+        self.note_meta_fields(s);
+        Ok(())
     }
 
     fn write_text(&self, id: &str, text: &str) -> Result<(), String> {
@@ -499,7 +501,9 @@ impl SessionStore {
             if nekko_js::truthy(head.get("incognito")) {
                 self.remove_review(&id)?;
             }
-            self.write_text(&id, &chat_text(&self.dir, &head, messages.as_deref())?)
+            self.write_text(&id, &chat_text(&self.dir, &head, messages.as_deref())?)?;
+            self.note_meta_fields(&head);
+            Ok(())
         });
         if let Some(m) = messages
             && let Some(obj) = lock().as_object_mut()
@@ -718,6 +722,9 @@ impl SessionStore {
             let text = chat_text(&self.dir, fields, None)?;
             let written = write_atomic(&self.path(id), &text).map_err(|e| format!("could not save the chat: {e}"));
             self.touched(id);
+            if written.is_ok() {
+                self.note_meta_fields(fields);
+            }
             written
         })
     }
@@ -734,6 +741,7 @@ impl SessionStore {
                 _ => Ok(()),
             };
             self.touched(id);
+            self.forget_meta_fields(id);
             removed
         })
     }
@@ -787,6 +795,7 @@ impl SessionStore {
                 _ => {}
             }
             self.touched(id);
+            self.forget_meta_fields(id);
 
             count += 1;
         }
@@ -883,6 +892,7 @@ impl SessionStore {
                 _ => {}
             }
             self.touched(id);
+            self.forget_meta_fields(id);
             count += 1;
         }
         Ok(count)

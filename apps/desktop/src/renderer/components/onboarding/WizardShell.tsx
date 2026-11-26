@@ -1,4 +1,6 @@
+import { useOnboardingT } from '../../onboardingMessages.js';
 import React, { useEffect, useRef } from 'react';
+import { LanguagePicker } from '../LanguagePicker.js';
 
 export interface WizardStepDef {
   id: string;
@@ -25,9 +27,9 @@ export function WizardShell({
   onSkipStep,
   onSkipAll,
   onGoTo,
-  nextLabel = 'Next',
+  nextLabel,
   showSkipStep = true,
-  skipLabel = 'Skip step',
+  skipLabel,
   wide = false,
   children,
 }: {
@@ -46,6 +48,7 @@ export function WizardShell({
   wide?: boolean;
   children: React.ReactNode;
 }) {
+  const t = useOnboardingT();
   const stepRef = useRef<HTMLElement>(null);
   const step = steps[index];
 
@@ -88,13 +91,16 @@ export function WizardShell({
       className="absolute inset-0 z-50 flex flex-col bg-paper"
       role="dialog"
       aria-modal="true"
-      aria-label="Nekko Agent setup"
+      aria-label={t('setup')}
+      data-testid="Nekko Agent setup"
       onKeyDown={handleKey}
     >
-      {/* Header: step dots centered, Skip setup tucked in the trailing corner. */}
-      <div className="flex items-center px-6 py-5">
-        <div className="w-24" aria-hidden="true" />
-        <div className="flex flex-1 items-center justify-center gap-2" role="group" aria-label="Setup progress">
+      {/* Header: step dots centered; the app language and Skip setup sit in the
+          trailing corner on every step. The side columns share the spare width
+          so the dots stay centred unless the corner needs more room. */}
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 px-6 py-5">
+        <div aria-hidden="true" />
+        <div className="flex items-center justify-center gap-2" role="group" aria-label={t('progress')}>
           {steps.map((s, i) => {
             const current = i === index;
             const visited = i < index;
@@ -102,7 +108,7 @@ export function WizardShell({
               <button
                 key={s.id}
                 onClick={() => onGoTo(i)}
-                aria-label={`Step ${i + 1} of ${steps.length}: ${s.title}`}
+                aria-label={t('stepCount', { index: i + 1, total: steps.length, title: s.title })}
                 aria-current={current ? 'step' : undefined}
                 className={`h-2.5 rounded-full transition-colors ${
                   current ? 'w-6 bg-accent' : visited ? 'w-2.5 bg-accent-soft' : 'w-2.5 bg-line hover:bg-surface-2'
@@ -111,9 +117,10 @@ export function WizardShell({
             );
           })}
         </div>
-        <div className="flex w-24 justify-end">
+        <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+          <LanguagePicker id="setup-language" />
           <button className="btn btn-ghost px-2 py-1 text-xs" onClick={onSkipAll}>
-            Skip setup
+            {t('skipSetup')}
           </button>
         </div>
       </div>
@@ -134,16 +141,16 @@ export function WizardShell({
       {/* Footer: Back on the left, Skip step + Next on the right. */}
       <div className="flex items-center justify-between px-6 py-5">
         <button className="btn btn-ghost" onClick={onBack} disabled={index === 0} aria-disabled={index === 0}>
-          Back
+          {t('back')}
         </button>
         <div className="flex items-center gap-2">
           {showSkipStep && (
             <button className="btn btn-ghost" onClick={onSkipStep}>
-              {skipLabel}
+              {skipLabel ?? t('skipStep')}
             </button>
           )}
           <button className="btn btn-primary" onClick={onNext}>
-            {nextLabel}
+            {nextLabel ?? t('next')}
           </button>
         </div>
       </div>
