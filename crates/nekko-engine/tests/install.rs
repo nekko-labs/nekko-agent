@@ -77,11 +77,12 @@ fn offers_the_builds_the_host_offers() {
 
 /// The pinned stable-diffusion.cpp release (`builds.rs`) and how upstream names
 /// its archives. Update both when updating the pin in `builds.rs`.
-const SD_RELEASE: &str = "master-1086-465adf3";
-const SD_ARCHIVE_TAG: &str = "master-465adf3";
+const SD_RELEASE: &str = "master-1091-b9d7176";
+const SD_ARCHIVE_TAG: &str = "master-b9d7176";
 
 #[test]
 fn diffusion_release_matches_published_asset_names() {
+    assert_eq!(builds::release_pin("diffusion").1, SD_RELEASE);
     // The pinned release's real asset list (gh api repos/leejet/stable-diffusion.cpp/releases/tags/<tag>).
     let names: Vec<String> = [
         "cudart-sd-bin-win-cu12-x64.zip".to_string(),
