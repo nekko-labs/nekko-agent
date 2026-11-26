@@ -298,8 +298,17 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let machine = Arc::new(nekko_machine::Machine::new(Some(data_dir.clone()), Box::new(engine_bin)));
     let library = library::Library::new(settings.clone(), machine.clone(), engine.clone());
     let _ = engine.speeds.sink.set(speeds::Speeds::new(machine.clone(), library.clone()));
-    // What this computer tells the organizations it is shared with: its name and the
-    // local models it can serve (the model library, never a cloud provider's models).
+    #[cfg(unix)]
+    let runners = runner::Runners::start(
+        data_dir.clone(),
+        machine.clone(),
+        Box::new(read_settings()),
+        hub.clone(),
+        cfg.github_api_url.clone(),
+    );
+    // What this computer tells the organizations it is shared with: its name, the
+    // local models it can serve (the model library, never a cloud provider's models)
+    // and its CI runners' coarse state.
     cloud.set_host(nekko_cloud::HostInfo {
         app_version: cfg.app_version.clone().unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string()),
         name: {
@@ -318,6 +327,13 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             let remote = remote.clone();
             Some(Arc::new(move || fleet::connect_info(&remote)))
         },
+        #[cfg(unix)]
+        runners: {
+            let runners = runners.clone();
+            Some(Arc::new(move || runners.fleet_summary()))
+        },
+        #[cfg(not(unix))]
+        runners: None,
     });
     {
         // Abandoned downloads can be GBs each (#1035).
@@ -405,13 +421,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         installs: installs.clone(),
         server: server.clone(),
         #[cfg(unix)]
-        runners: runner::Runners::start(
-            data_dir.clone(),
-            machine.clone(),
-            Box::new(read_settings()),
-            hub.clone(),
-            cfg.github_api_url.clone(),
-        ),
+        runners: runners.clone(),
         resource_queue: Arc::new(resource_queue::ResourceQueue::new(data_dir.clone(), Box::new(read_settings()))),
         voice: voice.clone(),
         cloud: cloud.clone(),

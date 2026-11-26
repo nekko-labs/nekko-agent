@@ -5,7 +5,7 @@ import { SettingRow, SettingsSection } from '../SettingsSection.js';
 import { StatusDot } from '../primitives/index.js';
 import { Toggle } from '../primitives/Toggle.js';
 import {
-  FLEET_FAST_PATH, canManage, canOpen, loadFleet, loadOrgs, lastSeen, openOnComputer, orgErrorText, fleetPollMs, orgGate, orgListErrorText, osLabel, reachNote, relayPresenceKey,
+  FLEET_FAST_PATH, canManage, canOpen, loadFleet, loadOrgs, lastSeen, openOnComputer, orgErrorText, fleetPollMs, orgGate, orgListErrorText, osLabel, reachNote, relayPresenceKey, runnerLines,
   roleLabel, roleSentence, setSharing, sortComputers, splitModels, validEmail, type OrgGate, type OrgSnapshot,
 } from './orgModel.js';
 import { addCreatedSession, useStore } from '../../store.js';
@@ -244,6 +244,7 @@ function ComputerRow({ c, now, onOpenChat }: { c: FleetComputerView; now?: numbe
             {hidden > 0 && <> <button type="button" className="text-ink-soft underline-offset-2 hover:underline" onClick={() => setOpen(true)} data-testid="org-more-models">+{hidden} more</button></>}
             {open && c.models.length > 3 && <> <button type="button" className="text-ink-soft underline-offset-2 hover:underline" onClick={() => setOpen(false)}>Show less</button></>}
           </div>
+          {runnerLines(c).map((line) => <div key={line} className="mt-(--q-tight) text-xs text-ink-faint" data-testid="org-runner">{line}</div>)}
           {note && <div role={failed ? 'alert' : undefined} className={`mt-(--q-tight) text-xs ${failed ? 'text-danger-text' : 'text-ink-faint'}`} data-testid="org-reach-note">{note}</div>}
         </div>
       </div>
