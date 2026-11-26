@@ -203,6 +203,18 @@ fn is_local(kind: &str) -> bool {
     LOCAL_KINDS.contains(&kind)
 }
 
+/// Who caused this admitted turn. A subagent wins over unattended because its
+/// parent, not a person or workflow, started that persisted child chat.
+fn turn_actor(session: &Value, opts: &Value) -> &'static str {
+    if session.get("parentSessionId").is_some_and(|parent| !parent.is_null()) {
+        "subagent"
+    } else if crate::claude_policy::is_unattended(opts) {
+        "automation"
+    } else {
+        "user"
+    }
+}
+
 /// A cloud-only chat asked to run on a model server on this machine.
 pub(crate) const CLOUD_ONLY_REFUSAL: &str =
     "This chat runs on cloud models only. Pick a cloud model, or turn Cloud only off in the Mode panel.";
@@ -672,13 +684,22 @@ async fn admit(
         .and_then(Value::as_str)
         .or_else(|| settings.get("defaultChatMode").and_then(Value::as_str))
         .unwrap_or("guardrails");
-    crate::telemetry::capture(
-        "turn_started",
+    // Attribution follows only the exact route admission validated. Managed
+    // Local Model Server ids are path-derived, and a provider can choose later;
+    // those cases get a fixed missing reason rather than an inferred model.
+    let managed_local =
+        kind == "llamacpp" && host_provider_config(ctx, &provider).get("managedCachePrompt") == Some(&json!(true));
+    let reported_model = crate::telemetry::model_attribution(kind, model_id, managed_local);
+    let subagent = session.get("parentSessionId").is_some_and(|parent| !parent.is_null());
+    crate::telemetry::capture_turn(
+        (!incognito).then_some(session_id.as_str()),
         &json!({
             "provider": kind, "local": is_local(kind), "offline": offline, "mode": mode_name, "sandbox": sandbox,
-            "model": model_id,
+            "model": reported_model.model,
+            "model_missing_reason": reported_model.missing_reason,
             "permission": permission,
-            "subagent": session.get("parentSessionId").is_some_and(|p| !p.is_null()),
+            "actor": turn_actor(&session, &opts),
+            "subagent": subagent,
             // Other chats with a turn running as this one starts.
             "running_agents": crate::routes::running_chats(ctx).len(),
             "connectors": connector_kinds.join(","),
@@ -919,6 +940,14 @@ mod tests {
         assert!(effective_thinking(&managed, &json!({ "preset": { "thinking": true } })));
         assert!(effective_thinking(&managed, &json!({})));
         assert!(effective_thinking(&managed, &json!({ "format": "mlx", "preset": { "thinking": false } })));
+    }
+
+    #[test]
+    fn turn_actor_distinguishes_people_automation_and_subagents() {
+        assert_eq!(turn_actor(&json!({}), &json!({})), "user");
+        assert_eq!(turn_actor(&json!({}), &json!({ "unattended": true })), "automation");
+        assert_eq!(turn_actor(&json!({ "parentSessionId": "parent" }), &json!({ "unattended": true })), "subagent");
+        assert_eq!(turn_actor(&json!({ "parentSessionId": null }), &json!({})), "user");
     }
 
     #[test]

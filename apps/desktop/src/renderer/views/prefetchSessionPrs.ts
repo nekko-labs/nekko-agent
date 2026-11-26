@@ -19,14 +19,35 @@ export function freshSessionPrs(
   return fresh;
 }
 
-/** Hydrate every visible card, with bounded concurrency rather than a one-shot slice. */
+/** Cards read together in one request when the host can answer for many. */
+const BATCH = 24;
+
+/**
+ * Hydrate every visible card, with bounded concurrency rather than a one-shot
+ * slice. With `refreshMany` the cards still to read go together, `BATCH` to a
+ * request (`pr:sessionListMany`), instead of one request each.
+ */
 export async function prefetchSessionPrs(
   ids: string[],
   loaded: () => Record<string, unknown>,
   refresh: (id: string) => Promise<void>,
   inFlight: Map<string, Promise<void>>,
   cancelled: () => boolean,
+  refreshMany?: (ids: string[]) => Promise<void>,
 ): Promise<void> {
+  if (refreshMany) {
+    const wanted = [...new Set(ids)].filter((id) => id && !(id in loaded()) && !inFlight.has(id));
+    for (let i = 0; i < wanted.length && !cancelled(); i += BATCH) {
+      const chunk = wanted.slice(i, i + BATCH).filter((id) => !inFlight.has(id));
+      if (chunk.length === 0) continue;
+      const read = Promise.resolve().then(() => refreshMany(chunk))
+        .catch(() => { /* Retry on summary/visibility changes, not a tight loop. */ })
+        .finally(() => { for (const id of chunk) inFlight.delete(id); });
+      for (const id of chunk) inFlight.set(id, read);
+      await read;
+    }
+    return;
+  }
   let next = 0;
   const worker = async () => {
     while (!cancelled() && next < ids.length) {

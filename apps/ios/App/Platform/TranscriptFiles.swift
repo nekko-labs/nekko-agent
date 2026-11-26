@@ -10,8 +10,8 @@ import NekkoKit
 /// still paint a chat) and are excluded from iCloud and computer backups.
 /// Forget deletes a computer's files; turning the setting off or Forget
 /// everything deletes the folder. Photos are never written.
-@MainActor
-final class TranscriptFiles: TranscriptCache {
+/// Safe from any thread: `SavedTranscripts` writes from a background queue.
+final class TranscriptFiles: TranscriptCache, @unchecked Sendable {
     private let dir: URL
 
     init(fileManager: FileManager = .default) {

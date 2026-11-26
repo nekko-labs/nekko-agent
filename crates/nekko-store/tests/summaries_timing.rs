@@ -73,3 +73,54 @@ fn time_summaries() {
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
+
+/// What `pr:sessionList` read per call on a large chat: before, the whole chat
+/// (read, parse, pictures restored) and its PR URLs collected from the
+/// transcript, then the list for the sub-agents' PRs; after, `summary(id)`.
+/// The "before" list call here is the kept-list `summaries()` of the current
+/// store, which is faster than the one `pr:sessionList` used to call.
+#[test]
+#[ignore]
+fn time_pr_session_list_on_a_large_chat() {
+    use base64::Engine;
+    let dir = std::env::temp_dir().join(format!("nekko-prlist-timing-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let store = SessionStore::new(&dir);
+    chats(&dir, 500);
+    // One large agent chat: 2,000 messages of 10 KB text and 20 screenshots of ~150 KB each.
+    let png = format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(vec![7u8; 110_000]));
+    let mut messages: Vec<Value> = (0..2000)
+        .map(|i| json!({ "id": format!("m{i}"), "role": "assistant", "content": "word ".repeat(2000), "createdAt": i }))
+        .collect();
+    for i in 0..20 {
+        messages.push(json!({ "id": format!("t{i}"), "role": "tool", "toolResult": { "toolCallId": format!("c{i}"), "output": "ok", "images": [png.clone()] } }));
+    }
+    let mut big = store.create(None).unwrap();
+    big["messages"] = Value::Array(messages);
+    store.put_synced(&big).unwrap();
+    let id = big["id"].as_str().unwrap().to_string();
+    let file = std::fs::metadata(dir.join("sessions").join(format!("{id}.json"))).unwrap().len();
+    println!("large chat file: {:.1} MB, 500 other chats", file as f64 / 1e6);
+    store.summaries();
+    let time = |f: &dyn Fn()| {
+        median(
+            (0..9)
+                .map(|_| {
+                    let t = Instant::now();
+                    f();
+                    t.elapsed().as_secs_f64() * 1e3
+                })
+                .collect(),
+        )
+    };
+    let before = time(&|| {
+        let s = store.get(&id).unwrap();
+        let _ = nekko_store::pr::collect_session_pr_urls(s["messages"].as_array().unwrap());
+        let _ = store.summaries().into_iter().find(|v| v["id"] == id.as_str());
+    });
+    let after = time(&|| {
+        let _ = store.summary(&id);
+    });
+    println!("pr:sessionList read per call: before (get + collect + summaries) median {before:.2} ms, after summary(id) median {after:.3} ms");
+    let _ = std::fs::remove_dir_all(&dir);
+}
