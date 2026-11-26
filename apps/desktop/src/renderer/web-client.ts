@@ -458,6 +458,7 @@ function makeWebClient(): NekkoApi {
     fleetSetSharing: (orgId, on) => call(IpcChannels.fleetSetSharing, orgId, on),
     fleetList: (orgId) => call(IpcChannels.fleetList, orgId),
     fleetStatus: () => call(IpcChannels.fleetStatus),
+    fleetRunners: () => call(IpcChannels.fleetRunners),
     voiceStatus: () => call(IpcChannels.voiceStatus),
   voiceInstall: (engine) => call(IpcChannels.voiceInstall, engine),
   voiceCancelInstall: () => call(IpcChannels.voiceCancelInstall),

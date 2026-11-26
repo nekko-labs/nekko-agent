@@ -353,6 +353,9 @@ describe('skills from a phone', () => {
   it('lists the tools by name and what they do, without their schemas', () => {
     expect(redactPhoneResult('tools:list', [{ name: 'bash', description: 'Run a command', inputSchema: { type: 'object' } }])).toEqual([{ name: 'bash', description: 'Run a command' }]);
     expect(redactPhoneResult('tools:list', null)).toEqual([]);
+    const fleet = { orgs: [{ orgId: 'o1', orgName: 'Nekko Labs', computers: [{ deviceId: 'd1', name: 'Studio Mac', os: 'macos', online: true, seenAt: 5, you: false, connect: { blob: 'x' }, runners: [{ label: 'nekko-cloud-mac', state: 'running', busy: 1, slots: 2, repos: ['a/b'] }] }] }] };
+    expect(redactPhoneResult('fleet:runners', fleet)).toEqual({ orgs: [{ orgName: 'Nekko Labs', computers: [{ deviceId: 'd1', name: 'Studio Mac', os: 'macos', online: true, seenAt: 5, you: false, runners: [{ label: 'nekko-cloud-mac', state: 'running', busy: 1, slots: 2 }] }] }] });
+    expect(redactPhoneResult('fleet:runners', null)).toEqual({ orgs: [] });
   });
 
   it('expands a skill turn on the computer, replacing what the phone sent as text', async () => {

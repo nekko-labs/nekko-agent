@@ -41,6 +41,8 @@ pub struct Policy {
     pub machine_resident_view: Vec<String>,
     pub skill_view: Vec<String>,
     pub tool_view: Vec<String>,
+    pub fleet_computer_view: Vec<String>,
+    pub fleet_runner_view: Vec<String>,
     pub queue_keys: Vec<String>,
     pub session_option_keys: Vec<String>,
     pub chat_send_keys: Vec<String>,
@@ -166,6 +168,8 @@ pub fn policy() -> &'static Policy {
             machine_resident_view: strings(&v["machineResidentView"]),
             skill_view: strings(&v["skillView"]),
             tool_view: strings(&v["toolView"]),
+            fleet_computer_view: strings(&v["fleetComputerView"]),
+            fleet_runner_view: strings(&v["fleetRunnerView"]),
             queue_keys: strings(&v["queueKeys"]),
             session_option_keys: strings(&v["sessionOptionKeys"]),
             chat_send_keys: strings(&v["chatSendKeys"]),
@@ -756,6 +760,7 @@ pub fn redact(channel: &str, result: Value) -> Value {
             Value::Array(list) => Value::Array(list.iter().map(|t| pick(t, &policy().tool_view)).collect()),
             _ => json!([]),
         },
+        "fleet:runners" => fleet_runners_view(&result),
         "session:get" | "chat:steer" => session_view(result),
         // One photo's data URL, nothing else.
         "session:photo" => match result {
@@ -1778,6 +1783,29 @@ pub fn gate_secured(
     })
 }
 
+/// `fleet:runners` (decision 0064): per organization its name and the computers that run CI
+/// runners, each with its runners, and nothing else.
+fn fleet_runners_view(result: &Value) -> Value {
+    let list = |v: &Value| v.as_array().cloned().unwrap_or_default();
+    let orgs = list(&result["orgs"])
+        .iter()
+        .map(|o| {
+            let computers = list(&o["computers"])
+                .iter()
+                .map(|c| {
+                    let mut out = pick(c, &policy().fleet_computer_view);
+                    out["runners"] = Value::Array(
+                        list(&c["runners"]).iter().map(|r| pick(r, &policy().fleet_runner_view)).collect(),
+                    );
+                    out
+                })
+                .collect::<Vec<_>>();
+            json!({ "orgName": o["orgName"].as_str().unwrap_or(""), "computers": computers })
+        })
+        .collect::<Vec<_>>();
+    json!({ "orgs": orgs })
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -1905,6 +1933,23 @@ mod tests {
             json!([{ "name": "bash", "description": "Run a command" }, { "name": "mcp__gh__issue" }])
         );
         assert_eq!(redact("tools:list", Value::Null), json!([]));
+    }
+
+    #[test]
+    fn the_fleets_runners_reach_a_phone_without_anything_else() {
+        let raw = json!({ "orgs": [{ "orgId": "o1", "orgName": "Nekko Labs", "secret": 1, "computers": [{
+            "deviceId": "d1", "name": "Studio Mac", "os": "macos", "online": true, "seenAt": 5, "you": false,
+            "connect": { "blob": "x" }, "models": [{ "id": "m" }],
+            "runners": [{ "label": "nekko-cloud-mac", "state": "running", "busy": 1, "slots": 2, "repos": ["a/b"] }],
+        }] }] });
+        assert_eq!(
+            redact("fleet:runners", raw),
+            json!({ "orgs": [{ "orgName": "Nekko Labs", "computers": [{
+                "deviceId": "d1", "name": "Studio Mac", "os": "macos", "online": true, "seenAt": 5, "you": false,
+                "runners": [{ "label": "nekko-cloud-mac", "state": "running", "busy": 1, "slots": 2 }],
+            }] }] })
+        );
+        assert_eq!(redact("fleet:runners", Value::Null), json!({ "orgs": [] }));
     }
     use super::*;
     use std::sync::Mutex;
