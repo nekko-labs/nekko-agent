@@ -41,27 +41,40 @@ For loopback testing, generate design tokens with the website build, then start 
   privacy policy version the form showed; both are stored on the row and a
   repeat signup replaces them. Beta mail never depends on `marketing`; any
   product-update mail must go only to `marketing_opt_in` rows.
-  `list` defaults to `beta`. `source` keeps a page path only, `utm` keeps
+  `list` defaults to `beta` and must be `beta` or `app` (`LISTS` in
+  `src/signups.ts`; each list is its own row with its own daily confirmation
+  email, so callers can't make up lists). `source` keeps a page path only, `utm` keeps
   `utm_*` keys only, anything else is dropped. `website` is a honeypot the form
   hides; a filled one gets a fake success. Always answers `202 {ok:true}` on
   valid input, new or repeat, so the form can't reveal who is on the list.
   Browser calls are accepted only from `ALLOWED_ORIGINS`; 5 per IP per hour.
   Double opt-in: a pending signup gets one "Confirm you want to join the Nekko
   Agent beta" email (Resend, from `hello@mail.nekkoagent.com`, reply-to
-  `hello@nekkoagent.com`), at most one per address per day. Without
-  `RESEND_API_KEY` the signup saves and the email is skipped with a log line.
-- `GET /v1/signups/confirm?token=`: uses the email's single-use link (only its
-  SHA-256 is stored; 7 days) and marks the signup `confirmed`; answers a small
-  HTML page. Only the newest email's link works.
-- `GET|POST /v1/signups/unsubscribe?token=`: one-click unsubscribe from the
-  link in every email, and RFC 8058 `List-Unsubscribe-Post` from mail apps.
-  Unsubscribing deletes the address's signup rows and keeps only a SHA-256 of
-  it in `email_suppressions`, which no email is ever sent to (a later signup
-  saves but gets no email).
-- Retention: every 6 hours (and on start) pending signups not confirmed
-  within 30 days of their last confirmation email (never one that wasn't
-  emailed), and any row marked `unsubscribed`, are deleted in one
-  transaction; confirmed, invited and joined rows are never touched.
+  `hello@nekkoagent.com`), at most one per list row per day. The email never
+  includes the name: anyone can sign up any address, so it carries no text the
+  sender chose. Without `RESEND_API_KEY` the signup saves and the email is
+  skipped with a log line. An address in `email_suppressions` is not stored at
+  all (same `202` answer).
+- Confirmation retry: hourly (and on start), pending signups never emailed
+  (the send failed, or there was no Resend key yet) are sent their
+  confirmation, 50 at a time. A failure records `confirmation_failed_at`
+  (the first one only).
+- `GET /v1/signups/confirm?token=` shows a **Confirm my email** button;
+  `POST` to the same URL uses the single-use link (only its SHA-256 is stored;
+  7 days) and marks the signup `confirmed`. Opening a link never acts, because
+  mail security scanners open every link in a message. Only the newest email's
+  link works.
+- `GET /v1/signups/unsubscribe?token=` shows an **Unsubscribe** button;
+  `POST` (that button, or RFC 8058 `List-Unsubscribe-Post` from mail apps'
+  own Unsubscribe button) unsubscribes. It deletes the address's signup rows
+  and keeps only a SHA-256 of it in `email_suppressions`; a later signup of
+  that address is not stored and gets no email.
+- Retention: every 6 hours (and on start), in one transaction: pending signups
+  not confirmed within 30 days of their last confirmation email; pending
+  signups never emailed whose first send failed more than 30 days ago; rows
+  for a suppressed address; and any row marked `unsubscribed`. A pending
+  signup never tried is kept for the retry. Confirmed, invited and joined rows
+  are never touched.
   Links point at `PUBLIC_URL` (default `https://nekko-agent-api.fly.dev`).
 - `/v1/sync/*`: end-to-end encrypted sync for Pro and Enterprise (plan `team`) (see
   [docs/SYNC-ENCRYPTION.md](../../docs/SYNC-ENCRYPTION.md)). Bearer `nk_` tokens

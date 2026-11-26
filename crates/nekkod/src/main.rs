@@ -526,6 +526,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     }
     connections::follow(ctx.clone());
     telemetry::start(ctx.clone());
+    // A setup email that didn't reach Nekko Cloud is sent again later.
+    feedback::start_retry(ctx.clone());
     // Claude Agent chats' idle Claude Code children are ended after 15 minutes.
     ctx.turns.harness.start_reaper();
     // Claude Agent's approval bridge: the app's own CLI, else `nekko-agent` on PATH.
