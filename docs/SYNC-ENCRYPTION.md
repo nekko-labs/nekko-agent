@@ -197,5 +197,5 @@ All sync routes take `Authorization: Bearer nk_…`. Writes answer `402 {"error"
 - [ ] Connect the Supabase project and deploy Nekko Cloud with it (settings in `apps/nekko-agent-api/README.md`).
 - [ ] Stripe plans into `users.plan`.
 - [ ] Generate the research key offline, pin it, and build donation redaction and sharing.
-- [ ] Android: the crypto is ported and held to the shared vectors (#2835, 2026-11-26); sign-in, the keyring unlock and the screens are next. The device key will be an Android Keystore agreement key from API 31 and a software key sealed by the Keystore below that.
+- [ ] Android: the crypto is ported and held to the shared vectors, and `CloudSync` (sign-in, join by recovery key or approval, approve a computer, epoch moves, read synced chats) passes the iPhone's tests on an in-memory server (#2835, 2026-11-26); the screens are next. The device key will be an Android Keystore agreement key from API 31 and a software key sealed by the Keystore below that.
 - [ ] The outside cryptography review ([scope and RFP](../reports/crypto-review-scope-2026-10-22.md)) before sync is switched on for anyone.
