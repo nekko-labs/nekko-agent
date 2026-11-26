@@ -35,6 +35,8 @@ struct TurnStrategyView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("Strategy") + Text(verbatim: ": \(summary)"))
+        .accessibilityIdentifier("turn-strategy")
     }
 }

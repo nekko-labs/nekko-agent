@@ -8,9 +8,9 @@ final class ChatStrategyEvidenceTests: XCTestCase {
         app.launch()
         let reply = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "The ledgers agree")).firstMatch
         XCTAssertTrue(reply.waitForExistence(timeout: 15))
-        let rows = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@", "Tool list · Direct", "Code mode · Orchestration"))
+        let rows = app.descendants(matching: .any).matching(identifier: "turn-strategy").allElementsBoundByIndex
         let baseline = ProcessInfo.processInfo.environment["NEKKO_EVIDENCE_BASELINE"] == "1"
-        XCTAssertEqual(rows.count, baseline ? 0 : 2)
+        XCTAssertEqual(rows.map(\.label), baseline ? [] : ["Strategy: Tool list · Direct", "Strategy: Code mode · Orchestration"])
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = "chat-strategy"
         shot.lifetime = .keepAlways
