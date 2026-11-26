@@ -108,15 +108,21 @@ public final class CloudSync {
         var cursor: Int64 = 0
         var revisions: [String: Int64] = [:]
         var waiting = false
+        /// This build can read deflated records (decision 0124) and has looked at the state it started from.
+        /// Optional so a state saved before this decodes.
+        var zReady: Bool?
+        /// An iPhone that was already syncing before it could read them pulls once from the start if the
+        /// account has compressed records, so the ones an older build skipped are read.
+        var zCatchup: Bool?
     }
 
     /// - Parameter key: this iPhone's agreement key, made on first use (a Secure Enclave key on a device).
-    /// - Parameter retryWaits: how long to wait before each retry of a brief Nekko Cloud stall (tests pass tiny waits).
+    /// - Parameter retry: when a brief Nekko Cloud stall is tried again (tests pass `.instant` or their own sleep).
     public init(api: URL, http: CloudHTTP = URLSessionCloudHTTP(), secrets: SecureStore, files: OfflineFiles?,
-                deviceLabel: String, retryWaits: [Duration] = [.milliseconds(500), .seconds(2)],
+                deviceLabel: String, retry: CloudRetry = CloudRetry(),
                 key: @escaping () throws -> SyncAgreementKey) {
         self.api = api
-        self.retryWaits = retryWaits
+        self.retry = retry
         self.http = http
         self.secrets = secrets
         self.files = files
@@ -307,7 +313,8 @@ public final class CloudSync {
         state.waiting = false
         waitingForApproval = false
         save()
-        let me = TrustedDevice(id: deviceId, publicKey: SyncCrypto.base64url(device.publicKeyX963), label: deviceLabel)
+        let me = TrustedDevice(id: deviceId, publicKey: SyncCrypto.base64url(device.publicKeyX963), label: deviceLabel,
+                               caps: [SyncCrypto.capDeflate])
         try await updateAccount(token: t) { $0.add(me) }
         try await sync()
     }
@@ -365,17 +372,50 @@ public final class CloudSync {
             let mine = state.keyId ?? 0
             if remote < mine { throw CloudError(message: "Nekko Cloud reports an older sync key than this iPhone holds. Nothing was synced.") }
             if remote > mine { guard try await adopt(token: t, target: remote) else { return } }
+            if state.zReady != true {
+                state.zReady = true
+                state.zCatchup = state.cursor > 0
+                save()
+            }
             for _ in 0..<3 {
                 if try await pull(token: t) { break }
                 try await refresh()
                 guard try await adopt(token: t, target: remoteKeyId ?? 0) else { return }
             }
+            if try await compressionStep(token: t) { _ = try await pull(token: t) }
             error = nil
             lastSyncAt = Date()
         } catch {
             self.error = (error as? CloudError)?.message ?? error.localizedDescription
             throw error
         }
+    }
+
+    /// After a pull has read the account record: pull again from the start once if this iPhone predates
+    /// deflated records and the account has used them (true then), and tell the other devices this
+    /// iPhone can read them. Telling them is a one-time write that never fails a sync.
+    private func compressionStep(token t: String) async throws -> Bool {
+        guard let k = state.keyId, let record = Self.accountRecord(state.accountRecord), record.epoch == k else { return false }
+        var again = false
+        if state.zCatchup == true {
+            // The saved copy may come from a build that dropped the mark: ask for the newest.
+            var used = record.compressed
+            if !used, let accountId = account?.id, let kr = keyring(k),
+               let (fresh, _, _) = try? await fetchAccount(token: t, keyring: kr, accountId: accountId, epoch: k) {
+                used = fresh.compressed
+            }
+            state.zCatchup = false
+            if used { state.cursor = 0; again = true }
+            save()
+        }
+        if let me = state.deviceId, let mine = record.devices.first(where: { $0.id == me }), !mine.caps.contains(SyncCrypto.capDeflate) {
+            try? await updateAccount(token: t) { r in
+                if let i = r.devices.firstIndex(where: { $0.id == me }), !r.devices[i].caps.contains(SyncCrypto.capDeflate) {
+                    r.devices[i].caps.append(SyncCrypto.capDeflate)
+                }
+            }
+        }
+        return again
     }
 
     /// The keyring a computer wrapped to this iPhone with its join code, once approved.
@@ -497,6 +537,8 @@ public final class CloudSync {
         var id: String
         var publicKey: String
         var label: String
+        /// What this device can do beyond the base format (`SyncCrypto.capDeflate`); unknown names are kept.
+        var caps: [String] = []
     }
 
     /// The sealed account record of one key epoch: the recovery key's public half and the trusted devices.
@@ -504,6 +546,8 @@ public final class CloudSync {
         var epoch: UInt32
         var recoveryPublic: String
         var devices: [TrustedDevice]
+        /// A device has sealed a deflated record for this account (decision 0124).
+        var compressed = false
 
         func trusts(_ id: String) -> Bool { devices.contains { $0.id == id } }
         func lists(id: String, publicKey: String) -> Bool { devices.contains { $0.id == id && $0.publicKey == publicKey } }
@@ -525,15 +569,22 @@ public final class CloudSync {
               let rp = v.str("recoveryPublic") else { return nil }
         let devices = (v["devices"]?.array ?? []).compactMap { d -> TrustedDevice? in
             guard let id = d.str("id"), let pk = d.str("publicKey") else { return nil }
-            return TrustedDevice(id: id, publicKey: pk, label: d.str("label") ?? "")
+            return TrustedDevice(id: id, publicKey: pk, label: d.str("label") ?? "",
+                                 caps: (d["caps"]?.array ?? []).compactMap { if case .string(let c) = $0 { return c } else { return nil } })
         }
-        return AccountRecord(epoch: e, recoveryPublic: rp, devices: devices)
+        return AccountRecord(epoch: e, recoveryPublic: rp, devices: devices, compressed: v["compressed"]?.bool == true)
     }
 
     static func accountRecordJSON(_ r: AccountRecord) -> String {
-        let devices: [JSONValue] = r.devices.map { .object(["id": .string($0.id), "publicKey": .string($0.publicKey), "label": .string($0.label)]) }
-        return JSONValue.object(["v": .int(2), "epoch": .int(Int64(r.epoch)), "recoveryPublic": .string(r.recoveryPublic),
-                                 "devices": .array(devices)]).serialized()
+        let devices: [JSONValue] = r.devices.map { d in
+            var o: [String: JSONValue] = ["id": .string(d.id), "publicKey": .string(d.publicKey), "label": .string(d.label)]
+            if !d.caps.isEmpty { o["caps"] = .array(d.caps.map { .string($0) }) }
+            return .object(o)
+        }
+        var o: [String: JSONValue] = ["v": .int(2), "epoch": .int(Int64(r.epoch)), "recoveryPublic": .string(r.recoveryPublic),
+                                      "devices": .array(devices)]
+        if r.compressed { o["compressed"] = .bool(true) }
+        return JSONValue.object(o).serialized()
     }
 
     /// Open an epoch's account record and check it: the right object, the
@@ -936,15 +987,7 @@ public final class CloudSync {
         return supabase!
     }
 
-    private let retryWaits: [Duration]
-
-    /// A failure that is safe to try again: nothing reached the service (a failed connect), or the
-    /// service said it couldn't do the work right now (502, 503, 504). Same as the desktop (#3186).
-    private static func transient(status: Int?, error: Error?) -> Bool {
-        if let status { return (502...504).contains(status) }
-        guard let e = error as? URLError else { return false }
-        return e.code == .cannotConnectToHost || e.code == .cannotFindHost
-    }
+    private let retry: CloudRetry
 
     @discardableResult
     private func request(_ method: String, _ url: URL, json: JSONValue? = nil, token: String? = nil, headers: [String: String] = [:]) async throws -> JSONValue {
@@ -960,22 +1003,26 @@ public final class CloudSync {
             resetFleet()
         }
         // Only Nekko Cloud's own API is retried; a sign-in code sent twice would send two emails.
-        var waits = url.host == api.host ? retryWaits[...] : []
+        let retries = url.host == api.host
+        var connectTries = 0
+        var busyTries = 0
         var status = 0
         var data = Data()
         while true {
-            do { (status, data) = try await http.send(method, url, headers: h, body: json.map { Data($0.serialized().utf8) }) }
-            catch {
-                if Self.transient(status: nil, error: error), let wait = waits.popFirst() {
-                    try await Task.sleep(for: wait)
-                    continue
-                }
-                invalidateFleet(); throw error
-            }
-            if Self.transient(status: status, error: nil), let wait = waits.popFirst() {
-                try await Task.sleep(for: wait)
+            var back: [String: String] = [:]
+            var failure: Error?
+            do { (status, data, back) = try await http.exchange(method, url, headers: h, body: json.map { Data($0.serialized().utf8) }) }
+            catch { failure = error }
+            let stall = failure.map { CloudRetry.stall(status: nil, error: $0) }
+                ?? CloudRetry.stall(status: status, code: ((try? JSONValue.parse(data)) ?? .null).str("error") ?? "")
+            if retries, let stall,
+               let wait = retry.wait(for: stall, path: url.path, connectTries: connectTries, busyTries: busyTries,
+                                     retryAfter: CloudRetry.retryAfter(back)) {
+                if stall == .connect { connectTries += 1 } else { busyTries += 1 }
+                try await retry.sleep(wait)
                 continue
             }
+            if let failure { invalidateFleet(); throw failure }
             break
         }
         let v = (try? JSONValue.parse(data)) ?? .null
@@ -1004,18 +1051,35 @@ public struct CloudError: Error, Equatable, LocalizedError {
 /// HTTP for the cloud model, so tests can answer without a network.
 public protocol CloudHTTP: Sendable {
     func send(_ method: String, _ url: URL, headers: [String: String], body: Data?) async throws -> (Int, Data)
+    /// `send` with the answer's headers (names lowercased), for `Retry-After`. Defaults to `send` and no headers.
+    func exchange(_ method: String, _ url: URL, headers: [String: String], body: Data?) async throws -> (Int, Data, [String: String])
+}
+
+public extension CloudHTTP {
+    func exchange(_ method: String, _ url: URL, headers: [String: String], body: Data?) async throws -> (Int, Data, [String: String]) {
+        let (status, data) = try await send(method, url, headers: headers, body: body)
+        return (status, data, [:])
+    }
 }
 
 public struct URLSessionCloudHTTP: CloudHTTP {
     public init() {}
 
     public func send(_ method: String, _ url: URL, headers: [String: String], body: Data?) async throws -> (Int, Data) {
+        let (status, data, _) = try await exchange(method, url, headers: headers, body: body)
+        return (status, data)
+    }
+
+    public func exchange(_ method: String, _ url: URL, headers: [String: String], body: Data?) async throws -> (Int, Data, [String: String]) {
         var req = URLRequest(url: url, timeoutInterval: 60)
         req.httpMethod = method
         req.httpBody = body
         headers.forEach { req.setValue($1, forHTTPHeaderField: $0) }
         let (data, res) = try await URLSession.shared.data(for: req)
-        return ((res as? HTTPURLResponse)?.statusCode ?? 0, data)
+        let http = res as? HTTPURLResponse
+        var back: [String: String] = [:]
+        if let ra = http?.value(forHTTPHeaderField: "Retry-After") { back["retry-after"] = ra }
+        return (http?.statusCode ?? 0, data, back)
     }
 }
 
