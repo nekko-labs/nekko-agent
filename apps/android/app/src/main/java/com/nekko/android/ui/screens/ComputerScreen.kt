@@ -300,6 +300,8 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
             com.nekko.android.ui.settings.RouteChoiceGroup(c.name, listOf(c.relayUrl) + c.alts, c.routeChoice) { next ->
                 scope.launch { repo.setRouteChoice(c.id, next) }
             }
+            // The organizations' CI runners (decision 0064), only while this computer reports some.
+            FleetRunnersSection(repo, c.id, c.name)
             // Nekko Agent's service: status, updates, restart (#2059). Live only while this computer is the active one.
             ServiceSection(repo, c.id, c.name)
             Spacer(Modifier.size(32.dp))
