@@ -25,3 +25,13 @@ Philip (2026-11-17), Settings, Models on This iPhone: remove the **On a computer
 ## Boundaries and status
 
 No behavior of keys, requests or storage changes. The subscription choice is never actionable on the phone. `PhoneProviders.notOnPhone` stays as data but is no longer shown. Not done: screenshots (`node scripts/ios-evidence-local.mjs` on a Mac), native compile and UI test runs. Android: [#2939](https://github.com/nekko-labs/nekko-agent/issues/2939).
+
+## Android (#2939)
+
+`[implemented 2026-11-26 on Android; JVM tests and lint pass, the device journey (PhoneCloudDeviceTest) is updated but not yet run; not seen on an emulator or a phone]`
+
+- The phone's providers screen ("Models on this phone") has no "need a computer" line. Each provider is an avatar row with its mark that opens its page: Use on this phone, Test (its result said under the name), New key, Remove.
+- **Add a provider**: buttons for ChatGPT, Claude API, OpenAI, Google Gemini, OpenRouter and Ollama Cloud, each opening the add form already set to it, and **More providers** for the rest.
+- **Claude API** first shows Anthropic's choice: API key goes on to the form; Claude subscription is dimmed and can't be chosen, with the same sad Nekko (`SadNekko`, the iPhone's drawing) and words.
+- From Settings → Models on This phone, a provider's row opens its page and Add a provider opens these buttons.
+- The screen stays English-only, as the rest of the phone's own chats screen.

@@ -12,6 +12,7 @@ declare global {
       reportNotificationVisibility: (report: import('../notificationVisibility.js').NotificationVisibilityReport) => void;
       deepLinksReady?: () => void;
       platform: string;
+      systemLanguages?: readonly string[];
       titleBarHeight: number;
       setTitleBarOverlay: (theme: { color: string; symbolColor: string }) => void;
       setPageZoom: (factor: number) => void;

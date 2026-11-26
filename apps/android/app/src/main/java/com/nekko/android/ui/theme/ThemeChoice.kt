@@ -1,7 +1,5 @@
 package com.nekko.android.ui.theme
 
-import com.nekko.protocol.Appearance
-
 /**
  * A desktop theme preset (`ThemePreset`, packages/shared/src/themes.ts); the
  * catalog is [THEME_PRESETS] in ThemePresets.kt, written from the desktop's.
@@ -45,21 +43,19 @@ data class ThemePreset(
 }
 
 /**
- * What the phone's theme follows, stored on the phone only (Settings →
- * Appearance → Theme): the computer's look ([COMPUTER], the default) or a
- * desktop preset id ([SYSTEM] follows the phone). The iPhone's choice.
+ * The phone's theme, stored on the phone only (Settings → Appearance → Theme): a desktop preset id,
+ * [SYSTEM] (the default) following the phone's light or dark setting. The phone no longer follows the
+ * computer's own theme: the desktop's look didn't fit the phone.
  */
 @JvmInline
 value class ThemeChoice(val id: String) {
     companion object {
-        /** The paired computer's preset, light/dark mode and accent, live. */
-        val COMPUTER = ThemeChoice("computer")
         val SYSTEM = ThemeChoice("system")
         val LIGHT = ThemeChoice("light")
         val DARK = ThemeChoice("dark")
 
-        /** A stored id this phone doesn't know reads as [COMPUTER]. */
-        fun from(id: String?): ThemeChoice = if (id != null && ThemePreset.find(id) != null) ThemeChoice(id) else COMPUTER
+        /** A stored id this phone doesn't know (the retired "computer" among them) reads as [SYSTEM]. */
+        fun from(id: String?): ThemeChoice = if (id != null && ThemePreset.find(id) != null) ThemeChoice(id) else SYSTEM
     }
 }
 
@@ -68,24 +64,10 @@ data class ResolvedTheme(val dark: Boolean, val accent: Long?, val preset: Theme
 
 object ThemeResolver {
     /**
-     * [systemDark] is the phone's own setting. "Match my computer" uses the
-     * computer's preset, mode and accent; a computer set to System, or one that
-     * has not answered yet (offline, nothing paired), falls back to the phone's
-     * setting. A preset brings its own mode (System follows the phone) and, unless
-     * it is System, Light or Dark, its accent and surfaces.
+     * [systemDark] is the phone's own setting. A preset brings its own mode (System follows the phone)
+     * and, unless it is System, Light or Dark, its accent and surfaces.
      */
-    fun resolve(choice: ThemeChoice, computer: Appearance?, systemDark: Boolean): ResolvedTheme {
-        if (choice == ThemeChoice.COMPUTER) {
-            return ResolvedTheme(
-                dark = when (computer?.theme) {
-                    Appearance.ThemeMode.LIGHT -> false
-                    Appearance.ThemeMode.DARK -> true
-                    else -> systemDark
-                },
-                accent = computer?.accent,
-                preset = ThemePreset.find(computer?.preset),
-            )
-        }
+    fun resolve(choice: ThemeChoice, systemDark: Boolean): ResolvedTheme {
         val preset = ThemePreset.find(choice.id)
         val dark = when (preset?.mode) {
             ThemePreset.Mode.LIGHT -> false

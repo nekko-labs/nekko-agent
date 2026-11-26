@@ -251,9 +251,15 @@ fn relayed(text: &str) -> Option<(String, Value)> {
         return None;
     }
     let mut v: Value = serde_json::from_str(text).ok()?;
-    let payload = v.get_mut("payload").map(Value::take).unwrap_or(Value::Null);
+    let mut payload = v.get_mut("payload").map(Value::take).unwrap_or(Value::Null);
     if payload.get("relayOnly") == Some(&Value::Bool(true)) {
         return None;
+    }
+    // The window applies a `session_meta`'s changed fields; a phone reads the chat again, as it always did.
+    if let Some(obj) = payload.as_object_mut()
+        && obj.get("type").and_then(Value::as_str) == Some("session_meta")
+    {
+        obj.remove("summary");
     }
     Some((channel.to_string(), payload))
 }
@@ -337,5 +343,11 @@ mod tests {
         assert!(relayed(r#"{"channel":"downloads:updated","payload":[]}"#).is_none());
         assert!(relayed(r#"{"channel":"limits:updated","payload":{"relayOnly":true}}"#).is_none());
         assert!(relayed("not json").is_none());
+        // The window's changed fields are not sent to a phone.
+        let (_, meta) = relayed(
+            r#"{"channel":"agent:event","payload":{"type":"session_meta","sessionId":"s","summary":{"title":"T"}}}"#,
+        )
+        .unwrap();
+        assert_eq!(meta, serde_json::json!({ "type": "session_meta", "sessionId": "s" }));
     }
 }

@@ -1,3 +1,4 @@
+import { useOnboardingT } from '../../onboardingMessages.js';
 import React from 'react';
 import type { AppSettings } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
@@ -10,6 +11,7 @@ import { ThemePresetPicker } from '../ThemePresetPicker.js';
  * stays applied even if the user then skips forward through the rest.
  */
 export function ThemeStep() {
+  const t = useOnboardingT();
   const { settings, applyTheme } = useStore(useShallow((s) => ({ settings: s.settings, applyTheme: s.applyTheme })));
 
   const update = async (patch: Partial<AppSettings>) => {
@@ -22,7 +24,7 @@ export function ThemeStep() {
 
   return (
     <div className="w-full">
-      <h1 className="text-center text-2xl font-semibold tracking-tight">Make it yours</h1>
+      <h1 className="text-center text-2xl font-semibold tracking-tight">{t('look')}</h1>
       <p className="mx-auto mt-2 max-w-md text-center text-sm leading-relaxed text-ink-soft">
         Pick a look. It applies right away, and you can change it any time in Settings → Appearance.
       </p>
