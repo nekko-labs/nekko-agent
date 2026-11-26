@@ -117,12 +117,12 @@ public final class CloudSync {
     }
 
     /// - Parameter key: this iPhone's agreement key, made on first use (a Secure Enclave key on a device).
-    /// - Parameter retryWaits: how long to wait before each retry of a brief Nekko Cloud stall (tests pass tiny waits).
+    /// - Parameter retry: when a brief Nekko Cloud stall is tried again (tests pass `.instant` or their own sleep).
     public init(api: URL, http: CloudHTTP = URLSessionCloudHTTP(), secrets: SecureStore, files: OfflineFiles?,
-                deviceLabel: String, retryWaits: [Duration] = [.milliseconds(500), .seconds(2)],
+                deviceLabel: String, retry: CloudRetry = CloudRetry(),
                 key: @escaping () throws -> SyncAgreementKey) {
         self.api = api
-        self.retryWaits = retryWaits
+        self.retry = retry
         self.http = http
         self.secrets = secrets
         self.files = files
@@ -987,15 +987,7 @@ public final class CloudSync {
         return supabase!
     }
 
-    private let retryWaits: [Duration]
-
-    /// A failure that is safe to try again: nothing reached the service (a failed connect), or the
-    /// service said it couldn't do the work right now (502, 503, 504). Same as the desktop (#3186).
-    private static func transient(status: Int?, error: Error?) -> Bool {
-        if let status { return (502...504).contains(status) }
-        guard let e = error as? URLError else { return false }
-        return e.code == .cannotConnectToHost || e.code == .cannotFindHost
-    }
+    private let retry: CloudRetry
 
     @discardableResult
     private func request(_ method: String, _ url: URL, json: JSONValue? = nil, token: String? = nil, headers: [String: String] = [:]) async throws -> JSONValue {
@@ -1011,22 +1003,26 @@ public final class CloudSync {
             resetFleet()
         }
         // Only Nekko Cloud's own API is retried; a sign-in code sent twice would send two emails.
-        var waits = url.host == api.host ? retryWaits[...] : []
+        let retries = url.host == api.host
+        var connectTries = 0
+        var busyTries = 0
         var status = 0
         var data = Data()
         while true {
-            do { (status, data) = try await http.send(method, url, headers: h, body: json.map { Data($0.serialized().utf8) }) }
-            catch {
-                if Self.transient(status: nil, error: error), let wait = waits.popFirst() {
-                    try await Task.sleep(for: wait)
-                    continue
-                }
-                invalidateFleet(); throw error
-            }
-            if Self.transient(status: status, error: nil), let wait = waits.popFirst() {
-                try await Task.sleep(for: wait)
+            var back: [String: String] = [:]
+            var failure: Error?
+            do { (status, data, back) = try await http.exchange(method, url, headers: h, body: json.map { Data($0.serialized().utf8) }) }
+            catch { failure = error }
+            let stall = failure.map { CloudRetry.stall(status: nil, error: $0) }
+                ?? CloudRetry.stall(status: status, code: ((try? JSONValue.parse(data)) ?? .null).str("error") ?? "")
+            if retries, let stall,
+               let wait = retry.wait(for: stall, path: url.path, connectTries: connectTries, busyTries: busyTries,
+                                     retryAfter: CloudRetry.retryAfter(back)) {
+                if stall == .connect { connectTries += 1 } else { busyTries += 1 }
+                try await retry.sleep(wait)
                 continue
             }
+            if let failure { invalidateFleet(); throw failure }
             break
         }
         let v = (try? JSONValue.parse(data)) ?? .null
@@ -1055,18 +1051,35 @@ public struct CloudError: Error, Equatable, LocalizedError {
 /// HTTP for the cloud model, so tests can answer without a network.
 public protocol CloudHTTP: Sendable {
     func send(_ method: String, _ url: URL, headers: [String: String], body: Data?) async throws -> (Int, Data)
+    /// `send` with the answer's headers (names lowercased), for `Retry-After`. Defaults to `send` and no headers.
+    func exchange(_ method: String, _ url: URL, headers: [String: String], body: Data?) async throws -> (Int, Data, [String: String])
+}
+
+public extension CloudHTTP {
+    func exchange(_ method: String, _ url: URL, headers: [String: String], body: Data?) async throws -> (Int, Data, [String: String]) {
+        let (status, data) = try await send(method, url, headers: headers, body: body)
+        return (status, data, [:])
+    }
 }
 
 public struct URLSessionCloudHTTP: CloudHTTP {
     public init() {}
 
     public func send(_ method: String, _ url: URL, headers: [String: String], body: Data?) async throws -> (Int, Data) {
+        let (status, data, _) = try await exchange(method, url, headers: headers, body: body)
+        return (status, data)
+    }
+
+    public func exchange(_ method: String, _ url: URL, headers: [String: String], body: Data?) async throws -> (Int, Data, [String: String]) {
         var req = URLRequest(url: url, timeoutInterval: 60)
         req.httpMethod = method
         req.httpBody = body
         headers.forEach { req.setValue($1, forHTTPHeaderField: $0) }
         let (data, res) = try await URLSession.shared.data(for: req)
-        return ((res as? HTTPURLResponse)?.statusCode ?? 0, data)
+        let http = res as? HTTPURLResponse
+        var back: [String: String] = [:]
+        if let ra = http?.value(forHTTPHeaderField: "Retry-After") { back["retry-after"] = ra }
+        return (http?.statusCode ?? 0, data, back)
     }
 }
 

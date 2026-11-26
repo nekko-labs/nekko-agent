@@ -1241,6 +1241,7 @@ mod tests {
             code: code.into(),
             message: code.into(),
             body: Box::new(Value::Null),
+            retry_after: None,
         };
         assert_eq!(org_error(err(402, "plan-required")), NEEDS_PLAN);
         assert_eq!(org_error(err(403, "needs-synced-device")), LOCKED);
