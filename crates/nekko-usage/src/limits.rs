@@ -276,6 +276,13 @@ fn describe_claude_window(kind: &str, model: Option<&str>) -> Map<String, Value>
     let (id, label, scope) = match kind {
         "five_hour" => ("session".to_string(), "Current session".to_string(), "session"),
         "seven_day" => ("weekly".to_string(), "This week".to_string(), "weekly"),
+        // One family's week: the same window `/usage` scopes by model, so it never blocks the others.
+        "seven_day_opus" => return describe_claude_window("seven_day", model.or(Some("Opus"))),
+        "seven_day_sonnet" => return describe_claude_window("seven_day", model.or(Some("Sonnet"))),
+        // A per-model bucket whose model the event does not name: shown, but it covers no model.
+        "seven_day_overage_included" => {
+            ("weekly-overage-included".to_string(), "This week (overage included)".to_string(), "model")
+        }
         other => (other.replace('_', "-"), title_case(other), "weekly"),
     };
     let mut d = Map::new();
@@ -296,6 +303,27 @@ fn describe_claude_window(kind: &str, model: Option<&str>) -> Map<String, Value>
     d
 }
 
+/// Claude Code's `allowed` / `allowed_warning` / `rejected` as a window status.
+fn claude_status(v: Option<&Value>) -> Option<&'static str> {
+    match v.and_then(Value::as_str) {
+        Some("rejected") => Some("rate_limited"),
+        Some("allowed_warning") => Some("warning"),
+        Some("allowed") => Some("allowed"),
+        _ => None,
+    }
+}
+
+/// Epoch seconds, as the plan headers give it, in ms; milliseconds pass through, unknown is 0.
+fn epoch_ms(v: f64) -> f64 {
+    if !v.is_finite() {
+        0.0
+    } else if v < 1e12 {
+        v * 1000.0
+    } else {
+        v
+    }
+}
+
 /// Claude plan usage from the user's own Claude Code, out of its documented
 /// stream-json: a `rate_limit_event` (one window, merged into `prev`) or an
 /// assistant message's `usage_report` from `/usage` (every window, replacing
@@ -304,43 +332,43 @@ fn describe_claude_window(kind: &str, model: Option<&str>) -> Map<String, Value>
 pub fn parse_claude_code_usage(event: &Value, prev: Option<&Value>, now: f64) -> Option<Value> {
     if get(event, "type").and_then(Value::as_str) == Some("rate_limit_event") {
         let info = get(event, "rate_limit_info")?;
-        let status = match get(info, "status").and_then(Value::as_str) {
-            Some("rejected") => "rate_limited",
-            Some("allowed_warning") => "warning",
-            Some("allowed") => "allowed",
-            _ => return None,
-        };
-        // shortcut: the docs leave utilization's scale unstated; Claude Code reads it from the unified
-        // headers, which report a fraction (TASKS.md, "the 6200% limits chip"). Above 1 reads as percent;
-        // confirm against a live plan-signed-in run and drop the guess.
-        let mut used = loose_number(get(info, "utilization"));
-        if used.is_finite() && used <= 1.0 {
-            used *= 100.0;
-        }
-        if !used.is_finite() {
-            if status != "rate_limited" {
-                return None;
-            }
-            used = 100.0;
-        }
-        let resets = loose_number(get(info, "resetsAt"));
-        // Seconds, as the unified headers give it; milliseconds pass through.
-        let reset_at = if !resets.is_finite() {
-            0.0
-        } else if resets < 1e12 {
-            resets * 1000.0
-        } else {
-            resets
-        };
-        // `rateLimitType` is not in the docs yet; without it the event is the session window.
+        let status = claude_status(get(info, "status"))?;
+        // The window this response was limited by; without `rateLimitType` it is the session.
         let kind = get(info, "rateLimitType").and_then(Value::as_str).unwrap_or("five_hour");
-        let w = window(describe_claude_window(kind, None), clamp_percent(used), reset_at, status);
+        let mut fresh = Vec::new();
+        // Every window the plan headers carried, each with its own use. Claude Code's schema: utilization
+        // is a fraction that can pass 1, resetsAt epoch seconds. Current builds put use only here.
+        if let Some(Value::Object(ws)) = get(info, "unifiedWindows") {
+            for (k, w) in ws {
+                let used = loose_number(get(w, "utilization")) * 100.0;
+                if !used.is_finite() {
+                    continue;
+                }
+                let own = claude_status(get(w, "status")).unwrap_or(if k == kind { status } else { "allowed" });
+                let reset_at = epoch_ms(loose_number(get(w, "resetsAt")));
+                fresh.push(window(describe_claude_window(k, None), clamp_percent(used), reset_at, own));
+            }
+        }
+        let desc = describe_claude_window(kind, None);
+        if !fresh.iter().any(|w| get(w, "id") == desc.get("id")) {
+            let mut used = loose_number(get(info, "utilization")) * 100.0;
+            if !used.is_finite() && status == "rate_limited" {
+                used = 100.0;
+            }
+            if used.is_finite() {
+                let reset_at = epoch_ms(loose_number(get(info, "resetsAt")));
+                fresh.push(window(desc, clamp_percent(used), reset_at, status));
+            }
+        }
+        if fresh.is_empty() {
+            return None;
+        }
         let mut windows: Vec<Value> = prev
             .and_then(|p| get(p, "windows"))
             .and_then(Value::as_array)
-            .map(|ws| ws.iter().filter(|o| get(o, "id") != get(&w, "id")).cloned().collect())
+            .map(|ws| ws.iter().filter(|o| !fresh.iter().any(|w| get(o, "id") == get(w, "id"))).cloned().collect())
             .unwrap_or_default();
-        windows.push(w);
+        windows.extend(fresh);
         let mut extra = Map::new();
         let credits = prev.and_then(|p| get(p, "creditsState")).cloned().unwrap_or(json!("unknown"));
         extra.insert("creditsState".into(), credits);
@@ -394,7 +422,10 @@ pub fn roll_over_reset_windows(limits: &Value, now: f64) -> Value {
     let mut out = limits.clone();
     for w in out.get_mut("windows").and_then(Value::as_array_mut).into_iter().flatten() {
         let reset_at = loose_number(get(w, "resetAt"));
-        if reset_at > 0.0 && reset_at <= now && let Some(o) = w.as_object_mut() {
+        if reset_at > 0.0
+            && reset_at <= now
+            && let Some(o) = w.as_object_mut()
+        {
             o.insert("usedPercent".into(), num(0.0));
             o.insert("resetAt".into(), num(0.0));
             o.insert("status".into(), json!("allowed"));
@@ -577,6 +608,52 @@ mod tests {
     }
 
     #[test]
+    fn claude_code_unified_windows_refresh_every_window() {
+        // A stale rejection: the week was called spent.
+        let spent = json!({ "type": "rate_limit_event", "rate_limit_info": { "status": "rejected", "rateLimitType": "seven_day" } });
+        let prev = parse_claude_code_usage(&spent, None, 0.0).unwrap();
+        // What Claude Code 2.x printed on 2026-11-26: no top-level utilization, every window under `unifiedWindows`.
+        let live = json!({ "type": "rate_limit_event", "rate_limit_info": {
+            "status": "allowed", "resetsAt": 1_795_710_000, "rateLimitType": "five_hour",
+            "overageStatus": "rejected", "overageDisabledReason": "out_of_credits", "isUsingOverage": false,
+            "unifiedWindows": {
+                "five_hour": { "utilization": 0.05, "resetsAt": 1_795_710_000, "status": "allowed" },
+                "seven_day": { "utilization": 0, "resetsAt": 1_796_248_800, "status": "allowed" }
+            }
+        } });
+        let got = parse_claude_code_usage(&live, Some(&prev), 1000.0).expect("an allowed event with windows counts");
+        let windows = got["windows"].as_array().unwrap();
+        assert_eq!(windows.len(), 2);
+        let week = windows.iter().find(|w| w["id"] == "weekly").unwrap();
+        assert_eq!(week["status"], "allowed", "the stale rejection is cleared");
+        assert_eq!(week["usedPercent"], num(0.0));
+        let session = windows.iter().find(|w| w["id"] == "session").unwrap();
+        assert_eq!(session["usedPercent"], num(5.0));
+        assert_eq!(session["resetAt"], num(1_795_710_000_000.0));
+
+        // Past the cap is still a fraction: 1.2 is 120%, clamped, not 1.2%.
+        let past =
+            json!({ "type": "rate_limit_event", "rate_limit_info": { "status": "rejected", "utilization": 1.2 } });
+        assert_eq!(parse_claude_code_usage(&past, None, 0.0).unwrap()["windows"][0]["usedPercent"], num(100.0));
+    }
+
+    #[test]
+    fn claude_code_model_weekly_limit_scopes_to_that_model() {
+        let opus = json!({ "type": "rate_limit_event", "rate_limit_info": { "status": "rejected", "rateLimitType": "seven_day_opus" } });
+        let got = parse_claude_code_usage(&opus, None, 0.0).unwrap();
+        let w = &got["windows"][0];
+        assert_eq!(w["id"], "weekly-opus", "the same window `/usage` reports for Opus");
+        assert_eq!(w["scope"], "model", "spending Opus's week does not block Sonnet");
+        assert_eq!(w["modelFamily"], "opus");
+        let sonnet = json!({ "type": "rate_limit_event", "rate_limit_info": { "status": "rejected", "rateLimitType": "seven_day_sonnet" } });
+        assert_eq!(parse_claude_code_usage(&sonnet, None, 0.0).unwrap()["windows"][0]["modelFamily"], "sonnet");
+        let bucket = json!({ "type": "rate_limit_event", "rate_limit_info": { "status": "rejected", "rateLimitType": "seven_day_overage_included" } });
+        let w = parse_claude_code_usage(&bucket, None, 0.0).unwrap()["windows"][0].clone();
+        assert_eq!(w["scope"], "model", "a per-model bucket of an unnamed model blocks nothing account-wide");
+        assert_eq!(w.get("modelFamily"), None);
+    }
+
+    #[test]
     fn claude_code_window_past_its_reset_reads_fresh() {
         let spent = json!({ "type": "rate_limit_event", "rate_limit_info": {
             "status": "rejected", "resetsAt": 2_000_000_000_000.0, "utilization": 1.0
@@ -588,7 +665,16 @@ mod tests {
         assert_eq!(after["windows"][0]["status"], "allowed");
         assert_eq!(after["windows"][0]["usedPercent"], num(0.0));
         assert_eq!(after["windows"][0]["resetAt"], num(0.0), "the next reset is unknown");
-        let unknown = parse_claude_code_usage(&json!({ "type": "rate_limit_event", "rate_limit_info": { "status": "rejected" } }), None, 0.0).unwrap();
-        assert_eq!(roll_over_reset_windows(&unknown, 1e15)["windows"][0]["status"], "rate_limited", "no reset time, no guess");
+        let unknown = parse_claude_code_usage(
+            &json!({ "type": "rate_limit_event", "rate_limit_info": { "status": "rejected" } }),
+            None,
+            0.0,
+        )
+        .unwrap();
+        assert_eq!(
+            roll_over_reset_windows(&unknown, 1e15)["windows"][0]["status"],
+            "rate_limited",
+            "no reset time, no guess"
+        );
     }
 }

@@ -1,11 +1,11 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-07
 ---
 
 # 0064. The CI runner fleet goes through Nekko Cloud, with the GitHub key held there
 
-Proposed on 2026-11-07; to be confirmed by Philip. Issue: [#1038](https://github.com/nekko-labs/nekko-agent/issues/1038). Spec: [CI runners](../../spec/automation/ci-runners.md), "Free and Nekko Cloud". Design: [reports/ci-runners-p4-design.md](../../reports/ci-runners-p4-design.md).
+Proposed on 2026-11-07; accepted by Philip on 2026-11-26 with the recommended answers. Issue: [#1038](https://github.com/nekko-labs/nekko-agent/issues/1038). Spec: [CI runners](../../spec/automation/ci-runners.md), "Free and Nekko Cloud". Design: [reports/ci-runners-p4-design.md](../../reports/ci-runners-p4-design.md).
 
 ## Context
 
@@ -57,3 +57,7 @@ Proposed: 1, 4, 6, 7 and 10.
 - The picker endpoint answers only for repositories a live fleet Mac serves, so it reveals nothing about anyone else.
 - Creating the Nekko Runner GitHub App and its Fly secrets is a step only Philip can take.
 - We were wrong if teams need a fleet before Cloud teams exist, or if one-hour tokens on a laptop turn out to be as much exposure as the key.
+
+## Implementation notes (fleet view)
+
+Added 2026-11-26. Between the proposal and its acceptance, Nekko Cloud gained organizations and an end-to-end sealed computer fleet ([0066](0066-account-fleet-reuses-encrypted-account-trust.md), [0086](0086-organizations-own-the-computer-fleet.md)). So the fleet view is not a new plaintext table: a sharing Mac's sealed descriptor gains `runners` (each runner's label, state, busy VMs and the VMs it may run now; no repos, jobs, reasons or networks), and members see it in Settings > Nekko Cloud > Fleet management > Computers. The server still reads nothing. A fleet is therefore an organization's computers, not one account's, and the opt-in is the existing per-org sharing switch. The picker still needs presence the server can read, which stays as decided above.

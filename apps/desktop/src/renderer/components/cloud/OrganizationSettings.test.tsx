@@ -5,7 +5,7 @@ import type { CloudStatus, FleetComputerView, FleetList, OrgDetail, OrgSummary }
 import { OrganizationView, type OrgViewProps } from './OrganizationSettings.js';
 import { Toggle } from '../primitives/Toggle.js';
 import {
-  FLEET_FAST_PATH, FLEET_POLL_CONNECTED_MS, FLEET_POLL_MS, canManage, canOpen, fleetPollMs, lastSeen, loadFleet, loadOrgs, openOnComputer, orgErrorText, orgGate, orgListErrorText, reachNote, relayPresenceKey, setSharing, sortComputers, splitModels,
+  FLEET_FAST_PATH, FLEET_POLL_CONNECTED_MS, FLEET_POLL_MS, canManage, canOpen, fleetPollMs, lastSeen, loadFleet, loadOrgs, openOnComputer, orgErrorText, orgGate, orgListErrorText, reachNote, relayPresenceKey, runnerLines, setSharing, sortComputers, splitModels,
   type FleetOpenApi, type OrgApi,
 } from './orgModel.js';
 
@@ -234,6 +234,20 @@ describe('Computers', () => {
     expect(out).toContain('+2 more');
     expect(splitModels(models, true)).toEqual({ shown: models, hidden: 0 });
     expect(splitModels(models.slice(0, 3), false).hidden).toBe(0);
+  });
+
+  it('shows a Mac\'s CI runners while it is online, and nothing for an offline one', () => {
+    const mac = computer({ os: 'macos', runners: [
+      { label: 'nekko-cloud-mac', state: 'running', busy: 1, slots: 2 },
+      { label: 'lint-linux', state: 'waiting', busy: 0, slots: 2 },
+    ] });
+    expect(runnerLines(mac)).toEqual(['CI runner nekko-cloud-mac: running a job (1 of 2 VMs)', 'CI runner lint-linux: waiting']);
+    expect(runnerLines({ ...mac, runners: [{ label: 'x', state: 'ready', busy: 0, slots: 1 }] })).toEqual(['CI runner x: ready (1 VM)']);
+    expect(runnerLines({ ...mac, online: false })).toEqual([]);
+    expect(runnerLines(computer())).toEqual([]);
+    const out = html(props({ fleet: fleet([mac]) }));
+    expect(out.match(/data-testid="org-runner"/g)).toHaveLength(2);
+    expect(out).toContain('CI runner nekko-cloud-mac: running a job (1 of 2 VMs)');
   });
 
   it('has no Connect or Run button on a computer', () => {
