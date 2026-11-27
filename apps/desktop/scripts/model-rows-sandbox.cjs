@@ -124,7 +124,17 @@ app.whenReady().then(async () => {
       await click('Delete');
       await check('Confirm deletes only the selected model and refreshes the library', `fixture.deleted.join(',')==='gemma' && !document.querySelector('[data-model-family=gemma4e4b]')`);
       await check('Deletion resets only the removed model’s favorite and default', `fixture.saved().favoriteModels.join(',')==='cloud::other' && fixture.saved().defaultModelId!=='gemma'`);
-      await check('Borrowed files cannot be deleted; non-chat models cannot be chat defaults', `!document.querySelector('[aria-label="Delete BGE-Small"]') && !document.querySelector('[aria-label="Set BGE-Small as default"]')`);
+      await check('Non-chat models cannot be chat defaults', `!document.querySelector('[aria-label="Set BGE-Small as default"]')`);
+      await run('fixture.skipDeletePrompt()');
+      await click('Delete BGE-Small');
+      await check('External warnings cannot be skipped and name the source and file', `(() => { const d = document.querySelector('[role=dialog]'); return d && d.innerText.includes('LM Studio') && d.innerText.includes('/fixture/bge') && !d.querySelector('input[type=checkbox]') && fixture.deleted.length===1 })()`);
+      await sleep(180);
+      fs.writeFileSync(path.join(out, 'models-external-delete-warning.png'), (await win.capturePage(undefined, { stayHidden: true })).toPNG());
+      await click('Cancel');
+      await check('Cancel does not call delete for an external file', `fixture.deleted.length===1 && !document.querySelector('[role=dialog]')`);
+      await click('Delete BGE-Small');
+      await click('Delete');
+      await check('External deletion confirms the exact file and refreshes', `fixture.deleted.join(',')==='gemma,bge' && fixture.confirmations.at(-1)==='/fixture/bge' && !document.querySelector('[aria-label="Delete BGE-Small"]')`);
       await run(`document.querySelector('[data-model-family="qwen359b"]').click()`);
       await check('Multi-variant families offer exact-file actions on the variant rows', `!!document.querySelector('[data-library-row=qwen-f16] [aria-label="Delete Qwen3.5-9B-F16"]') && !document.querySelector('[aria-label="Delete Qwen3.5-9B"]')`);
       await run(`document.querySelector('[data-model-family=flux2klein4b]').click()`);

@@ -120,7 +120,7 @@ async fn serves_the_model_library_and_its_folders_itself() {
     assert_eq!((imported["ok"].clone(), imported["message"].clone()), (json!(true), json!("Added Loose.")));
     let (_, refused) = post(d.port, "engine:deleteModel", json!(["ollama/tiny:latest"]), Some(TOKEN)).await;
     assert_eq!(refused["ok"], false);
-    assert!(ollama.join("blobs/sha256-abc").exists(), "a borrowed folder is never written");
+    assert!(ollama.join("blobs/sha256-abc").exists(), "no confirmation must leave the blob intact");
     let (_, deleted) = post(d.port, "engine:deleteModel", json!([id]), Some(TOKEN)).await;
     assert_eq!(deleted, json!({ "ok": true, "message": "Deleted Tiny." }));
     assert!(!model.exists());
@@ -140,6 +140,19 @@ async fn serves_the_model_library_and_its_folders_itself() {
     assert_eq!(report["suggestions"][0]["provider"], "ollama", "removed, so suggested");
     let settings: Value = serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap();
     assert_eq!(settings["engine"]["modelFolders"], json!([]));
+    post(
+        d.port,
+        "engine:foldersSave",
+        json!([[{ "id": "ollama", "path": ollama, "enabled": true, "provider": "ollama" }]]),
+        Some(TOKEN),
+    )
+    .await;
+    let blob = ollama.join("blobs/sha256-abc");
+    let (_, deleted) = post(d.port, "engine:deleteModel", json!(["ollama/tiny:latest", blob]), Some(TOKEN)).await;
+    assert_eq!(deleted["ok"], true, "{deleted}");
+    assert!(blob.exists(), "Ollama blob must be preserved");
+    assert!(!ollama.join("manifests/registry.ollama.ai/library/tiny/latest").exists());
+
     drop(d);
     std::fs::remove_dir_all(root).ok();
 }

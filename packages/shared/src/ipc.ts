@@ -860,7 +860,7 @@ export interface NekkoApi {
     path: string,
   ): Promise<{ ok: boolean; message: string; model?: import('./engine.js').LocalModel }>;
   /** Delete a model file and its library row. */
-  engineDeleteModel(id: string): Promise<{ ok: boolean; message: string }>;
+  engineDeleteModel(id: string, confirmedPath?: string): Promise<{ ok: boolean; message: string }>;
   /** Save per-model load settings, applied every time it loads. */
   engineSaveModelPreset(id: string, preset: import('./engine.js').EngineLoadPreset): Promise<void>;
   /** The starter list, or search results when a query is given. */

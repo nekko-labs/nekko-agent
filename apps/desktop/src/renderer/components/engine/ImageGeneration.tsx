@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import type { LocalModel, ImageCompanionStatus } from '@nekko-agent/shared';
+import type { EngineMemory, LocalModel, ImageCompanionStatus } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
 import { PhotoPackageStatus } from './PhotoPackageStatus.js';
+import { ModelAllocationBar } from './ModelAllocationBar.js';
 import { LoadMemoryMeter } from './LoadMemoryMeter.js';
 
 /**
@@ -9,7 +10,7 @@ import { LoadMemoryMeter } from './LoadMemoryMeter.js';
  * settings. Generating happens in chat (an Image chat), where prompts and
  * pictures stay together as a history; this panel opens one on this model.
  */
-export function ImageGeneration({ model, onChanged, attached = false }: { model: LocalModel; onChanged: () => void; attached?: boolean }) {
+export function ImageGeneration({ model, onChanged, attached = false, memory }: { model: LocalModel; onChanged: () => void; attached?: boolean; memory?: EngineMemory }) {
   const pushToast = useStore(s => s.pushToast);
   const newImageChat = useStore(s => s.newImageChat);
   const [paths, setPaths] = useState(model.preset?.diffusion ?? {});
@@ -29,7 +30,7 @@ export function ImageGeneration({ model, onChanged, attached = false }: { model:
       {!attached && <h3 className="text-sm font-semibold">{model.name}</h3>}
       <button className="btn btn-primary ml-auto py-1 text-xs" onClick={() => void openChat()}>Open Photo</button>
     </div>
-    <LoadMemoryMeter model={model} />
+    {attached ? <ModelAllocationBar model={model} memory={memory} /> : <LoadMemoryMeter model={model} />}
     <PhotoPackageStatus key={model.id} modelId={model.id} onChanged={onChanged} onDefaults={setDefaults} />
     <details><summary className="cursor-pointer text-xs text-ink-soft">Advanced: custom files and memory</summary>
       <p className="mt-2 text-xs text-ink-faint">Use absolute paths on the machine running Nekko. These override the downloaded companions above. Files beside the model named like clip_l.safetensors or vae-*.safetensors are detected automatically.</p>

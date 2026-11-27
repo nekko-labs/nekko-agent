@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { LIST_PAGE, pageGroups, showMoreLabel } from '../../listPaging.js';
 import type { EngineMemory, LocalModel, ModelModality, ResidentModel } from '@nekko-agent/shared';
-import { MODEL_FOLDER_PROVIDERS, cannotLoadReason } from '@nekko-agent/shared';
+import { MODEL_FOLDER_PROVIDERS, cannotLoadReason, modelModality } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
 import { notifyModelsChanged } from '../../modelCatalog.js';
 import { CheckIcon, ChevronIcon, WarningIcon } from '../../icons.js';
@@ -15,7 +15,7 @@ import { gpuGuidance, sortLibraryModels, type LibraryModel, type ModelSort } fro
 import { ModelRowActions, type ModelRowControl } from './ModelRowActions.js';
 import { RunnableAlternativeOffer } from './RunnableAlternativeOffer.js';
 import { loadableFiles } from './runnableAlternative.js';
-import { localTypeLabel, modelProblem, paramsLabel } from './modelFacts.js';
+import { modelProblem, paramsLabel } from './modelFacts.js';
 import { MiddleTruncate } from '../primitives/MiddleTruncate.js';
 
 /**
@@ -33,10 +33,7 @@ import { MiddleTruncate } from '../primitives/MiddleTruncate.js';
  * teach people nothing. A vision model missing its projector still loads, and
  * says plainly what it cannot do until the projector arrives.
  *
- * Not all of them are ours. A model found in Ollama's or LM Studio's folder runs
- * here exactly like one we downloaded, and says where it came from so nobody has
- * to wonder why deleting it is not on offer: that file belongs to another app,
- * and removing it from here would break that app without saying so.
+ * Borrowed models can run here, and deletion warns when it affects another app.
  */
 
 /** The filter is "all" or one bucket; unsupported modalities share a bucket. */
@@ -346,15 +343,15 @@ export function ModelLibrary({
     const details = (
       <span className="block min-w-0 flex-1">
         <MiddleTruncate text={m.name} tail={20} className="block max-w-full text-sm font-medium" />
-        <ModelMemoryPreview model={m} memory={memory} id={previewId} />
+        <ModelFactChips model={m} />
+        {!expanded && <ModelMemoryPreview model={m} memory={memory} id={previewId} />}
         {actions.isDefault(m) && <span className="text-2xs text-accent">Default</span>}
-        <span className="block text-xs text-ink-soft" data-model-facts>{[localTypeLabel(m), paramsLabel(m.name, m.parameterSize)].filter(Boolean).join(' · ')}</span>
-        <span className="block text-2xs text-ink-faint" title={m.modality && m.modality !== 'chat' ? modalityTitle(m.modality) : undefined}>
+        <span className="block text-xs text-ink-soft" data-model-facts>{paramsLabel(m.name, m.parameterSize)}</span>
+        <span className="block text-2xs text-ink-faint">
           {[
             fit,
             m.quantization,
             m.maxContext && `${formatTokens(m.maxContext)} max context`,
-            m.format === 'mlx' && 'MLX',
             m.managed === false && `from ${locationOf(m)}`,
           ].filter(Boolean).join(' · ')}
         </span>
@@ -377,7 +374,7 @@ export function ModelLibrary({
               aria-label={`${m.modality === 'image' ? 'Image settings' : 'Settings'} for ${m.name}`}
               aria-expanded={expanded}
               aria-controls={panelId}
-              aria-describedby={previewId}
+              aria-describedby={expanded ? undefined : previewId}
               data-model-row-toggle
               onClick={() => setOpen(expanded ? null : m.id)}
             >
@@ -431,12 +428,13 @@ export function ModelLibrary({
               </div>
               <Toggle value={autoloadIds.has(m.id)} onChange={(on) => void toggleAutoload(m, on)} label="Load when the engine starts" />
             </div>}
-            {m.modality === 'image' ? <ImageGeneration model={m} onChanged={onChanged} attached /> : (
+            {m.modality === 'image' ? <ImageGeneration model={m} onChanged={onChanged} attached memory={memory} /> : (
               <EngineLoadDrawer
                 providerId={providerId}
                 model={m}
                 loadedParams={live?.params}
                 attached
+                memory={memory}
                 onFetchCompanions={() => void fetchCompanions(m)}
                 onDone={onChanged}
                 onClose={() => {
@@ -527,22 +525,16 @@ function locationOf(m: LocalModel): string {
       : 'Another folder';
 }
 
-/** One sentence for the badge tooltip: what the kind means for running it. */
-function modalityTitle(modality: ModelModality): string {
-  switch (modality) {
-    case 'vision':
-      return 'A chat model that can also read images, when its projector file is present';
-    case 'embedding':
-      return 'Turns text into vectors. Answers /v1/embeddings, not chat';
-    case 'image':
-      return 'An image-generation model. Runs in the optional stable-diffusion.cpp runtime';
-    case 'audio':
-      return 'A speech-recognition model. llama.cpp cannot serve it';
-    case 'draft':
-      return 'A speculative-decoding draft head. Only runs attached to its full model';
-    case 'unknown':
-      return 'The file would not parse as a GGUF';
-    default:
-      return 'A chat model';
-  }
+function ModelFactChips({ model }: { model: LocalModel }) {
+  const modality = model.modality ?? modelModality(model);
+  const chip = 'rounded-md bg-(--q-wash) px-1.5 py-0.5 font-medium text-ink-soft';
+  const support: Record<ModelModality, string[]> = {
+    chat: ['Chat'], vision: ['Vision', 'Chat'], embedding: ['Embeddings'], image: ['Image generation'],
+    audio: ['Audio'], draft: ['Speculative decoding'], unknown: ['Unknown'],
+  };
+  return <span className="my-1.5 block space-y-1 text-2xs text-ink-faint" data-model-chips>
+    <span className="flex flex-wrap items-center gap-1.5"><span>Format:</span><span className={chip}>{model.format === 'mlx' ? 'MLX' : 'GGUF'}</span></span>
+    <span className="flex flex-wrap items-center gap-1.5"><span>Supports:</span>{support[modality].map(label =>
+      <span key={label} className={chip} title={label === 'Vision' && model.format !== 'mlx' && !model.hasProjector ? 'Requires a projector file' : undefined}>{label}</span>)}</span>
+  </span>;
 }
