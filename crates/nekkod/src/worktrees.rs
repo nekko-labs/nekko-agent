@@ -17,8 +17,13 @@ use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-pub const CHANNELS: &[&str] =
-    &["chatWorktrees:list", "chatWorktrees:remove", "storage:idleWorktrees", "storage:removeWorktrees"];
+pub const CHANNELS: &[&str] = &[
+    "chatWorktrees:list",
+    "chatWorktrees:remove",
+    "storage:idleWorktrees",
+    "storage:mergedReminder",
+    "storage:removeWorktrees",
+];
 
 const WORD_A: [&str; 20] = [
     "brisk", "calm", "bold", "quiet", "swift", "keen", "bright", "gentle", "nimble", "steady", "lucky", "merry",
@@ -1014,6 +1019,36 @@ fn check(
     cwds: &[std::path::PathBuf],
     merged_head: Option<&str>,
 ) -> Result<&'static str, Kept> {
+    clean_and_unused(c, cwds)?;
+    if now.duration_since(last_activity(c)?).unwrap_or_default() < IDLE_AFTER {
+        return Err(Kept::Recent);
+    }
+    match git_no_locks(&c.root, &["rev-list", "-n1", "HEAD", "--not", "--remotes"]) {
+        Ok(out) if out.trim().is_empty() => return Ok("pushed"),
+        Ok(_) => {}
+        Err(_) => return Err(Kept::Unpushed),
+    }
+    let head = git_no_locks(&c.root, &["rev-parse", "HEAD"]).unwrap_or_default();
+    match merged_head {
+        Some(m) if c.branch.is_some() && !m.is_empty() && head.trim().eq_ignore_ascii_case(m) => Ok("merged"),
+        _ => Err(Kept::Unpushed),
+    }
+}
+
+/// Most recent activity on the checkout or its private Git metadata (not the branch commit date).
+fn last_activity(c: &Candidate) -> Result<std::time::SystemTime, Kept> {
+    let gitdir = git_no_locks(&c.root, &["rev-parse", "--absolute-git-dir"]).map_err(|_| Kept::Dirty)?;
+    let gitdir = gitdir.trim();
+    ["HEAD", "index", "logs/HEAD"]
+        .iter()
+        .map(|f| Path::new(gitdir).join(f))
+        .chain([Path::new(&c.root).to_path_buf()])
+        .filter_map(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok())
+        .max()
+        .ok_or(Kept::Recent)
+}
+
+fn clean_and_unused(c: &Candidate, cwds: &[std::path::PathBuf]) -> Result<(), Kept> {
     if c.locked.is_some() {
         return Err(Kept::Locked);
     }
@@ -1042,27 +1077,77 @@ fn check(
     if ignored {
         return Err(Kept::Ignored);
     }
-    let gitdir = git_no_locks(&c.root, &["rev-parse", "--absolute-git-dir"]).map_err(|_| Kept::Dirty)?;
-    let gitdir = gitdir.trim();
-    let last = ["HEAD", "index", "logs/HEAD"]
-        .iter()
-        .map(|f| Path::new(gitdir).join(f))
-        .chain([Path::new(&c.root).to_path_buf()])
-        .filter_map(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok())
-        .max();
-    if last.is_none_or(|t| now.duration_since(t).unwrap_or_default() < IDLE_AFTER) {
-        return Err(Kept::Recent);
+    Ok(())
+}
+
+const WEEK: Duration = Duration::from_secs(7 * 24 * 3600);
+const REMINDER_THRESHOLD: usize = 15;
+
+#[derive(Clone)]
+enum MergeProof {
+    Integrated,
+    NeedsPr { root: String, branch: String, head: String },
+}
+
+fn old_candidate(c: &Candidate, now: std::time::SystemTime, cwds: &[std::path::PathBuf]) -> Option<MergeProof> {
+    if now.duration_since(last_activity(c).ok()?).ok()? <= WEEK {
+        return None;
     }
-    match git_no_locks(&c.root, &["rev-list", "-n1", "HEAD", "--not", "--remotes"]) {
-        Ok(out) if out.trim().is_empty() => return Ok("pushed"),
-        Ok(_) => {}
-        Err(_) => return Err(Kept::Unpushed),
+    clean_and_unused(c, cwds).ok()?;
+    let head = git_no_locks(&c.root, &["rev-parse", "--verify", "HEAD"]).ok()?;
+    // A feature remote ref is not a merge. Use origin's recorded default, never the main checkout's current HEAD.
+    if git_no_locks(&c.root, &["merge-base", "--is-ancestor", head.trim(), "refs/remotes/origin/HEAD"]).is_ok() {
+        return Some(MergeProof::Integrated);
     }
-    let head = git_no_locks(&c.root, &["rev-parse", "HEAD"]).unwrap_or_default();
-    match merged_head {
-        Some(m) if c.branch.is_some() && !m.is_empty() && head.trim().eq_ignore_ascii_case(m) => Ok("merged"),
-        _ => Err(Kept::Unpushed),
+    Some(MergeProof::NeedsPr { root: c.root.clone(), branch: c.branch.clone()?, head: head.trim().into() })
+}
+
+/// One scan per daemon per day, shared by desktop windows. No size walk, fetch, or removal.
+async fn merged_reminder(ctx: &crate::routes::Ctx) -> Result<Value, String> {
+    use futures_util::{StreamExt, stream};
+    static CACHE: tokio::sync::Mutex<Option<(Instant, bool)>> = tokio::sync::Mutex::const_new(None);
+    let mut cache = CACHE.lock().await;
+    if let Some((at, show)) = *cache
+        && at.elapsed() < Duration::from_secs(24 * 3600)
+    {
+        return Ok(json!(show));
     }
+    let settings = crate::settings::current(ctx).await;
+    let (store, running) = (ctx.sessions.clone(), crate::routes::running_chats(ctx));
+    let proofs = tokio::task::spawn_blocking(move || {
+        let sessions = store.list_meta();
+        let cs = candidates(&settings, &|r| owner_in(&sessions, &running, r));
+        if cs.len() < REMINDER_THRESHOLD {
+            return Vec::new();
+        }
+        let cwds = nekko_machine::probe::process_cwds();
+        let now = std::time::SystemTime::now();
+        parallel_map(&cs, LIST_THREADS, |c| old_candidate(c, now, &cwds)).into_iter().flatten().collect::<Vec<_>>()
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    let enough = proofs.len() >= REMINDER_THRESHOLD;
+    let mut count = proofs.iter().filter(|p| matches!(p, MergeProof::Integrated)).count();
+    if enough && count < REMINDER_THRESHOLD {
+        let pending =
+            proofs.into_iter().filter_map(|p| match p {
+                MergeProof::NeedsPr { root, branch, head } => Some(async move {
+                    merged_head(ctx, &root, &branch).await.is_some_and(|h| h.eq_ignore_ascii_case(&head))
+                }),
+                _ => None,
+            });
+        let results = stream::iter(pending).buffer_unordered(3);
+        futures_util::pin_mut!(results);
+        while let Some(merged) = results.next().await {
+            count += usize::from(merged);
+            if count >= REMINDER_THRESHOLD {
+                break;
+            }
+        }
+    }
+    let show = count >= REMINDER_THRESHOLD;
+    *cache = Some((Instant::now(), show));
+    Ok(json!(show))
 }
 
 /// Every listed worktree with whether it is idle (merged PRs not yet looked up).
@@ -1356,6 +1441,7 @@ async fn remove_many(ctx: &crate::routes::Ctx, roots: Vec<String>) -> Result<Val
 
 pub async fn route(ctx: &crate::routes::Ctx, channel: &str, args: &[Value]) -> Result<Value, String> {
     match channel {
+        "storage:mergedReminder" => return merged_reminder(ctx).await,
         "storage:idleWorktrees" => return idle_preview(ctx).await,
         "storage:removeWorktrees" => {
             let roots = args.first().and_then(Value::as_array).ok_or("Expected a list of worktree folders.")?;
@@ -1423,6 +1509,25 @@ mod tests {
     #[cfg(unix)]
     fn now() -> std::time::SystemTime {
         std::time::SystemTime::now()
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reminder_requires_more_than_a_week_and_default_branch_or_matching_pr() {
+        let r = Repo::new("reminder");
+        let wt = linked(&r, "a", &["-b", "a"]);
+        let c = candidate(&r, &wt);
+        let last = last_activity(&c).unwrap();
+        let later = last + WEEK + Duration::from_secs(1);
+        r.git(&["update-ref", "refs/remotes/origin/topic", "a"]);
+        assert!(old_candidate(&c, last + WEEK, &[]).is_none());
+        assert!(matches!(old_candidate(&c, later, &[]), Some(MergeProof::NeedsPr { .. })));
+        r.git(&["update-ref", "refs/remotes/origin/main", "a"]);
+        r.git(&["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"]);
+        assert!(matches!(old_candidate(&c, later, &[]), Some(MergeProof::Integrated)));
+        assert!(old_candidate(&c, later, &[std::fs::canonicalize(&wt).unwrap()]).is_none());
+        std::fs::write(Path::new(&wt).join("draft"), "keep").unwrap();
+        assert!(old_candidate(&c, later + WEEK, &[]).is_none());
     }
 
     #[cfg(unix)]

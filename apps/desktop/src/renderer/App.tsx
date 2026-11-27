@@ -34,6 +34,7 @@ import { CommandPalette } from './components/CommandPalette.js';
 import { UpdateBanner } from './components/UpdateBanner.js';
 import { AppNotices } from './components/AppNotices.js';
 import { RelayPairing } from './components/RelayPairing.js';
+import { MergedWorktreeNotice } from './components/StorageAudit.js';
 import { LowDiskNotice } from './components/LowDiskNotice.js';
 import { openSettingsPage } from './settingsPage.js';
 import { DeepLinkListener } from './components/DeepLink.js';
@@ -346,6 +347,7 @@ export function App() {
         {/* Main (bottom padding on phones so the tab bar never covers content,
             the home indicator's inset included) */}
         <main className="relative flex min-w-0 flex-1 flex-col pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-0">
+          <ErrorBoundary label="Worktree reminder"><MergedWorktreeNotice /></ErrorBoundary>
           <ErrorBoundary label="Low disk"><LowDiskNotice openStorage={() => openSettingsPage('storage')} /></ErrorBoundary>
           {providersLoaded && providers.length === 0 && view !== 'models' && view !== 'modelserver' && view !== 'settings' && (
             <button

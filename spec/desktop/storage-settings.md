@@ -124,3 +124,9 @@ nekkod measures, never the renderer. `storage:usage` returns the last measuremen
 Automatic cleanup on a schedule; an OS notification when the app is closed; cleaning build output inside a worktree while keeping the checkout; cleaning caches other tools keep (npm, Cargo, Xcode DerivedData outside worktrees, Simulator runtimes); a per-chat breakdown of history.
 
 Tracked in [#3504](https://github.com/nekko-labs/nekko-agent/issues/3504).
+
+## Storage audit chat
+
+**Run storage audit** starts a folderless chat with the selected model. Claude Code requires a workspace, so choose another provider for this folderless audit. Its first turn receives category sizes, available disk space and counts of protected and unused Nekko runner images. It has no tools that can act. It does not inspect external VM libraries or treat similarly sized images as duplicates. To clean up, review the items in Settings → Storage and confirm separately.
+
+Once at least 15 clean, unlocked worktrees have been unused for **more than seven days** and their current commits are confirmed merged, Nekko also offers the audit at the top of the window. It checks the recorded remote default branch or the exact head of a merged PR. A pushed feature branch alone does not count; unavailable merge proof is skipped. **Not now** snoozes this reminder for a week. The manual audit remains available.

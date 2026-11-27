@@ -42,3 +42,9 @@ When less than 20 GB is free on the disk Nekko's data lives on, a quiet line at 
 Cleanup on this page never removes models, Library files, prompts, evidence, commits or branches, and every cleanup shows what goes and how much it frees before you confirm.
 
 The phone apps don't show this page; freeing space on a computer is done at that computer. The Local Web UI shows the same page without App caches.
+
+## Storage audit chat
+
+**Run storage audit** starts a folderless chat with the selected model. Claude Code requires a workspace, so choose another provider for this folderless audit. Its first turn receives category sizes, available disk space and counts of protected and unused Nekko runner images. It has no tools that can act. It does not inspect external VM libraries or treat similarly sized images as duplicates. To clean up, review the items in Settings → Storage and confirm separately.
+
+Once at least 15 clean, unlocked worktrees have been unused for **more than seven days** and their current commits are confirmed merged, Nekko also offers the audit at the top of the window. It checks the recorded remote default branch or the exact head of a merged PR. A pushed feature branch alone does not count; unavailable merge proof is skipped. **Not now** snoozes this reminder for a week. The manual audit remains available.

@@ -313,6 +313,7 @@ const api: NekkoApi = {
   removeChatWorktree: (root) => inv(IpcChannels.chatWorktreesRemove, root),
   getStorageUsage: (refresh) => inv(IpcChannels.storageUsage, { refresh: !!refresh }),
   getDiskSpace: () => inv(IpcChannels.storageDisk),
+  hasOldMergedWorktrees: () => inv(IpcChannels.storageMergedReminder),
   previewIdleWorktrees: () => inv(IpcChannels.storageIdleWorktrees),
   removeWorktrees: (roots) => inv(IpcChannels.storageRemoveWorktrees, roots),
   listRunnerImages: () => inv(IpcChannels.storageRunnerImages),

@@ -274,6 +274,7 @@
  "ssh:open",
  "storage:disk",
  "storage:idleWorktrees",
+ "storage:mergedReminder",
  "storage:removeRunnerImage",
  "storage:removeWorktrees",
  "storage:runnerImages",
