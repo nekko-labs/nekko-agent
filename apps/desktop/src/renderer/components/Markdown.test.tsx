@@ -58,6 +58,19 @@ describe('remote images', () => {
     expect(out).not.toMatch(/<img[^>]+src="https?:/);
     expect(out).toContain('Wall mount');
   });
+  it('shows a single source line below a manual Load image button', () => {
+    const out = html('![Wall mount](https://hamilex.example/a.jpeg)');
+    expect(out).toContain('data-state="blocked"');
+    expect(out).toMatch(/>Load image<.*>From hamilex\.example</);
+    expect(out).not.toContain('Not from a search');
+    expect(out).not.toContain('Loading it contacts');
+  });
+  it('lets document previews choose auto-load without changing chat', () => {
+    const text = '![A](https://x.example/a.png)\n![B](https://x.example/b.png)';
+    expect(renderToStaticMarkup(<Markdown text={text} doc autoLoadImages />)).not.toContain('>Load image<');
+    expect(renderToStaticMarkup(<Markdown text={text} doc autoLoadImages={false} />).match(/>Load image</g)).toHaveLength(2);
+    expect(renderToStaticMarkup(<Markdown text={text} autoLoadImages />).match(/>Load image</g)).toHaveLength(2);
+  });
   it('group lines of nothing but photos into one gallery', () => {
     const out = html('![a](https://x.example/1.png)\n![b](https://x.example/2.png) ![c](https://x.example/3.png)');
     expect(out).toContain('aria-label="3 photos"');

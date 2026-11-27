@@ -1,13 +1,10 @@
 import React from 'react';
-import { ChatImages, imageHost, useNearViewport, useRemoteImage, type ChatImageItem } from '../remoteImages.js';
+import { ChatImages, imageHost, PreviewImageAutoload, useNearViewport, useRemoteImage, type ChatImageItem } from '../remoteImages.js';
 import { PixelSkeleton } from './PixelSkeleton.js';
 
 /**
- * A photo from the web in a chat reply. It loads through the host
- * (`image:fetch`), only once it is near the viewport, and only by itself when
- * the chat has actually seen the URL in a tool result or a user message;
- * otherwise it waits for a click. Click opens the photo viewer; right-click
- * offers copy, save, copy link and open.
+ * A photo loaded through the host (`image:fetch`). A document preview uses its
+ * auto-load preference; chat still requires URL provenance or an explicit click.
  */
 export function RemoteImageCard({ url, alt, items, index = 0, tile = false }: {
   url: string;
@@ -19,10 +16,12 @@ export function RemoteImageCard({ url, alt, items, index = 0, tile = false }: {
   tile?: boolean;
 }) {
   const chat = React.useContext(ChatImages);
+  const previewAutoload = React.useContext(PreviewImageAutoload);
   const [clicked, setClicked] = React.useState(false);
-  const trusted = !!chat?.trusted(url);
+  const autoLoad = previewAutoload ?? !!chat?.trusted(url);
   const [ref, near] = useNearViewport<HTMLSpanElement>();
-  const [state, retry] = useRemoteImage(url, near && (trusted || clicked));
+  const [state, retry, decodeFailed] = useRemoteImage(url, clicked || (near && autoLoad));
+  const fallback = state.status === 'error' || (!autoLoad && !clicked);
   const host = imageHost(url);
   const label = alt || `Image from ${host}`;
   const item: ChatImageItem = { url, alt, src: state.status === 'ready' ? state.image.dataUrl : undefined };
@@ -34,41 +33,38 @@ export function RemoteImageCard({ url, alt, items, index = 0, tile = false }: {
 
   let body: React.ReactNode;
   if (state.status === 'ready') {
-    body = (
+    const image = (
+      <img
+        src={state.image.dataUrl}
+        alt={label}
+        loading="lazy"
+        decoding="async"
+        referrerPolicy="no-referrer"
+        draggable={false}
+        onError={decodeFailed}
+        className={tile ? 'block h-full w-full object-cover' : 'block h-auto max-h-[480px] w-full object-contain'}
+        style={tile ? { aspectRatio: '4 / 3' } : undefined}
+      />
+    );
+    body = chat ? (
       <button
         type="button"
         className="block w-full cursor-zoom-in"
         title="Open the photo viewer (right-click for more)"
         aria-label={`Open ${label}`}
-        onClick={() => chat?.open(list.map((it) => (it.url === url ? { ...it, src: state.image.dataUrl } : it)), index)}
-        onContextMenu={(e) => chat?.menu(e, item)}
+        onClick={() => chat.open(list.map((it) => (it.url === url ? { ...it, src: state.image.dataUrl } : it)), index)}
+        onContextMenu={(e) => chat.menu(e, item)}
       >
-        <img
-          src={state.image.dataUrl}
-          alt={label}
-          loading="lazy"
-          decoding="async"
-          referrerPolicy="no-referrer"
-          draggable={false}
-          className={tile ? 'block h-full w-full object-cover' : 'block h-auto max-h-[480px] w-full object-contain'}
-          style={tile ? { aspectRatio: '4 / 3' } : undefined}
-        />
+        {image}
       </button>
-    );
-  } else if (state.status === 'error') {
+    ) : image;
+  } else if (fallback) {
     body = (
-      <span className={`flex ${frame} flex-col items-center justify-center gap-2 p-4 text-center text-xs text-ink-soft`} role="status">
-        <span>Couldn't load the image from {host}.</span>
-        <span className="text-2xs text-ink-faint">{state.message}</span>
-        <button type="button" className="btn btn-ghost h-7 px-3 text-xs" onClick={retry}>Retry</button>
-      </span>
-    );
-  } else if (!trusted && !clicked) {
-    body = (
-      <span className={`flex ${frame} flex-col items-center justify-center gap-2 p-4 text-center text-xs text-ink-soft`}>
-        <span>Image from <strong className="font-medium text-ink">{host}</strong></span>
-        <span className="max-w-[320px] text-2xs text-ink-faint">Not from a search or page in this chat, so it waits for you. Loading it contacts {host}.</span>
-        <button type="button" className="btn btn-ghost h-7 px-3 text-xs" onClick={() => setClicked(true)}>Load image</button>
+      <span className={`flex w-full items-center justify-center px-3 py-2 ${tile ? frame : ''}`}>
+        <button type="button" className="btn btn-outline h-7 px-3 text-xs" onClick={() => {
+          setClicked(true);
+          if (state.status === 'error') retry();
+        }}>Load image</button>
       </span>
     );
   } else {
@@ -79,14 +75,14 @@ export function RemoteImageCard({ url, alt, items, index = 0, tile = false }: {
     <span
       ref={ref}
       data-remote-image={url}
-      data-state={state.status === 'idle' && !trusted && !clicked ? 'blocked' : state.status}
+      data-state={state.status === 'idle' && fallback ? 'blocked' : state.status}
       className={`artifact-card inline-flex min-w-0 flex-col overflow-hidden rounded-xl border align-top ${tile ? 'w-full' : 'my-2 w-full max-w-[640px]'}`}
       aria-label={label}
     >
       {body}
       <span className="flex min-w-0 items-center gap-2 px-3 py-1">
-        <span className="min-w-0 flex-1 truncate text-xs text-ink" title={alt || undefined}>{alt || host}</span>
-        <span className="shrink-0 truncate text-2xs text-ink-faint" title={url}>{host}</span>
+        {!fallback && alt && <span className="min-w-0 flex-1 truncate text-xs text-ink" title={alt}>{alt}</span>}
+        <span className="min-w-0 truncate text-2xs text-ink-faint" title={url}>From {host}</span>
       </span>
     </span>
   );
