@@ -300,9 +300,12 @@ export function RemoteAccess() {
       const target = routeTargets(next, tailnetUrl, status.alsoRelays ?? []);
       if (!target) return setUrlProblem('Tailscale isn’t connected on this computer.');
       let s = status;
+      const turningOn = !s.enabled;
       if (!s.enabled || s.relayUrl !== target.main) s = await window.nekko.enableRemote(target.main);
       const have = (s.alsoRelays ?? []).join(' ');
-      if (have !== target.also.join(' ')) s = (await window.nekko.setRemoteRelays?.(target.also)) ?? s;
+      // Turning on always says which relays, so the computer remembers an unticked
+      // Nekko Cloud Relay and the Pro default doesn't add it back.
+      if (turningOn || have !== target.also.join(' ')) s = (await window.nekko.setRemoteRelays?.(target.also)) ?? s;
       setStatus(s);
     } catch (e) {
       setUrlProblem(String((e as Error)?.message ?? e).replace(/^Error:\s*/, ''));

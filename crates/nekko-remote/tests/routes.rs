@@ -230,3 +230,48 @@ fn a_code_minted_for_one_route_pairs_a_device_to_that_route() {
     assert!(svc.route("remote:pair", &[Value::Null, json!({ "route": "auto" })]).unwrap()["code"].is_string());
     assert!(svc.route("remote:pair", &[]).unwrap()["code"].is_string());
 }
+
+#[test]
+fn a_pro_computer_holds_its_room_on_nekko_cloud_relay_too() {
+    let (dir, svc, fake) = computer(Value::Null);
+    assert!(!svc.hold_cloud_relay(false), "not on a plan that includes it");
+    assert!(saved(&dir)["alsoRelays"].is_null());
+
+    fake.said.lock().unwrap().clear();
+    assert!(svc.hold_cloud_relay(true));
+    assert_eq!(saved(&dir)["alsoRelays"], json!([CLOUD_RELAY_URL]));
+    assert_eq!(
+        *fake.said.lock().unwrap(),
+        [format!("stop {TAILNET}"), format!("connect {TAILNET}"), format!("connect {CLOUD_RELAY_URL}")]
+    );
+    assert!(!svc.hold_cloud_relay(true), "already there");
+}
+
+#[test]
+fn an_untick_keeps_nekko_cloud_relay_off() {
+    let (dir, svc, _) = computer(json!([CLOUD_RELAY_URL]));
+    svc.route("remote:setRelays", &[json!([])]).unwrap();
+    assert_eq!(saved(&dir)["cloudRelay"], "off");
+    assert!(!svc.hold_cloud_relay(true));
+    assert!(saved(&dir)["alsoRelays"].is_null());
+    // Ticked again: remembered as on.
+    svc.route("remote:setRelays", &[json!([CLOUD_RELAY_URL])]).unwrap();
+    assert_eq!(saved(&dir)["cloudRelay"], "on");
+}
+
+#[test]
+fn the_pro_default_leaves_an_owners_own_relay_and_a_stopped_computer_alone() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("remote.json"),
+        json!({ "enabled": true, "relayUrl": "wss://relay.example.com", "room": "r", "secret": "s", "devices": [] }).to_string(),
+    )
+    .unwrap();
+    let svc = RemoteService::new(dir.path(), Arc::new(|b: &mut [u8]| b.fill(7)), Arc::new(|| NOW), Box::new(Fake::default()));
+    assert!(!svc.hold_cloud_relay(true), "the owner's own relay");
+
+    let (dir, svc, _) = computer(Value::Null);
+    svc.route("remote:disable", &[]).unwrap();
+    assert!(!svc.hold_cloud_relay(true), "remote access is off");
+    assert!(saved(&dir)["alsoRelays"].is_null());
+}

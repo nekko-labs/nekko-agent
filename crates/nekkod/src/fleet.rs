@@ -106,6 +106,12 @@ pub fn start(remote: Arc<Remote>, computers: Arc<Computers>, cloud: Arc<Cloud>, 
             for id in cut {
                 crate::logs::note(&format!("nekkod: cut off fleet connection {id}: the account no longer allows it"));
             }
+            // The Pro default (decision 0116): a phone of the account reaches this
+            // computer through Nekko Cloud Relay without Tailscale or a new pairing.
+            let (r, c) = (remote.clone(), cloud.clone());
+            if tokio::task::spawn_blocking(move || r.hold_cloud_relay(c.relay_included())).await.unwrap_or(false) {
+                crate::logs::note("nekkod: remote access also through Nekko Cloud Relay (included on this plan)");
+            }
             computers.drop_fleet_unless_ready().await;
         }
     });

@@ -113,6 +113,11 @@ impl Remote {
         self.svc.set_fleet_gate(gate);
     }
 
+    /// Hold the room on Nekko Cloud Relay too while the account includes it (fleet.rs).
+    pub fn hold_cloud_relay(&self, included: bool) -> bool {
+        self.svc.hold_cloud_relay(included)
+    }
+
     /// Cut off fleet devices the account no longer allows (fleet.rs).
     pub fn recheck_fleet(&self) -> Vec<String> {
         self.svc.recheck_fleet()

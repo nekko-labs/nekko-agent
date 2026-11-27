@@ -202,6 +202,8 @@ impl RemoteService {
                     .with("relayUrl", get("relayUrl"))
                     // Decision 0116: relays this computer is also reachable through, same room.
                     .with("alsoRelays", get("alsoRelays"))
+                    // `on` or `off` once the owner ticks or unticks Nekko Cloud Relay; absent until then.
+                    .with("cloudRelay", get("cloudRelay"))
                     .with("room", get("room"))
                     .with("secret", get("secret"))
                     .with("hostKey", get("hostKey"))
@@ -869,6 +871,10 @@ impl RemoteService {
         let cfg = self
             .load()
             .with("alsoRelays", Some(Value::Array(clean)).filter(|v| v.as_array().is_some_and(|a| !a.is_empty())));
+        // The owner's routes, as they ticked them: remembered so the Pro default
+        // (`hold_cloud_relay`) never adds Nekko Cloud Relay back after an untick.
+        let on = Self::relay_urls(&cfg).iter().any(|u| crate::route::is_cloud_relay(u));
+        let cfg = cfg.with("cloudRelay", Some(json!(if on { "on" } else { "off" })));
         self.save(&cfg)?;
         let enabled = nekko_js::truthy(cfg.get("enabled")) && nekko_js::truthy(cfg.get("relayUrl"));
         if enabled {
@@ -876,6 +882,39 @@ impl RemoteService {
         }
         drop(_io);
         Ok(self.status_of(self.handle(), &cfg))
+    }
+
+    /// The Pro default (decision 0116, 2026-11-28): while remote access is on
+    /// and this computer's account includes Nekko Cloud Relay (`included`),
+    /// hold the room there too, beside whatever else it uses, so a phone of the
+    /// account reaches it without Tailscale. Left alone when the owner unticked
+    /// it (`cloudRelay: "off"`), when the main relay is one of their own on the
+    /// internet, or when there is no room for another relay. True when it added it.
+    pub fn hold_cloud_relay(&self, included: bool) -> bool {
+        if !included {
+            return false;
+        }
+        let _io = lock(&self.io);
+        let cfg = self.load();
+        if !nekko_js::truthy(cfg.get("enabled")) || cfg.get("cloudRelay").and_then(Value::as_str) == Some("off") {
+            return false;
+        }
+        let urls = Self::relay_urls(&cfg);
+        let Some(main) = urls.first() else { return false };
+        if urls.iter().any(|u| crate::route::is_cloud_relay(u))
+            || crate::route::relay_route(main) == crate::route::Route::Internet
+            || urls.len() > MAX_ALSO_RELAYS
+        {
+            return false;
+        }
+        let mut also = cfg.get("alsoRelays").and_then(Value::as_array).cloned().unwrap_or_default();
+        also.push(json!(crate::route::cloud_relay_url()));
+        let cfg = cfg.with("alsoRelays", Some(Value::Array(also)));
+        if self.save(&cfg).is_err() {
+            return false;
+        }
+        self.connect(&mut lock(&self.state), &cfg);
+        true
     }
 
     /// Each paired device's HELLO key (`{ [deviceId]: base64 X9.63 P-256 }`),
