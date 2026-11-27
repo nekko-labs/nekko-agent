@@ -22,6 +22,7 @@ const types = {
   '.mp4': 'video/mp4',
   '.webm': 'video/webm',
   '.woff2': 'font/woff2',
+  '.zip': 'application/zip',
 };
 
 // The same lookups as Vercel's cleanUrls in vercel.json: /docs serves

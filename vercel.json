@@ -19,6 +19,24 @@
       ]
     },
     {
+      "source": "/brand/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/brand/(.*)\\.zip",
+      "headers": [
+        {
+          "key": "Content-Disposition",
+          "value": "attachment; filename=\"nekko-agent-brand-pack.zip\""
+        }
+      ]
+    },
+    {
       "source": "/(.*)\\.(css|js)",
       "headers": [
         {
@@ -29,6 +47,11 @@
     }
   ],
   "redirects": [
+    {
+      "source": "/(brand|press|press-kit|media-kit)",
+      "destination": "/docs/brand",
+      "permanent": false
+    },
     {
       "source": "/docs/getting-started",
       "destination": "/docs",
