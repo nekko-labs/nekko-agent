@@ -115,6 +115,13 @@ pub fn preview(
     let system_instructions = [
         settings.get("systemInstructions").and_then(Value::as_str).unwrap_or_default().to_string(),
         nekko_turn::plan::work_tracking(settings),
+        if crate::hypergate::enabled(settings)
+            && session.is_none_or(|s| crate::worktrees::execution_mode(s) != "sandbox")
+        {
+            nekko_turn::plan::HYPERGATE_GITHUB.to_owned()
+        } else {
+            String::new()
+        },
     ]
     .into_iter()
     .filter(|s| !s.is_empty())

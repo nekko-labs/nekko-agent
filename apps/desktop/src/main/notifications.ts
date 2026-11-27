@@ -35,7 +35,7 @@ export function startMainNotifications(
       if (disposed || settings?.desktopNotifications === false) return;
       let title: string | undefined;
       try {
-        title = (await engine.call<{ title?: string } | null>(IpcChannels.sessionGet, event.sessionId))?.title;
+        title = (await engine.call<{ title?: string } | null>(IpcChannels.sessionGet, event.sessionId, { pictures: 'refs' }))?.title;
       } catch { /* A deleted chat can still report its final event. */ }
       if (disposed) return;
       // Focus alone is insufficient: another chat or a non-chat view may be showing.

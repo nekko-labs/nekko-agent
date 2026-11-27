@@ -22,7 +22,7 @@ import type {
   OAuthStatus,
   SubscriptionLimits,
 } from '@nekko-agent/shared';
-import { AGENT_REPLAY, HTML_PREVIEW_CHANNELS, IpcChannels, IpcEvents, LIBRARY_THUMBNAIL_CHANNELS } from '@nekko-agent/shared';
+import { AGENT_REPLAY, HTML_PREVIEW_CHANNELS, IpcChannels, IpcEvents, sessionGetArgs, LIBRARY_THUMBNAIL_CHANNELS } from '@nekko-agent/shared';
 import { ENGINE_ENDPOINT_CHANNEL, PICK_FOLDER_CHANNEL, SERVICE_CONTROL_CHANNEL } from '../engineChannels.js';
 import { createEngineSocket, type Listener } from './engine-socket.js';
 import { heldWhileHidden, pageHidden } from './hiddenReads.js';
@@ -43,6 +43,7 @@ import {
   DISPLAYS_PLACEMENT_CHANNEL, DISPLAYS_REPORT_CHANNEL, DISPLAYS_TOGGLE_CHANNEL, type DisplaysState,
   DISPLAYS_DESKTOP_CHANNEL, DISPLAYS_GO_CHANNEL, DISPLAYS_SPACES_MODE_CHANNEL,
 } from '../displayWindows.js';
+import { STORAGE_CLEAR_CACHES_CHANNEL } from '../storageCaches.js';
 
 // Every call goes to the engine's socket (see `routing.ts`).
 const engine = createEngineSocket((operation) => ipcRenderer.invoke(ENGINE_ENDPOINT_CHANNEL, operation));
@@ -207,7 +208,9 @@ const api: NekkoApi = {
   listAgentWatches: (sessionId) => inv(IpcChannels.sessionWatches, sessionId),
   listSessionSummaries: () => inv(IpcChannels.sessionsSummaries),
   createSession: (workspaceId) => inv(IpcChannels.sessionCreate, workspaceId),
-  getSession: (id) => inv(IpcChannels.sessionGet, id),
+  getSession: (id, opts) => inv(IpcChannels.sessionGet, ...sessionGetArgs(id, opts)),
+  sessionPicture: (reference) => inv(IpcChannels.sessionBlob, reference),
+  finderChatText: (ids) => inv(IpcChannels.sessionsFinderText, ids),
   deleteSession: (id) => inv(IpcChannels.sessionDelete, id),
   setSessionWorkspace: (sessionId, workspaceId) => inv(IpcChannels.sessionSetWorkspace, sessionId, workspaceId),
   setSessionSupportingWorkspaces: (sessionId, workspaceIds) => inv(IpcChannels.sessionSetSupportingWorkspaces, sessionId, workspaceIds),
@@ -308,6 +311,13 @@ const api: NekkoApi = {
   getGitStatus: (id, force) => inv(IpcChannels.workspaceGitStatus, id, force),
   listChatWorktrees: () => inv(IpcChannels.chatWorktreesList),
   removeChatWorktree: (root) => inv(IpcChannels.chatWorktreesRemove, root),
+  getStorageUsage: (refresh) => inv(IpcChannels.storageUsage, { refresh: !!refresh }),
+  getDiskSpace: () => inv(IpcChannels.storageDisk),
+  previewIdleWorktrees: () => inv(IpcChannels.storageIdleWorktrees),
+  removeWorktrees: (roots) => inv(IpcChannels.storageRemoveWorktrees, roots),
+  listRunnerImages: () => inv(IpcChannels.storageRunnerImages),
+  removeRunnerImage: (name) => inv(IpcChannels.storageRemoveRunnerImage, name),
+  clearAppCaches: () => ipcRenderer.invoke(STORAGE_CLEAR_CACHES_CHANNEL),
 
   readFile: (path) => inv(IpcChannels.fileRead, path),
   // The main process serves these on loopback, not the engine (main/htmlPreview.ts).
@@ -482,6 +492,11 @@ const api: NekkoApi = {
   computerModelServer: (id, channel, args = []) => inv(IpcChannels.computersCall, id, channel, args),
   createSessionOn: (computerId, workspaceId) => inv(IpcChannels.computersCreateSession, computerId, workspaceId),
   connectFleetComputer: (orgId, deviceId) => inv(IpcChannels.computersConnectFleet, orgId, deviceId),
+  nearbyComputers: () => inv(IpcChannels.computersNearby),
+  openComputerLobby: (link) => inv(IpcChannels.computersLobbyOpen, link),
+  answerComputerLobby: (pair) => inv(IpcChannels.computersLobbyAnswer, pair),
+  closeComputerLobby: () => inv(IpcChannels.computersLobbyClose),
+  joinComputerLobby: (found) => inv(IpcChannels.computersLobbyJoin, found),
   computerCatalog: (id) => inv(IpcChannels.computersCatalog, id),
   listRemoteDevices: () => inv(IpcChannels.remoteDevices),
   revokeRemoteDevice: (deviceId) => inv(IpcChannels.remoteRevoke, deviceId),
@@ -581,6 +596,11 @@ const api: NekkoApi = {
     const listener = (_: unknown, e: { path: string }) => cb(e);
     bus.on(IpcEvents.gitChanged, listener);
     return () => bus.removeListener(IpcEvents.gitChanged, listener);
+  },
+  onComputerLobby: (cb) => {
+    const listener = (_: unknown, e: import('@nekko-agent/shared').ComputerLobbyEvent) => cb(e);
+    bus.on(IpcEvents.computersLobby, listener);
+    return () => bus.removeListener(IpcEvents.computersLobby, listener);
   },
   onComputersUpdated: (cb) => {
     const listener = () => cb();

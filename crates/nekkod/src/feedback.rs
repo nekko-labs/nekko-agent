@@ -15,7 +15,11 @@
 //! `updates:join` is the setup wizard's optional email: the address (and the
 //! name the person gave, if any) joins the `app` list through the same
 //! `POST /v1/signups` the website's beta form uses, which stores it in Nekko
-//! Cloud's Postgres and sends one confirmation email.
+//! Cloud's Postgres and sends one confirmation email. An address that couldn't
+//! be sent (offline, Nekko Cloud down or busy, the connection switched off) is
+//! kept as `settings.userEmailPending` and sent again by [`start_retry`]: a
+//! minute after start, then every six hours, until Nekko Cloud takes it or the
+//! person changes or clears their email.
 
 use crate::routes::Ctx;
 use serde_json::{Map, Value, json};
@@ -55,7 +59,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
         "updates:join" => {
             let email = args.first().and_then(Value::as_str).unwrap_or_default();
             let name = args.get(1).and_then(Value::as_str);
-            join(&cloud_url(), &signup_body(email, name)?).await
+            join_and_record(ctx, &cloud_url(), email, name).await
         }
         _ => Err(format!("unknown channel {channel}")),
     }
@@ -133,26 +137,110 @@ fn signup_body(email: &str, name: Option<&str>) -> Result<Value, String> {
     Ok(out)
 }
 
-async fn join(base: &str, body: &Value) -> Result<Value, String> {
+/// Why a signup didn't reach Nekko Cloud, and whether sending it again later can help.
+#[derive(Debug, PartialEq)]
+struct JoinError {
+    message: String,
+    /// Offline, blocked, rate-limited or a server error: worth another try.
+    /// Nekko Cloud refusing the address itself (400) is not.
+    retry: bool,
+}
+
+async fn join(base: &str, body: &Value) -> Result<Value, JoinError> {
     let url = format!("{}/v1/signups", base.trim_end_matches('/'));
+    let again = |message: String| JoinError { message, retry: true };
     let res = nekko_net::send("updates-email", nekko_cloud::client().post(url).json(body)).await.map_err(|e| {
-        if e.is_blocked() {
+        again(if e.is_blocked() {
             e.to_string()
         } else {
             "Couldn't reach Nekko Cloud. Check your connection and try again.".to_string()
-        }
+        })
     })?;
     match res.status().as_u16() {
         200..=299 => Ok(json!({ "ok": true })),
-        429 => Err("Too many tries. Try again later.".into()),
-        400 => Err(res
-            .json::<Value>()
-            .await
-            .ok()
-            .and_then(|v| v["error"].as_str().map(String::from))
-            .unwrap_or_else(|| "Enter a valid email address.".into())),
-        status => Err(format!("Nekko Cloud couldn't save the address ({status}). Try again later.")),
+        429 => Err(again("Too many tries. Try again later.".into())),
+        400 => Err(JoinError {
+            message: res
+                .json::<Value>()
+                .await
+                .ok()
+                .and_then(|v| v["error"].as_str().map(String::from))
+                .unwrap_or_else(|| "Enter a valid email address.".into()),
+            retry: false,
+        }),
+        status => Err(again(format!("Nekko Cloud couldn't save the address ({status}). Try again later."))),
     }
+}
+
+/// What `settings.userEmailPending` becomes after trying to send `email`:
+/// kept when another try can help, cleared otherwise.
+fn pending_after(email: &str, outcome: &Result<Value, JoinError>) -> Value {
+    match outcome {
+        Err(JoinError { retry: true, .. }) => json!(email.trim()),
+        _ => Value::Null,
+    }
+}
+
+/// Sends the address to Nekko Cloud and records in the settings whether it
+/// still has to go, so [`start_retry`] can send it later.
+async fn join_and_record(ctx: &Ctx, base: &str, email: &str, name: Option<&str>) -> Result<Value, String> {
+    let body = signup_body(email, name)?;
+    let outcome = join(base, &body).await;
+    let pending = pending_after(email, &outcome);
+    let now = crate::settings::current(ctx).await;
+    if now.get("userEmailPending").unwrap_or(&Value::Null) != &pending {
+        crate::settings::update(ctx, json!({ "userEmailPending": pending })).await?;
+    }
+    outcome.map_err(|e| if e.retry { format!("{} Nekko will try again later.", e.message) } else { e.message })
+}
+
+/// What the retry should do with the saved settings.
+#[derive(Debug, PartialEq)]
+enum Retry {
+    Nothing,
+    /// The pending address is no longer the person's email: forget it.
+    Forget,
+    Send {
+        email: String,
+        name: Option<String>,
+    },
+}
+
+fn retry_for(settings: &Value) -> Retry {
+    let Some(pending) = settings["userEmailPending"].as_str().map(str::trim).filter(|p| !p.is_empty()) else {
+        return Retry::Nothing;
+    };
+    let email = settings["userEmail"].as_str().unwrap_or_default().trim();
+    if !email.eq_ignore_ascii_case(pending) {
+        return Retry::Forget;
+    }
+    let name = settings["userName"].as_str().map(str::trim).filter(|n| !n.is_empty()).map(String::from);
+    Retry::Send { email: email.to_string(), name }
+}
+
+/// When the first retry runs after start, and how often after that.
+const FIRST_RETRY: std::time::Duration = std::time::Duration::from_secs(60);
+const RETRY_EVERY: std::time::Duration = std::time::Duration::from_secs(6 * 60 * 60);
+
+/// Sends a setup email that didn't reach Nekko Cloud, while this daemon runs.
+pub fn start_retry(ctx: Ctx) {
+    tokio::spawn(async move {
+        tokio::time::sleep(FIRST_RETRY).await;
+        loop {
+            match retry_for(&crate::settings::current(&ctx).await) {
+                Retry::Nothing => {}
+                Retry::Forget => {
+                    let _ = crate::settings::update(&ctx, json!({ "userEmailPending": null })).await;
+                }
+                // Switched off in Settings > Connections: wait, rather than log a refusal every time.
+                Retry::Send { .. } if !nekko_net::allowed("updates-email") => {}
+                Retry::Send { email, name } => {
+                    let _ = join_and_record(&ctx, &cloud_url(), &email, name.as_deref()).await;
+                }
+            }
+            tokio::time::sleep(RETRY_EVERY).await;
+        }
+    });
 }
 
 /// The sheet's screenshots as `{ type, data }`: the file name stays on this
@@ -313,6 +401,45 @@ mod tests {
         let req = server.await.unwrap();
         assert!(req.starts_with("POST /v1/signups "), "{req}");
         assert!(req.contains(r#""list":"app""#), "{req}");
+    }
+
+    #[tokio::test]
+    async fn join_retries_outages_but_not_a_refused_address() {
+        let body = signup_body("a@b.co", None).unwrap();
+        for (status, retry) in
+            [("429 Too Many Requests", true), ("503 Service Unavailable", true), ("400 Bad Request", false)]
+        {
+            let (base, _server) = answer_once(status, r#"{"error":"Enter a valid email address."}"#).await;
+            assert_eq!(join(&base, &body).await.unwrap_err().retry, retry, "{status}");
+        }
+        // Nothing listening: offline.
+        let gone = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base = format!("http://{}", gone.local_addr().unwrap());
+        drop(gone);
+        assert!(join(&base, &body).await.unwrap_err().retry);
+    }
+
+    #[test]
+    fn pending_is_kept_only_while_another_try_can_help() {
+        let again = || Err(JoinError { message: "offline".into(), retry: true });
+        let refused = || Err(JoinError { message: "bad".into(), retry: false });
+        assert_eq!(pending_after(" a@b.co ", &again()), json!("a@b.co"));
+        assert_eq!(pending_after("a@b.co", &refused()), Value::Null);
+        assert_eq!(pending_after("a@b.co", &Ok(json!({ "ok": true }))), Value::Null);
+    }
+
+    #[test]
+    fn retry_sends_only_the_current_email() {
+        assert_eq!(retry_for(&json!({})), Retry::Nothing);
+        assert_eq!(retry_for(&json!({ "userEmail": "a@b.co", "userEmailPending": null })), Retry::Nothing);
+        assert_eq!(retry_for(&json!({ "userEmail": "a@b.co", "userEmailPending": " " })), Retry::Nothing);
+        assert_eq!(
+            retry_for(&json!({ "userEmail": "A@b.co", "userEmailPending": "a@b.co", "userName": " Ada " })),
+            Retry::Send { email: "A@b.co".into(), name: Some("Ada".into()) }
+        );
+        // Changed or cleared since: the old address is not sent.
+        assert_eq!(retry_for(&json!({ "userEmail": "new@b.co", "userEmailPending": "a@b.co" })), Retry::Forget);
+        assert_eq!(retry_for(&json!({ "userEmail": "", "userEmailPending": "a@b.co" })), Retry::Forget);
     }
 
     #[tokio::test]

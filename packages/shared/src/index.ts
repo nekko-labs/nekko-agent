@@ -43,6 +43,7 @@ export * from './guardrails.js';
 export * from './context.js';
 export * from './memory.js';
 export * from './workspace.js';
+export * from './storage.js';
 export * from './files.js';
 export * from './logs.js';
 export * from './privacy.js';

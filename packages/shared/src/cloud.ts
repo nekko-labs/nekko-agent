@@ -74,7 +74,8 @@ export interface CloudStatus {
      */
     joinCode: string | null;
     devices: SyncDevice[];
-    usage: { bytes: number; limit: number } | null;
+    /** `parts`: what the storage holds by kind (Settings → Storage); absent from older services. Shares count toward the limit on top of `bytes`. */
+    usage: { bytes: number; limit: number; parts?: { chats: number; library: number; revisions: number; shares: number } } | null;
   };
 }
 

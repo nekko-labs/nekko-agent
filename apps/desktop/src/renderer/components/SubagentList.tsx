@@ -78,7 +78,8 @@ function SubagentRow({ session, status, selected, last, rowRef, onOpen }: {
     <button type="button" onClick={() => onOpen(session.id)} data-subagent-row={session.id}
       className={`subagent-row relative flex items-center gap-2 rounded-lg py-1 pl-7 pr-2 text-left text-xs transition-colors duration-(--dur-fast) ${selected ? 'bg-accent-soft text-ink' : 'text-ink-soft hover:bg-surface-2'}`}>
       <span aria-hidden data-subagent-tree={last ? 'last' : 'tee'} className="subagent-tree" />
-      <StatusIcon status={status} />
+      {/* The done check trails the row, so the text starts flush left; the other glyphs lead it. */}
+      {status !== 'done' && <StatusIcon status={status} />}
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1">
           <span data-subagent-title className="min-w-0 flex-1 truncate font-semibold text-ink" title={session.title} dir="auto">{session.title || 'Untitled chat'}</span>
@@ -86,6 +87,7 @@ function SubagentRow({ session, status, selected, last, rowRef, onOpen }: {
         </span>
         <SubagentRoute child={session} modelFirst />
       </span>
+      {status === 'done' && <StatusIcon status={status} />}
     </button>
   </div>;
 }

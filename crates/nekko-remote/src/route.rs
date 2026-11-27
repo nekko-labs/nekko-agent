@@ -159,7 +159,12 @@ mod cloud_tests {
         assert!(is_cloud_relay("wss://nekko-agent-relay.fly.dev/"));
         assert!(is_cloud_relay("WSS://Nekko-Agent-Relay.fly.dev"));
         assert_eq!(via(CLOUD_RELAY_URL), "cloud");
-        for other in ["ws://gomi.tail1234.ts.net:4400", "ws://192.168.1.4:4400", "wss://relay.example.com", "wss://nekko-agent-relay.fly.dev.evil.com"] {
+        for other in [
+            "ws://gomi.tail1234.ts.net:4400",
+            "ws://192.168.1.4:4400",
+            "wss://relay.example.com",
+            "wss://nekko-agent-relay.fly.dev.evil.com",
+        ] {
             assert_eq!(via(other), "direct", "{other}");
         }
     }

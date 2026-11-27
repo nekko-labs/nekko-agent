@@ -17,6 +17,22 @@ const row = (kind: ConnectorKind, stage: SetupStage, extra: Partial<React.Compon
     />,
   );
 
+describe('the Nekko Labs tag', () => {
+  it('marks only Floop in the catalog, by an explicit flag', () => {
+    expect(CONNECTOR_CATALOG.filter((c) => c.nekkoLabs).map((c) => c.kind)).toEqual(['floop']);
+  });
+
+  it('shows "Nekko Labs" with a hover title on Floop and on no other row', () => {
+    const floop = row('floop', 'closed');
+    expect(floop).toContain('>Nekko Labs<');
+    expect(floop).toContain('title="Made by Nekko Labs"');
+    expect(row('github', 'closed')).not.toContain('Nekko Labs');
+    expect(row('floop', 'closed', { connected: true })).toContain('>Nekko Labs<');
+    const grid = renderToStaticMarkup(<ConnectorGrid />);
+    expect(grid.match(/>Nekko Labs</g)?.length).toBe(1);
+  });
+});
+
 describe('one-click connector setup (#2492)', () => {
   it('starts every connector as one Connect button with no key field', () => {
     const html = renderToStaticMarkup(<ConnectorGrid />);

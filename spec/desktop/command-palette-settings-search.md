@@ -35,7 +35,7 @@ User intent (Philip, 2026-11-09): "I want the ctrl+k to be able to search anythi
 
 ## Privacy and safety
 
-The search runs in the renderer over the settings list and chats already on this machine; nothing is sent anywhere and nothing new is stored. Transcripts are read through the same local `getSession` the chat view uses and kept only in memory while the app runs. A setting change is the same local settings write as on the Settings page, with the same error toast.
+The search runs in the renderer over the settings list and chats already on this machine; nothing is sent anywhere and nothing new is stored. Message text is read through the local text-only `sessions:finderText` channel (messages and file names, no pictures or tool output; see the chat finder spec) and kept only in memory while the app runs. A setting change is the same local settings write as on the Settings page, with the same error toast.
 
 ## Status
 

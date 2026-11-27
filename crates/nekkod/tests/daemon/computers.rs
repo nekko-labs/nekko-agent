@@ -14,24 +14,27 @@ struct Room {
     clients: HashMap<String, Tx>,
 }
 
-/// The relay's frame rules (apps/relay-server/src/server.ts), one room.
+/// The relay's frame rules (apps/relay-server/src/server.ts), by room.
 async fn relay() -> String {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("ws://127.0.0.1:{}", listener.local_addr().unwrap().port());
-    let room: Arc<Mutex<Room>> = Arc::default();
+    let rooms: Arc<Mutex<HashMap<String, Room>>> = Arc::default();
     tokio::spawn(async move {
         let mut next = 0;
         while let Ok((tcp, _)) = listener.accept().await {
             next += 1;
-            let (room, cid) = (room.clone(), format!("c{next}"));
+            let (rooms, cid) = (rooms.clone(), format!("c{next}"));
             tokio::spawn(async move {
                 let mut agent = false;
+                let mut code = String::new();
                 #[allow(clippy::result_large_err)] // tungstenite's callback signature
                 let ws = tokio_tungstenite::accept_hdr_async(
                     tcp,
                     |req: &tokio_tungstenite::tungstenite::handshake::server::Request,
                      res: tokio_tungstenite::tungstenite::handshake::server::Response| {
                         agent = req.uri().to_string().contains("role=agent");
+                        let q = req.uri().query().unwrap_or_default();
+                        code = q.split('&').find_map(|kv| kv.strip_prefix("room=")).unwrap_or_default().to_string();
                         Ok(res)
                     },
                 )
@@ -49,7 +52,8 @@ async fn relay() -> String {
                 });
                 let text = |v: Value| Message::text(v.to_string());
                 {
-                    let mut r = room.lock().unwrap();
+                    let mut all = rooms.lock().unwrap();
+                    let r = all.entry(code.clone()).or_default();
                     if agent {
                         r.agent = Some(tx.clone());
                         for (id, c) in &r.clients {
@@ -67,7 +71,8 @@ async fn relay() -> String {
                 }
                 while let Some(Ok(m)) = stream.next().await {
                     let Message::Text(t) = m else { continue };
-                    let r = room.lock().unwrap();
+                    let mut all = rooms.lock().unwrap();
+                    let r = all.entry(code.clone()).or_default();
                     if !agent {
                         if let Some(a) = &r.agent {
                             let _ = a.send(text(json!({ "type": "c", "cid": cid, "data": t.as_str() })));
@@ -90,7 +95,8 @@ async fn relay() -> String {
                         _ => {}
                     }
                 }
-                let mut r = room.lock().unwrap();
+                let mut all = rooms.lock().unwrap();
+                let r = all.entry(code.clone()).or_default();
                 if agent {
                     r.agent = None;
                     for c in r.clients.values() {
@@ -216,6 +222,65 @@ async fn one_daemon_pairs_with_another_and_calls_across() {
     window.wait_state(&id, "denied").await;
 
     drop(window);
+    drop(laptop);
+    drop(host);
+    let _ = std::fs::remove_dir_all(host_dir);
+    let _ = std::fs::remove_dir_all(laptop_dir);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_computer_on_the_network_pairs_through_the_lobby_once_the_host_says_pair() {
+    let url = relay().await;
+    let (host_dir, laptop_dir) = (scratch("lobby-host"), scratch("lobby-laptop"));
+    let host = start_with_env(&host_dir, json!({}), FILE_VAULT);
+    let laptop = start_with_env(&laptop_dir, json!({}), FILE_VAULT);
+    post(host.port, "remote:enable", json!([url]), Some(TOKEN)).await;
+    let (_, pairing) = post(host.port, "remote:pairing", json!([]), Some(TOKEN)).await;
+    let (_, grant) = post(host.port, "remote:pairComputer", json!([]), Some(TOKEN)).await;
+    let link = json!({ "relayUrl": url, "room": pairing["room"], "key": pairing["key"], "hostKey": pairing["hostKey"], "pair": grant["code"], "alts": [] });
+
+    // The host opens its lobby with the link it would have shown; only its window can.
+    let mut at_host = Window::open(host.port).await;
+    let (code, _) = post(host.port, "computers:lobbyOpen", json!([link]), Some(TOKEN)).await;
+    assert_ne!(code, 200, "an agent's path never opens a lobby");
+    let opened = at_host.call("computers:lobbyOpen", json!([link])).await.unwrap();
+    let lobby = opened["lobby"].as_str().unwrap().to_string();
+
+    // The laptop joins as it would from On this network, and gets the code to compare.
+    let mut window = Window::open(laptop.port).await;
+    let joined =
+        window.call("computers:lobbyJoin", json!([{ "lobby": lobby, "relay": url, "name": "gomi" }])).await.unwrap();
+    let shown = joined["code"].as_str().unwrap();
+    assert_eq!(shown.len(), 7, "{joined}");
+    assert!(
+        window.call("computers:list", json!([])).await.unwrap().as_array().unwrap().is_empty(),
+        "nothing before Pair"
+    );
+
+    // The host's owner taps Pair once it asks; the laptop pairs with the sealed link.
+    let mut answered = false;
+    for _ in 0..100 {
+        if at_host.call("computers:lobbyAnswer", json!([true])).await.is_ok() {
+            answered = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert!(answered, "the host asked");
+    let mut id = String::new();
+    for _ in 0..200 {
+        let list = window.call("computers:list", json!([])).await.unwrap();
+        if let Some(c) = list.as_array().unwrap().first() {
+            id = c["id"].as_str().unwrap().to_string();
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert!(!id.is_empty(), "paired");
+    window.wait_state(&id, "online").await;
+
+    drop(window);
+    drop(at_host);
     drop(laptop);
     drop(host);
     let _ = std::fs::remove_dir_all(host_dir);

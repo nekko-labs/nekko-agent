@@ -47,6 +47,8 @@ describe("parseSignup", () => {
   it("rejects a bad email and an unknown list", () => {
     expect(parseSignup({ email: "nope" }).ok).toBe(false);
     expect(parseSignup({ email: "a@b.co", list: "Bad List" }).ok).toBe(false);
+    expect(parseSignup({ email: "a@b.co", list: "made-up" }).ok).toBe(false);
+    expect(parseSignup({ email: "a@b.co", list: "app" }).ok).toBe(true);
   });
 
   it("keeps only a path for source and only utm_* keys", () => {

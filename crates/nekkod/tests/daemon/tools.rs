@@ -445,7 +445,7 @@ async fn orchestrate_uses_admitted_models_and_keeps_state_in_the_current_request
             (format!("p2::{worker}")): "Wrong route override."
         }}
     })).await;
-    for text in ["Coordinate this task", "Review current progress"] {
+    for text in ["Coordinate this task", "Review the worker progress"] {
         let opts = json!({"sessionId": "s_roles", "providerId": "p1", "modelId": lead, "text": text});
         let (status, body) = post(rig.d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
         assert_eq!(status, 200, "{body}");
@@ -624,7 +624,7 @@ async fn orchestrate_persists_the_final_attempt_outcome_for_followup_after_daemo
         rig.d.child.kill().unwrap();
         rig.d.child.wait().unwrap();
         rig.d = start_with(&rig.data);
-        let (code, body) = post(rig.d.port, "chat:send", opts("Review the previous outcome"), Some(TOKEN)).await;
+        let (code, body) = post(rig.d.port, "chat:send", opts("Review the worker outcome"), Some(TOKEN)).await;
         assert_eq!(code, 200, "{name}: {body}");
         let requests = model.requests.lock().unwrap();
         let requests: Vec<_> = requests
@@ -700,6 +700,45 @@ async fn orchestrate_projects_exact_inferred_and_neutral_books_only_for_the_sele
         }
     }
     assert!(!saved_session(&rig, "s_books").to_string().contains("Built-in model playbook"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn orchestrate_uses_direct_tools_for_simple_turns_and_saves_actual_strategy() {
+    let rig = turn_rig(
+        "orchestrate-selective",
+        json!({ "id": "s_strategy", "title": "Fixture", "titleAuto": false, "orchestrate": true,
+            "toolApproach": "list", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1 }),
+    );
+    let model = scripted_model(vec![say_text("Done."); 3]).await;
+    write_settings(&rig, scripted_settings(&rig, &model)).await;
+    for (text, coord, reason) in [
+        ("Read the first file", false, "not-needed"),
+        ("Delegate a review of the first file", true, "requested"),
+        ("Please do not delegate the next lookup", false, "not-needed"),
+    ] {
+        let (status, body) = post(
+            rig.d.port,
+            "chat:send",
+            json!([{
+                "sessionId": "s_strategy", "providerId": "p1", "modelId": "synthetic", "text": text
+            }]),
+            Some(TOKEN),
+        )
+        .await;
+        assert_eq!(status, 200, "{body}");
+        {
+            let requests = model.requests.lock().unwrap();
+            let req = requests.last().unwrap();
+            assert_eq!(req["messages"][0]["content"].as_str().unwrap().contains("Orchestrate coordinator:"), coord);
+            assert_eq!(req["tools"].as_array().unwrap().iter().any(|t| t["function"]["name"] == "spawn_agent"), coord);
+        }
+        let saved = saved_session(&rig, "s_strategy");
+        let user = saved["messages"].as_array().unwrap().iter().rfind(|m| m["role"] == "user").unwrap();
+        assert_eq!(
+            user["turnStrategy"],
+            json!({ "tools": "list", "orchestration": if coord { "coordinator" } else { "direct" }, "reason": reason })
+        );
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]

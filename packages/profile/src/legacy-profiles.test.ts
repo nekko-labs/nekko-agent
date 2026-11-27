@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, statSync, symlinkSync, truncateSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { cleanup, consolidate, detectLegacy, legacyEnv, summarize, unmerged, type LegacyEnv } from './legacy-profiles.js';
 
 const dirs: string[] = [];
@@ -234,5 +234,348 @@ describe('cleanup', () => {
     const { env } = world(); const s = seed(env);
     expect(unmerged(s.main, env.target)).toContain('sessions/s_old1.json');
     expect(unmerged(s.main, env.target)).toContain('usage.jsonl');
+  });
+});
+
+describe('CI runners and other data folders', () => {
+  /** An old profile with a CI runner, as the desktop app leaves it, and a target with one of its own. */
+  function seedRunner(env: LegacyEnv) {
+    const s = seed(env);
+    const runners = join(s.main, 'runners');
+    put(join(runners, 'runners.json'), [
+      { id: 'r-old', label: 'nekko-cloud-mac', github: { appId: 1, installationId: 2 }, image: join(runners, 'images', 'custom') },
+      { id: 'r-both', label: 'from-source' },
+    ]);
+    put(join(runners, 'images', 'default', 'disk.img'), 'old image');
+    put(join(runners, 'images', 'custom', 'disk.img'), 'custom image');
+    put(join(runners, 'images', 'default.new', 'build.json'), { step: 'install' });
+    put(join(runners, 'images', 'cache', 'restore.ipsw'), 'download');
+    put(join(runners, 'images', 'linux-cache', 'kernel'), 'download');
+    put(join(runners, 'images', 'linux.old', 'vmlinux'), 'replaced');
+    put(join(runners, 'audit.jsonl'), jsonl([{ ts: 1, event: 'job' }]));
+    put(join(runners, 'logs', 'job-1.log'), 'log');
+    put(join(runners, 'install-id'), 'oldid000');
+    put(join(runners, 'memory.json'), { samples: [1] });
+    put(join(runners, 'vms', 'vm-1', 'disk.img'), 'clone');
+    put(join(s.main, 'plugins', 'cat', 'manifest.json'), { name: 'cat', root: join(s.main, 'plugins', 'cat') });
+
+    put(join(env.target, 'runners', 'runners.json'), [{ id: 'r-both', label: 'from-target' }]);
+    put(join(env.target, 'runners', 'images', 'default', 'disk.img'), 'the image this Mac built');
+    put(join(env.target, 'runners', 'install-id'), 'newid000');
+    return { ...s, runners };
+  }
+
+  it('merges runner records by id, the target winning, with the images they use', () => {
+    const { env } = world(); const s = seedRunner(env);
+    const report = consolidate(detectLegacy(env), env);
+    const records = json(join(env.target, 'runners', 'runners.json')) as Array<{ id: string; label: string; image?: string }>;
+    expect(records.map((r) => r.id)).toEqual(['r-both', 'r-old']);
+    expect(records[0].label).toBe('from-target');
+    expect(records[1].image).toBe(join(env.target, 'runners', 'images', 'custom'));
+    expect(readFileSync(join(env.target, 'runners', 'images', 'custom', 'disk.img'), 'utf8')).toBe('custom image');
+    expect(readFileSync(join(env.target, 'runners', 'images', 'default', 'disk.img'), 'utf8')).toBe('the image this Mac built');
+    expect(readFileSync(join(env.target, 'runners', 'install-id'), 'utf8')).toBe('newid000');
+    expect(existsSync(join(env.target, 'runners', 'vms'))).toBe(false);
+    for (const local of ['default.new', 'cache', 'linux-cache', 'linux.old']) expect(existsSync(join(env.target, 'runners', 'images', local))).toBe(false);
+    expect(existsSync(join(env.target, 'runners', 'logs', 'job-1.log'))).toBe(true);
+    expect(readFileSync(join(env.target, 'runners', 'audit.jsonl'), 'utf8')).toContain('"event":"job"');
+    expect(report.roots.find((r) => r.source === s.main)?.runners).toBe(1);
+    expect(json(join(report.backupDir, 'source-1-.agent-nekko', 'runners', 'runners.json'))).toHaveLength(2);
+  });
+
+  it('moves any other known data folder, rewriting paths into it', () => {
+    const { env } = world(); seedRunner(env);
+    consolidate(detectLegacy(env), env);
+    expect(json(join(env.target, 'plugins', 'cat', 'manifest.json')).root).toBe(join(env.target, 'plugins', 'cat'));
+  });
+
+  it('reports runner records and data folders the target lacks', () => {
+    const { env } = world(); const s = seedRunner(env);
+    const left = unmerged(s.main, env.target);
+    expect(left).toContain('runners/runners.json');
+    expect(left).toContain('runners/images/custom');
+    expect(left).toContain('plugins/cat/manifest.json');
+    expect(left.filter((f) => /install-id|memory\.json|vms|\.new|\.old|cache/.test(f))).toEqual([]);
+  });
+
+  it('keeps an old folder whose runners were not merged, and removes it once they are', () => {
+    const { env } = world(); seedRunner(env);
+    const items = detectLegacy(env);
+    const before = cleanup(items, env, { uninstall: () => {} });
+    expect(before.kept.map((k) => k.path)).toContain(join(env.home, '.agent-nekko'));
+    expect(existsSync(join(env.home, '.agent-nekko', 'runners', 'runners.json'))).toBe(true);
+
+    consolidate(items, env);
+    const after = cleanup(items, env, { uninstall: () => {} });
+    expect(after.kept).toEqual([]);
+    expect(after.removed).toContain(join(env.home, '.agent-nekko'));
+    expect((json(join(env.target, 'runners', 'runners.json')) as unknown[])).toHaveLength(2);
+  });
+
+  it('keeps an old folder holding a file that clashes with a different one in the target', () => {
+    const { env } = world(); const s = seed(env);
+    put(join(s.main, 'skills', 'a', 'SKILL.md'), 'old text');
+    put(join(env.target, 'skills', 'a', 'SKILL.md'), 'newer, different text');
+    const items = detectLegacy(env);
+    consolidate(items, env);
+    const report = cleanup(items, env, { uninstall: () => {} });
+    expect(report.kept.map((k) => k.path)).toEqual([join(env.home, '.agent-nekko')]);
+    expect(report.kept[0].reason).toContain('skills/a/SKILL.md');
+  });
+
+  it('leaves a moved JSON file byte for byte when it holds no old path', () => {
+    const { env } = world(); const s = seed(env);
+    // A Latin-1 byte inside a string: still parses, but would not survive a UTF-8 round trip.
+    const bytes = Buffer.concat([Buffer.from('{\n\t"name": "caf'), Buffer.from([0xe9]), Buffer.from('",\n\t"version": "1.0"\n}\n')]);
+    const file = join(s.main, 'workflow-checkouts', 'repo', 'package.json');
+    mkdirSync(join(s.main, 'workflow-checkouts', 'repo'), { recursive: true });
+    writeFileSync(file, bytes);
+    chmodSync(file, 0o644);
+
+    consolidate(detectLegacy(env), env);
+    const moved = join(env.target, 'workflow-checkouts', 'repo', 'package.json');
+    expect(readFileSync(moved).equals(bytes)).toBe(true);
+    if (process.platform !== 'win32') expect(statSync(moved).mode & 0o777).toBe(0o644);
+  });
+
+  it('copies a root JSON file the target lacks byte for byte when it holds no old path', () => {
+    const { env } = world(); const s = seed(env);
+    const bytes = Buffer.concat([Buffer.from('{"label":"caf'), Buffer.from([0xe9]), Buffer.from('"}')]);
+    writeFileSync(join(s.main, 'design.json'), bytes);
+    chmodSync(join(s.main, 'design.json'), 0o644);
+
+    consolidate(detectLegacy(env), env);
+    expect(readFileSync(join(env.target, 'design.json')).equals(bytes)).toBe(true);
+    if (process.platform !== 'win32') expect(statSync(join(env.target, 'design.json')).mode & 0o777).toBe(0o600);
+  });
+
+  it('keeps an old folder until the target holds every key of a runner JSON file', () => {
+    const { env } = world(); const s = seed(env);
+    put(join(s.main, 'runners', 'secrets.json'), { 'github-app-1': 'old key', 'github-app-2': 'other key' });
+    put(join(env.target, 'runners', 'secrets.json'), { 'github-app-1': 'target key' });
+    expect(unmerged(s.main, env.target)).toContain('runners/secrets.json');
+
+    consolidate(detectLegacy(env), env);
+    expect(unmerged(s.main, env.target)).not.toContain('runners/secrets.json');
+    expect(json(join(env.target, 'runners', 'secrets.json'))).toEqual({ 'github-app-1': 'target key', 'github-app-2': 'other key' });
+  });
+
+  it('counts an old runner file that names old paths as merged once its entries are rewritten into the target', () => {
+    const { env } = world(); const s = seed(env);
+    put(join(s.main, 'runners', 'mounts.json'), [{ path: join(s.main, 'runners', 'images', 'custom') }]);
+    expect(unmerged(s.main, env.target)).toContain('runners/mounts.json');
+
+    consolidate(detectLegacy(env), env);
+    expect(json(join(env.target, 'runners', 'mounts.json'))).toEqual([{ path: join(env.target, 'runners', 'images', 'custom') }]);
+    expect(unmerged(s.main, env.target)).not.toContain('runners/mounts.json');
+  });
+
+  it('counts no runners for a runner record file that does not parse', () => {
+    const { env } = world(); const s = seed(env);
+    put(join(s.main, 'runners', 'runners.json'), 'not json');
+
+    const report = consolidate(detectLegacy(env), env);
+    expect(readFileSync(join(env.target, 'runners', 'runners.json'), 'utf8')).toBe('not json');
+    expect(report.roots.find((r) => r.source === s.main)?.runners).toBe(0);
+  });
+
+  it('still reports a root JSON file it copied, even an empty one', () => {
+    const { env } = world(); const s = seed(env);
+    put(join(s.main, 'design.json'), {});
+
+    const report = consolidate(detectLegacy(env), env);
+    expect(report.roots.find((r) => r.source === s.main)?.files).toContain('design.json');
+  });
+
+  it('does not keep an old folder for a runner VM log that clashes', () => {
+    const { env } = world(); const s = seed(env);
+    put(join(s.main, 'runners', 'logs', 'vm-1.log'), 'old console');
+    put(join(s.main, 'runners', 'logs', 'vm-2.log'), 'only here');
+    put(join(env.target, 'runners', 'logs', 'vm-1.log'), 'a longer console from this Mac');
+    const items = detectLegacy(env);
+
+    const merged = consolidate(items, env);
+    expect(readFileSync(join(env.target, 'runners', 'logs', 'vm-2.log'), 'utf8')).toBe('only here');
+    expect(merged.roots.flatMap((r) => r.conflicts).filter((c) => c.includes(join('runners', 'logs')))).toEqual([]);
+    const report = cleanup(items, env, { uninstall: () => {} });
+    expect(report.kept).toEqual([]);
+    expect(report.removed).toContain(s.main);
+  });
+});
+
+describe('what cleanup counts as merged', () => {
+  it('keeps an old folder holding a same-length file that differs from the target copy', () => {
+    const { env } = world(); const s = seed(env);
+    put(join(s.main, 'skills', 'a', 'SKILL.md'), 'Use teh tool');
+    put(join(env.target, 'skills', 'a', 'SKILL.md'), 'Use the tool');
+    const items = detectLegacy(env);
+
+    consolidate(items, env);
+    expect(unmerged(s.main, env.target)).toContain('skills/a/SKILL.md');
+    const report = cleanup(items, env, { uninstall: () => {} });
+    expect(report.kept.map((k) => k.path)).toContain(join(env.home, '.agent-nekko'));
+  });
+
+  it('removes an old folder whose clashing file is identical', () => {
+    const { env } = world(); const s = seed(env);
+    put(join(s.main, 'skills', 'a', 'SKILL.md'), 'Use the tool');
+    put(join(env.target, 'skills', 'a', 'SKILL.md'), 'Use the tool');
+    const items = detectLegacy(env);
+
+    consolidate(items, env);
+    expect(unmerged(s.main, env.target)).toEqual([]);
+    expect(cleanup(items, env, { uninstall: () => {} }).removed).toContain(join(env.home, '.agent-nekko'));
+  });
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('keeps an old folder holding a clashing file it cannot read', () => {
+    const { env } = world(); const s = seed(env);
+    put(join(s.main, 'skills', 'a', 'SKILL.md'), 'Use the tool');
+    put(join(env.target, 'skills', 'a', 'SKILL.md'), 'Use the tool');
+    chmodSync(join(s.main, 'skills', 'a', 'SKILL.md'), 0o000);
+    try {
+      expect(unmerged(s.main, env.target)).toContain('skills/a/SKILL.md');
+    } finally {
+      chmodSync(join(s.main, 'skills', 'a', 'SKILL.md'), 0o600);
+    }
+  });
+
+  // Sparse files: no disk is written. Identical bytes, yet too large to read at launch.
+  it.skipIf(process.platform === 'win32')('keeps an old folder holding a clashing file too large to compare', () => {
+    const { env } = world(); const s = seed(env);
+    const size = 256 * 1024 * 1024 + 1;
+    for (const root of [s.main, env.target]) {
+      put(join(root, 'sandboxes', 'box', 'disk.img'), '');
+      truncateSync(join(root, 'sandboxes', 'box', 'disk.img'), size);
+    }
+    expect(unmerged(s.main, env.target)).toContain('sandboxes/box/disk.img');
+  });
+
+  it('still compares model downloads by size', () => {
+    const { env } = world(); const s = seed(env);
+    put(join(s.main, 'models', 'chat', 'x.gguf'), 'aaaa');
+    put(join(env.target, 'models', 'chat', 'x.gguf'), 'bbbb');
+    expect(unmerged(s.main, env.target)).not.toContain('models/chat/x.gguf');
+  });
+
+  it('keeps an old folder holding a folder the merge does not know, and names it', () => {
+    const { env } = world(); const s = seed(env);
+    put(join(s.main, 'notes-v2', 'mine.md'), 'mine');
+    const items = detectLegacy(env);
+
+    consolidate(items, env);
+    expect(existsSync(join(s.main, 'notes-v2', 'mine.md'))).toBe(true);
+    expect(existsSync(join(env.target, 'notes-v2'))).toBe(false);
+    expect(unmerged(s.main, env.target)).toEqual(['notes-v2/']);
+    const report = cleanup(items, env, { uninstall: () => {} });
+    const kept = report.kept.find((k) => k.path === join(env.home, '.agent-nekko'));
+    expect(kept?.reason).toContain('notes-v2/');
+  });
+
+  it('treats caches and Chromium folders in a data root as disposable', () => {
+    const { env } = world();
+    const root = join(env.appData, '@open-paw', 'desktop');
+    put(join(root, 'settings.json'), { theme: 'old' });
+    put(join(root, 'Local State'), '{}');
+    for (const dir of ['Crashpad', 'IndexedDB', 'GPUCache', 'DawnGraphiteCache', 'catalog', 'agent-browser']) put(join(root, dir, 'x'), 'x');
+    put(join(env.target, 'settings.json'), { theme: 'new' });
+    const items = detectLegacy(env);
+
+    consolidate(items, env);
+    expect(unmerged(root, env.target)).toEqual([]);
+    expect(cleanup(items, env, { uninstall: () => {} }).removed).toContain(join(env.appData, '@open-paw'));
+  });
+
+  describe.skipIf(process.platform === 'win32')('symlinks', () => {
+    /** A skill a person keeps in their own folder, linked into the data folder. */
+    function linkedSkill(root: string, s: { main: string }) {
+      const own = join(root, 'dev', 'my-skill');
+      put(join(own, 'SKILL.md'), 'mine');
+      put(join(own, 'meta.json'), { home: join(s.main, 'skills') });
+      return own;
+    }
+
+    it('moves a linked skill as the link, leaving the folder it points at alone', () => {
+      const { root, env } = world(); const s = seed(env);
+      const own = linkedSkill(root, s);
+      mkdirSync(join(s.main, 'skills'), { recursive: true });
+      symlinkSync(own, join(s.main, 'skills', 'my-skill'));
+      const items = detectLegacy(env);
+
+      consolidate(items, env);
+      expect(readlinkSync(join(env.target, 'skills', 'my-skill'))).toBe(own);
+      expect(json(join(own, 'meta.json')).home).toBe(join(s.main, 'skills'));
+      expect(unmerged(s.main, env.target)).toEqual([]);
+      expect(cleanup(items, env, { uninstall: () => {} }).removed).toContain(s.main);
+      expect(readFileSync(join(own, 'SKILL.md'), 'utf8')).toBe('mine');
+    });
+
+    it('keeps an old folder whose linked skill clashes with a different one in the target', () => {
+      const { root, env } = world(); const s = seed(env);
+      const own = linkedSkill(root, s);
+      mkdirSync(join(s.main, 'skills'), { recursive: true });
+      symlinkSync(own, join(s.main, 'skills', 'my-skill'));
+      put(join(env.target, 'skills', 'my-skill', 'SKILL.md'), 'another');
+      const items = detectLegacy(env);
+
+      consolidate(items, env);
+      expect(unmerged(s.main, env.target)).toEqual(['skills/my-skill']);
+      expect(cleanup(items, env, { uninstall: () => {} }).kept[0].reason).toContain('skills/my-skill');
+      expect(readlinkSync(join(s.main, 'skills', 'my-skill'))).toBe(own);
+    });
+
+    it('keeps a relative link pointing at the same place after the move', () => {
+      const { root, env } = world(); const s = seed(env);
+      const own = linkedSkill(root, s);
+      mkdirSync(join(s.main, 'skills'), { recursive: true });
+      symlinkSync(relative(join(s.main, 'skills'), own), join(s.main, 'skills', 'my-skill'));
+      const items = detectLegacy(env);
+
+      consolidate(items, env);
+      expect(realpathSync(join(env.target, 'skills', 'my-skill'))).toBe(realpathSync(own));
+      expect(unmerged(s.main, env.target)).toEqual([]);
+    });
+
+    it('moves a linked model folder as the link, and checks it', () => {
+      const { root, env } = world(); const s = seed(env);
+      const disk = join(root, 'external', 'big-model');
+      put(join(disk, 'w.gguf'), 'weights');
+      symlinkSync(disk, join(s.main, 'models', 'big-model'));
+      expect(unmerged(s.main, env.target)).toContain('models/big-model');
+
+      consolidate(detectLegacy(env), env);
+      expect(readlinkSync(join(env.target, 'models', 'big-model'))).toBe(disk);
+      expect(unmerged(s.main, env.target)).not.toContain('models/big-model');
+    });
+
+    it('moves a linked data folder as the link', () => {
+      const { root, env } = world(); const s = seed(env);
+      const own = join(root, 'dev', 'skills');
+      put(join(own, 'a', 'SKILL.md'), 'mine');
+      symlinkSync(own, join(s.main, 'skills'));
+      expect(unmerged(s.main, env.target)).toContain('skills');
+      const items = detectLegacy(env);
+
+      consolidate(items, env);
+      expect(readlinkSync(join(env.target, 'skills'))).toBe(own);
+      expect(existsSync(join(own, 'a', 'SKILL.md'))).toBe(true);
+      expect(unmerged(s.main, env.target)).toEqual([]);
+      expect(cleanup(items, env, { uninstall: () => {} }).removed).toContain(s.main);
+      expect(existsSync(join(own, 'a', 'SKILL.md'))).toBe(true);
+    });
+  });
+
+  it('does not report a nested data root against the root that holds it', () => {
+    const { env } = world();
+    const outer = join(env.home, '.open-paw');
+    put(join(outer, 'settings.json'), { theme: 'outer' });
+    put(join(outer, 'profile-b', 'sessions', 's_b.json'), { id: 's_b' });
+    put(join(env.target, 'settings.json'), { theme: 'new' });
+    const items = detectLegacy(env);
+    expect(items.find((i) => i.path === outer)?.dataRoots).toEqual([outer, join(outer, 'profile-b')]);
+
+    consolidate(items, env);
+    expect(unmerged(outer, env.target, items.find((i) => i.path === outer)!.dataRoots)).toEqual([]);
+    expect(cleanup(items, env, { uninstall: () => {} }).removed).toContain(outer);
+    expect(existsSync(join(env.target, 'sessions', 's_b.json'))).toBe(true);
   });
 });

@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Storage settings</title>
+<style>
+:root{
+  --paper:#fbfbfd;--surface:#fff;--surface-2:#f2f2f7;--ink:#17171d;--ink-soft:#52525e;--ink-faint:#6c6c77;--line:#e8e8ef;
+  --accent:#5a2352;--accent-2:#8a4a7f;--info:#1f6680;--warning:#c9871f;--warning-text:#8a5a0c;--danger:#d24738;--danger-text:#b23a2d;--neutral:#8a8f98;
+  --accent-soft:color-mix(in srgb,var(--accent) 13%,transparent);--danger-soft:color-mix(in srgb,var(--danger) 14%,transparent);--warning-soft:color-mix(in srgb,var(--warning) 14%,transparent);
+  --wash:color-mix(in srgb,var(--ink) 6%,transparent);--canvas:#ececf2;
+  --s1:var(--accent);--s2:var(--accent-2);--s3:var(--info);--s4:color-mix(in srgb,var(--info) 55%,var(--paper));--s5:color-mix(in srgb,var(--accent-2) 50%,var(--paper));--s6:color-mix(in srgb,var(--accent) 35%,var(--paper));
+  --other:color-mix(in srgb,var(--neutral) 45%,var(--paper));--free:var(--surface-2);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#0b0c14;--surface:#14151f;--surface-2:#1d1f2c;--ink:#eaeaf4;--ink-soft:#a3a4b6;--ink-faint:#87899b;--line:#252735;
+  --accent:#c084b5;--accent-2:#c99bb3;--info:#6bb8d4;--warning:#e0a44a;--warning-text:#e0a44a;--danger:#e0574a;--danger-text:#ef6a5d;--canvas:#05060b;
+  --s4:color-mix(in srgb,var(--info) 55%,var(--paper));--s5:color-mix(in srgb,var(--accent-2) 50%,var(--paper));--s6:color-mix(in srgb,var(--accent) 40%,var(--paper));--other:color-mix(in srgb,var(--neutral) 40%,var(--paper));
+}}
+:root[data-theme="dark"]{
+  --paper:#0b0c14;--surface:#14151f;--surface-2:#1d1f2c;--ink:#eaeaf4;--ink-soft:#a3a4b6;--ink-faint:#87899b;--line:#252735;
+  --accent:#c084b5;--accent-2:#c99bb3;--info:#6bb8d4;--warning:#e0a44a;--warning-text:#e0a44a;--danger:#e0574a;--danger-text:#ef6a5d;--canvas:#05060b;
+  --s4:color-mix(in srgb,var(--info) 55%,var(--paper));--s5:color-mix(in srgb,var(--accent-2) 50%,var(--paper));--s6:color-mix(in srgb,var(--accent) 40%,var(--paper));--other:color-mix(in srgb,var(--neutral) 40%,var(--paper));
+}
+*{box-sizing:border-box}
+body{margin:0;padding:24px 16px 48px;background:var(--canvas);color:var(--ink);font:14px/1.45 Geist,system-ui,-apple-system,"Segoe UI",sans-serif}
+header.top{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 20px;margin:0 0 20px}
+header.top h1{font-size:20px;font-weight:600;margin:0}
+header.top p{margin:0;color:var(--ink-faint);font-size:12px}
+header.top button{margin-left:auto}
+.canvas{display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start}
+figure{margin:0;max-width:100%}
+figcaption{font-size:12px;color:var(--ink-soft);margin:0 0 8px;max-width:720px}
+figcaption b{color:var(--ink);font-weight:500}
+.frame{background:var(--paper);border-radius:12px;box-shadow:0 1px 0 var(--line),0 8px 24px color-mix(in srgb,var(--ink) 8%,transparent);overflow:hidden}
+.w-wide{width:1040px}.w-page{width:760px}.w-narrow{width:360px}.w-pop{width:480px}
+@media (max-width:1100px){.w-wide,.w-page,.w-pop{width:100%}}
+.shell{display:grid;grid-template-columns:200px 1fr;gap:40px;padding:20px 40px 40px 20px}
+.rail{display:flex;flex-direction:column;gap:8px;font-size:14px}
+.rail .lbl{font-size:12px;font-weight:500;color:var(--ink-soft);margin-top:12px}
+.rail a{display:block;padding:8px 12px;border-radius:8px;color:var(--ink-soft);text-decoration:none}
+.rail a.on{background:var(--wash);color:var(--ink)}
+.content{min-width:0;max-width:720px}
+.pad{padding:20px}
+h2{font-size:20px;font-weight:600;margin:0 0 4px}
+h3{font-size:16px;font-weight:600;margin:0}
+.faint{color:var(--ink-faint);font-size:12px}
+.soft{color:var(--ink-soft)}
+.mono{font-family:"Geist Mono",ui-monospace,Menlo,monospace;font-size:12px}
+.sec{margin-top:40px}.sec:first-of-type{margin-top:20px}
+.sechead{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px}
+.bar{display:flex;height:20px;border-radius:6px;overflow:hidden;background:var(--free);margin:8px 0}
+.bar span{display:block;height:100%}
+.bar span+span{box-shadow:inset 2px 0 0 var(--paper)}
+.hatch{background:repeating-linear-gradient(135deg,var(--surface-2) 0 6px,color-mix(in srgb,var(--neutral) 30%,var(--paper)) 6px 9px)!important}
+.legend{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:var(--ink-soft)}
+.legend i,.sw{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px;vertical-align:1px}
+.rows{margin-top:20px}
+.row{display:grid;grid-template-columns:8px 1fr auto auto;align-items:center;gap:8px 16px;min-height:40px;padding:8px;border-radius:8px}
+.row:hover{background:var(--wash)}
+.row .t{font-weight:500}
+.row .d{font-size:12px;color:var(--ink-faint);margin-top:4px}
+.row .n{font-family:"Geist Mono",ui-monospace,Menlo,monospace;font-size:12px;color:var(--ink-soft);text-align:right;white-space:nowrap}
+.row .a{display:flex;gap:8px;justify-content:flex-end}
+.btn{font:inherit;font-size:13px;font-weight:500;height:28px;padding:0 12px;border:0;border-radius:8px;background:var(--wash);color:var(--ink);cursor:pointer;white-space:nowrap}
+.btn:hover{background:color-mix(in srgb,var(--ink) 10%,transparent)}
+.ghost{background:transparent;color:var(--ink-soft)}
+.link{background:transparent;color:var(--accent);padding:0 4px}
+.danger{background:transparent;color:var(--danger-text)}
+.primary{background:var(--accent);color:var(--paper)}
+.rule{height:1px;background:var(--line);margin:40px 0 0}
+.confirm{background:var(--danger-soft);border-radius:12px;padding:16px;margin-top:8px}
+.confirm h4{margin:0;font-size:14px;font-weight:600}
+.confirm .acts{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.pick{display:grid;grid-template-columns:16px 1fr auto;gap:4px 8px;align-items:start;padding:8px 0;font-size:13px}
+.pick input{margin:3px 0 0;accent-color:var(--accent)}
+.pick .n{font-family:"Geist Mono",ui-monospace,Menlo,monospace;font-size:12px;color:var(--ink-soft)}
+.scroll{max-height:220px;overflow:auto;margin-top:8px}
+.notice{display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;padding:8px 20px;font-size:13px;color:var(--ink-soft);border-bottom:1px solid var(--line)}
+.notice.warn{color:var(--warning-text);background:var(--warning-soft);border-bottom:0}
+.notice .dot{width:8px;height:8px;border-radius:50%;background:var(--neutral)}
+.notice.warn .dot{background:var(--warning)}
+.notice .sp{margin-left:auto;display:flex;gap:8px}
+.app{display:grid;grid-template-columns:56px 1fr;min-height:260px}
+.app .side{background:var(--surface-2);display:flex;flex-direction:column;align-items:center;gap:12px;padding:12px 0}
+.app .side b{width:28px;height:28px;border-radius:8px;background:var(--wash);display:block}
+.app .side b.alert{position:relative}
+.app .side b.alert:after{content:"";position:absolute;right:-2px;top:-2px;width:8px;height:8px;border-radius:50%;background:var(--warning)}
+.wall{padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.wall div{height:96px;border-radius:10px;background:var(--surface-2)}
+.pop{position:absolute;left:64px;bottom:20px;width:300px;background:var(--surface);border-radius:12px;padding:16px;box-shadow:0 12px 32px color-mix(in srgb,var(--ink) 18%,transparent);font-size:13px}
+.note{font-size:12px;color:var(--ink-faint);margin-top:8px}
+.rec{font-size:11px;font-weight:500;color:var(--accent);margin-left:6px}
+.narrow-only .row{grid-template-columns:8px 1fr auto}
+.narrow-only .row .a{grid-column:2 / 4;justify-content:flex-start}
+@media (max-width:640px){.shell{grid-template-columns:1fr;padding:16px}.rail{flex-direction:row;flex-wrap:wrap}.row{grid-template-columns:8px 1fr auto}.row .a{grid-column:2 / 4;justify-content:flex-start}}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Settings → Storage</h1>
+  <p>Sizes are this Mac's, measured 2026-11-26, shown at the point the disk had 14 GB free. Cloud figures are illustrative.</p>
+  <button class="btn" type="button" id="theme">Switch light / dark</button>
+</header>
+
+<div class="canvas">
+
+<!-- 01 -->
+<figure>
+<figcaption><b>01 · The page.</b> Storage sits under Nekko Agent, after Tools. One bar for the disk, then rows largest first, each with one action. Nekko Cloud below a single hairline, since it is a different kind of storage. Chat history is the existing control moved here, folded behind its row.</figcaption>
+<div class="frame w-wide">
+<div class="shell">
+  <nav class="rail" aria-label="Settings">
+    <a>Profile</a><a>Help out the Nekko Team</a><a>Nekko Cloud</a>
+    <span class="lbl">Nekko Agent</span><a>General</a><a>Appearance</a><a>Agents</a><a>Tools</a><a class="on">Storage</a>
+    <span class="lbl">Privacy and devices</span><a>Safety</a><a>Connections</a><a>Phone and computers</a><a>System</a>
+  </nav>
+  <div class="content">
+    <h2>Storage</h2>
+    <p class="faint">Measured 2 minutes ago · <button class="btn link" type="button">Measure again</button></p>
+
+    <section class="sec">
+      <div class="sechead"><h3>This Mac</h3><span class="mono soft">14 GB free of 2 TB</span></div>
+      <div class="bar" role="img" aria-label="Disk: Nekko 370 GB, other apps and files 1.6 TB, 14 GB free">
+        <span style="width:9%;background:var(--s1)"></span><span style="width:6.7%;background:var(--s2)"></span><span style="width:2.6%;background:var(--s3)"></span><span style="width:.4%;background:var(--s4)"></span><span style="width:.3%;background:var(--s5)"></span><span style="width:80.3%;background:var(--other)"></span><span style="width:.7%;background:var(--free)"></span>
+      </div>
+      <div class="legend"><span><i style="background:var(--s1)"></i>Nekko 370 GB</span><span><i style="background:var(--other)"></i>Other apps and files 1.6 TB</span><span><i style="background:var(--free);box-shadow:inset 0 0 0 1px var(--line)"></i>Free 14 GB</span></div>
+
+      <div class="rows">
+        <div class="row"><span class="sw" style="background:var(--s1)"></span><div><div class="t">Agent worktrees</div><div class="d">158 checkouts · 135 GB of it is build output (node_modules, target)</div></div><span class="n">180 GB</span><span class="a"><button class="btn" type="button">Remove idle worktrees…</button><button class="btn ghost" type="button">See all</button></span></div>
+        <div class="row"><span class="sw" style="background:var(--s2)"></span><div><div class="t">CI runner images</div><div class="d">1 unused old image runner · 76 GB</div></div><span class="n">134 GB</span><span class="a"><button class="btn" type="button">Review images…</button></span></div>
+        <div class="row"><span class="sw" style="background:var(--s3)"></span><div><div class="t">Models</div><div class="d">14 models and their runtimes · removed one at a time</div></div><span class="n">53 GB</span><span class="a"><button class="btn ghost" type="button">Open Models</button></span></div>
+        <div class="row"><span class="sw" style="background:var(--s4)"></span><div><div class="t">App caches</div><div class="d">Browser caches the app rebuilds as it goes</div></div><span class="n">1.9 GB</span><span class="a"><button class="btn" type="button">Clear caches…</button></span></div>
+        <div class="row"><span class="sw" style="background:var(--s5)"></span><div><div class="t">Chat history</div><div class="d">212 archived chats · 113 MB of pictures</div></div><span class="n">1.2 GB</span><span class="a"><button class="btn" type="button">Clear history…</button></span></div>
+        <div class="row"><span class="sw" style="background:var(--s6)"></span><div><div class="t">Other Nekko data</div><div class="d">Settings, logs, backups, usage</div></div><span class="n">70 MB</span><span class="a"></span></div>
+      </div>
+    </section>
+
+    <div class="rule"></div>
+
+    <section class="sec" style="margin-top:20px">
+      <div class="sechead"><h3>Nekko Cloud</h3><span class="mono soft">2.9 GB of 5 GB · Pro</span></div>
+      <div class="bar" role="img" aria-label="Nekko Cloud: 2.9 GB used of 5 GB">
+        <span style="width:32%;background:var(--s1)"></span><span style="width:18%;background:var(--s3)"></span><span style="width:6%;background:var(--s2)"></span><span style="width:2%;background:var(--s4)"></span>
+      </div>
+      <div class="legend"><span><i style="background:var(--s1)"></i>Synced chats 1.6 GB</span><span><i style="background:var(--s3)"></i>Library files 900 MB</span><span><i style="background:var(--s2)"></i>Kept revisions 300 MB</span><span><i style="background:var(--s4)"></i>Shares 80 MB</span><span><i style="background:var(--free);box-shadow:inset 0 0 0 1px var(--line)"></i>Free 2.1 GB</span></div>
+      <p class="faint" style="margin-top:8px">Synced copies are extra; your files stay on this Mac. <button class="btn link" type="button">Library</button><button class="btn link" type="button">Sync settings</button></p>
+    </section>
+  </div>
+</div>
+</div>
+</figure>
+
+<!-- 02 -->
+<figure>
+<figcaption><b>02 · Measuring.</b> The page opens at once with the last result. Anything still being measured is hatched in the bar and reads "Measuring…"; rows fill in as each finishes. Actions wait for their size.</figcaption>
+<div class="frame w-page"><div class="pad">
+  <div class="sechead"><h3>This Mac</h3><span class="mono soft">14 GB free of 2 TB</span></div>
+  <div class="bar"><span style="width:9%;background:var(--s1)"></span><span style="width:9.7%" class="hatch"></span><span style="width:80.6%;background:var(--other)"></span><span style="width:.7%;background:var(--free)"></span></div>
+  <div class="rows">
+    <div class="row"><span class="sw" style="background:var(--s1)"></span><div><div class="t">Agent worktrees</div><div class="d">158 checkouts · measuring build output…</div></div><span class="n">180 GB</span><span class="a"><button class="btn" type="button" disabled>Remove idle worktrees…</button></span></div>
+    <div class="row"><span class="sw hatch"></span><div><div class="t">CI runner images</div><div class="d">Measuring…</div></div><span class="n">–</span><span class="a"></span></div>
+    <div class="row"><span class="sw hatch"></span><div><div class="t">Models</div><div class="d">Measuring…</div></div><span class="n">–</span><span class="a"><button class="btn ghost" type="button">Open Models</button></span></div>
+  </div>
+</div></div>
+</figure>
+
+<!-- 03 -->
+<figure>
+<figcaption><b>03 · Remove idle worktrees.</b> A destructive confirmation (the one allowed object), opening under the row. Each worktree shows why it is safe; anything can be unticked, with Select all and Deselect all and a running count above the list. What is kept is one line, with the reasons behind a disclosure. Branches always stay.</figcaption>
+<div class="frame w-page"><div class="pad">
+  <div class="row"><span class="sw" style="background:var(--s1)"></span><div><div class="t">Agent worktrees</div><div class="d">158 checkouts · 135 GB of it is build output</div></div><span class="n">180 GB</span><span class="a"></span></div>
+  <div class="confirm" role="alertdialog" aria-labelledby="wt-t">
+    <h4 id="wt-t">Remove 131 idle worktrees? Frees about 168 GB.</h4>
+    <p class="faint" style="margin:4px 0 0">Each is clean, unused for 3 days and fully pushed. Branches are kept, so you can check any of them out again.</p>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap"><span class="faint">130 of 131 selected · 166 GB</span><span style="margin-left:auto"><button class="btn link" type="button">Select all</button><button class="btn link" type="button">Deselect all</button></span></div>
+    <div class="scroll">
+      <label class="pick"><input type="checkbox" checked><span>compact-agents-panel<br><span class="faint">nekko-agent · compact-agents-panel · pushed</span></span><span class="n">2.4 GB</span></label>
+      <label class="pick"><input type="checkbox" checked><span>p4-fleet<br><span class="faint">nekko-agent · feat/p4-fleet · PR #3402 merged</span></span><span class="n">1.9 GB</span></label>
+      <label class="pick"><input type="checkbox" checked><span>3467-compact-cloud-models<br><span class="faint">nekko-agent · 3467-compact-cloud-models · PR #3489 merged</span></span><span class="n">1.8 GB</span></label>
+      <label class="pick"><input type="checkbox"><span>claude-usage-unified-windows<br><span class="faint">nekko-agent · claude-usage-unified-windows · pushed</span></span><span class="n">1.6 GB</span></label>
+      <label class="pick"><input type="checkbox" checked><span>merge-sweep-2518<br><span class="faint">nekko-agent · detached at 8c1e0a2 · on origin/main</span></span><span class="n">1.2 GB</span></label>
+      <p class="faint">and 126 more</p>
+    </div>
+    <details class="faint" style="margin-top:8px"><summary>27 kept</summary>
+      <p style="margin:4px 0 0">14 used in the last 3 days · 9 with uncommitted changes · 3 with commits on no remote · 1 open in a running chat</p>
+    </details>
+    <div class="acts"><button class="btn" type="button" autofocus>Cancel</button><button class="btn danger" type="button">Remove 130 worktrees</button></div>
+  </div>
+  <p class="note">After: a toast, "Removed 130 worktrees, freed 166 GB. 1 couldn't be removed." with the reason in the row's detail. No Undo: the checkout is gone, but its branch is not.</p>
+</div></div>
+</figure>
+
+<!-- 04 -->
+<figure>
+<figcaption><b>04 · CI runner images.</b> "Review images…" expands the row in place. Images runners use are listed with no action; a leftover gets Remove, one at a time, with its own confirmation.</figcaption>
+<div class="frame w-page"><div class="pad">
+  <div class="row"><span class="sw" style="background:var(--s2)"></span><div><div class="t">CI runner images</div><div class="d">1 unused old image runner · 76 GB</div></div><span class="n">134 GB</span><span class="a"></span></div>
+  <div style="padding-left:24px">
+    <div class="row" style="grid-template-columns:1fr auto auto"><div><div class="t">macOS image</div><div class="d">In use by 1 runner</div></div><span class="n">55 GB</span><span class="a"></span></div>
+    <div class="row" style="grid-template-columns:1fr auto auto"><div><div class="t">Linux image and cache</div><div class="d">In use</div></div><span class="n">3.4 GB</span><span class="a"></span></div>
+    <div class="row" style="grid-template-columns:1fr auto auto"><div><div class="t mono">old-image-tart-2026-10-29</div><div class="d">Not used by any runner · Oct 29</div></div><span class="n">76 GB</span><span class="a"><button class="btn danger" type="button">Remove…</button></span></div>
+    <div class="confirm" role="alertdialog">
+      <h4>Remove old-image-tart-2026-10-29? Frees 76 GB.</h4>
+      <p class="faint" style="margin:4px 0 0">No runner uses it. This can't be undone.</p>
+      <div class="acts"><button class="btn" type="button">Cancel</button><button class="btn danger" type="button">Remove permanently</button></div>
+    </div>
+  </div>
+</div></div>
+</figure>
+
+<!-- 05 -->
+<figure>
+<figcaption><b>05 · Clear caches.</b> Short confirmation; says what it does not touch. Not shown in the Local Web UI, where the browser owns its cache.</figcaption>
+<div class="frame w-pop"><div class="pad">
+  <div class="row"><span class="sw" style="background:var(--s4)"></span><div><div class="t">App caches</div><div class="d">Browser caches the app rebuilds as it goes</div></div><span class="n">1.9 GB</span><span class="a"></span></div>
+  <div class="confirm" role="alertdialog">
+    <h4>Clear 1.9 GB of caches?</h4>
+    <p class="faint" style="margin:4px 0 0">You stay signed in; chats and settings are kept. The app may be slower to open screens for a moment, and the caches grow back as you use it.</p>
+    <div class="acts"><button class="btn" type="button">Cancel</button><button class="btn danger" type="button">Clear caches</button></div>
+  </div>
+</div></div>
+</figure>
+
+<!-- 06 -->
+<figure>
+<figcaption><b>06 · Nekko Cloud states.</b> Near full: the used part and its line turn warning, saying what stops. No plan with sync: one line and a link, no bar.</figcaption>
+<div class="frame w-pop"><div class="pad">
+  <div class="sechead"><h3>Nekko Cloud</h3><span class="mono" style="color:var(--warning-text)">4.7 GB of 5 GB · Pro</span></div>
+  <div class="bar"><span style="width:52%;background:var(--warning)"></span><span style="width:30%;background:color-mix(in srgb,var(--warning) 70%,var(--paper))"></span><span style="width:12%;background:color-mix(in srgb,var(--warning) 45%,var(--paper))"></span></div>
+  <p style="margin:8px 0 0;font-size:12px;color:var(--warning-text)">Almost full. New and changed files stop syncing at 5 GB.</p>
+  <p class="faint" style="margin-top:4px"><button class="btn link" type="button">Library</button><button class="btn link" type="button">Sync settings</button></p>
+  <div class="rule" style="margin-top:20px"></div>
+  <div class="sechead" style="margin-top:20px"><h3>Nekko Cloud</h3></div>
+  <p class="faint" style="margin:0">Nekko Cloud keeps a synced, encrypted copy of your chats and Library on Pro and Enterprise. <button class="btn link" type="button">Nekko Cloud settings</button></p>
+</div></div>
+</figure>
+
+<!-- 07 -->
+<figure>
+<figcaption><b>07 · Low-disk notice, option A</b><span class="rec">Recommended</span>. A one-line band at the top of the main window under 20 GB free, quiet neutral; it turns warning under 5 GB. "See what's using it" opens Storage. "Not now" hides it for a day or until another 5 GB goes.</figcaption>
+<div class="frame w-page">
+  <div class="notice"><span class="dot"></span><span>Your disk is almost full: 14 GB free.</span><span class="sp"><button class="btn link" type="button">See what's using it</button><button class="btn ghost" type="button">Not now</button></span></div>
+  <div class="app"><div class="side"><b></b><b></b><b></b></div><div class="wall"><div></div><div></div><div></div><div></div></div></div>
+  <div class="notice warn" style="border-top:1px solid var(--line)"><span class="dot"></span><span>Your disk is nearly out of space: 3.2 GB free. Builds and downloads may fail.</span><span class="sp"><button class="btn link" type="button">See what's using it</button></span></div>
+</div>
+</figure>
+
+<!-- 08 -->
+<figure>
+<figcaption><b>08 · Low-disk notice, option B.</b> A warning dot on the Settings icon in the app rail, with the same line in a popover on hover or click. Quieter, but easy to miss, which is the problem this is solving.</figcaption>
+<div class="frame w-pop" style="position:relative">
+  <div class="app" style="min-height:300px"><div class="side"><b></b><b></b><b></b><span style="flex:1"></span><b class="alert"></b></div><div class="wall"><div></div><div></div></div></div>
+  <div class="pop"><b style="font-weight:500">Your disk is almost full</b><p class="faint" style="margin:4px 0 8px">14 GB free. Nekko uses 370 GB of it.</p><button class="btn" type="button">See what's using it</button></div>
+</div>
+</figure>
+
+<!-- 09 -->
+<figure>
+<figcaption><b>09 · Where the old controls went.</b> General keeps one line pointing to Storage for one release. Git management's worktree rows gain a size; that list stays the one place to remove a single worktree (which may also delete a merged branch).</figcaption>
+<div class="frame w-page"><div class="pad">
+  <h3>Chat history</h3>
+  <p class="faint" style="margin:4px 0 0">Moved to Storage. <button class="btn link" type="button">Open Storage</button></p>
+  <div class="rule" style="margin-top:20px"></div>
+  <h3 style="margin-top:20px">Git management · Chat worktrees</h3>
+  <div class="rows" style="margin-top:8px">
+    <div class="row" style="grid-template-columns:1fr auto auto"><div><div class="t">compact-agents-panel</div><div class="d">nekko-agent · compact-agents-panel · made outside Nekko</div></div><span class="n">2.4 GB</span><span class="a"><button class="btn danger" type="button">Remove</button></span></div>
+    <div class="row" style="grid-template-columns:1fr auto auto"><div><div class="t">Storage settings page</div><div class="d">nekko-agent · feat/storage-settings · running</div></div><span class="n">410 MB</span><span class="a"></span></div>
+  </div>
+</div></div>
+</figure>
+
+<!-- 10 -->
+<figure>
+<figcaption><b>10 · Narrow, 360px.</b> The rail becomes a wrapping band; actions drop under each row's detail. The Local Web UI is the same, without App caches. Phone apps show nothing new.</figcaption>
+<div class="frame w-narrow narrow-only"><div class="pad">
+  <h2>Storage</h2>
+  <div class="sechead" style="margin-top:20px"><h3>This Mac</h3><span class="mono soft">14 GB free</span></div>
+  <div class="bar"><span style="width:9%;background:var(--s1)"></span><span style="width:6.7%;background:var(--s2)"></span><span style="width:2.6%;background:var(--s3)"></span><span style="width:.7%;background:var(--s4)"></span><span style="width:80.3%;background:var(--other)"></span><span style="width:.7%;background:var(--free)"></span></div>
+  <div class="legend"><span><i style="background:var(--s1)"></i>Nekko 370 GB</span><span><i style="background:var(--other)"></i>Other 1.6 TB</span></div>
+  <div class="rows">
+    <div class="row"><span class="sw" style="background:var(--s1)"></span><div><div class="t">Agent worktrees</div><div class="d">158 · 135 GB build output</div></div><span class="n">180 GB</span><span class="a"><button class="btn" type="button">Remove idle…</button><button class="btn ghost" type="button">See all</button></span></div>
+    <div class="row"><span class="sw" style="background:var(--s2)"></span><div><div class="t">CI runner images</div><div class="d">1 old image · 76 GB</div></div><span class="n">134 GB</span><span class="a"><button class="btn" type="button">Review images…</button></span></div>
+    <div class="row"><span class="sw" style="background:var(--s3)"></span><div><div class="t">Models</div><div class="d">14 models</div></div><span class="n">53 GB</span><span class="a"><button class="btn ghost" type="button">Open Models</button></span></div>
+  </div>
+</div></div>
+</figure>
+
+</div>
+<script>
+document.getElementById('theme').addEventListener('click',()=>{const r=document.documentElement;const dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;r.dataset.theme=dark?'light':'dark';});
+</script>
+</body>
+</html>

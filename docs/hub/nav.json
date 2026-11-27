@@ -88,6 +88,12 @@
           "description": "Opt in to anonymous usage and crash reports, what they contain, and how to see each send."
         },
         {
+          "slug": "storage",
+          "title": "Storage",
+          "source": "docs/storage.md",
+          "description": "See where Nekko Agent's disk space goes on your computer and in Nekko Cloud, and free it safely: idle worktrees, old CI runner images, caches and chat history."
+        },
+        {
           "slug": "voice",
           "title": "Voice",
           "source": "docs/voice.md",

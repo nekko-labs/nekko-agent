@@ -13,4 +13,11 @@
     <string name="chats_showcontext">Context window</string>
     <string name="chats_showpullrequests">Pull requests</string>
     <string name="chats_showupdated">Updated time</string>
+    <string name="plan_display">Plan display</string>
+    <string name="plan_display_configure">Configure plan display</string>
+    <string name="plan_display_full">Show full plan</string>
+    <string name="plan_display_balanced">Balanced · 3 rows (default)</string>
+    <string name="plan_display_one">Show 1 row</string>
+    <string name="plan_display_hidden">Hide entirely</string>
+    <string name="plan_completed_group">Completed (%1$d)</string>
 </resources>

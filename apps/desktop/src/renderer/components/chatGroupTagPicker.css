@@ -1,0 +1,97 @@
+/*
+ * The group and tag picker: one floating surface (the menu or popover around
+ * it), a search field, and rows with no borders. Colours are tokens.
+ */
+.chat-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.chat-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.chat-picker-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 8px;
+}
+.chat-picker-label {
+  padding: 0 8px 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+.chat-picker-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.chat-picker-option[data-active] { background: var(--q-wash); }
+.chat-picker-option[aria-selected='true'] { background: var(--accent-soft); }
+.chat-picker-option[aria-selected='true'][data-active] { background: var(--q-wash-strong); }
+.chat-picker-lead {
+  display: inline-grid;
+  place-items: center;
+  width: 12px;
+  flex-shrink: 0;
+  color: var(--ink-soft);
+}
+.chat-picker-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+}
+.chat-picker-check {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  flex-shrink: 0;
+}
+/* A tag some, not all, of the chosen chats carry. */
+.chat-picker-mixed {
+  width: 8px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--ink-soft);
+}
+.chat-picker-empty {
+  padding: 8px;
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+.chat-picker-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.chat-picker-kinds {
+  display: flex;
+  gap: 4px;
+}
+.chat-picker-kind {
+  padding: 4px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.chat-picker-kind:hover { background: var(--q-wash); }
+.chat-picker-kind[aria-checked='true'] { color: var(--ink); background: var(--q-wash-strong); }
+.chat-picker-kind:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--ring); }
+@media (prefers-reduced-motion: reduce) {
+  .chat-picker-option, .chat-picker-kind { transition: none; }
+}

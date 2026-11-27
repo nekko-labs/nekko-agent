@@ -124,6 +124,10 @@ impl Installs {
         if runtime == "diffusion" { &self.diffusion } else { &self.llama }
     }
 
+    pub async fn mlx_dflash2_bin_path(&self) -> Option<String> {
+        self.mlx.dflash2_bin_path().await
+    }
+
     /// One runtime's install state (`detect`).
     pub async fn detect(&self, runtime: &str) -> Value {
         if runtime == "mlx" { self.mlx.detect().await } else { self.installer(runtime).detect().await }
