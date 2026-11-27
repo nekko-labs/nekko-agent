@@ -39,6 +39,10 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## iPhone chat re-reads stop re-reading the runnable skills (#3388, 2026-11-26)
+Area: renderer
+Result: improvement (reads per re-read)
+Conditions: `swift test` on an Apple M1 Max, macOS 27.2.1, with a counting fake connection (`ReloadFanOutTests.testSkillsAreReadOnceNotOnEveryReload`): open a chat, then four re-reads (three turn ends and one explicit reload). Counts are `skills:runnable` calls, not time.
 ## iPhone folds streamed text into the chat once per display frame (#3387, 2026-11-26)
 Area: renderer
 Result: improvement (model work per frame); not profiled in the running app
@@ -221,6 +225,7 @@ Conditions: JVM unit test `ChatControllerTest` on an Apple M1 Max with a countin
 |---|---|---|
 | `skills:runnable` calls for one open plus four re-reads | 5 | 1 |
 
+Why: `ChatModel.reload` read the skills list with every re-read; it now reads it on the first read and on a reconnect. This is the part of the chat-open fan-out that needed no engine change. The paged open (`session:page`, tail first) is not implemented: phones cannot call it (#3439), so the 300-message read is unchanged and unmeasured. Source: #3388.
 Why: `ChatController.reload` read the skills list with every re-read (each turn end, answered card, setting change, reconnect); it now reads it on the first read, on a reconnect and after a failed read. This is the part of the chat-open fan-out that needs no engine change (the iPhone did the same, #3388). The paged open (`session:page`, tail first) is not implemented: phones cannot call it (#3439), so the 300-message read is unchanged and unmeasured. Source: #3415.
 ## Android: saved chats are encoded and written off the main thread (#3413, 2026-11-26)
 Area: renderer (Android app, main thread)
