@@ -55,7 +55,8 @@ describe('plan sheet, folded and open (#1317)', () => {
       const folded = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} initiallyOpen={false} />);
       expect(folded).toMatch(/data-subagent-card="k2" data-status="working"[^]*?data-subagent-card="k1" data-status="done"/);
       expect(folded).not.toContain('Not mine');
-      expect(folded).toContain('ollama-local · qwen3:8b');
+      expect(folded).toContain('>qwen3:8b<');
+      expect(folded).not.toContain('ollama-local');
       expect(renderToStaticMarkup(<PlanRail sessionId="s" session={loop} />)).toContain('ollama-local · qwen3:8b');
       const open = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} initiallyOpen />);
       expect(open).toContain('1 of 4 done');

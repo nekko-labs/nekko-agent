@@ -158,7 +158,7 @@ describe('sub-agent cards', () => {
   const kids = () => {
     state.sessions = [
       { id: 'done', parentSessionId: 's', title: 'Finished helper', createdAt: now },
-      { id: 'kid', parentSessionId: 's', title: 'Trace lookup', createdAt: now, activeRun: { startedAt: now } },
+      { id: 'kid', parentSessionId: 's', title: 'Trace lookup', modelId: 'vendor/sol:latest', providerId: 'ChatGPT (subscription)', createdAt: now, activeRun: { startedAt: now } },
       { id: 'other', parentSessionId: 'other-parent', title: 'Unrelated helper', activeRun: {} },
     ];
   };
@@ -172,7 +172,11 @@ describe('sub-agent cards', () => {
     expect(row).toContain('data-subagent-card="kid" data-status="working"');
     expect(row).toContain('data-subagent-card="done" data-status="done"');
     expect(row.indexOf('Trace lookup')).toBeLessThan(row.indexOf('Finished helper'));
-    expect(row).toContain('aria-label="Trace lookup, Working. Open sub-agent"');
+    expect(row).toContain('aria-label="Trace lookup, Working, sol. Open sub-agent"');
+    const visible = row.replace(/<[^>]*>/g, '');
+    expect(visible).toContain('Trace lookupsol');
+    expect(visible).not.toMatch(/subscription|vendor\/|Working|Done/);
+    expect(row.match(/class="plan-sheet-agent-model truncate"/g)).toHaveLength(1);
     expect(row).not.toContain('Unrelated helper');
     expect(html).not.toContain('data-plan-running-subagents');
     // The row leads with its own label and the agents glyph.

@@ -43,6 +43,8 @@ fn spec(bin: &str, model: &str) -> SpawnSpec {
         kind: Kind::Chat,
         health_path: "/health".into(),
         health_expect: Some("\"ok\"".into()),
+        health_ready_log: None,
+        upstream_model: None,
         budget_secs: Some(600),
     }
 }
