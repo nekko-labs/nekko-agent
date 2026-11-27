@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import com.nekko.android.R
 import com.nekko.android.data.ComputersState
 import com.nekko.protocol.DenyReason
+import com.nekko.protocol.FleetLink
 import com.nekko.protocol.ProtocolCheck
 import com.nekko.protocol.RelayHint
 import com.nekko.protocol.RelayRoute
@@ -99,6 +100,8 @@ data class ConnectionFacts(
      * another internet relay, decision 0116), so Tailscale being off is not what keeps it away.
      */
     val offTailnet: Boolean = false,
+    /** A computer of the account, dialed with no pairing (decision 0126): a refusal reads as the account's. */
+    val fromAccount: Boolean = false,
 ) {
     /** Only Tailscale reaches this computer: when Tailscale is off, it is the thing to fix. */
     val tailnetOnly: Boolean get() = route == RelayRoute.TAILSCALE && !offTailnet
@@ -202,7 +205,11 @@ object ConnectionNotes {
                 ConnectionNote.Tone.WARNING, msg(R.string.conn_word_offline), msg(R.string.conn_offline_line, name),
                 msg(R.string.conn_offline_fix), listOf(ConnectionNote.Action.RETRY),
             )
-            RelayState.DENIED -> when (c.denied) {
+            RelayState.DENIED -> if (c.fromAccount && (c.denied?.isFleet == true || c.denied == DenyReason.INVALID)) problem(
+                // The account's own refusals, in words (English for now: the pairing ones are translated).
+                ConnectionNote.Tone.WARNING, msg(R.string.conn_word_refused),
+                Msg.Text(FleetLink.accountRefusalText(c.denied.wire) ?: "$name refused this phone."), null, emptyList(),
+            ) else when (c.denied) {
                 DenyReason.UPDATE_REQUIRED -> problem(
                     ConnectionNote.Tone.DANGER, msg(R.string.conn_word_update), msg(R.string.conn_update_required_line, name),
                     msg(R.string.conn_update_required_fix), emptyList(),
@@ -252,6 +259,7 @@ object ConnectionNotes {
             waiting = if (active) waiting else 0,
             addressProblem = RelayHint.problem(url, debug),
             offTailnet = reachableOffTailnet(c.routes),
+            fromAccount = c.fromAccount,
         )
     }
 }

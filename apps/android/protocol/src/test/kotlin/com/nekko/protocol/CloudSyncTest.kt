@@ -1,6 +1,7 @@
 package com.nekko.protocol
 
 import java.net.URI
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -584,5 +585,180 @@ class CloudSyncTest {
         assertFalse("the token stays in its own slot", state.contains("nk_test"))
         assertFalse("the keyring stays in its own slot", state.contains(secrets.items["cloud.keyring.1"]!!))
         assertFalse("the recovery key is never stored", secrets.items.values.any { it.contains(mac.recovery.text) })
+    }
+
+    // ---- reach records (decision 0126) ----
+
+    private fun sealReach(fake: FakeCloud, mac: Computer, deviceId: String, plain: String, rev: Long, oid: String? = null, keyring: SyncCrypto.Keyring? = null, epoch: Long? = null) {
+        val k = keyring ?: mac.keyring
+        val o = oid ?: SyncCrypto.objectId(k, "reach", deviceId)
+        val e = epoch ?: mac.epoch
+        fake.add("reach", o, rev, e, SyncCrypto.sealRecord(k, fake.account, e, "reach", o, rev, plain.toByteArray()))
+    }
+
+    private fun reachJson(id: String, name: String = "Studio Mac", routes: String = "\"wss://relay.nekko.example/r/1\"", room: String = "room-1") =
+        "{\"v\":1,\"deviceId\":\"$id\",\"name\":\"$name\",\"routes\":[$routes],\"room\":\"$room\",\"secret\":\"s3cr3t-pairing-secret\",\"hostKey\":\"HOSTKEY1\"}"
+
+    @Test fun `reach records are read, replaced by newer ones, and removed by a tombstone`() = runBlocking {
+        val fake = FakeCloud()
+        val mac = computer(fake)
+        val secrets = MemorySecrets()
+        val key = SyncCrypto.SoftwareKey.generate()
+        val p = phone(fake, key, secrets)
+        p.verifyCode("ada@example.com", "123456")
+        p.restore(mac.recovery.text)
+        assertTrue(p.view.value.reach.isEmpty())
+        val six = "\"wss://relay.nekko.example/r/1\",\"ws://100.64.1.2:7777\",\"http://not-a-relay\",\"wss://b.example/r\",\"wss://c.example/r\",\"wss://d.example/r\""
+        sealReach(fake, mac, mac.id, reachJson(mac.id, routes = six), 1)
+        p.sync()
+        val r = p.view.value.reach.single()
+        assertEquals(mac.id, r.deviceId)
+        assertEquals("Studio Mac", r.name)
+        assertEquals("room-1", r.room)
+        assertEquals("s3cr3t-pairing-secret", r.secret)
+        assertEquals("HOSTKEY1", r.hostKey)
+        assertEquals("main route first, only relay urls, at most 4", listOf("wss://relay.nekko.example/r/1", "ws://100.64.1.2:7777", "wss://b.example/r", "wss://c.example/r"), r.routes)
+        assertFalse("the secret never prints", r.toString().contains("s3cr3t"))
+        // The secret has its own sealed slot, not the plain state.
+        assertFalse(secrets.items["cloud.state"]!!.contains("s3cr3t"))
+        assertTrue(secrets.items["cloud.reach"]!!.contains("s3cr3t"))
+        // A relaunch keeps it.
+        assertEquals(1, phone(fake, key, secrets).view.value.reach.size)
+
+        // A newer revision replaces it.
+        sealReach(fake, mac, mac.id, reachJson(mac.id, name = "Studio", routes = "\"wss://x.example/r\""), 2)
+        p.sync()
+        assertEquals(listOf("wss://x.example/r"), p.view.value.reach.single().routes)
+        assertEquals("Studio", p.view.value.reach.single().name)
+
+        // The tombstone removes it; a replayed older record does not bring it back.
+        sealReach(fake, mac, mac.id, "{\"v\":1,\"deleted\":true,\"deviceId\":\"${mac.id}\"}", 3)
+        p.sync()
+        assertTrue(p.view.value.reach.isEmpty())
+        sealReach(fake, mac, mac.id, reachJson(mac.id), 1)
+        p.sync()
+        assertTrue("a replayed old revision is ignored", p.view.value.reach.isEmpty())
+        assertFalse(secrets.items["cloud.reach"]!!.contains("s3cr3t"))
+    }
+
+    @Test fun `tampered, swapped, foreign-key and own reach records are ignored`() = runBlocking {
+        val fake = FakeCloud()
+        val mac = computer(fake)
+        val p = phone(fake)
+        p.verifyCode("ada@example.com", "123456")
+        p.restore(mac.recovery.text)
+        val mine = p.me!!.id
+        // Filed under another computer's object id (the server swapping records).
+        sealReach(fake, mac, "other-1", reachJson("other-1"), 1, oid = SyncCrypto.objectId(mac.keyring, "reach", "mac-2"))
+        // A flipped bit doesn't open.
+        val o = SyncCrypto.objectId(mac.keyring, "reach", "mac-3")
+        val raw = SyncCrypto.fromBase64url(SyncCrypto.sealRecord(mac.keyring, fake.account, 1, "reach", o, 1, reachJson("mac-3").toByteArray()))
+        raw[40] = (raw[40].toInt() xor 1).toByte()
+        fake.add("reach", o, 1, 1, SyncCrypto.base64url(raw))
+        // This phone's own id is no computer to dial.
+        sealReach(fake, mac, mine, reachJson(mine), 1)
+        // Wrong shape: no relay route, an unknown version, a missing secret.
+        sealReach(fake, mac, "mac-4", reachJson("mac-4", routes = "\"ftp://x\""), 1)
+        sealReach(fake, mac, "mac-5", reachJson("mac-5").replace("\"v\":1", "\"v\":2"), 1)
+        sealReach(fake, mac, "mac-6", reachJson("mac-6").replace(",\"secret\":\"s3cr3t-pairing-secret\"", ""), 1)
+        // Sealed under a key the account doesn't hold.
+        sealReach(fake, mac, "mac-7", reachJson("mac-7"), 1, keyring = SyncCrypto.Keyring(SyncCrypto.randomBytes(64)))
+        p.sync()
+        assertTrue(p.view.value.reach.toString(), p.view.value.reach.isEmpty())
+        // One good record still lands beside them.
+        sealReach(fake, mac, "mac-8", reachJson("mac-8"), 1)
+        p.sync()
+        assertEquals(listOf("mac-8"), p.view.value.reach.map { it.deviceId })
+    }
+
+    @Test fun `signing out hides the account's computers and forgetting everything removes them`() = runBlocking {
+        val fake = FakeCloud()
+        val mac = computer(fake)
+        val secrets = MemorySecrets()
+        val p = phone(fake, secrets = secrets)
+        p.verifyCode("ada@example.com", "123456")
+        p.restore(mac.recovery.text)
+        sealReach(fake, mac, mac.id, reachJson(mac.id), 1)
+        p.sync()
+        assertEquals(1, p.view.value.reach.size)
+        p.signOut()
+        assertTrue(p.view.value.reach.isEmpty())
+        assertNull(p.accountIdentity())
+        p.forgetAll()
+        assertNull(secrets.items["cloud.reach"])
+    }
+
+    @Test fun `the account HELLO is a fleet HELLO with an empty org id, bound to the handshake`() = runBlocking {
+        val fake = FakeCloud()
+        val mac = computer(fake)
+        val p = phone(fake)
+        assertNull("signed out", p.accountIdentity())
+        p.verifyCode("ada@example.com", "123456")
+        assertNull("not joined", p.accountIdentity())
+        p.restore(mac.recovery.text)
+        val id = p.accountIdentity()!!
+        val me = p.me!!.id
+        assertEquals("fleet:$me", id.linkDeviceId)
+        val b = FleetBinding("room-1", "chal-1", "hostEph1", "clientEph1", "helloKey1")
+        val fleet = id.hello(b)
+        assertEquals("1", fleet["v"]!!.jsonPrimitive.content)
+        assertEquals(fake.account, fleet["accountId"]!!.jsonPrimitive.content)
+        assertEquals("1", fleet["keyId"]!!.jsonPrimitive.content)
+        assertEquals("the account device id, with no fleet: prefix", me, fleet["deviceId"]!!.jsonPrimitive.content)
+        assertEquals(setOf("v", "accountId", "keyId", "deviceId", "proof"), fleet.keys)
+        val plain = Json.parseToJsonElement(
+            String(FleetLink.openHelloProof(AccountKeyring(mac.keyring.bytes), fake.account, 1, me, fleet["proof"]!!.jsonPrimitive.content)),
+        ) as JsonObject
+        assertEquals(setOf("v", "orgId", "room", "challenge", "hostEph", "clientEph", "helloKey"), plain.keys)
+        assertEquals("account scope", "", plain["orgId"]!!.jsonPrimitive.content)
+        assertEquals("room-1", plain["room"]!!.jsonPrimitive.content)
+        assertEquals("chal-1", plain["challenge"]!!.jsonPrimitive.content)
+        assertEquals("hostEph1", plain["hostEph"]!!.jsonPrimitive.content)
+        assertEquals("clientEph1", plain["clientEph"]!!.jsonPrimitive.content)
+        assertEquals("helloKey1", plain["helloKey"]!!.jsonPrimitive.content)
+        // Sealed for this device and account: another device id does not open it.
+        fails("a proof opens for another device") { FleetLink.openHelloProof(AccountKeyring(mac.keyring.bytes), fake.account, 1, "other", fleet["proof"]!!.jsonPrimitive.content) }
+        p.signOut()
+        assertNull("signed out says nothing", p.accountIdentity())
+    }
+
+    @Test fun `the account refusals have plain words`() {
+        for (code in listOf("fleet-off", "fleet-device", "fleet-epoch", "fleet-account", "fleet-locked", "invalid")) {
+            assertNotNull(code, FleetLink.accountRefusalText(code))
+            assertFalse(code, FleetLink.accountRefusalText(code)!!.contains(0x2014.toChar()))
+        }
+        assertEquals(DenyReason.FLEET_OFF, DenyReason.parse("fleet-off"))
+        assertTrue(DenyReason.parse("fleet-epoch").isFleet)
+        assertFalse(DenyReason.REVOKED.isFleet)
+    }
+
+    @Test fun `the background loop does nothing signed out, then syncs on start, on foreground and on a timer`() = runBlocking {
+        val fake = FakeCloud()
+        val mac = computer(fake)
+        val p = phone(fake)
+        assertFalse("signed out", p.syncQuietly())
+        p.verifyCode("ada@example.com", "123456")
+        assertFalse("signed in but not joined: it never starts a join", p.syncQuietly())
+        p.restore(mac.recovery.text)
+        val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default)
+        val loop = AccountSyncLoop(scope, p, intervalMs = 20)
+        try {
+            suspend fun until(what: String, ok: () -> Boolean) {
+                repeat(200) { if (ok()) return; kotlinx.coroutines.delay(10) }
+                fail(what)
+            }
+            sealReach(fake, mac, "mac-1", reachJson("mac-1"), 1)
+            loop.start()
+            until("the first sync reads the record") { p.view.value.reach.any { it.deviceId == "mac-1" } }
+            // The timer picks up a later record without anyone asking.
+            sealReach(fake, mac, "mac-2", reachJson("mac-2"), 1)
+            until("the timer reads the next record") { p.view.value.reach.any { it.deviceId == "mac-2" } }
+            loop.stop()
+            sealReach(fake, mac, "mac-3", reachJson("mac-3"), 1)
+            loop.onForeground()
+            until("foreground reads it") { p.view.value.reach.any { it.deviceId == "mac-3" } }
+        } finally {
+            scope.cancel()
+        }
     }
 }

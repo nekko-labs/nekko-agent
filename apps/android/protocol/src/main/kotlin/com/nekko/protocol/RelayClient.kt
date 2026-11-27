@@ -52,7 +52,12 @@ enum class DenyReason(val wire: String) {
     /** The computer's owner turned off phones that speak an older protocol than it does. */
     UPDATE_REQUIRED("update-required"),
     /** The computer only lets this phone in through another route (its per-device route choice, #3243). */
-    ROUTE("route");
+    ROUTE("route"),
+    /** An account HELLO (decision 0126) the computer refused: see [FleetLink.accountRefusalText]. */
+    FLEET_OFF("fleet-off"), FLEET_DEVICE("fleet-device"), FLEET_EPOCH("fleet-epoch"), FLEET_ACCOUNT("fleet-account"), FLEET_LOCKED("fleet-locked");
+
+    /** A refusal of an account HELLO. */
+    val isFleet: Boolean get() = wire.startsWith("fleet-")
 
     companion object {
         fun parse(s: String?) = entries.firstOrNull { it.wire == s } ?: INVALID
@@ -467,6 +472,8 @@ class RelayClient(
     private fun deniedText(reason: DenyReason?) = when (reason) {
         DenyReason.UPDATE_REQUIRED -> UPDATE_MESSAGE
         DenyReason.ROUTE -> "This computer only lets this phone in through another route."
+        DenyReason.FLEET_OFF, DenyReason.FLEET_DEVICE, DenyReason.FLEET_EPOCH, DenyReason.FLEET_ACCOUNT, DenyReason.FLEET_LOCKED ->
+            FleetLink.accountRefusalText(reason.wire) ?: "This computer refused this phone."
         else -> "This phone is no longer paired."
     }
 

@@ -6,6 +6,8 @@ import com.nekko.protocol.RouteChoice
 import com.nekko.protocol.Tailnet
 import com.nekko.protocol.RelayHint
 import com.nekko.protocol.DenyReason
+import com.nekko.protocol.AccountIdentity
+import com.nekko.protocol.Reach
 import com.nekko.protocol.Activity
 import com.nekko.protocol.ActivityTracker
 import com.nekko.protocol.AgentEvent
@@ -137,6 +139,15 @@ class ComputersRepository(
     private val stayConnected: Boolean = false,
     /** The background queue saved chats are written on (#3413); null writes on the caller's thread (tests). */
     private val io: com.nekko.protocol.BackgroundIO? = null,
+    /**
+     * The account's computers that publish how to reach them (`reach` records, decision 0126), from Nekko Cloud sync.
+     * Empty while signed out, so a phone with no sign-in changes nothing.
+     */
+    private val accountReach: StateFlow<List<Reach>> = MutableStateFlow(emptyList()),
+    /** What the account HELLO needs, read just before dialing a computer that has no pairing; null while signed out or locked. */
+    private val accountIdentity: (suspend () -> AccountIdentity?)? = null,
+    /** Read the account again (a sync catch-up): a computer said `fleet-device` or `fleet-epoch`, which one more try can fix. */
+    private val refreshAccount: (suspend () -> Unit)? = null,
 ) {
     /** The active computer's composers, kept until their prompt is sent (offline mode, the iPhone's drafts). */
     val drafts = DraftStore(offlineFiles, scope, draftDebounceMs)
@@ -223,8 +234,9 @@ class ComputersRepository(
         val computer = _state.value.active ?: return
         if (!_checking.compareAndSet(false, true)) return
         try {
-            val secret = StoredJson.decodeSecret(store.get(secretKey(computer.id))) ?: return
+            val secret = secretOf(computer) ?: return
             val hostKey = secret.pin ?: return
+            val identity = accountIdentityFor(computer)
             val routes = RouteSupervisor.order(computer.routes)
             _checks.value = routes.map { RouteReport(it) }
             routes.forEachIndexed { i, url ->
@@ -240,13 +252,14 @@ class ComputersRepository(
                                 key = secret.key,
                                 keyBytes = E2E.fromHex(secret.keyHex),
                                 hostKey = hostKey,
-                                deviceId = deviceId(),
+                                deviceId = identity?.linkDeviceId ?: deviceId(),
                                 deviceName = deviceName(),
                                 pairCode = null,
                                 platform = "android",
                                 handshakeTimeoutMs = helloTimeoutMs,
                                 routeAllowed = routeAllowed,
                                 helloSigner = helloSigner,
+                                fleetHello = fleetHelloFor(computer, identity),
                             ),
                             computer.name,
                         )
@@ -399,10 +412,16 @@ class ComputersRepository(
      * one used last, else the first.
      */
     suspend fun load(preferredId: String? = null) {
-        val list = StoredJson.decodeIndex(store.get(INDEX_KEY))
+        val paired = StoredJson.decodeIndex(store.get(INDEX_KEY))
+        reachList = accountReach.value
+        shownReach = reachList
+        val list = withAccount(paired, paired)
         val activeId = NewChatDefaults.startComputer(preferredId, store.get(ACTIVE_KEY), list.map { it.id })
         _state.update { it.copy(ready = true, computers = list, activeId = activeId) }
         activeId?.let { connect(it) }
+        // From now on the account's computers follow the sync: new ones appear, tombstoned ones go.
+        reachJob?.cancel()
+        reachJob = scope.launch { accountReach.collect { reachList = it; applyReach() } }
         // Sign-outs the computer has not heard yet: say them now, beside the normal connection.
         scope.launch { deliverSignOuts() }
     }
@@ -413,7 +432,8 @@ class ComputersRepository(
         val keyHex = E2E.toHex(deriveKey(link.key, link.room))
         val id = lock.withLock {
             // Re-scanning a computer we already know keeps its id and name.
-            val list = _state.value.computers
+            val all = _state.value.computers
+            val list = all.filter { !it.fromAccount }
             val sameRoute = list.lastOrNull { c ->
                 c.relayUrl == link.relayUrl && StoredJson.decodeSecret(store.get(secretKey(c.id)))?.room == link.room
             }
@@ -429,12 +449,14 @@ class ComputersRepository(
             val next = if (existing != null) list.map { if (it.id == id) it.copy(relayUrl = link.relayUrl, alts = link.alts, connectionDisabled = null) else it }
             else list + Computer(id, DEFAULT_COMPUTER_NAME, link.relayUrl, now(), alts = link.alts)
             saveIndex(next)
-            _state.update { it.copy(computers = next) }
+            _state.update { it.copy(computers = next + all.filter { c -> c.fromAccount }) }
             id
         }
         // Paired again: its fleet link still carries the old pairing, so it is dialed afresh.
         dropLink(id)
         connect(id)
+        // A computer that was shown from the account is now paired: one entry, with the account's routes added.
+        applyReach()
         return id
     }
 
@@ -449,6 +471,8 @@ class ComputersRepository(
     }
 
     suspend fun forget(id: String) {
+        // A computer of the account has no pairing to forget: it goes when this phone signs out of Nekko Cloud.
+        if (_state.value.computers.firstOrNull { it.id == id }?.fromAccount == true) return
         val activeId = lock.withLock {
             val wasActive = _state.value.activeId == id
             if (wasActive) disconnect()
@@ -466,7 +490,7 @@ class ComputersRepository(
             val next = _state.value.computers.filter { it.id != id }
             saveIndex(next)
             // No computer knows the Change key any more: the next pairing makes a new one.
-            if (next.isEmpty()) runCatching { changeSigner?.forget() }
+            if (next.none { !it.fromAccount }) runCatching { changeSigner?.forget() }
             val activeId = if (wasActive) next.firstOrNull()?.id else _state.value.activeId
             store.set(ACTIVE_KEY, activeId)
             _state.update {
@@ -478,13 +502,15 @@ class ComputersRepository(
             if (wasActive) activeId else null
         }
         activeId?.let { connect(it) }
+        // A forgotten pairing's computer shows again from the account when its record is there.
+        applyReach()
     }
 
     /** Make [id] the active computer and (re)connect to it. */
     suspend fun connect(id: String) = lock.withLock {
         release(id)
         val computer = _state.value.computers.firstOrNull { it.id == id } ?: return@withLock
-        val secret = StoredJson.decodeSecret(store.get(secretKey(id))) ?: return@withLock
+        val secret = secretOf(computer) ?: return@withLock
         // Already reached by the fleet: carry on with its open link and what it knows.
         val taken = links.remove(id)?.also { it.stop() }
         val peer = _state.value.peers[id]
@@ -557,6 +583,8 @@ class ComputersRepository(
                     _state.update { it.copy(conn = s.state, connDetail = s.detail, denied = s.denied ?: it.denied, route = s.route,
                         attention = if (s.state == RelayState.ONLINE) it.attention else it.attention.invalidate()) }
                     logStatus(s.state, s.detail, s.denied)
+                    if (s.state == RelayState.ONLINE) accountRetried.remove(id)
+                    if (s.state == RelayState.DENIED) retryAccount(computer, s.denied, active = true)
                     if (s.state == RelayState.ONLINE) scope.launch {
                         refresh()
                         // Back in reach: answers and approvals first (each checked against what still
@@ -606,19 +634,22 @@ class ComputersRepository(
 
     /** A connection to one paired computer, not yet dialed. */
     private suspend fun dial(computer: Computer, secret: ComputerSecret, hostKey: String): Remote {
+        val identity = accountIdentityFor(computer)
         val config = RelayConfig(
             relayUrl = computer.routes.first(),
             room = secret.room,
             key = secret.key,
             keyBytes = E2E.fromHex(secret.keyHex),
             hostKey = hostKey,
-            deviceId = deviceId(),
+            // A computer of the account has no pairing: this phone is `fleet:<its account device id>` there (decision 0126).
+            deviceId = identity?.linkDeviceId ?: deviceId(),
             deviceName = deviceName(),
             pairCode = secret.pair,
             platform = "android",
             alts = computer.routes.drop(1),
             routeAllowed = routeAllowed,
             helloSigner = helloSigner,
+            fleetHello = fleetHelloFor(computer, identity),
         )
         // Refusals read with the computer's current name (it can be renamed while connected).
         return PlainRefusals(remotes.create(config, scope)) {
@@ -691,7 +722,7 @@ class ComputersRepository(
     /** Dial one computer that isn't active, showing its saved list until it answers. */
     private suspend fun openLink(id: String) {
         val computer = _state.value.computers.firstOrNull { it.id == id } ?: return
-        val secret = StoredJson.decodeSecret(store.get(secretKey(id))) ?: return
+        val secret = secretOf(computer) ?: return
         var peer = Peer()
         chatListCache?.load(id)?.let { saved -> peer = peer.copy(summaries = saved.summaries, workspaces = saved.folders, savedAt = saved.savedAt) }
         val hostKey = secret.pin
@@ -702,7 +733,7 @@ class ComputersRepository(
         }
         _state.update { it.copy(peers = it.peers + (id to peer)) }
         val c = dial(computer, secret, hostKey)
-        listen(id, c, hadCode = secret.pair != null)
+        listen(id, c, hadCode = secret.pair != null, computer = computer)
         c.setNetworkPath(networkPath)
         c.connect()
     }
@@ -721,7 +752,7 @@ class ComputersRepository(
     }
 
     /** Follow one fleet link: its state, who is running there, and its list when a turn ends. */
-    private fun listen(id: String, c: Remote, hadCode: Boolean) {
+    private fun listen(id: String, c: Remote, hadCode: Boolean, computer: Computer? = null) {
         val link = PeerLink(c)
         links[id] = link
         link.job = scope.launch {
@@ -731,6 +762,8 @@ class ComputersRepository(
                     updatePeer(id) { p ->
                         p.copy(conn = s.state, detail = s.detail, denied = s.denied ?: p.denied.takeIf { s.state != RelayState.ONLINE })
                     }
+                    if (s.state == RelayState.ONLINE) accountRetried.remove(id)
+                    if (s.state == RelayState.DENIED && computer != null) retryAccount(computer, s.denied, active = false)
                     if (s.state == RelayState.ONLINE) scope.launch { refreshPeer(id, link) }
                 }
             }
@@ -1006,6 +1039,7 @@ class ComputersRepository(
     private suspend fun signOut(): SignOutResult {
         val id = _state.value.activeId ?: throw RelayException("No computer to sign out of.")
         val computer = _state.value.active ?: throw RelayException("No computer to sign out of.")
+        if (computer.fromAccount) throw RelayException("That computer is on your Nekko Cloud account, not paired. Sign out of Nekko Cloud to stop connecting to it.")
         val secret = StoredJson.decodeSecret(store.get(secretKey(id)))
         val c = client
         val sent = c != null && _state.value.conn == RelayState.ONLINE && try {
@@ -1457,7 +1491,115 @@ class ComputersRepository(
         if (s.pair != null) store.set(secretKey(id), StoredJson.encodeSecret(s.copy(pair = null)))
     }
 
-    private suspend fun saveIndex(list: List<Computer>) = store.set(INDEX_KEY, StoredJson.encodeIndex(list))
+    /** Only pairings are saved: a computer from the account is rebuilt from its `reach` record and goes on sign-out. */
+    private suspend fun saveIndex(list: List<Computer>) = store.set(INDEX_KEY, StoredJson.encodeIndex(list.filter { !it.fromAccount }))
+
+    // ---- the account's computers (decision 0126) ----
+
+    private val accountKeys = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val accountRetried = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    @Volatile private var reachList: List<Reach> = accountReach.value
+    /** The records the computers shown now were built from, to tell which one changed. */
+    private var shownReach: List<Reach> = emptyList()
+    private var reachJob: Job? = null
+
+    /** What this phone dials [c] with: its pairing's secret, or for a computer of the account the secret in its `reach` record. */
+    private suspend fun secretOf(c: Computer): ComputerSecret? {
+        if (!c.fromAccount) return StoredJson.decodeSecret(store.get(secretKey(c.id)))
+        val r = reachList.firstOrNull { !it.deleted && ACCOUNT_PREFIX + it.deviceId == c.id } ?: return null
+        val cacheKey = r.room + "\n" + r.secret
+        val hex = accountKeys[cacheKey] ?: E2E.toHex(deriveKey(r.secret, r.room)).also { accountKeys[cacheKey] = it }
+        return ComputerSecret(r.room, r.secret, hex, pair = null, hostKey = r.hostKey)
+    }
+
+    private suspend fun accountIdentityFor(c: Computer): AccountIdentity? = if (c.fromAccount) accountIdentity?.invoke() else null
+
+    /** The HELLO's `fleet` object for a computer of the account. Says nothing (no HELLO) while signed out or locked. */
+    private fun fleetHelloFor(c: Computer, identity: AccountIdentity?): ((com.nekko.protocol.FleetBinding) -> JsonObject?)? =
+        if (c.fromAccount) { b -> identity?.hello(b) } else null
+
+    /**
+     * `fleet-device` and `fleet-epoch` mean the computer has not read the account's newest list or key yet: read it
+     * here too (a sync), then dial again, once until the computer lets this phone in.
+     */
+    private fun retryAccount(c: Computer, reason: DenyReason?, active: Boolean) {
+        if (!c.fromAccount || (reason != DenyReason.FLEET_DEVICE && reason != DenyReason.FLEET_EPOCH)) return
+        val refresh = refreshAccount ?: return
+        if (!accountRetried.add(c.id)) return
+        scope.launch {
+            runCatching { refresh() }
+            if (active) { if (_state.value.activeId == c.id) connect(c.id) }
+            else lock.withLock { dropLink(c.id); syncFleet() }
+        }
+    }
+
+    /** [paired] with each room's routes from the account added, then the account's computers that have no pairing. */
+    private suspend fun withAccount(paired: List<Computer>, current: List<Computer>): List<Computer> {
+        val reach = reachList.filter { !it.deleted }
+        val matched = mutableSetOf<String>()
+        val merged = paired.map { c ->
+            val sec = StoredJson.decodeSecret(store.get(secretKey(c.id)))
+            val r = sec?.let { s -> reach.firstOrNull { it.room == s.room } }
+            if (sec == null || r == null) return@map c.copy(accountRoutes = emptyList())
+            matched += r.deviceId
+            // A record for another computer's key is no route to this one.
+            val extra = if (sec.pin == null || sec.pin == r.hostKey) r.routes.filter { it != c.relayUrl && it !in c.alts } else emptyList()
+            c.copy(accountRoutes = extra)
+        }
+        val byId = current.associateBy { it.id }
+        val account = reach.filter { it.deviceId !in matched }.map { r ->
+            val old = byId[ACCOUNT_PREFIX + r.deviceId]
+            Computer(
+                id = ACCOUNT_PREFIX + r.deviceId,
+                name = old?.takeIf { it.nameIsCustom == true }?.name ?: r.name,
+                relayUrl = r.routes.first(), pairedAt = old?.pairedAt ?: now(), platform = old?.platform,
+                alts = r.routes.drop(1), icon = old?.icon, nameIsCustom = old?.nameIsCustom,
+                connectionDisabled = old?.connectionDisabled, routeChoice = old?.routeChoice ?: RouteChoice.AUTO, fromAccount = true,
+            )
+        }
+        return merged + account
+    }
+
+    /**
+     * The account's records changed: show its computers that have no pairing, add its routes to the paired
+     * ones, and drop what a tombstone or sign-out took away. Redials only what changed and is not online.
+     */
+    private suspend fun applyReach() {
+        var reconnect: String? = null
+        lock.withLock {
+            val s = _state.value
+            if (!s.ready) return
+            val oldReach = shownReach.associateBy { it.deviceId }
+            val newReach = reachList.filter { !it.deleted }.associateBy { it.deviceId }
+            val next = withAccount(s.computers.filter { !it.fromAccount }, s.computers)
+            shownReach = reachList
+            val before = s.computers.associateBy { it.id }
+            val gone = s.computers.filter { it.fromAccount }.map { it.id }.toSet() - next.map { it.id }.toSet()
+            val changed = next.filter { c ->
+                val old = before[c.id] ?: return@filter false
+                if (c.fromAccount) oldReach[c.id.removePrefix(ACCOUNT_PREFIX)] != newReach[c.id.removePrefix(ACCOUNT_PREFIX)]
+                else old.accountRoutes != c.accountRoutes &&
+                    (if (c.id == s.activeId) s.conn else s.peers[c.id]?.conn ?: RelayState.IDLE) != RelayState.ONLINE
+            }.map { it.id }.toSet()
+            if (next == s.computers && changed.isEmpty()) return
+            _state.update { it.copy(computers = next) }
+            (gone + changed).forEach { dropLink(it) }
+            val active = s.activeId
+            if (active != null && active in gone) {
+                // The active computer was only there through the account: carry on with another.
+                disconnect()
+                val n = next.firstOrNull()?.id
+                store.set(ACTIVE_KEY, n)
+                _state.update { it.copy(activeId = n, conn = RelayState.IDLE, denied = null, summaries = emptyList()) }
+                reconnect = n
+            } else if (active != null && active in changed) {
+                reconnect = active
+            } else {
+                syncFleet()
+            }
+        }
+        reconnect?.let { connect(it) }
+    }
 
     private suspend fun deviceId(): String {
         cachedDeviceId?.let { return it }
@@ -1492,6 +1634,8 @@ class ComputersRepository(
         /** The service section's reads, and its changes (an install may take a while to be accepted), as on the iPhone. */
         const val SERVICE_READ_TIMEOUT_MS = 10_000L
         const val SERVICE_CHANGE_TIMEOUT_MS = 60_000L
+        /** The id of a computer shown from the account (decision 0126): never a pairing's id. */
+        const val ACCOUNT_PREFIX = "account:"
         fun secretKey(id: String) = "nekko.computer.$id"
     }
 }

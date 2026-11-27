@@ -59,6 +59,43 @@ object FleetLink {
         else -> null
     }
 
+    /**
+     * The sentence for a refusal of an account HELLO (decision 0126), where the phone may have no pairing to fall back on.
+     * `invalid` is the computer's catch-all for a HELLO it could not check.
+     */
+    fun accountRefusalText(code: String): String? = when (code) {
+        "fleet-off" -> "That computer has turned off connecting without pairing. Turn on \"Devices on my Nekko Cloud account connect without pairing\" there, or pair this phone."
+        "fleet-locked" -> "That computer is signed out of Nekko Cloud or locked. Unlock it, then try again."
+        "fleet-epoch" -> "That computer doesn't have the newest key yet. It will in a minute."
+        "fleet-device" -> "That computer doesn't know this phone yet. It will after it next syncs."
+        "fleet-account" -> "That computer belongs to a different Nekko Cloud account."
+        "invalid" -> "That computer couldn't check this phone's account proof. Pair this phone instead."
+        else -> null
+    }
+
+    /** The empty org id an account HELLO proof carries: account scope, not an organization's. */
+    const val ACCOUNT_ORG = ""
+
+    /** A `reach` record's plaintext (decision 0126), or null when it is not in shape. A tombstone is [Reach.deleted]. */
+    fun parseReach(plain: ByteArray): Reach? = runCatching {
+        val v = WireJson.parseToJsonElement(String(plain, Charsets.UTF_8)).jsonObject
+        if (v["v"]?.jsonPrimitive?.intOrNull != 1) return null
+        fun graphic(s: String?, max: Int) = s?.takeIf { it.isNotEmpty() && it.length <= max && it.all { c -> c.code in 0x21..0x7e } }
+        val id = graphic(v["deviceId"]?.jsonPrimitive?.contentOrNull, MAX_LEN) ?: return null
+        if (v["deleted"]?.jsonPrimitive?.contentOrNull == "true") return Reach(id, "", emptyList(), "", "", "", deleted = true)
+        val routes = v["routes"]!!.jsonArray.mapNotNull { graphic(it.jsonPrimitive.contentOrNull, 200) }
+            .filter { it.startsWith("ws://") || it.startsWith("wss://") }.take(MAX_ROUTES)
+        if (routes.isEmpty()) return null
+        Reach(
+            id,
+            v["name"]?.jsonPrimitive?.contentOrNull?.filter { !it.isISOControl() }?.take(80)?.ifBlank { null } ?: "Computer",
+            routes,
+            graphic(v["room"]?.jsonPrimitive?.contentOrNull, 64) ?: return null,
+            graphic(v["secret"]?.jsonPrimitive?.contentOrNull, 128) ?: return null,
+            graphic(v["hostKey"]?.jsonPrimitive?.contentOrNull, 200) ?: return null,
+        )
+    }.getOrNull()
+
     /** Whether one more try can help: the computer reads the account again after these two. */
     fun retryable(code: String) = code == "fleet-device" || code == "fleet-epoch"
 
@@ -182,3 +219,33 @@ class ConnectInfo(val routes: List<String>, val room: String, val secret: String
 
 /** What a fleet HELLO proof binds: this one handshake, as both ends hold it. */
 class FleetBinding(val room: String, val challenge: String, val hostEph: String, val clientEph: String, val helloKey: String)
+
+/**
+ * A computer of this account, as it published itself in a `reach` record (decision 0126): how to dial it with no pairing.
+ * [deviceId] is the computer's account device id. Holds the room secret, so its `toString` says nothing.
+ */
+data class Reach(
+    val deviceId: String,
+    val name: String,
+    val routes: List<String>,
+    val room: String,
+    val secret: String,
+    val hostKey: String,
+    val deleted: Boolean = false,
+) {
+    override fun toString() = "Reach($deviceId, $name, $routes, ..)"
+}
+
+/**
+ * What the account HELLO needs of a signed-in, unlocked phone: the current keyring and this phone's ids.
+ * Held only in memory by the caller; [hello] is what [RelayConfig.fleetHello] runs per handshake.
+ */
+class AccountIdentity(private val ring: AccountKeyring, val accountId: String, val keyId: Int, val deviceId: String) {
+    /** The HELLO `deviceId` for a computer this phone has no pairing with. */
+    val linkDeviceId: String get() = FleetLink.linkDeviceId(deviceId)
+
+    /** The HELLO's `fleet` object for one handshake, at account scope (empty org id). */
+    fun hello(b: FleetBinding): JsonObject = FleetLink.hello(ring, accountId, keyId, deviceId, FleetLink.ACCOUNT_ORG, b)
+
+    override fun toString() = "AccountIdentity($deviceId)"
+}

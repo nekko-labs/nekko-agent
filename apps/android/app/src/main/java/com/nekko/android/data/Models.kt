@@ -45,9 +45,22 @@ data class Computer(
     val connectionDisabled: Boolean? = null,
     /** Which kinds of route this phone dials to reach it (#3346). Saves from before this load as [RouteChoice.AUTO]. */
     val routeChoice: RouteChoice = RouteChoice.AUTO,
+    /**
+     * A computer of this phone's Nekko Cloud account with no pairing (decision 0126): dialed with the account
+     * HELLO, never saved with the pairings, gone on sign-out. Its [relayUrl] and [alts] are its `reach` record's routes.
+     */
+    val fromAccount: Boolean = false,
+    /**
+     * Routes the computer's `reach` record adds to a paired computer (decision 0126), kept in memory only:
+     * the saved pairing is never rewritten, and they go when the record is tombstoned or gone.
+     */
+    val accountRoutes: List<String> = emptyList(),
 ) {
-    /** The addresses this phone dials, in the pairing's order: [routeChoice]'s kinds, or all when that leaves none. */
-    val routes: List<String> get() = routeChoice.filter(listOf(relayUrl) + alts)
+    /**
+     * The addresses this phone dials, in the pairing's order then any the account added: [routeChoice]'s kinds,
+     * or all when that leaves none.
+     */
+    val routes: List<String> get() = routeChoice.filter((listOf(relayUrl) + alts + accountRoutes).distinct())
 }
 
 /** Secret half of a pairing, kept in [SecureStore] only. */
