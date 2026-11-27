@@ -635,6 +635,12 @@ function makeWebClient(): NekkoApi {
     getGitStatus: (id, force) => call(IpcChannels.workspaceGitStatus, id, force),
     listChatWorktrees: () => call(IpcChannels.chatWorktreesList),
     removeChatWorktree: (root) => call(IpcChannels.chatWorktreesRemove, root),
+    getStorageUsage: (refresh) => call(IpcChannels.storageUsage, { refresh: !!refresh }),
+    getDiskSpace: () => call(IpcChannels.storageDisk),
+    previewIdleWorktrees: () => call(IpcChannels.storageIdleWorktrees),
+    removeWorktrees: (roots) => call(IpcChannels.storageRemoveWorktrees, roots),
+    listRunnerImages: () => call(IpcChannels.storageRunnerImages),
+    removeRunnerImage: (name) => call(IpcChannels.storageRemoveRunnerImage, name),
 
     readFile: (path) => call(IpcChannels.fileRead, path),
     // The Local Web UI server serves pages on a port of its own, over plain

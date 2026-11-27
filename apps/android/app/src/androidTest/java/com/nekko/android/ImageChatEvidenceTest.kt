@@ -87,7 +87,8 @@ class ImageChatEvidenceTest {
             compose.waitUntil(10_000) { compose.onAllNodesWithTag("photo.full").fetchSemanticsNodes().isNotEmpty() }
             shot("image-full")
             assertEquals(listOf(JsonPrimitive("image-session"), JsonPrimitive("reply"), JsonPrimitive(0)), host.calls.single { it.first == "session:photo" }.second)
-            compose.onNodeWithText("Close").performClick()
+            // The full-screen viewer closes from its bar's close button (#2655).
+            compose.onNodeWithTag("photo.close").performClick()
             compose.onAllNodes(hasSetTextAction()).onFirst().performTextInput("A cat in a paper boat")
             compose.onNodeWithContentDescription("Send").performClick()
             compose.waitUntil(10_000) { host.signed.any { it.first == "chat:generateImage" } }
@@ -133,7 +134,7 @@ class ImageChatEvidenceTest {
             // Both revisions must render the actual chat row, not just its repository summary.
             compose.onNode(hasText("Paper boat") and hasClickAction()).assertIsDisplayed()
             if (!before) compose.onNodeWithTag("chats.row.image", useUnmergedTree = true)
-                .assertExists().assertTextEquals("Image").assertIsDisplayed()
+                .assertExists().assertContentDescriptionEquals("Image").assertIsDisplayed()
             else compose.onAllNodesWithTag("chats.row.image", useUnmergedTree = true).assertCountEquals(0)
             shot("image-summary")
         } catch (failure: Throwable) {
@@ -216,6 +217,7 @@ private class ImageEvidenceRemote : Remote {
     // Default grouped lists hide idle, unpinned chats older than 14 days. Missing dates parse as 0.
     private val updatedAt = System.currentTimeMillis()
     private val image = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAmElEQVR4nO3PMQ2AUBTFUPQhC1V4wQEGWDHw38BUmjS5Y4d7tv04l7vuZ7m/9dvfDgWgDwWgDwWgD30GWI5OfQC6D0D3AejeD7AcnfoAdB+A7gPQvR9gOTr1Aeg+AN0HoHs/wHJ06gPQfQC6D0D3foDl6NQHoPsAdB+A7v0Ay9GpD0D3Aeg+AN37AZajUx+A7gPQfQC61wNe8oUB/4lexNYAAAAASUVORK5CYII="
+    private val fullImage = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAIAAABMXPacAAAAyElEQVR42u3RQQ0AAAjEsJODJtQhFRnwaDIFa6pHh8UCAAAEAIAAABAAAAIAQAAACAAAAQAgAAAEAIAAABAAAAIAQAAACAAAAQAgAAAEAIAAABAAAAIAQAAACAAAAQAgAAAEAIAAABAAAAIAQAAACAAAAQAAwAUAAAQAgAAAEAAAAgBAAAAIAAABACAAAAQAgAAAEAAAAgBAAAAIAAABACAAAAQAgAAAEAAAAgBAAAAIAAABACAAAAQAgAAAEAAAAgBAAAAIwIcWtpWEOSjvbIgAAAAASUVORK5CYII="
     fun online() { welcome.tryEmit(WelcomedDevice("test", "Test phone", "android", PhoneProtocol.VERSION)); status.value = RelayStatus(RelayState.ONLINE) }
     override fun connect() { status.value = RelayStatus(RelayState.CONNECTING) }
     override fun close() { status.value = RelayStatus(RelayState.IDLE) }
@@ -238,7 +240,9 @@ private class ImageEvidenceRemote : Remote {
             "sessions:summaries" -> json("""[{"id":"image-session","title":"Paper boat","updatedAt":$updatedAt,"chatType":"image"}]""")
             "session:create" -> json("""{"id":"image-session"}""")
             "session:get" -> json("""{"id":"image-session","title":"Paper boat","chatType":"image","imageParams":{"modelId":"flux","cfgScale":4},"messages":[{"id":"reply","role":"assistant","content":"","reasoning":"Rendering","images":["$image"],"generated":{"modelId":"flux","width":1024,"height":1024}}]}""")
-            "session:photo" -> JsonPrimitive(image)
+            // The full photo differs from the reply's small copy, as on a real computer: the viewer
+            // only swaps in (and tags `photo.full`) a full copy that isn't the one already shown (#2655).
+            "session:photo" -> JsonPrimitive(fullImage)
             "workspace:list", "skills:list", "skills:all", "skills:runnable", "prompts:list" -> JsonArray(emptyList())
             "chat:pending" -> JsonObject(emptyMap())
             else -> JsonNull

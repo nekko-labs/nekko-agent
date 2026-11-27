@@ -276,6 +276,8 @@ export interface AppSettings {
   themePreset?: string;
   /** Settings > Style: the interface font family; unset is Geist (docs/design-system.md). */
   fontSans?: string;
+  /** How much of the composer plan to show. Unset defaults to balanced. */
+  planDisplay?: 'full' | 'balanced' | 'one' | 'hidden';
   /** Settings > Style: the code font family; unset is Geist Mono. */
   fontMono?: string;
   /** Settings > Style: interface scale in percent; unset is 100. */

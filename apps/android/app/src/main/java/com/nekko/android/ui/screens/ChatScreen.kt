@@ -787,7 +787,8 @@ private fun ChatScreenContent(
                     }
                     // The agent's plan, right on the composer's top edge (#2115).
                     val planUi by vm.plan.collectAsStateWithLifecycle()
-                    planUi?.let { com.nekko.android.ui.chat.PlanSheet(it, showPrs = simple.shown("pr-status", pr = true), onOpenChat = { id -> onOpenChat(id, null) }) }
+                    val planMode by vm.planDisplay.collectAsStateWithLifecycle()
+                    androidx.compose.runtime.key(vm.sessionId) { planUi?.let { com.nekko.android.ui.chat.PlanSheet(it, planMode, vm::setPlanDisplay, showPrs = simple.shown("pr-status", pr = true), onOpenChat = { id -> onOpenChat(id, null) }) } }
                     Composer(
                         restore = restore,
                         onRestored = vm::restored,

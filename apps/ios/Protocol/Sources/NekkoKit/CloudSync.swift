@@ -94,6 +94,17 @@ public final class CloudSync {
     private let key: () throws -> SyncAgreementKey
     private var state: State
     private var supabase: (url: String, anon: String)?
+    /// The clock, replaced by tests.
+    var now: @Sendable () -> Date = Date.init
+    /// The one sync running now: a second call (view task, pull to refresh, Check now) shares it.
+    private var syncTask: Task<Void, Error>?
+    /// When the refresh at the start of a sync last finished, and for which token.
+    private var refreshed: (at: Date, token: String)?
+    /// A refresh this recent is not repeated by `sync()`.
+    static let freshFor: TimeInterval = 3
+    /// The fleet list loaded this recently (for this session) is not fetched again.
+    private var machinesLoadedAt: Date?
+    static let machinesFreshFor: TimeInterval = 5
 
     /// What survives a relaunch, none of it secret.
     struct State: Codable, Equatable {
@@ -114,6 +125,8 @@ public final class CloudSync {
         /// An iPhone that was already syncing before it could read them pulls once from the start if the
         /// account has compressed records, so the ones an older build skipped are read.
         var zCatchup: Bool?
+        /// The account's `cloud-machines` switch, as last read, so the machines screens show from launch.
+        var machines: Bool?
     }
 
     /// - Parameter key: this iPhone's agreement key, made on first use (a Secure Enclave key on a device).
@@ -130,6 +143,7 @@ public final class CloudSync {
         self.key = key
         state = secrets.get("cloud.state").flatMap { try? JSONDecoder().decode(State.self, from: Data($0.utf8)) } ?? State()
         account = state.account
+        fleetEnabled = state.machines ?? false
         waitingForApproval = state.waiting
         joinCode = state.waiting ? secrets.get("cloud.joinCode") : nil
         chats = Self.decodeChats(files?.load("cloud", "chats"))
@@ -239,6 +253,8 @@ public final class CloudSync {
         if account?.id != a.id { resetFleet() }
         state.account = a
         account = a
+        state.machines = me["account"]?["features"]?["cloud-machines"]?.bool ?? false
+        fleetEnabled = state.machines ?? false
         let remote = try await request("GET", path("/v1/sync/state"), token: t)
         // A number the server sends that doesn't fit is treated as missing, never trapped on.
         remoteKeyId = remote.long("currentKeyId").flatMap { UInt32(exactly: $0) }.flatMap { $0 >= 1 ? $0 : nil }
@@ -350,12 +366,32 @@ public final class CloudSync {
 
     // MARK: Sync (read)
 
+    /// Pull what is new. Callers that arrive while a sync runs share it instead of starting another
+    /// that would pull from the same cursor and race it.
     public func sync() async throws {
+        if let running = syncTask { return try await running.value }
+        let task = Task { [self] in
+            defer { syncTask = nil }
+            try await runSync()
+        }
+        syncTask = task
+        try await task.value
+    }
+
+    private func runSync() async throws {
         let t = try token()
         syncing = true
         defer { syncing = false }
         do {
-            try await refresh()
+            // The account and sync state a sync just read are not read again a moment later.
+            // Only one an earlier sync did counts: after approving a device, restoring, and so on, the next sync asks.
+            if let r = refreshed, r.token == t, now().timeIntervalSince(r.at) < Self.freshFor, account != nil {
+                // fresh enough
+            } else {
+                refreshed = nil
+                try await refresh()
+                refreshed = (now(), t)
+            }
             if state.keyId != nil && remoteKeyId == nil {
                 // Everything synced was deleted (on a computer, or by the server).
                 forgetKeys()
@@ -847,6 +883,7 @@ public final class CloudSync {
         fleetGeneration = UUID()
         fleetLoading = false
         fleetSession = nil
+        machinesLoadedAt = nil
         machines = []
         machinesRelay = nil
         machineLinks = [:]
@@ -884,7 +921,7 @@ public final class CloudSync {
     /// The computer id a machine was paired as on this iPhone.
     public func computerId(for machine: Machine) -> String? { fleetConnected ? machineLinks[machine.id] : nil }
 
-    public func loadMachines() async throws {
+    public func loadMachines(force: Bool = false) async throws {
         // Also enforce this below the UI, so an accidental task cannot contact the fleet.
         guard fleetEnabled else { return }
         guard signedIn, let accountId = account?.id, !accountId.isEmpty else {
@@ -893,6 +930,8 @@ public final class CloudSync {
         }
         guard !fleetLoading else { return }
         let t = try token()
+        // Two screens asking in a row share one fetch.
+        if !force, fleetConnected, let at = machinesLoadedAt, now().timeIntervalSince(at) < Self.machinesFreshFor { return }
         let generation = fleetGeneration
         fleetLoading = true
         defer { if generation == fleetGeneration { fleetLoading = false } }
@@ -913,6 +952,7 @@ public final class CloudSync {
             machinesRelay = v.str("relayUrl")
             loadLinks()
             fleetSession = (accountId, t)
+            machinesLoadedAt = now()
         } catch {
             if generation == fleetGeneration, account?.id == accountId, secrets.get("cloud.token") == t { resetFleet() }
             throw error

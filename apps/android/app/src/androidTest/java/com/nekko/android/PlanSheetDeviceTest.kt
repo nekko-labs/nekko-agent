@@ -74,6 +74,8 @@ class PlanSheetDeviceTest {
         if (revision != "after") return
         compose.onNode(hasTestTag("chat.planFolded")).performClick()
         compose.waitUntil(5_000) { compose.onAllNodes(hasTestTag("chat.planOpen")).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNode(hasTestTag("chat.planStep.step_2")).assertDoesNotExist()
+        compose.onNode(hasTestTag("chat.planCompleted")).performClick()
         compose.onNode(hasTestTag("chat.planStep.step_2")).assertExists()
         settle()
         shot("2-open")

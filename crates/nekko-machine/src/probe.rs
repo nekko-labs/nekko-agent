@@ -97,6 +97,11 @@ pub fn release() -> String {
 
 /// Free bytes on the volume holding `dir` (`statfs(dir).bavail * bsize`).
 pub fn disk_free(dir: &Path) -> Option<f64> {
+    disk_space(dir).map(|(_, free)| free)
+}
+
+/// `(total, free)` bytes of the volume holding `dir`; free is what a user may still write.
+pub fn disk_space(dir: &Path) -> Option<(f64, f64)> {
     #[cfg(unix)]
     {
         use std::os::unix::ffi::OsStrExt;
@@ -109,8 +114,8 @@ pub fn disk_free(dir: &Path) -> Option<f64> {
             }
             // The field types differ by platform (u32 on macOS, u64 on Linux).
             #[allow(clippy::unnecessary_cast)]
-            let free = s.f_bavail as f64 * s.f_frsize as f64;
-            Some(free)
+            let (free, total) = (s.f_bavail as f64 * s.f_frsize as f64, s.f_blocks as f64 * s.f_frsize as f64);
+            Some((total, free))
         }
     }
     #[cfg(windows)]
@@ -118,11 +123,10 @@ pub fn disk_free(dir: &Path) -> Option<f64> {
         use std::os::windows::ffi::OsStrExt;
         use windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
         let wide: Vec<u16> = dir.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
-        let mut available = 0u64;
+        let (mut available, mut total) = (0u64, 0u64);
         // SAFETY: a NUL-terminated wide path and out-pointers to locals.
-        let ok =
-            unsafe { GetDiskFreeSpaceExW(wide.as_ptr(), &mut available, std::ptr::null_mut(), std::ptr::null_mut()) };
-        (ok != 0).then_some(available as f64)
+        let ok = unsafe { GetDiskFreeSpaceExW(wide.as_ptr(), &mut available, &mut total, std::ptr::null_mut()) };
+        (ok != 0).then_some((total as f64, available as f64))
     }
 }
 
@@ -461,4 +465,16 @@ async fn backends() -> Vec<String> {
     let smi = run_ok("nvidia-smi", &["-L"], Duration::from_secs(4)).await;
     let vk = run_ok("vulkaninfo", &["--summary"], Duration::from_secs(4)).await;
     parse::gpu_backends(smi.as_deref(), vk.as_deref())
+}
+
+/// Every process's working directory this user can read, canonical.
+pub fn process_cwds() -> Vec<std::path::PathBuf> {
+    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+    let mut sys = System::new();
+    sys.refresh_processes_specifics(
+        ProcessesToUpdate::All,
+        true,
+        ProcessRefreshKind::nothing().with_cwd(UpdateKind::Always),
+    );
+    sys.processes().values().filter_map(|p| p.cwd()).filter_map(|d| std::fs::canonicalize(d).ok()).collect()
 }

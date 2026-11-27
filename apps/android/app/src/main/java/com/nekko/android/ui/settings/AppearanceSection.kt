@@ -49,6 +49,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nekko.android.data.PlanDisplay
 import com.nekko.android.R
 import com.nekko.android.lock.LocalAppLock
 import com.nekko.android.ui.components.NCard
@@ -68,6 +69,8 @@ fun AppearanceSection(deps: SettingsDeps) {
     val p = Nekko.palette
     val themePrefs = deps.themePrefs
     val choice by themePrefs.choice.collectAsStateWithLifecycle()
+    val planMode by deps.phonePrefs.flow(PlanDisplay.KEY).collectAsStateWithLifecycle()
+    var planMenu by remember { mutableStateOf(false) }
     var picking by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val lock = LocalAppLock.current
@@ -85,6 +88,13 @@ fun AppearanceSection(deps: SettingsDeps) {
                 icon = ThemeIcons.of(current),
                 tag = "settings.theme",
             ) { picking = true }
+            HorizontalDivider(color = p.line)
+            Box {
+                LinkRow(stringResource(R.string.plan_display), stringResource(planMode.label), tag = "settings.planDisplay") { planMenu = true }
+                androidx.compose.material3.DropdownMenu(expanded = planMenu, onDismissRequest = { planMenu = false }) {
+                    PlanDisplay.entries.forEach { mode -> androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(mode.label)) }, onClick = { deps.phonePrefs.set(PlanDisplay.KEY, mode); planMenu = false }) }
+                }
+            }
             HorizontalDivider(color = p.line)
             LinkRow(
                 stringResource(R.string.appearance_language),

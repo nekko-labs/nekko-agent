@@ -26,6 +26,7 @@
 //! Merging is per chat, newest `updatedAt` wins; a chat a turn is running in
 //! is never overwritten (its local copy is newer by the time it saves).
 
+mod coalesce;
 mod fleet_link;
 mod http;
 pub mod library;
@@ -57,6 +58,9 @@ use zeroize::Zeroize;
 pub use fleet_link::{ConnectInfo, FleetAdmitted, FleetTarget, HelloBinding};
 pub use http::client;
 pub use org_records::{LocalModel, RunnerSummary};
+/// How many wanted pictures are fetched at once.
+const PICTURE_FETCHES: usize = 3;
+
 pub use orgs::{HEARTBEAT, HostInfo, ModelFuture};
 
 pub const CHANNELS: &[&str] = &[
@@ -186,6 +190,8 @@ pub struct Cloud {
     share: tokio::sync::Mutex<()>,
     /// The Nekko Cloud Relay account channel: presence and sync nudges (decision 0116).
     relay: relay_channel::Channel,
+    /// When `refresh` last finished; held while `cloud:refresh` runs so concurrent callers share it.
+    refreshed: tokio::sync::Mutex<coalesce::Refreshed>,
     /// Relay tickets kept until they are due for renewal (`renewAfterSeconds`).
     tickets: pace::Tickets,
     /// A pass started by a Relay nudge is waiting out its jitter; more nudges join it.
@@ -231,6 +237,7 @@ impl Cloud {
             host: Mutex::new(None),
             share: tokio::sync::Mutex::new(()),
             relay: relay_channel::Channel::default(),
+            refreshed: tokio::sync::Mutex::new(coalesce::Refreshed::default()),
             tickets: pace::Tickets::default(),
             nudge_pending: pace::Pending::default(),
             lease_seconds: std::sync::atomic::AtomicU64::new(0),
@@ -293,7 +300,7 @@ impl Cloud {
         match channel {
             "cloud:status" => Ok(self.status()),
             "cloud:refresh" => {
-                self.refresh().await?;
+                self.refresh_coalesced().await?;
                 Ok(self.status())
             }
             "cloud:sendCode" => self.send_code(&arg(args, 0)).await,
@@ -690,6 +697,20 @@ impl Cloud {
                 "usage": live.remote.as_ref().and_then(|r| r.get("usage")).cloned(),
             },
         })
+    }
+
+    /// `cloud:refresh` from a window: the account and sync state are read again unless a refresh
+    /// finished in the last few seconds (Settings > Sync on every mount, sign-in and Plan on every
+    /// window focus all ask), and callers that arrive together share one.
+    async fn refresh_coalesced(&self) -> Result<(), String> {
+        let token = self.token()?;
+        let mut last = self.refreshed.lock().await;
+        if last.is_fresh(&token, Instant::now(), coalesce::REFRESH_WITHIN) {
+            return Ok(());
+        }
+        self.refresh().await?;
+        last.mark(&token, Instant::now());
+        Ok(())
     }
 
     /// Fetch the account and the sync state from Nekko Cloud.
@@ -1893,7 +1914,7 @@ impl Cloud {
         })
     }
 
-    /// Fetch, one by one, the pictures chats here refer to that are not beside them yet (a chat
+    /// Fetch, a few at a time, the pictures chats here refer to that are not beside them yet (a chat
     /// that arrived before its picture, or a picture removed here since). One Nekko Cloud has no
     /// record of, or only a tombstone for, is no longer looked for.
     async fn fetch_wanted_pictures(&self, token: &str) -> Result<(), String> {
@@ -1903,26 +1924,25 @@ impl Cloud {
         }
         let account_id = self.account_id()?;
         let Some(keyring) = self.keyring(self.key_id()) else { return Ok(()) };
-        for local in wanted {
-            let name = local.rsplit('\n').next().unwrap_or("");
-            if self.sessions.has_blob(name) {
+        coalesce::for_each_bounded(wanted, PICTURE_FETCHES, |local| {
+            let (account_id, keyring) = (&account_id, &keyring);
+            async move {
+                let name = local.rsplit('\n').next().unwrap_or("");
+                if !self.sessions.has_blob(name) {
+                    let oid = object_id(keyring, records::PICTURE, &local).map_err(|err| err.to_string())?;
+                    match self.api.get(token, &format!("/v1/sync/objects/{}/{oid}", records::PICTURE)).await {
+                        Ok(o) => self.apply(account_id, &o)?,
+                        Err(err) if err.status == 404 => {}
+                        Err(err) => return Err(e(err)),
+                    }
+                }
+                // Arrived, or nothing more will: either way it is not looked for again.
                 self.edit(|s| {
                     s.pictures_wanted.remove(&local);
-                })?;
-                continue;
+                })
             }
-            let oid = object_id(&keyring, records::PICTURE, &local).map_err(|err| err.to_string())?;
-            match self.api.get(token, &format!("/v1/sync/objects/{}/{oid}", records::PICTURE)).await {
-                Ok(o) => self.apply(&account_id, &o)?,
-                Err(err) if err.status == 404 => {}
-                Err(err) => return Err(e(err)),
-            }
-            // Arrived, or nothing more will: either way it is not looked for again.
-            self.edit(|s| {
-                s.pictures_wanted.remove(&local);
-            })?;
-        }
-        Ok(())
+        })
+        .await
     }
 
     /// Another computer's Library file: a read-only copy under `<data>/cloud/library/<folder key>/`,
