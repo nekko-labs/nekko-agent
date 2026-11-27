@@ -69,6 +69,11 @@ public final class CloudSync {
     public private(set) var syncing = false
     public private(set) var error: String?
     public private(set) var lastSyncAt: Date?
+    /// How to reach the account's computers with no pairing (decision 0128), by the object id each is filed under.
+    /// Kept in the Keychain (it holds each room's secret), and empty once signed out.
+    private var reachByObject: [String: ReachRecord] = [:]
+    /// Told, on the main actor, whenever the set of reach records changes.
+    @ObservationIgnored public var onReachChange: (@MainActor ([ReachRecord]) -> Void)?
     /// The account already syncs (a key epoch exists on the server).
     public var accountSyncs: Bool { remoteKeyId != nil }
     /// The newest key epoch on the server.
@@ -147,6 +152,99 @@ public final class CloudSync {
         waitingForApproval = state.waiting
         joinCode = state.waiting ? secrets.get("cloud.joinCode") : nil
         chats = Self.decodeChats(files?.load("cloud", "chats"))
+        if state.account != nil, secrets.get("cloud.token") != nil {
+            reachByObject = secrets.get("cloud.reach").flatMap { try? JSONValue.parse(Data($0.utf8)) }.map(Self.decodeReach) ?? [:]
+        }
+    }
+
+    // MARK: Reach records (decision 0128)
+
+    /// One computer of this account and how to reach it: the sealed `reach` record it publishes.
+    /// Holds the room secret, so it prints nothing.
+    public struct ReachRecord: Equatable, Sendable, CustomStringConvertible, CustomDebugStringConvertible {
+        /// The computer's account device id.
+        public let deviceId: String
+        public let name: String
+        /// Every relay the room is on, the main relay first, at most 4.
+        public let routes: [String]
+        public let room: String
+        public let secret: String
+        /// The computer's public key, pinned as for a pairing.
+        public let hostKey: String
+        public var description: String { "ReachRecord(\(name))" }
+        public var debugDescription: String { description }
+    }
+
+    static let maxReachRoutes = 4
+
+    /// A record's plaintext, refused unless it is in shape (the engine's `reach` wire format, version 1).
+    static func reachRecord(_ v: JSONValue) -> ReachRecord? {
+        func graphic(_ s: String?, _ max: Int) -> String? {
+            s.flatMap { !$0.isEmpty && $0.utf8.count <= max && $0.utf8.allSatisfy { (0x21...0x7e).contains($0) } ? $0 : nil }
+        }
+        guard v.long("v") == 1, v["deleted"]?.bool != true, let id = graphic(v.str("deviceId"), 64),
+              let room = graphic(v.str("room"), 64), let secret = graphic(v.str("secret"), 128),
+              let hostKey = graphic(v.str("hostKey"), 200) else { return nil }
+        let routes = (v["routes"]?.array ?? []).compactMap { r -> String? in
+            guard case .string(let s) = r, let g = graphic(s, 200), g.hasPrefix("ws://") || g.hasPrefix("wss://") else { return nil }
+            return g
+        }
+        var seen = Set<String>()
+        let unique = routes.filter { seen.insert($0).inserted }.prefix(maxReachRoutes)
+        guard !unique.isEmpty else { return nil }
+        let name = v.str("name").map { String($0.trimmingCharacters(in: .whitespacesAndNewlines).prefix(40)) } ?? ""
+        return ReachRecord(deviceId: id, name: name.isEmpty ? "Computer" : name, routes: Array(unique), room: room, secret: secret, hostKey: hostKey)
+    }
+
+    static func decodeReach(_ v: JSONValue) -> [String: ReachRecord] {
+        guard let o = v.object else { return [:] }
+        return o.compactMapValues { reachRecord($0) }
+    }
+
+    private func saveReach() {
+        let o: [String: JSONValue] = reachByObject.mapValues { r in
+            .object(["v": .int(1), "deviceId": .string(r.deviceId), "name": .string(r.name), "routes": .array(r.routes.map { .string($0) }),
+                     "room": .string(r.room), "secret": .string(r.secret), "hostKey": .string(r.hostKey)])
+        }
+        secrets.set("cloud.reach", o.isEmpty ? nil : JSONValue.object(o).serialized())
+        onReachChange?(reach)
+    }
+
+    /// The account's computers that can be reached with no pairing, by name. Empty unless signed in with sync keys.
+    public var reach: [ReachRecord] {
+        guard signedIn, hasKeys else { return [] }
+        return reachByObject.values.sorted { ($0.name, $0.deviceId) < ($1.name, $1.deviceId) }
+    }
+
+    private func clearReach() {
+        guard !reachByObject.isEmpty || secrets.get("cloud.reach") != nil else { return }
+        reachByObject = [:]
+        saveReach()
+    }
+
+    /// What dials a computer of this account with no pairing: this device's account id and a maker of the HELLO's `fleet`
+    /// object, fixed to the current key epoch's keyring. Nil while signed out or without keys.
+    public struct AccountLink: Sendable {
+        public let deviceId: String
+        public let hello: @Sendable (FleetLink.Binding) -> JSONValue?
+    }
+
+    public func accountLink() -> AccountLink? {
+        guard signedIn, let accountId = account?.id, let deviceId = state.deviceId, let keyId = state.keyId, let ring = keyring(keyId) else { return nil }
+        return AccountLink(deviceId: deviceId) { binding in
+            FleetLink.hello(keyring: ring, accountId: accountId, keyId: keyId, deviceId: deviceId, binding: binding)
+        }
+    }
+
+    /// How often the app syncs in the background of its own screens while open.
+    public static let backgroundEvery: TimeInterval = 180
+
+    /// A sync pass for the app to run on launch, on foreground and every few minutes while open, whenever this
+    /// iPhone is signed in and joined. Never from a screen's task, never throws: the reach records it pulls
+    /// reach the computers list through `onReachChange`.
+    public func syncQuietly() async {
+        guard signedIn, account?.canSync == true, hasKeys else { return }
+        try? await sync()
     }
 
     public var signedIn: Bool { account != nil && secrets.get("cloud.token") != nil }
@@ -236,6 +334,7 @@ public final class CloudSync {
         state.keysAccount = state.keysAccount ?? state.account?.id
         state.account = nil
         account = nil
+        clearReach()
         devices = []
         boundDevice = nil
         save()
@@ -561,6 +660,24 @@ public final class CloudSync {
             } else {
                 return
             }
+        case "reach":
+            guard let plain = try? SyncCrypto.openRecord(keyring: kr, account: accountId, keyId: kid, collection: collection,
+                                                         objectId: oid, revision: UInt64(rev), blob: o.str("blob") ?? ""),
+                  let v = try? JSONValue.parse(plain), v.long("v") == 1, let deviceId = v.str("deviceId"),
+                  // The record must be the one filed under this computer's id: the server can't swap computers.
+                  (try? SyncCrypto.objectId(keyring: kr, collection: "reach", localId: deviceId)) == oid else { return }
+            // This iPhone's own device id is never a computer to dial.
+            if deviceId == state.deviceId { break }
+            if v["deleted"]?.bool == true {
+                if reachByObject.removeValue(forKey: oid) != nil { saveReach() }
+            } else if let r = Self.reachRecord(v) {
+                if reachByObject[oid] != r {
+                    reachByObject[oid] = r
+                    saveReach()
+                }
+            } else {
+                return
+            }
         default:
             return
         }
@@ -793,11 +910,13 @@ public final class CloudSync {
         joinCode = nil
         chats = []
         files?.remove("cloud")
+        clearReach()
     }
 
     /// Forget sync (keys already gone), keeping the sign-in.
     private func resetSync() {
         state = State(account: state.account, keysAccount: state.account?.id)
+        clearReach()
         waitingForApproval = false
         save()
     }

@@ -249,6 +249,7 @@ extension ComputersStore {
         switch signal {
         case .status(let s):
             if s.state != .online { invalidateAttention(id) }
+            noteAccountStatus(id, s)
             peers[id]?.conn = s.state
             peers[id]?.detail = s.detail
             if let d = s.denied { peers[id]?.denied = d } else if s.state == .online { peers[id]?.denied = nil }
