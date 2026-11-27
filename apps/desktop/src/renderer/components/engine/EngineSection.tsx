@@ -379,7 +379,6 @@ export function EngineSection({
               memory={status.memory}
               resident={status.resident}
               settings={status.settings}
-              running={running}
               onChanged={refresh}
               onOpenModel={onOpenModel}
               onFind={() => setTab('find')}

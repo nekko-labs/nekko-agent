@@ -31,7 +31,12 @@ Updated 2026-11-07 (the Agent server half superseded 2026-11-20, below: it moved
 
 - **On this machine** defaults to **Recent** (newest added first). A sort control also offers **Name** (A–Z) and **Size** (largest first). A family sorts by its newest installed file or the sum of its installed files; its variants use the same sort across folders. Find new models keeps its own order.
 - Installed fit icons use the engine’s fit result, not a file-size estimate. A known fit shows a check, a partial or too-large fit shows a warning, and load problems or residency take precedence. The row still states the result in words. This supersedes the earlier no-glyph rule for healthy installed families with a known fit.
-- Clicking an installed family opens or closes its details. In that pane, clicking a variant’s name and facts opens or closes its Settings (Image settings for image models). Load, On start, Favorite, Default, and Delete are separate controls and never operate the disclosure.
+- Clicking an installed family opens or closes its details. In that pane, clicking a variant’s name and facts opens or closes its Settings (Image settings for image models). Load, Favorite, Default, and Delete are separate controls and never operate the disclosure. Startup loading is now inside the disclosure (#3574).
+
+**Installed variant cards (#3574).** `[implemented in the desktop renderer; isolated verification below, no real model loaded]`
+
+- An installed variant shows its name once and reveals its settings in a recessed section attached underneath. **Load when the engine starts** is in that section. The primary **Load** button sits at the far right and still uses the model’s saved or automatic settings.
+- The compact preview under the name shows a rough load estimate for a known single-pool GGUF fit. Otherwise it labels the on-disk weights and, where the engine reports a memory capacity, shows them against that capacity in a striped bar. An unknown size is shown as unknown. This preview does not query the placement planner per row; configuration estimates and live usage still have separate meters.
 
 **Configuration memory in model settings (#3361).** `[implemented; verified in a hidden desktop renderer at 1280 and 390 px; actual runtime allocation not measured]`
 
