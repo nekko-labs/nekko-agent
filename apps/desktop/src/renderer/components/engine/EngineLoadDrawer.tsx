@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { GpuFit, LoadParams, LocalModel, PlacementPlan, Recommendation, SplitPreset } from '@nekko-agent/shared';
+import { useCallback, useEffect, useId, useMemo, useState, type CSSProperties } from 'react';
+import type { EngineMemory, GpuFit, LoadParams, LocalModel, PlacementPlan, Recommendation, SplitPreset } from '@nekko-agent/shared';
 import { ENGINE_KV_CACHE_DTYPE } from '@nekko-agent/shared';
 import { Toggle } from '../primitives/index.js';
 import { formatBytes, formatTokens } from '../runtimes/verdict.js';
 import { useStore } from '../../store.js';
 import { Shown } from '../ModeViews.js';
 import { LoadMemoryMeter, useLoadPlacement } from './LoadMemoryMeter.js';
+import { ModelAllocationBar } from './ModelAllocationBar.js';
 import { dflash2DraftName, draftModelCandidates, isStockDflash2Target } from './draftModels.js';
 import {
   KEEP_LABELS,
@@ -23,7 +24,6 @@ import {
   keepOf,
   keepParams,
   matchesRecommendation,
-  pagesOf,
   precisionOf,
   runOnOf,
   sessionsOf,
@@ -55,6 +55,8 @@ export function EngineLoadDrawer({
   onDone,
   onClose,
   initialSurface = 'simple',
+  attached = false,
+  memory,
 }: {
   providerId: string;
   model: LocalModel & { loaded: boolean; gpuFit?: GpuFit };
@@ -69,6 +71,9 @@ export function EngineLoadDrawer({
   onClose: () => void;
   /** A jump from "where does it run" opens with More controls unfolded. */
   initialSurface?: 'simple' | 'advanced';
+  /** The installed card already supplies the name and outer surface. */
+  attached?: boolean;
+  memory?: EngineMemory;
 }) {
   const pushToast = useStore((s) => s.pushToast);
   const saved = useMemo(() => fromPreset(model.preset), [model.preset]);
@@ -83,7 +88,9 @@ export function EngineLoadDrawer({
   const layers = model.layers;
   const moe = isMoe(model);
   const mlx = model.format === 'mlx';
-  const stops = useMemo(() => contextStops(model.maxContext), [model.maxContext]);
+  const contextId = useId();
+  const recommendedContext = rec?.request.contextTokens;
+  const stops = useMemo(() => contextStops(model.maxContext, recommendedContext), [model.maxContext, recommendedContext]);
 
   const patch = (p: Partial<LoadParams>) => setParams((prev) => ({ ...prev, ...p }));
   /** A hand edit to placement is a custom split. */
@@ -184,6 +191,8 @@ export function EngineLoadDrawer({
   const perSession = contextPerSession(params);
   const sessions = sessionsOf(params);
   const ctxIndex = Math.max(0, stops.indexOf(nearest(stops, perSession)));
+  const recommendedIndex = recommendedContext === undefined ? -1 : stops.indexOf(recommendedContext);
+  const stopPosition = (index: number) => `${100 * index / Math.max(1, stops.length - 1)}%`;
   const setContext = (perSessionTokens: number) => {
     if (split === 'coding') setSplit('custom');
     patch({ contextTokens: perSessionTokens * sessions });
@@ -192,27 +201,67 @@ export function EngineLoadDrawer({
   const keep = keepOf(params);
 
   return (
-    <div className="mt-2 rounded-xl border p-4" style={{ borderColor: 'var(--line)' }} data-engine-load-drawer>
-      <div className="flex flex-wrap items-start gap-2">
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">{model.name}</p>
-          <p className="text-xs text-ink-faint">
-            {[
-              model.parameterSize,
-              model.quantization,
-              moe && model.weightLayout?.experts && `${model.weightLayout.experts} experts`,
-              model.maxContext && `${formatTokens(model.maxContext)} max`,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-          </p>
-        </div>
+    <div className={attached ? undefined : 'mt-2 rounded-xl border border-line p-4'} data-engine-load-drawer>
+      <div className="flex flex-wrap items-start justify-end gap-2">
+        {!attached && (
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">{model.name}</p>
+            <p className="text-xs text-ink-faint">
+              {[
+                model.parameterSize,
+                model.quantization,
+                moe && model.weightLayout?.experts && `${model.weightLayout.experts} experts`,
+                model.maxContext && `${formatTokens(model.maxContext)} max`,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
+          </div>
+        )}
         {plan && plan.verdict !== 'unknown' && <VerdictChip plan={plan} />}
       </div>
 
-      <LoadMemoryMeter model={model} plan={plan} params={params} pending={pending} previous={previous} />
+      {attached ? <ModelAllocationBar model={model} plan={plan} params={params} pending={pending} previous={previous} memory={memory} />
+        : <LoadMemoryMeter model={model} plan={plan} params={params} pending={pending} previous={previous} />}
 
-      <div className="mt-3">
+      <div className="mt-3" data-context-control>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+          <label htmlFor={contextId} className="text-xs font-medium">
+            Context {matches.context && <RecommendedTag />}
+          </label>
+          <div className="flex flex-wrap items-center gap-x-2">
+            <span className="font-mono text-2xs" data-context-label>
+              {formatTokens(perSession)} per session{sessions > 1 ? ` · ${formatTokens(perSession * sessions)} total` : ''}
+            </span>
+            {recommendedContext !== undefined && <button type="button" data-context-reset className="btn btn-ghost px-2 py-0.5 text-2xs"
+              aria-label="Reset context to recommended" title="Reset context only; other settings stay as set"
+              disabled={perSession === recommendedContext} onClick={() => setContext(recommendedContext)}>Reset</button>}
+          </div>
+        </div>
+        <div className="model-context-range" style={{ '--context-stop': stopPosition(ctxIndex),
+          '--context-recommended': recommendedIndex >= 0 ? stopPosition(recommendedIndex) : undefined } as CSSProperties}>
+          <div className="model-context-range__track" aria-hidden="true"><i /><i /><i />
+            {recommendedIndex >= 0 && <span className="model-context-range__marker" />}
+          </div>
+          <input id={contextId} type="range" min={0} max={stops.length - 1} step={1} value={ctxIndex}
+            disabled={stops.length === 1} aria-valuetext={`${formatTokens(perSession)} tokens per session`}
+            aria-describedby={recommendedIndex >= 0 ? `${contextId}-recommendation` : undefined}
+            onChange={(e) => setContext(stops[Number(e.target.value)])} />
+        </div>
+        <div className="flex flex-wrap justify-between gap-x-2 gap-y-1 text-2xs text-ink-faint">
+          <span>{formatTokens(stops[0])}</span>
+          {recommendedIndex >= 0 && <span id={`${contextId}-recommendation`} data-context-recommendation className="text-accent">
+            <span aria-hidden="true">◆ </span>Recommended: {formatTokens(recommendedContext!)}
+          </span>}
+          <span>{formatTokens(stops[stops.length - 1])}{model.maxContext ? ' (model max)' : ''}</span>
+        </div>
+        <p className="mt-1 text-xs leading-relaxed text-ink-faint">
+          Context is used for the content your model reads. Roughly: a book is 100k tokens, a picture can be 250–2,000,
+          a codebase can be 10k–1M+, and a 1–2 paragraph prompt is about 100–300. Counts vary by model and input.
+        </p>
+      </div>
+
+      {(!attached || rec) && <div className="mt-3">
         <button
           className="btn btn-outline text-xs"
           title={rec ? undefined : 'A fitting recommendation is unavailable'}
@@ -237,11 +286,11 @@ export function EngineLoadDrawer({
             </div>
           </div>
         )}
-      </div>
+      </div>}
 
-      {mlx ? (
+      {mlx ? (!attached &&
         <Section title="Run on" hint="MLX models live on the GPU; a Mac shares one memory pool between it and the CPU." />
-      ) : unified ? (
+      ) : unified ? (!attached &&
         <Section
           title="Run on"
           hint="Your Mac shares one pool of memory between the GPU and the CPU, so there is nothing to split. The model runs on the GPU."
@@ -323,35 +372,6 @@ export function EngineLoadDrawer({
         </div>
       )}
 
-      <div className="mt-4">
-        <div className="flex items-baseline justify-between gap-3">
-          <label htmlFor="engine-ctx" className="text-sm font-medium">
-            Context {matches.context && <RecommendedTag />}
-          </label>
-          <span className="font-mono text-xs" data-context-label>
-            {formatTokens(perSession)} per session{sessions > 1 ? ` · ${formatTokens(perSession * sessions)} total` : ''}
-          </span>
-        </div>
-        <input
-          id="engine-ctx"
-          type="range"
-          className="mt-1 w-full"
-          min={0}
-          max={stops.length - 1}
-          step={1}
-          value={ctxIndex}
-          onChange={(e) => setContext(stops[Number(e.target.value)])}
-        />
-        <div className="flex justify-between text-2xs text-ink-faint">
-          <span>{formatTokens(stops[0])}</span>
-          <span>{formatTokens(stops[stops.length - 1])} (model max)</span>
-        </div>
-        <p className="mt-1 text-xs text-ink-faint">
-          How much the model can keep in mind at once: your messages, its replies and any files it reads.{' '}
-          {formatTokens(perSession)} is roughly {pagesOf(perSession)} pages of text.{mlx ? ' MLX allocates its cache as tokens are used.' : ' More context uses more memory. The meter shows an estimate when available.'}
-        </p>
-      </div>
-
       <div className="mt-4 rounded-lg border" style={{ borderColor: 'var(--line)' }}>
         <Fold label="More controls" open={more} onToggle={() => setMore((v) => !v)} id="more" />
         {more && (
@@ -365,7 +385,7 @@ export function EngineLoadDrawer({
               readout={sessions === 1 ? '1 session' : `${sessions} sessions`}
               ends={['1', rec ? `Recommended here: ${rec.request.sessions}` : '', '8']}
               onChange={(i) => setSessions(SESSION_STOPS[i])}
-              hint={`How many chats or agents can get answers at the same time. Each one keeps its own context, so more sessions use more memory.${sessions > 1 ? ` Each of the ${sessions} gets ${formatTokens(perSession)}.` : ''}`}
+              hint={`How many chats or agents can get answers at the same time. Adding sessions increases the total context and can slow replies.${sessions > 1 ? ` Each of the ${sessions} gets ${formatTokens(perSession)}.` : ''}`}
             />
             <Slider
               id="engine-precision"

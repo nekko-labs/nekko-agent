@@ -525,7 +525,7 @@ fn lists_imports_deletes_and_reports_as_the_host_does() {
                 let (count, size) = library::probe(&s(0), args[1].as_str());
                 json!({ "modelCount": count, "sizeBytes": size })
             }
-            "remove" => library::remove(&cfg, &s(0)).unwrap(),
+            "remove" => library::remove(&cfg, &s(0), None).unwrap(),
             "folders" | "seed" => {
                 let env = args[0].as_object().unwrap().clone();
                 let home = env["HOME"].as_str().unwrap().to_string();
@@ -622,5 +622,64 @@ fn imports_keep_external_dflash_heads_visible_by_id_without_copying_them() {
     assert_eq!(library::find(&cfg, &b).unwrap().unwrap()["preset"]["contextTokens"], 2048);
     std::fs::remove_file(first).unwrap();
     assert!(library::find(&cfg, &a).unwrap().is_none());
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn confirmed_external_gguf_deletes_only_its_named_shards() {
+    let dir = scratch("external-gguf-delete");
+    let outside = dir.join("external");
+    std::fs::create_dir_all(&outside).unwrap();
+    let first = outside.join("Tiny-00001-of-00002.gguf");
+    let second = outside.join("Tiny-00002-of-00002.gguf");
+    let projector = outside.join("mmproj-Tiny.gguf");
+    let other = outside.join("other.gguf");
+    for file in [&first, &second, &projector, &other] {
+        std::fs::write(file, build(&json!({"pairs": []}))).unwrap();
+    }
+    let cfg = LibraryConfig {
+        models_dir: dir.join("models").to_string_lossy().into_owned(),
+        folders: vec![json!({ "id": "external", "path": outside, "provider": "lmstudio", "enabled": true })],
+        mlx_runnable: false,
+        now: 0.0,
+    };
+    let row = library::list(&cfg).unwrap().into_iter().find(|r| r["path"] == first.to_string_lossy().as_ref()).unwrap();
+    let id = row["id"].as_str().unwrap();
+    assert_eq!(library::remove(&cfg, id, None).unwrap()["ok"], false);
+    assert_eq!(library::remove(&cfg, id, other.to_str()).unwrap()["ok"], false);
+    assert!(first.exists() && second.exists());
+    assert_eq!(library::remove(&cfg, id, first.to_str()).unwrap()["ok"], true);
+    assert!(!first.exists() && !second.exists());
+    assert!(other.exists() && projector.exists());
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn confirmed_mlx_removes_weights_and_links_without_following_them() {
+    let dir = scratch("mlx-safe-delete");
+    let models = dir.join("models");
+    let model = models.join("model-mlx");
+    std::fs::create_dir_all(&model).unwrap();
+    let config = model.join("config.json");
+    let plain = model.join("model-1.safetensors");
+    let link = model.join("model-2.safetensors");
+    let shared = dir.join("shared-weight");
+    std::fs::write(&config, r#"{"model_type":"qwen3"}"#).unwrap();
+    std::fs::write(&plain, [0; 32]).unwrap();
+    std::fs::write(&shared, [0; 32]).unwrap();
+    std::os::unix::fs::symlink(&shared, &link).unwrap();
+    let cfg = LibraryConfig {
+        models_dir: models.to_string_lossy().into_owned(),
+        folders: vec![],
+        mlx_runnable: true,
+        now: 0.0,
+    };
+    let row = library::list(&cfg).unwrap().remove(0);
+    let id = row["id"].as_str().unwrap();
+    assert_eq!(library::remove(&cfg, id, model.to_str()).unwrap()["ok"], true);
+    assert!(library::list(&cfg).unwrap().is_empty());
+    assert!(config.exists() && shared.exists());
+    assert!(!plain.exists() && std::fs::symlink_metadata(&link).is_err());
     std::fs::remove_dir_all(dir).unwrap();
 }

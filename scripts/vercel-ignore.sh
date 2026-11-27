@@ -3,8 +3,9 @@
 # build, anything else builds. Vercel only serves apps/website, so a commit that
 # leaves the site's inputs alone gets no deployment. The paths are the Docs site
 # workflow's (scripts/build-docs.test.mjs keeps them in step) plus the site, its
-# own config, and the desktop sources the design system page reads its tokens
-# and marks from (scripts/build-design-system.mjs).
+# own config, the desktop sources the design system page reads its tokens
+# and marks from (scripts/build-design-system.mjs), and what the brand pack's
+# zip is built from (scripts/make-brand-kit.mjs).
 #
 # VERCEL_GIT_PREVIOUS_SHA is the branch's last successful deployment, so commits
 # whose builds were skipped still count. Vercel clones only the last 10 commits,
@@ -19,10 +20,14 @@ git diff --quiet "$base" HEAD -- \
   apps/website \
   docs \
   ASSETS.md \
+  TRADEMARKS.md \
   CONTRIBUTING.md \
   scripts/build-docs.mjs \
   scripts/build-contributors.mjs \
   scripts/build-design-system.mjs \
+  scripts/make-brand-kit.mjs \
+  scripts/brand-kit \
+  apps/desktop/scripts/icon-art.cjs \
   scripts/design-system \
   apps/desktop/src/renderer/styles.css \
   apps/desktop/src/renderer/gentleface-icons.tsx \

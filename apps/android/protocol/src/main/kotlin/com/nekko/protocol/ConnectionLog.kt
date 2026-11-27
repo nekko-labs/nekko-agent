@@ -82,6 +82,8 @@ object ConnectionAdvice {
                     DenyReason.BAD_KEY -> badKey
                     DenyReason.UPDATE_REQUIRED ->
                         "$computer only accepts phones on the newest Nekko Agent. Update this app to connect to it."
+                    DenyReason.FLEET_OFF, DenyReason.FLEET_DEVICE, DenyReason.FLEET_EPOCH, DenyReason.FLEET_ACCOUNT, DenyReason.FLEET_LOCKED ->
+                        "$computer: " + (FleetLink.accountRefusalText(denied.wire) ?: "refused this phone.")
                     else -> "$computer doesn’t know this phone. Pair again from Settings → Remote access on the computer."
                 },
             )

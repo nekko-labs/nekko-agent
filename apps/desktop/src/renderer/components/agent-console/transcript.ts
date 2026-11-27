@@ -132,8 +132,12 @@ export function toStreamBlocks(messages: ChatMessage[], context: ChatMessage[] =
       // Narration is written out in full as part of the conversation, and it
       // splits the run in two: what led up to it, and what it went on to do.
       if (m.content.trim() && !isFinalAnswer) say(m, i);
-      // Delegations, watches and memory saves show their outcome on the step itself.
-      m.toolCalls.forEach((c) => run.push({ kind: 'tool', call: c, startedAt: m.createdAt, endedAt: resultAt.get(c.id), ...(results.get(c.id)?.isError ? { failed: true } : {}), ...((c.name === 'spawn_agent' || c.name === 'agent_watch' || c.name === 'remember') && results.has(c.id) ? { result: results.get(c.id) } : {}) }));
+      m.toolCalls.forEach((call) => {
+        const result = results.get(call.id);
+        const showResult = result?.isError || ['spawn_agent', 'agent_watch', 'remember'].includes(call.name);
+        run.push({ kind: 'tool', call, startedAt: m.createdAt, endedAt: resultAt.get(call.id),
+          ...(result?.isError ? { failed: true } : {}), ...(result && showResult ? { result } : {}) });
+      });
       // Reasoning already has its inline activity projection above.
       if (isFinalAnswer) { flush(); blocks.push({ type: 'msg', message: { ...m, reasoning: undefined }, voice: 'reply' }); }
     } else {

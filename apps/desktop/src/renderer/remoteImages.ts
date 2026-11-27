@@ -70,6 +70,9 @@ export interface ChatImagesApi {
 /** Provided by the chat pane; absent elsewhere (file viewer, tests), where remote images stay click-to-load. */
 export const ChatImages = React.createContext<ChatImagesApi | null>(null);
 
+/** Markdown document previews use their own preference, not chat URL provenance. */
+export const PreviewImageAutoload = React.createContext<boolean | null>(null);
+
 // --- fetch cache ---
 
 /** Fetches allowed at once, across every chat. */
@@ -122,8 +125,8 @@ export type RemoteImageState =
   | { status: 'ready'; image: RemoteImage }
   | { status: 'error'; message: string };
 
-/** Load `url` once `enabled` turns true; `retry` starts it again after a failure. */
-export function useRemoteImage(url: string | null, enabled: boolean): [RemoteImageState, () => void] {
+/** Load `url` once enabled. Return controls to retry and report a renderer decode failure. */
+export function useRemoteImage(url: string | null, enabled: boolean): [RemoteImageState, () => void, () => void] {
   const [state, setState] = React.useState<RemoteImageState>({ status: 'idle' });
   const [attempt, setAttempt] = React.useState(0);
   React.useEffect(() => {
@@ -136,7 +139,20 @@ export function useRemoteImage(url: string | null, enabled: boolean): [RemoteIma
     );
     return () => { live = false; };
   }, [url, enabled, attempt]);
-  return [state, React.useCallback(() => setAttempt((n) => n + 1), [])];
+  const retry = React.useCallback(() => {
+    setState({ status: 'loading' });
+    setAttempt((n) => n + 1);
+  }, []);
+  const decodeFailed = React.useCallback(() => {
+    if (!url || state.status !== 'ready') return;
+    const pending = cache.get(url);
+    // Evict only the bytes this element failed to decode; a newer fetch may already be cached.
+    void pending?.then((image) => {
+      if (image === state.image && cache.get(url) === pending) cache.delete(url);
+    }, () => {});
+    setState({ status: 'error', message: 'Could not decode the image.' });
+  }, [url, state]);
+  return [enabled ? state : { status: 'idle' }, retry, decodeFailed];
 }
 
 /** The host's reason, without the IPC wrapper's prefix. */

@@ -19,6 +19,7 @@ const initial = [
 let models = [...initial];
 let saved = { providers: [], onboarded: true, favoriteModels: ['cloud::other'], defaultProviderId: 'cloud', defaultModelId: 'other', voice: { enabled: true, engine: 'apple' } } as AppSettings;
 const deleted: string[] = [];
+const confirmations: (string | undefined)[] = [];
 const loaded: string[] = [];
 const autoload = new Set<string>();
 const bridge = {
@@ -26,7 +27,7 @@ const bridge = {
   engineModels: async () => [...models], engineDownloads: async () => [], engineCatalog: async () => [],
   runtimeLoad: async (providerId: string, id: string) => { loaded.push(`${providerId}::${id}`); return { ok: true }; },
   engineSetAutoload: async (id: string, on: boolean) => { if (on) autoload.add(id); else autoload.delete(id); return { ok: true }; },
-  engineDeleteModel: async (id: string) => { if (id === 'bge') throw Error('Borrowed file must not be deleted'); deleted.push(id); models = models.filter(m => m.id !== id); return { ok: true, message: 'Deleted from disk.' }; },
+  engineDeleteModel: async (id: string, confirmedPath?: string) => { confirmations.push(confirmedPath); deleted.push(id); models = models.filter(m => m.id !== id); return { ok: true, message: 'Deleted from disk.' }; },
   voiceStatus: async () => ({ engine: 'apple', supported: false, apple: { supported: true, installed: true, installing: false, locale: 'en-US' }, whisper: { installed: false, installing: false, progress: 0 } }),
   decisionsCatalog: async () => [], decisionsModels: async () => [], listProviders: async () => [],
   machineRecommendations: async () => null,
@@ -35,5 +36,5 @@ const bridge = {
 Object.assign(window, { nekko: new Proxy(bridge, { get(t, k: string) { if (k in t) return Reflect.get(t, k); if (k.startsWith('on')) return () => () => {}; return () => Promise.resolve(null); } }) });
 const root = createRoot(document.getElementById('root')!);
 const mount = (empty = false) => { if (empty) models = []; useStore.setState({ settings: { ...saved }, view: 'models', activeModelId: 'cloud-fixture' }); root.render(<ModelsWorkspace key={String(empty)}/>); };
-Object.assign(window, { fixture: { mount, deleted, loaded, autoload: () => [...autoload], saved: () => saved, theme: (theme: 'dark' | 'light') => { useStore.setState(state => ({ settings: { ...state.settings!, theme, themePreset: theme === 'dark' ? 'x-plum-dark' : 'x-plum-white' } })); useStore.getState().applyTheme(); } } });
+Object.assign(window, { fixture: { mount, deleted, confirmations, loaded, skipDeletePrompt: () => { useStore.setState({ settings: { ...saved, skipDeleteConfirmation: true } }); }, autoload: () => [...autoload], saved: () => saved, theme: (theme: 'dark' | 'light') => { useStore.setState(state => ({ settings: { ...state.settings!, theme, themePreset: theme === 'dark' ? 'x-plum-dark' : 'x-plum-white' } })); useStore.getState().applyTheme(); } } });
 mount();

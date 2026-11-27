@@ -45,6 +45,68 @@ If someone else is already assigned, ask before taking it over. If you stop with
 
 Put the requester's prompt, screenshots or other chat context in the issue only when they said to (the app's Settings > Project management holds the same choice for its own users). Then put `Closes #<n>` in the PR description. A fix for a baseline failure links the issue for that failure.
 
+## Title a PR by its initiative
+
+A PR title starts with the initiative or goal the change serves, so the PR list
+groups itself by body of work (#3581):
+
+```
+<Initiative>: <what changed>
+Optimizations: Android: write saved chats off the main thread
+CI Runners: Setup: record the final check
+Nekko Cloud: Sync: each chat belongs to the computer that started it
+```
+
+- Pick the initiative from the work's purpose, never from the platform it touches.
+  There is no iPhone, Android or Desktop initiative: an iPhone speed fix is
+  Optimizations, an iPhone UI-test fix is CI, the iPhone model picker is Model Picker.
+- Keep a narrower existing prefix after the initiative (`Optimizations: Android: ...`),
+  and drop words the initiative already says (`Nekko Cloud API: ...` becomes
+  `Nekko Cloud: API: ...`, `Agents panel: ...` becomes `Agents Panel: ...`).
+- When two fit, the main purpose wins: a speed or resource goal is Optimizations
+  even on a Cloud or phone component, and a test-only or CI-only change is CI.
+- A change that serves none of them (a one-off copy tweak) keeps a plain title.
+  Add a new initiative here only when a body of work will span several PRs.
+
+| Initiative | What it covers |
+| --- | --- |
+| Fleet | The organization fleet: org computers, fleet view, fleet-connect, org presence |
+| Connected Computers | Pairing computers and phones, federation, running on another computer, computer names and icons |
+| CI Runners | The CI runner product: setup, images, VMs, jobs, the runner picker |
+| Nekko Cloud | Cloud API, accounts and sign-in, sync, Relay, the Cloud console, plans and billing |
+| Optimizations | Speed, memory, CPU, GPU and load work, the perf harness and perf-history |
+| CI | This repo's CI and test health: failing or flaky tests, lint on `main`, workflows |
+| Releases | Versioning, release and packaging pipelines, nightly and TestFlight distribution |
+| Security & Privacy | Signing, keystores, permissions, Privacy Shield, sandboxing, GDPR, dependency advisories |
+| Claude Agent | Claude Code integration: Claude subscriptions and logins, approvals, Claude Code chats |
+| Providers | Model provider accounts, keys, setup and catalog discovery |
+| Model Picker | Choosing a model and effort, routing, Fusion, prompt profiles |
+| Model Server | Local models: loading, memory and VRAM, the scheduler, overload protection |
+| Models Page | The Models page |
+| Agents Panel | The Agents panel, the wall and zones, agent cards, phone chat lists |
+| Chat | The chat transcript and chat windows |
+| Composer | The message box and its controls |
+| Plan Sheet | The agent's plan sheet |
+| Subagents | Sub-agent chats and their display |
+| PR Workflow | PR and issue chips, PR watches, the PR lifecycle in chat |
+| Connectors | Connectors and repositories in a chat's environment |
+| Library | The Library, designs, the design canvas and board |
+| Design System | Tokens, themes, icons, brand, quiet surfaces |
+| Monitors | The Monitors panel and dock, simulators |
+| Live Activity | iPhone Live Activities |
+| Voice | Dictation, hands-free voice, CarPlay |
+| Photo | Photo and Video mode |
+| Usage & Limits | Usage, plan limits, continuing at a limit reset |
+| Telemetry | Analytics, consent, error reports, feedback |
+| Setup | First-run setup and page introductions |
+| Localization | Languages and translations |
+| Profiles | App profiles |
+| Orchestrate | Mode → Orchestrate, delegating to local and hosted workers |
+| Automations | Scheduled Tasks and the Automations panel |
+| Website | nekkoagent.com |
+| Docs | README, product docs, the spec as docs |
+| Dev Tooling | The development runtime, dev builds and local signing |
+
 ## Always land work as a PR
 
 The default for every change is: commit it to a branch, push, open a PR, and merge it.

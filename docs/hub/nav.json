@@ -27,6 +27,12 @@
           "title": "What's new",
           "source": "docs/hub/whats-new.md",
           "description": "Where to find the highlights of each Nekko Agent release and the full release notes."
+        },
+        {
+          "slug": "brand",
+          "title": "Brand and press kit",
+          "source": "docs/hub/brand.md",
+          "description": "Download the Nekko Agent logo, app icon and mascot, and how to use them in articles, talks and projects."
         }
       ]
     },
@@ -259,6 +265,12 @@
           "title": "Credits",
           "source": "ASSETS.md",
           "description": "The projects, assets and runtimes Nekko Agent is built on, and their licenses."
+        },
+        {
+          "slug": "trademarks",
+          "title": "Trademarks and brand assets",
+          "source": "TRADEMARKS.md",
+          "description": "What our MIT license covers and what it doesn't: using the Nekko Agent names, logo and mascot, and what forks must change."
         },
         {
           "slug": "architecture",

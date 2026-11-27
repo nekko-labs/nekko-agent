@@ -65,6 +65,7 @@ export function MemoryBar({
   over = false,
   marker,
   height = 'h-4',
+  as: Element = 'div',
 }: {
   segments: BarSegment[];
   /** Bytes the full width stands for. */
@@ -75,23 +76,25 @@ export function MemoryBar({
   /** A thin line at a byte position, e.g. where overload protection starts. */
   marker?: { atBytes: number; title: string };
   height?: string;
+  /** Use phrasing content inside a row's disclosure button. */
+  as?: 'div' | 'span';
 }) {
   const pct = (b: number) => `${Math.max(0, (b / Math.max(1, scaleBytes)) * 100)}%`;
   const used = segments.reduce((n, s) => n + s.bytes, 0);
   return (
-    <div
+    <Element
       className={`relative flex ${height} overflow-hidden rounded`}
       style={{ background: 'color-mix(in srgb, var(--ink-faint) 14%, transparent)', outline: over ? '2px solid var(--danger)' : undefined }}
       role="meter"
       aria-label={label}
       aria-valuemin={0}
       aria-valuemax={scaleBytes}
-      aria-valuenow={used}
+      aria-valuenow={Math.min(used, scaleBytes)}
       data-memory-bar
     >
       {segments.map((s) =>
         s.bytes <= 0 ? null : (
-          <div
+          <Element
             key={s.key}
             className={`flex h-full shrink-0 ${EASE}`}
             style={{ width: pct(s.bytes), gap: s.slices && s.slices > 1 ? 1 : 0, opacity: s.dim ? 0.3 : 1 }}
@@ -111,7 +114,7 @@ export function MemoryBar({
                 }}
               />
             ))}
-          </div>
+          </Element>
         ),
       )}
       {marker && marker.atBytes < scaleBytes && (
@@ -122,7 +125,7 @@ export function MemoryBar({
           aria-hidden
         />
       )}
-    </div>
+    </Element>
   );
 }
 

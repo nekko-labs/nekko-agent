@@ -8,6 +8,10 @@ While a reply is active, a status line outside the collapsible steps identifies 
 
 A tool's duration freezes when that call returns—even if it returned an error and the assistant continues working. For example, a fixed **1.1s** tool time can sit beside an increasing turn timer. That is not evidence that the tool is still running. The turn status disappears when the reply ends; it does not diagnose a quiet provider as stuck or infer background CI progress from a command's output.
 
+## Reading a failed tool call
+
+Open the group marked **1 failed**, then hover, focus, or expand the failed call. Its recorded error appears above its input. Shell commands are shown as commands, with options such as the working directory underneath. Other inputs use formatted JSON. Code blocks in replies use syntax colors when the agent labels the language; **Copy** still copies the original code.
+
 ## Thoughts in the conversation
 
 When a provider supplies thought text, the desktop app and Local Web UI show it directly in the conversation with a thought-bubble icon. Thoughts stay visible while streaming and after the reply is saved, even when the tool activity is collapsed. They appear between tool groups in the order they arrived.

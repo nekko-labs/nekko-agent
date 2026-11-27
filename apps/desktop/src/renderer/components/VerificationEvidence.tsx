@@ -16,7 +16,7 @@ export function VerificationEvidence({ pairs, basePath, panel = false }: { pairs
           <div className="text-xs font-medium text-ink-soft">{side === 'before' ? 'Before' : 'After'}</div>
           {localImagePath(pair[side].src, basePath)
             ? <LocalImageCard src={pair[side].src} title={pair[side].label} basePath={basePath} />
-            : <RemoteImageCard url={pair[side].src} alt={pair[side].label} />}
+            : <RemoteImageCard key={pair[side].src} url={pair[side].src} alt={pair[side].label} />}
         </div>)}
       </div>
     </div>)}

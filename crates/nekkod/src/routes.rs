@@ -651,7 +651,10 @@ impl Table {
                 // delete an open file (os error 32), so it is unloaded first.
                 if channel == "engine:deleteModel" {
                     let id = args.first().map(nekko_js::display).unwrap_or_default();
-                    if ctx.server.model.loaded_ids().contains(&id) {
+                    if ctx.server.model.loaded_ids().contains(&id)
+                        && let Ok(Some(model)) = ctx.library.find(&id).await
+                        && nekko_engine::library::can_delete(&model, args.get(1).and_then(Value::as_str))
+                    {
                         ctx.server.model.unload(&id).await;
                     }
                 }
