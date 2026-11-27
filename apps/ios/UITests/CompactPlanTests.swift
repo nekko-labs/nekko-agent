@@ -23,6 +23,7 @@ final class CompactPlanTests: XCTestCase {
         let row = { (id: String) in app.descendants(matching: .any)["chat.planStep.\(id)"].firstMatch }
         XCTAssertTrue(row("compare").exists)
         XCTAssertTrue(row("review").exists)
+        XCTAssertLessThan(row("review").frame.midY - row("compare").frame.midY, 48, "Upcoming rows must stay compact above the composer")
         XCTAssertFalse(row("ship").exists)
         XCTAssertFalse(app.staticTexts["Read the importer"].exists)
         app.buttons["chat.planFolded"].tap()

@@ -52,9 +52,17 @@ struct PlanSheet: View {
                         if prefs.planDisplay != .one {
                             let remaining = plan.filter { !$0.squeezed && $0.id != current.id }
                             let upcoming = remaining.filter { $0.status == .active } + remaining.filter { $0.status != .active }
-                            ForEach(upcoming.prefix(2)) { step in row(step, links: nil, paused: paused, opened: nil, compact: true) }
+                            ForEach(upcoming.prefix(2)) { step in
+                                row(step, links: nil, paused: paused, opened: nil, compact: true)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
-                        ScrollView { history(plan, links: links, paused: paused) }.scrollBounceBehavior(.basedOnSize).fixedSize(horizontal: false, vertical: true).frame(maxHeight: 180)
+                        if completedOpen {
+                            ScrollView { history(plan, links: links, paused: paused) }
+                                .scrollBounceBehavior(.basedOnSize).fixedSize(horizontal: false, vertical: true).frame(maxHeight: 180)
+                        } else {
+                            history(plan, links: links, paused: paused)
+                        }
                     } else { whole(plan, links: links, paused: paused) }
                 }
                 .padding(.horizontal, Self.shoulder + 12).padding(.top, 8).padding(.bottom, Self.tuck + 8)
