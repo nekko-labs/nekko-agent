@@ -19,13 +19,15 @@ final class StreamThrottleTests: XCTestCase {
     func testABurstWithinAFrameIsOneApplication() async throws {
         let (s, c) = try await ChatModelTests.makeOnline()
         let chat = ChatModel(sessionId: "s", store: s)
-        chat.deltaInterval = 0.05
+        // A frame far longer than sending the burst takes, so a loaded simulator can't
+        // fire it mid-burst (run 45952198555: 2 applications at 0.05 s).
+        chat.deltaInterval = 0.5
         await chat.start()?.value
         for i in 0..<200 { c.event(text("w\(i) ")) }
         try await Task.sleep(nanoseconds: 20_000_000)
         XCTAssertEqual(chat.deltaApplications, 0, "nothing is folded in before the frame")
         let before = chat.blocksRevision
-        try await Task.sleep(nanoseconds: 300_000_000)
+        try await Task.sleep(nanoseconds: 1_000_000_000)
         XCTAssertEqual(chat.deltaApplications, 1, "200 deltas, one application")
         XCTAssertEqual(chat.blocksRevision, before + 1, "one change for the view")
         guard case .assistant(_, let reply, _, _, _)? = chat.blocks.last else { return XCTFail("a reply is streaming") }
