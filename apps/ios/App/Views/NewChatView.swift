@@ -509,11 +509,13 @@ struct NewChatView: View {
                             }
                             .tag(Optional(c.id))
                         }
-                        Label {
-                            Text(ChatPlace.phoneName)
-                            Text("Its own models")
-                        } icon: { Image(systemName: "iphone") }
-                        .tag(Optional(PhoneProviders.computerId))
+                        if phone.available {
+                            Label {
+                                Text(ChatPlace.phoneName)
+                                Text("Its own models")
+                            } icon: { Image(systemName: "iphone") }
+                            .tag(Optional(PhoneProviders.computerId))
+                        }
                     }
                     if !onPhone, let c = store.active {
                         Divider()

@@ -269,7 +269,9 @@ fun ChatsScreen(
     val phoneName = stringResource(R.string.chats_this_phone)
     val all = remember(s, phoneState, filter, phoneName) {
         AllChats.of(
-            s, phoneState?.chats.orEmpty(), phoneState?.running.orEmpty(), phoneState?.providers?.isNotEmpty() == true,
+            // This phone's chats and place only while its beta setting is on (PhoneCloudBeta).
+            s, phoneState?.takeIf { it.available }?.chats.orEmpty(), phoneState?.takeIf { it.available }?.running.orEmpty(),
+            phoneState?.let { it.available && it.providers.isNotEmpty() } == true,
             filter.ifEmpty { null }, phoneName,
         )
     }

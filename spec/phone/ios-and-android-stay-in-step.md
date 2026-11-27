@@ -75,6 +75,10 @@ Both: JVM or Linux unit tests only; neither app's screens have been looked at on
 
 Both phones keep in-chat answers and one-time Allow/Deny as pending response messages: the iPhone since #2499 (2026-11-13), Android since [#2497](https://github.com/nekko-labs/nekko-agent/issues/2497) (2026-11-16, JVM-tested and emulator-verified, not on a physical phone).
 
+## Cloud models on the phone are a beta setting
+
+Both phones: **Settings → Beta → Cloud models on This iPhone / This phone**, off for a new install, on for one that already used it. Same rule, same surfaces hidden, same wording. One difference, written down: with no computer paired the iPhone shows only its welcome screen (no Settings), so its welcome link says *(beta)* and turns it on; Android's Chats screen and Settings are there with no computer, so the switch is the way in. See [the beta setting](phone-cloud-models-beta-setting.md).
+
 ## Direct cloud text chats (#2414, not shipped)
 
 [#2414](https://github.com/nekko-labs/nekko-agent/issues/2414) tracks both platform PRs and stays open until both land. Android is implemented on `feat/android-phone-cloud-2414`; the iPhone counterpart is separate [draft PR #2462](https://github.com/nekko-labs/nekko-agent/pull/2462), not shipped. Branch implementation is not release or visual approval.

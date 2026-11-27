@@ -5,4 +5,7 @@
     <string name="settings_manage_computers">管理电脑</string>
     <string name="settings_models_on">%1$s上的模型</string>
     <string name="settings_phone_provider_off">关闭</string>
+    <string name="settings_beta">测试版</string>
+    <string name="settings_phone_cloud_beta">%1$s上的云端模型</string>
+    <string name="settings_phone_cloud_beta_detail">使用你自己的密钥与云服务商聊天，无需电脑。关闭后会保留你的密钥和聊天。</string>
 </resources>

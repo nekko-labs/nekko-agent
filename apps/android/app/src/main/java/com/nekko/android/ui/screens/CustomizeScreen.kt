@@ -165,10 +165,14 @@ private fun Experience(deps: SettingsDeps, phone: PhoneChats?) {
         }
 
         // Tone of the models running on this phone; the computer's agents keep that computer's.
-        SectionHeader(stringResource(R.string.customize_phone_chats))
-        Column(Modifier.padding(horizontal = 16.dp)) {
-            NCard { TonePicker(phone) }
-            Footer(stringResource(R.string.customize_tone_footer))
+        // Only while the beta setting is on (PhoneCloudBeta).
+        val phoneOn = phone?.state?.collectAsStateWithLifecycle()?.value?.available == true
+        if (phoneOn) {
+            SectionHeader(stringResource(R.string.customize_phone_chats))
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                NCard { TonePicker(phone) }
+                Footer(stringResource(R.string.customize_tone_footer))
+            }
         }
 
         // The look: the same rows as Settings → Appearance.

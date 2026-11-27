@@ -5,4 +5,7 @@
     <string name="settings_manage_computers">コンピュータを管理</string>
     <string name="settings_models_on">%1$sのモデル</string>
     <string name="settings_phone_provider_off">オフ</string>
+    <string name="settings_beta">ベータ</string>
+    <string name="settings_phone_cloud_beta">%1$sのクラウドモデル</string>
+    <string name="settings_phone_cloud_beta_detail">自分のキーでクラウドプロバイダーとチャットできます。コンピューターは不要です。オフにしてもキーとチャットは残ります。</string>
 </resources>

@@ -179,6 +179,10 @@ final class AppModel {
         if args.contains("-uiTestPairSuccess") { justPaired = "ui-test" }
         if args.contains("-uiTestTailscaleSetup") { tailscaleSetup = "ui-test" }
         #endif
+        // The beta setting: off for a new install, on for one that already used chats on this iPhone.
+        let phoneBeta = PhoneProviders.betaOn(stored: prefs.phoneCloudBeta, hasAnything: phone.hasAnything)
+        if prefs.phoneCloudBeta == nil && phoneBeta { prefs.phoneCloudBeta = true }
+        phone.available = phoneBeta
         if NativeFixtureRoute.isolated { return }
         // Here, not in `start()`: a tap on the card can launch the app in the
         // background, locked, and the card needs no connection to answer it.
@@ -187,7 +191,7 @@ final class AppModel {
         // iPhone's), so the card agrees with the list; the card stays the active computer's.
         activities.source = { [weak self] in
             guard let self, self.store.summariesLoaded, let c = self.store.active else { return nil }
-            let phoneChats = self.phone.summaries
+            let phoneChats = self.phone.available ? self.phone.summaries : []
             return .init(summaries: self.store.chats(on: nil) + phoneChats,
                          activity: self.store.activity(on: nil).merging(self.phone.activity) { a, _ in a },
                          computerId: c.id, computerName: c.name,
@@ -886,6 +890,14 @@ final class AppModel {
     }
 
     /// Settings → Forget everything on this iPhone.
+    /// Settings → Beta: turn chats on this iPhone's own providers on or off. Off hides them,
+    /// stops a reply that is coming in, and leaves the providers, keys and chats as they are.
+    func setPhoneCloudBeta(_ on: Bool) {
+        prefs.phoneCloudBeta = on
+        phone.available = on
+        if !on && prefs.chatsFilter == PhoneProviders.computerId { prefs.chatsFilter = nil }
+    }
+
     func forgetEverything() {
         for c in store.computers { store.forget(c.id) }
         cloud.forgetAll()

@@ -5,4 +5,7 @@
     <string name="settings_manage_computers">Computer verwalten</string>
     <string name="settings_models_on">Modelle auf %1$s</string>
     <string name="settings_phone_provider_off">Aus</string>
+    <string name="settings_beta">Beta</string>
+    <string name="settings_phone_cloud_beta">Cloud-Modelle auf %1$s</string>
+    <string name="settings_phone_cloud_beta_detail">Chatte mit einem Cloud-Anbieter über deinen eigenen Schlüssel, ganz ohne Computer. Beim Ausschalten bleiben deine Schlüssel und Chats erhalten.</string>
 </resources>

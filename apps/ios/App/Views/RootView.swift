@@ -161,7 +161,7 @@ struct RootView: View {
     }
 
     /// This iPhone runs chats of its own, so the chat list shows with no computer paired.
-    private var phoneRuns: Bool { phone.isSetUp || !phone.chats.isEmpty }
+    private var phoneRuns: Bool { phone.isSetUp || (phone.available && !phone.chats.isEmpty) }
 
     private var covered: Bool { app.prefs.appLock && (app.lock.locked || phase != .active) }
 

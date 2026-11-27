@@ -870,7 +870,7 @@ final class LiveRelayTests: XCTestCase {
         }
         let app = XCUIApplication()
         app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-theme", "light", "-onboarded", "YES", "-uiTestReset", "YES",
-                               "-uiTestPhoneProvider", "-AppleLanguages", "(en)"]
+                               "-uiTestPhoneProvider", "-phoneCloudBeta", "YES", "-AppleLanguages", "(en)"]
         app.launch()
         allowSystemAlerts()
 

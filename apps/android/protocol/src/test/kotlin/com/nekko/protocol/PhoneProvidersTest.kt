@@ -13,6 +13,12 @@ class PhoneProvidersTest {
         parser.line("data: $json")
         return parser.line("")
     }
+    @Test fun betaIsOffForANewInstallAndKeptForOneThatUsedIt() {
+        assertFalse(PhoneProviders.betaOn(stored = null, hasAnything = false))
+        assertTrue(PhoneProviders.betaOn(stored = null, hasAnything = true))
+        assertFalse(PhoneProviders.betaOn(stored = false, hasAnything = true))
+        assertTrue(PhoneProviders.betaOn(stored = true, hasAnything = false))
+    }
     @Test fun sevenKindsAndCorrectAuthentication() {
         assertEquals(listOf("chatgpt", "anthropic", "openai", "openrouter", "gemini", "ollama-cloud", "bedrock", "foundry", "vertex", "openai-compat"), PhoneProviders.kinds.map { it.id })
         // ChatGPT signs in instead of taking a key (ChatGptSignInTest).

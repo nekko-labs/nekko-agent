@@ -88,6 +88,7 @@ class NekkoApp : Application() {
         pullRequests = com.nekko.android.data.PullRequests(connectors, AndroidSecureStore(this))
         themePrefs = ThemePrefs(this)
         phonePrefs = PhonePrefs(this)
+        com.nekko.android.phone.PhoneCloudBeta.atLaunch(phonePrefs, phoneChats)
         // Notify me about: each kind starts as the old single switch was.
         com.nekko.android.connection.Notices.migrate(phonePrefs)
         newChatDefaults = NewChatDefaults(phonePrefs)
@@ -121,6 +122,7 @@ class NekkoApp : Application() {
             appLock.status.first { !it.locked }
             // The phone's default computer (Settings → New chats), else the one used last.
             phoneChats.load()
+            com.nekko.android.phone.PhoneCloudBeta.afterLoad(phonePrefs, phoneChats)
             computers.load(preferredId = newChatDefaults.computerId())
         }
         haptics = AndroidHaptics(this, EventHaptics(phonePrefs), computers)
