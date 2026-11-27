@@ -469,6 +469,8 @@ export interface Session {
   pinned?: boolean;
   /** Free-form tags for organizing/filtering chats. */
   tags?: string[];
+  /** The user's own group for this chat ("Frontend fixes"): one name, trimmed, at most 40 characters. Unset or null means none. */
+  chatGroup?: string | null;
   /** Queued prompts to run one after another when the current turn finishes. */
   queue?: QueuedPrompt[];
   /**

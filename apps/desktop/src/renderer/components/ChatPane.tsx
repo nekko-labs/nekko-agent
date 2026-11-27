@@ -122,6 +122,7 @@ import { NekkoAvatar } from './Mascot.js';
 import { ChatMascot } from './ChatMascot.js';
 import { PixelWaveBackground, pixelWaveFor, showEmptyAgentWave } from './PixelWaveBackground.js';
 import { WorktreeChip } from './WorktreeChip.js';
+import { ChatGroupTagButton } from './ChatGroupTagControls.js';
 import { FolderPicker, openRepoBrowser } from './FolderPicker.js';
 import { environmentActions } from '../environmentActions.js';
 import { summarizeChanges } from '../changeSummary.js';
@@ -2992,6 +2993,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     />}
     {/* Simple mode can hide the model and keep effort: then the gauge stands alone. */}
     {!(showModel || needsModel) && showEffort && <EffortSlider {...effortProps} />}
+    <ChatGroupTagButton sessionId={sessionId} />
     </div>
   );
 

@@ -736,6 +736,7 @@ export const PHONE_SESSION_OPTION_KEYS = [
   'autoModel',
   'autoProviderSwitch',
   'autoQuality',
+  'chatGroup',
   'chatType',
   'cloudOnly',
   'disabledConnectors',

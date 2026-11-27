@@ -1,0 +1,26 @@
+/*
+ * A chat's tags, drawn as the design system's quiet metadata: `#tag` text in
+ * --ink-faint at the 11px floor (--text-2xs), with no pill, border or fill, so
+ * they read as detail beside the card's other lines and take little height.
+ */
+.chat-tags {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+.chat-tag-chip {
+  min-width: 0;
+  max-width: 100%;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0;
+  color: var(--ink-faint);
+}
+.chat-tag-more {
+  flex-shrink: 0;
+  color: var(--ink-faint);
+}

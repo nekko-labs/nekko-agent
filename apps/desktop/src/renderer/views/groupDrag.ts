@@ -10,3 +10,19 @@ export function moveGroupBefore(ids: string[], moved: string, before: string | n
 export function leftGroup(current: HTMLElement, related: EventTarget | null): boolean {
   return !related || !current.contains(related as Node);
 }
+
+/**
+ * Drag-overs an inner drop target has taken. An inner target must not stop the
+ * event: the dragged chip follows the pointer from a document-level dragover
+ * listener, which then stops hearing it and leaves the chip stuck. It claims the
+ * event here instead, and the targets around it leave a claimed one alone.
+ */
+const claimedDragOvers = new WeakSet<object>();
+
+export function claimDragOver(e: { nativeEvent: object }): void {
+  claimedDragOvers.add(e.nativeEvent);
+}
+
+export function dragOverClaimed(e: { nativeEvent: object }): boolean {
+  return claimedDragOvers.has(e.nativeEvent);
+}
