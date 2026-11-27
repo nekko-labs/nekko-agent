@@ -314,6 +314,41 @@ final class BeyondTests: XCTestCase {
         XCTAssertEqual(s.rowPrsDue([movedOn]).map(\.id), ["s1"])
     }
 
+    /// #3448: what chats said is read a batch at a time, only for chats that moved on.
+    func testSearchReadsWhatChatsSaidInBatchesAndOnlyWhatChanged() async throws {
+        let (s, c) = try await makeStore()
+        // Built in a plain loop: the replies run off the main actor, outside this test's isolation.
+        c.replies[Channels.sessionsFinderText] = { @Sendable args in
+            var out: [String: JSONValue] = [:]
+            for id in args.first?.array ?? [] {
+                guard case .string(let s) = id else { continue }
+                out[s] = ["messages": [["role": "user", "text": .string("said in " + s)]]]
+            }
+            return .object(out)
+        }
+        let chats = try (1...45).map { try XCTUnwrap(SessionSummary.from(["id": .string("c\($0)"), "title": "t", "updatedAt": .int(Int64($0))])) }
+        await s.loadFinderTexts(chats)
+        XCTAssertEqual(c.callsTo(Channels.sessionsFinderText).map { $0.first?.array?.count }, [FinderSearch.batch, FinderSearch.batch, 5])
+        XCTAssertEqual(c.callsTo(Channels.sessionsFinderText).first?.first?.array?.first, .string("c45"), "newest first")
+        XCTAssertEqual(s.finderTexts.count, 45)
+        XCTAssertEqual(s.finderTexts["c7"]?.messages.first?.text, "said in c7")
+        XCTAssertTrue(s.finderDue(chats).isEmpty, "nothing changed: nothing asked")
+        let moved = try XCTUnwrap(SessionSummary.from(["id": "c3", "title": "t", "updatedAt": 99]))
+        XCTAssertEqual(s.finderDue([moved]).map(\.id), ["c3"])
+    }
+
+    /// #3448: a computer without `sessions:finderText` keeps the summary search and isn't asked again.
+    func testAnOlderComputerIsSearchedBySummariesOnly() async throws {
+        let (s, c) = try await makeStore()
+        c.replies[Channels.sessionsFinderText] = { _ in throw RelayError("Not allowed from a paired phone (channel-denied): sessions:finderText", fromComputer: true) }
+        let a = try XCTUnwrap(SessionSummary.from(["id": "a", "title": "t", "updatedAt": 1]))
+        await s.loadFinderTexts([a])
+        await s.loadFinderTexts([a])
+        XCTAssertEqual(c.callsTo(Channels.sessionsFinderText).count, 1)
+        XCTAssertTrue(s.finderTexts.isEmpty)
+        XCTAssertTrue(s.finderDue([a]).isEmpty)
+    }
+
     func testUsageAndLimitsByProviderId() async throws {
         let (s, c) = try await makeStore()
         let u = UsageModel(store: s)

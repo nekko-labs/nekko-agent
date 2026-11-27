@@ -218,6 +218,12 @@ public final class ComputersStore {
     public private(set) var rowPrs: [String: [PullRequest]] = [:]
     /// When each chat's row PRs were asked for, and the links it named then.
     @ObservationIgnored private var rowPrsAsked: [String: (urls: [String], at: Int64)] = [:]
+    /// What chats said, by chat id, for the chat list's search inside messages (#3448).
+    public private(set) var finderTexts: [String: FinderChat] = [:]
+    /// The summary's `updatedAt` each held text was read at.
+    @ObservationIgnored private var finderReadAt: [String: Int64] = [:]
+    /// Computers that refused `sessions:finderText` (an older Nekko Agent): their chats are searched by summaries only.
+    @ObservationIgnored private var finderUnsupported: Set<String> = []
     public private(set) var models: [String: [ModelInfo]] = [:]
     public private(set) var modelErrors: [String: String] = [:]
     public private(set) var hostVersion: String?
@@ -1412,6 +1418,46 @@ public final class ComputersStore {
         }
     }
 
+    /// The computer a chat's text is read from, as a key: the active one for nil.
+    private func finderKey(_ computer: String?) -> String { computer ?? activeId ?? "" }
+
+    /// The listed chats whose text is not held, or older than the chat, on computers that have
+    /// `sessions:finderText`. Chats kept on this phone have no computer to ask. Newest first.
+    public func finderDue(_ chats: [SessionSummary]) -> [SessionSummary] {
+        chats.filter { s in
+            !PhoneProviders.isPhoneChat(s.id) && finderReadAt[s.id] != s.updatedAt
+                && !finderUnsupported.contains(finderKey(computerId(ofChat: s.id)))
+        }.sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    /// Read what the due chats said from the computer each runs on, `FinderSearch.batch` at a
+    /// time, while someone searches the chat list (#3448). A computer that refuses the channel is
+    /// not asked again; any other failure ends this walk, and the chats are asked again next time.
+    public func loadFinderTexts(_ chats: [SessionSummary]) async {
+        let byComputer = Dictionary(grouping: finderDue(chats)) { computerId(ofChat: $0.id) }
+        for (computer, due) in byComputer {
+            var left = due
+            while !left.isEmpty, !Task.isCancelled {
+                let batch = Array(left.prefix(FinderSearch.batch))
+                let reply: JSONValue
+                do {
+                    reply = try await caller(computer).call(Channels.sessionsFinderText, [.array(batch.map { .string($0.id) })])
+                } catch let e as RelayError where e.fromComputer && PhoneRefusal(e.message)?.code == "channel-denied" {
+                    finderUnsupported.insert(finderKey(computer))
+                    break
+                } catch {
+                    break
+                }
+                let read = FinderChat.parse(reply).filter { id, _ in batch.contains { $0.id == id } }
+                // A reply that answered nothing would ask the same chats forever.
+                if read.isEmpty { break }
+                for s in batch where read[s.id] != nil { finderReadAt[s.id] = s.updatedAt }
+                finderTexts.merge(read) { _, new in new }
+                left.removeAll { read[$0.id] != nil }
+            }
+        }
+    }
+
     // MARK: Changing chats on the computer
 
     // Each takes the chat's computer (`on`): nil is the active one, another is reached through its fleet link.
@@ -1721,6 +1767,34 @@ extension ComputersStore {
         ])
         activity = ["input": .needsYou]
         if step < 2 { activity["moving"] = .running }
+    }
+
+    /// In-memory evidence for the search inside messages (#3448): two chats and, unless
+    /// `older` (a computer without `sessions:finderText`), what they said. Nothing is read.
+    public func seedFinderFixture(older: Bool) {
+        seedParityFixture()
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        let chats = SessionSummary.visible([
+            ["id": "cache", "title": "Speed up the CI cache", "updatedAt": .int(now), "exchangeCount": 2,
+             "firstUserText": "Why does the build cache miss on every run?", "lastReplyText": "Done: the cache hits again."],
+            ["id": "week", "title": "Plan the week", "updatedAt": .int(now - 86_400_000), "exchangeCount": 1,
+             "firstUserText": "Three goals for Monday", "lastReplyText": "Here is the plan."]
+        ])
+        summaries = chats
+        activity = [:]
+        for s in chats { finderReadAt[s.id] = s.updatedAt }
+        if older {
+            finderUnsupported.insert(activeId ?? "")
+            return
+        }
+        finderTexts = [
+            "cache": FinderChat(messages: [
+                FinderMessage(role: "user", text: "Why does the build cache miss on every run?"),
+                FinderMessage(role: "assistant", text: "The key includes the runner image date, so each nightly image misses it. Key it on the lockfile alone and restore with a prefix fallback.", files: [".github/workflows/ci.yml"]),
+                FinderMessage(role: "assistant", text: "Done: the cache hits again.")
+            ]),
+            "week": FinderChat(messages: [FinderMessage(role: "user", text: "Three goals for Monday")])
+        ]
     }
 }
 #endif

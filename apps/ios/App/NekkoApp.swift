@@ -129,6 +129,7 @@ private struct NativeAppContent: View {
         if ProcessInfo.processInfo.arguments.contains("-uiTestVoiceConversation") { VoiceConversationFixture() } else
         if ProcessInfo.processInfo.arguments.contains("-uiTestPhoneComposer") { PhoneComposerFixture() } else
         if ProcessInfo.processInfo.arguments.contains("-uiTestPhoneParity") { PhoneParityFixture() } else
+        if ProcessInfo.processInfo.arguments.contains("-uiTestChatSearch") { ChatSearchFixture() } else
         if ProcessInfo.processInfo.arguments.contains("-uiTestModelServer") { ModelServerFixture() } else
         if ProcessInfo.processInfo.arguments.contains("-uiTestRunSettings") { RunSettingsFixture() } else
         if ProcessInfo.processInfo.arguments.contains("-uiTestPhotoPreviews") {
@@ -181,7 +182,7 @@ private struct NativeAppContent: View {
                 guard !NativeFixtureRoute.isolated else { return }
                 #if DEBUG
                 // These fixtures skip the transports but keep the rest of the lifecycle, as on main.
-                if ["-uiTestVoiceConversation", "-uiTestPhoneParity", "-uiTestPhoneComposer", "-uiTestPhotoPreviews"]
+                if ["-uiTestVoiceConversation", "-uiTestPhoneParity", "-uiTestChatSearch", "-uiTestPhoneComposer", "-uiTestPhotoPreviews"]
                     .contains(where: ProcessInfo.processInfo.arguments.contains) { return }
                 #endif
                 app.start()
