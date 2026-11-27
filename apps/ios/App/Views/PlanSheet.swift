@@ -21,7 +21,9 @@ struct PlanSheet: View {
     @Environment(\.palette) private var palette
     @Environment(\.openURL) private var openURL
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var open = false
+    @State private var openOverride: Bool?
+    @State private var completedOpen = false
+    private var open: Bool { openOverride ?? (prefs.planDisplay == .full) }
     /// Finished steps the user tapped open (true) or folded (false); the rest follow `AgentPlan.openByDefault`.
     @State private var tapped: [String: Bool] = [:]
     @State private var prs: [PullRequest] = []
@@ -44,7 +46,16 @@ struct PlanSheet: View {
                 let links = AgentPlan.links(chat.session?.messages ?? [], plan: plan, prs: Set(prs.map(\.url)), children: chat.children)
                 let paused = AgentPlan.paused(chat.session?.messages ?? [], running: chat.running)
                 VStack(alignment: .leading, spacing: 0) {
-                    if open { whole(plan, links: links, paused: paused) } else { folded(plan, current: current, links: links, paused: paused) }
+                    if open { whole(plan, links: links, paused: paused) }
+                    else if !current.squeezed {
+                        folded(plan, current: current, links: links, paused: paused)
+                        if prefs.planDisplay != .one {
+                            let remaining = plan.filter { !$0.squeezed && $0.id != current.id }
+                            let upcoming = remaining.filter { $0.status == .active } + remaining.filter { $0.status != .active }
+                            ForEach(upcoming.prefix(2)) { step in row(step, links: nil, paused: paused, opened: nil, compact: true) }
+                        }
+                        ScrollView { history(plan, links: links, paused: paused) }.scrollBounceBehavior(.basedOnSize).fixedSize(horizontal: false, vertical: true).frame(maxHeight: 180)
+                    } else { whole(plan, links: links, paused: paused) }
                 }
                 .padding(.horizontal, Self.shoulder + 12).padding(.top, 8).padding(.bottom, Self.tuck + 8)
                 .background {
@@ -60,6 +71,7 @@ struct PlanSheet: View {
                 .accessibilityIdentifier("chat.planSheet")
             }
         }
+        .onChange(of: prefs.planDisplay) { _, _ in openOverride = nil }
         .task(id: chat.session?.updatedAt) {
             if let list = try? await chat.pullRequests() { prs = list }
         }
@@ -75,6 +87,7 @@ struct PlanSheet: View {
         let projects = own?.projects.isEmpty == false ? own!.projects : (plan.first.flatMap { links[$0.id]?.projects } ?? [])
         let position = (plan.firstIndex { $0.id == current.id } ?? 0) + 1
         return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 4) {
             Button { toggle(true) } label: {
                 HStack(spacing: 8) {
                     PlanStepMark(step: current, paused: paused)
@@ -92,6 +105,8 @@ struct PlanSheet: View {
             .accessibilityLabel("Plan, step \(position) of \(plan.count): \(current.title)")
             .accessibilityHint("Shows the whole plan")
             .accessibilityIdentifier("chat.planFolded")
+            configure
+            }
             let kids = chat.children
             if !kids.isEmpty || !shownPrs.isEmpty || !projects.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -108,7 +123,8 @@ struct PlanSheet: View {
 
     private func whole(_ plan: [PlanStep], links: [String: PlanStepLinks], paused: Bool) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Button { toggle(false) } label: {
+            HStack(spacing: 4) {
+            Button { toggle(!open) } label: {
                 HStack(spacing: 8) {
                     Text("Plan").fontWeight(.semibold).foregroundStyle(palette.inkSoft)
                     Text("\(AgentPlan.finished(plan)) of \(plan.count) done").monospacedDigit()
@@ -122,10 +138,13 @@ struct PlanSheet: View {
             .accessibilityLabel("Plan, \(AgentPlan.finished(plan)) of \(plan.count) done")
             .accessibilityHint("Folds the plan")
             .accessibilityIdentifier("chat.planOpen")
+            configure
+            }
             ScrollView {
                 let opened = AgentPlan.openByDefault(plan, links: links)
                 VStack(alignment: .leading, spacing: 2) {
-                    ForEach(plan) { step in row(step, links: links[step.id], paused: paused, opened: opened) }
+                    ForEach(plan.filter { !$0.squeezed }) { step in row(step, links: links[step.id], paused: paused, opened: opened) }
+                    history(plan, links: links, paused: paused)
                 }
             }
             .scrollBounceBehavior(.basedOnSize)
@@ -133,7 +152,25 @@ struct PlanSheet: View {
         }
     }
 
-    private func row(_ step: PlanStep, links own: PlanStepLinks?, paused: Bool, opened: String?) -> some View {
+    private var configure: some View {
+        Menu {
+            Picker("Plan display", selection: Binding(get: { prefs.planDisplay }, set: { openOverride = nil; prefs.planDisplay = $0 })) {
+                ForEach(PlanDisplay.allCases) { mode in Text(mode.label).tag(mode) }
+            }
+        } label: { Image(systemName: "gearshape").frame(minWidth: 32, minHeight: 32) }
+        .accessibilityLabel("Configure plan display")
+    }
+
+    @ViewBuilder private func history(_ plan: [PlanStep], links: [String: PlanStepLinks], paused: Bool) -> some View {
+        let completed = plan.filter(\.squeezed)
+        if !completed.isEmpty {
+            DisclosureGroup("Completed (\(completed.count))", isExpanded: $completedOpen) {
+                ForEach(completed) { step in row(step, links: links[step.id], paused: paused, opened: AgentPlan.openByDefault(plan, links: links)) }
+            }.font(.caption).accessibilityIdentifier("chat.planCompleted")
+        }
+    }
+
+    private func row(_ step: PlanStep, links own: PlanStepLinks?, paused: Bool, opened: String?, compact: Bool = false) -> some View {
         let kids = (own?.subagents ?? []).compactMap { id in chat.children.first { $0.id == id } }
         let prs = prefs.shows("pr-status", pr: true) ? own?.prs ?? [] : []
         let chips = !prs.isEmpty || own?.projects.isEmpty == false || !kids.isEmpty
@@ -154,7 +191,7 @@ struct PlanSheet: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     PassLabel(step: step)
                 }
-                if more && shown {
+                if more && shown && !compact {
                     VStack(alignment: .leading, spacing: 2) {
                         if let detail = step.detail {
                             Text(detail).font(.caption).foregroundStyle(palette.inkFaint).lineLimit(1)
@@ -185,7 +222,7 @@ struct PlanSheet: View {
     }
 
     private func toggle(_ to: Bool) {
-        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) { open = to }
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) { openOverride = to }
     }
 
     // MARK: Chips

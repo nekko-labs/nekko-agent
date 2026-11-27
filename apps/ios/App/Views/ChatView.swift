@@ -1283,8 +1283,8 @@ struct Composer: View {
             if dictation.recording || dictation.transcribing { Text(dictation.status).font(.caption2).foregroundStyle(palette.inkFaint) }
             else if let n = dictation.notice { Text(n).font(.caption2).foregroundStyle(palette.inkSoft) }
             // The agent's plan, tucked behind the box's top edge (drawn first, so the box covers its foot).
-            if !PlanSheet.plan(chat, store).isEmpty {
-                PlanSheet(chat: chat).padding(.bottom, -(PlanSheet.tuck + 6))
+            if prefs.planDisplay != .hidden, !PlanSheet.plan(chat, store).isEmpty {
+                PlanSheet(chat: chat).id(chat.session?.id).padding(.bottom, -(PlanSheet.tuck + 6))
             }
             // One box the width of the screen: the message on top, + and Send below it, then model and context.
             VStack(alignment: .leading, spacing: 0) {

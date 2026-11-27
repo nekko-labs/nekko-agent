@@ -169,3 +169,9 @@ Status: implemented in the shared desktop / Local Web UI renderer; verification 
 - **Unchanged boundaries.** No new reads, network requests, tool behavior or permissions. Existing chip navigation/actions, evidence validation, progress counts, original step order, pass labels, and bottom sub-agent cards remain. Native phone parity is outside this shared-renderer change.
 
 Supersedes the note/detail line and default per-step disclosure rules above. Acceptance: no row subtext; chips inline when space permits; accurate overflow count including individual CI chips; isolated per-row expansion with keyboard and mouse; no horizontal overflow; remeasure after resizing; safe evidence and chip actions remain reachable. Focused unit tests and a hidden, isolated Electron journey cover this scope. Packaged builds, live providers and native phone apps are not covered by the synthetic fixture.
+
+## Compact plan display (2026-11-27, #3542)
+
+This supersedes the whole-plan default and current-step-only fold described above. Desktop, Local Web UI, iOS and Android start in **Balanced**, showing at most three unfinished steps: active work first, then pending work in published order. As steps finish, the next steps take their place. If none is active, start with the first pending step.
+
+Finished and skipped steps share a closed **Completed (N)** disclosure. Opening it reveals their marks, links and results in published order. It remains available when all steps finish. The configure icon beside the chevron and **Settings → Appearance → Plan display** offer the same four choices: **Show full plan**, **Balanced · 3 rows (default)**, **Show 1 row** or **Hide entirely**. Full lists all unfinished steps in order; hidden removes the sheet, not the underlying plan. The chevron temporarily toggles full and compact without changing the saved preference; a full default temporarily minimizes to Balanced. Phones store their preference locally.

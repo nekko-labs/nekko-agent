@@ -36,6 +36,12 @@ import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material.icons.outlined.LocalOffer
 import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.WbSunny
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.IconButton
+import com.nekko.android.data.PlanDisplay
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -82,9 +88,12 @@ import com.nekko.protocol.SessionSummary
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun PlanSheet(plan: ChatViewModel.PlanUi, showPrs: Boolean, onOpenChat: (String) -> Unit) {
+fun PlanSheet(plan: ChatViewModel.PlanUi, mode: PlanDisplay, onMode: (PlanDisplay) -> Unit, showPrs: Boolean, onOpenChat: (String) -> Unit) {
     val p = Nekko.palette
-    var open by remember { mutableStateOf(false) }
+    if (mode == PlanDisplay.HIDDEN) return
+    var open by remember(mode) { mutableStateOf(mode == PlanDisplay.FULL) }
+    var completedOpen by remember { mutableStateOf(false) }
+    var menu by remember { mutableStateOf(false) }
     val tapped = remember { mutableStateMapOf<String, Boolean>() }
     val steps = plan.plan
     val sheetLabel = stringResource(R.string.plan_sheet)
@@ -99,12 +108,15 @@ fun PlanSheet(plan: ChatViewModel.PlanUi, showPrs: Boolean, onOpenChat: (String)
             .semantics { contentDescription = sheetLabel }
             .testTag("chat.planSheet"),
     ) {
-        if (!open) Folded(plan, showPrs, onOpenChat) { open = true }
-        else {
+        val compact = !open && !plan.current.squeezed
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) {
+            if (compact) Folded(plan, showPrs, onOpenChat) { open = true }
+            else {
             val done = AgentPlan.finished(steps)
             val openLabel = stringResource(R.string.plan_open_label, done, steps.size)
             Row(
-                Modifier.fillMaxWidth().heightIn(min = 40.dp).clickable(role = Role.Button) { open = false }
+                Modifier.fillMaxWidth().heightIn(min = 40.dp).clickable(role = Role.Button) { open = !open }
                     .semantics(mergeDescendants = true) { contentDescription = openLabel }.testTag("chat.planOpen"),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -113,9 +125,21 @@ fun PlanSheet(plan: ChatViewModel.PlanUi, showPrs: Boolean, onOpenChat: (String)
                 Text(stringResource(R.string.plan_done_of, done, steps.size), style = MaterialTheme.typography.labelMedium, color = p.inkFaint, modifier = Modifier.weight(1f))
                 Icon(Icons.Filled.KeyboardArrowDown, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(18.dp))
             }
+            }
+            }
+            Box {
+                IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.Settings, stringResource(R.string.plan_display_configure), modifier = Modifier.size(18.dp)) }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    PlanDisplay.entries.forEach { option -> DropdownMenuItem(text = { Text(stringResource(option.label)) }, onClick = { menu = false; open = option == PlanDisplay.FULL; onMode(option) }) }
+                }
+            }
+        }
             val opened = AgentPlan.openByDefault(steps, plan.links)
             Column(Modifier.heightIn(max = 280.dp).verticalScroll(rememberScrollState())) {
-                steps.forEach { step ->
+                val unfinished = steps.filterNot { it.squeezed }
+                val visible = if (compact) unfinished.filter { it.id != plan.current.id }.sortedBy { it.status != PlanStep.Status.ACTIVE }.take(if (mode == PlanDisplay.ONE) 0 else 2) else unfinished
+                val completed = steps.filter { it.squeezed }
+                @Composable fun StepRow(step: PlanStep) {
                     val own = plan.links[step.id]
                     val kids = own?.subagents.orEmpty().mapNotNull { id -> plan.children.firstOrNull { it.id == id } }
                     val prs = if (showPrs) own?.prs.orEmpty() else emptyList()
@@ -143,7 +167,7 @@ fun PlanSheet(plan: ChatViewModel.PlanUi, showPrs: Boolean, onOpenChat: (String)
                                 )
                                 PassLabel(step)
                             }
-                            AnimatedVisibility(more && shown, enter = fadeIn(tween(120)), exit = fadeOut(tween(120))) {
+                            AnimatedVisibility(more && shown && (!compact || step.squeezed), enter = fadeIn(tween(120)), exit = fadeOut(tween(120))) {
                                 Column(Modifier.padding(start = 60.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                     step.detail?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = p.inkFaint, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                                     if (chips) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -156,8 +180,15 @@ fun PlanSheet(plan: ChatViewModel.PlanUi, showPrs: Boolean, onOpenChat: (String)
                         }
                     }
                 }
+                visible.forEach { step -> androidx.compose.runtime.key(step.id) { StepRow(step) } }
+                if (completed.isNotEmpty()) {
+                    TextButton(onClick = { completedOpen = !completedOpen }, modifier = Modifier.testTag("chat.planCompleted")) {
+                        Icon(if (completedOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown, null, modifier = Modifier.size(16.dp))
+                        Text(stringResource(R.string.plan_completed_group, completed.size), style = MaterialTheme.typography.labelSmall)
+                    }
+                    if (completedOpen) completed.forEach { step -> androidx.compose.runtime.key(step.id) { StepRow(step) } }
+                }
             }
-        }
     }
 }
 

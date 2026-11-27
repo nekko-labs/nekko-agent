@@ -3296,7 +3296,12 @@ select:not([multiple]):not([size]) {
 @media (hover: hover) {
   .plan-sheet-chip:hover { background: color-mix(in srgb, var(--ink) 10%, transparent); color: var(--ink); }
 }
-.plan-sheet-steps { max-height: 40vh; overflow-y: auto; }
+.plan-config { position: relative; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 6px; }
+.plan-config:hover, .plan-config:focus-within { color: var(--ink); background: var(--surface-2); }
+.plan-config:focus-within { outline: 2px solid var(--ring); }
+.plan-config select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.plan-completed > summary { width: fit-content; padding-block: var(--q-tight); color: var(--ink-faint); font-size: var(--text-2xs); cursor: pointer; }
+.plan-sheet-scroll { max-height: 40vh; overflow-y: auto; }
 /* Dense flat title rows. Only overflow chiplets open their own row. */
 .plan-sheet-steps { display: flex; flex-direction: column; gap: 2px; padding-top: 2px; }
 .plan-sheet-step { display: grid; grid-template-columns: 12px minmax(0, 1fr); column-gap: 8px; padding: 1px 4px; }

@@ -13,6 +13,8 @@ import { GfIcon } from '../gentleface-icons.js';
 import type { ChatArtifact } from '../chatArtifacts.js';
 import { canonicalPrUrl, progressAge, safeProgressLink } from './WorkProgress.js';
 import { runPrAction } from './PrCard.js';
+import { PLAN_DISPLAYS, planRows, type PlanDisplay } from '../planDisplay.js';
+import { saveSettings } from '../settingsIndex.js';
 import { PlanRow } from './PlanRow.js';
 import { PlanWorking } from './PlanWorking.js';
 import { StatusIcon, type AgentStatus } from './WorkspaceCard.js';
@@ -230,7 +232,7 @@ function SubagentCards({ children, running, onOpen }: { children: SessionSummary
 /** The composer's plan: flat title rows with inline chips and per-row overflow. */
 const childrenOf = stableSelector((s: { sessions?: SessionSummary[] }, id) => (s.sessions ?? []).filter((c) => c.parentSessionId === id));
 
-export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpenChild, initiallyOpen = true }: {
+export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpenChild, initiallyOpen }: {
   sessionId: string;
   session: Session | null;
   streaming: boolean;
@@ -241,9 +243,9 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
   /** Start with the whole plan showing rather than folded. */
   initiallyOpen?: boolean;
 }) {
-  // The whole plan is open by default; the user folds it to one line when they
-  // want the chrome out of the way.
-  const [collapsed, setCollapsed] = useState(initiallyOpen === false);
+  const mode = useStore(s => s.settings?.planDisplay ?? 'balanced');
+  const [override, setOverride] = useState<{ mode: PlanDisplay; full: boolean }>();
+  const full = override?.mode === mode ? override.full : initiallyOpen ?? mode === 'full';
   // These chips are pull requests, so the condition holds wherever they would draw.
   const prsShown = useShown('pr-status', { pr: true });
   const childSessions = useStore((s) => childrenOf(s, sessionId));
@@ -284,7 +286,7 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
   // still share that step's disclosure, without a synthetic phase wrapper.
   const links = useMemo(() => planStepLinks(messages ?? [], plan, basePath, childSessions),
     [messages, plan, basePath, childSessions]);
-  if (!plan.length) return null;
+  if (!plan.length || mode === 'hidden') return null;
   const running = new Set(runningSessionIds());
   const childById = new Map(childSessions.map((c): [string, Child] => [c.id, { id: c.id, title: c.title || 'Sub-agent', running: running.has(c.id) || !!getLiveRun(c.id) || !!c.activeRun }]));
   const openChild = onOpenChild ?? ((id: string) => useStore.getState().openChatPane(id));
@@ -316,63 +318,49 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
   };
   const artifactChip = (artifact: ChatArtifact) => <button key={artifact.path} type="button" className="plan-sheet-chip" data-plan-chip="link" title={artifact.path} onClick={() => openArtifact(artifact, sessionId)}>{artifact.live ? 'Preview: ' + artifact.live.host + artifact.live.route : 'File: ' + artifact.filename}</button>;
   const kids = (own?: PlanStepLinks) => (own?.subagents ?? []).map(id => childById.get(id)).filter((c): c is Child => !!c);
-  const position = plan.indexOf(current) + 1;
-
-  if (collapsed) {
-    const own = links.get(current.id);
-    // The current step's PRs, else the newest PR the chat opened, so a finished plan still shows where it landed.
-    const shownPrs = !prsShown ? [] : own?.prs.length ? own.prs : [...links.values()].flatMap(l => l.prs).slice(-1);
+  const { completed, visible } = planRows(plan, full, mode);
+  const renderRow = (step: PlanStep) => {
+    const own = links.get(step.id);
+    const checks = ci.get(step.id) ?? [];
+    const stepKids = kids(own);
+    const summary = !full && step === current;
+    const projects = summary && !own?.projects.length ? links.get(plan[0].id)?.projects : own?.projects;
+    const rowPrs = summary && !own?.prs.length ? [...links.values()].flatMap(l => l.prs).slice(-1) : own?.prs;
     const chips = [
-      ...shownPrs.map(prChip),
-      // The step's own task links, else the chat's (the first step's), which say what this work is for.
-      ...(own?.projects.length ? own.projects : links.get(plan[0].id)?.projects ?? []).map(link => <ProjectChip key={link.url} link={link} />),
+      ...(projects ?? []).map(link => <ProjectChip key={link.url} link={link} />),
+      ...stepKids.map(child => <SubagentChip key={child.id} child={child} onOpen={openChild} />),
+      ...(prsShown ? rowPrs ?? [] : []).map(prChip),
+      ...checks.flatMap(ciChips),
       ...(own?.artifacts ?? []).map(artifactChip),
-    ].filter(Boolean);
-    return <div className="plan-sheet-dock"><div className="plan-sheet" data-plan-sheet data-folded aria-label="Agent plan">
-      <PlanRow chips={chips} title={<button type="button" className="plan-sheet-fold" onClick={() => setCollapsed(false)} aria-expanded={false} title="Show the whole plan">
-        <span className="plan-sheet-line">
-          <StepMark step={current} paused={paused} />
-          <span className={`min-w-0 flex-1 truncate ${current.status === 'done' ? 'text-ink-soft' : 'text-ink'}`} title={current.title}>{current.title}</span>
-          <Pass step={current} />
-          <span className="shrink-0 tabular-nums text-2xs text-ink-faint">{position} of {plan.length}</span>
-          <PlanCaret direction="down" label="Show the whole plan" />
-        </span>
-      </button>} />
-      <SubagentCards children={childSessions} running={running} onOpen={openChild} />
-    </div></div>;
-  }
-
-  return <div className="plan-sheet-dock"><div className="plan-sheet" data-plan-sheet aria-label="Agent plan">
+    ];
+    const squeezed = step.status === 'done' || step.status === 'skipped';
+    return <li key={step.id} className="plan-sheet-step" data-plan-step={squeezed ? 'done' : step.status} data-plan-step-id={step.id}>
+      <StepMark step={step} paused={paused} />
+      <PlanRow chips={chips} title={<span className="plan-sheet-line">
+        <span className={`min-w-0 truncate ${squeezed ? 'text-ink-soft' : 'text-ink'}${step.status === 'skipped' ? ' line-through' : ''}`} title={step.title}>{step.title}</span>
+        <Pass step={step} />
+      </span>} />
+    </li>;
+  };
+  return <div className="plan-sheet-dock"><div className="plan-sheet" data-plan-sheet data-folded={!full || undefined} aria-label="Agent plan">
     <div className="plan-sheet-head">
-      <button type="button" className="plan-sheet-toggle" onClick={() => setCollapsed(true)} aria-expanded title="Fold the plan">
+      <button type="button" className="plan-sheet-toggle" onClick={() => setOverride({ mode, full: !full })} aria-expanded={full} title={full ? 'Fold the plan' : 'Show the whole plan'}>
         <span className="font-semibold text-ink-soft">Plan</span>
-        <span className="tabular-nums">{progress.done + progress.skipped} of {progress.total} done</span>
-        <span className="flex-1" />
-        <PlanCaret direction="up" label="Fold the plan" />
+        <span className="tabular-nums">{progress.done + progress.skipped} of {progress.total} done</span><span className="flex-1" />
+        <PlanCaret direction={full ? 'up' : 'down'} label={full ? 'Fold the plan' : 'Show the whole plan'} />
       </button>
+      <label className="plan-config" title="Configure plan display"><GfIcon name="settings" className="h-3.5 w-3.5" />
+        <select aria-label="Configure plan display" value={mode} onChange={e => { setOverride(undefined); void saveSettings({ planDisplay: e.target.value as PlanDisplay }); }}>
+          {PLAN_DISPLAYS.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
+        </select>
+      </label>
     </div>
-    <ol className="plan-sheet-steps">
-      {plan.map(step => {
-        const own = links.get(step.id);
-        const checks = ci.get(step.id) ?? [];
-        const stepKids = kids(own);
-        const chips = [
-          ...(own?.projects ?? []).map(link => <ProjectChip key={link.url} link={link} />),
-          ...stepKids.map(child => <SubagentChip key={child.id} child={child} onOpen={openChild} />),
-          ...(prsShown ? own?.prs ?? [] : []).map(prChip),
-          ...checks.flatMap(ciChips),
-          ...(own?.artifacts ?? []).map(artifactChip),
-        ];
-        const squeezed = step.status === 'done' || step.status === 'skipped';
-        return <li key={step.id} className="plan-sheet-step" data-plan-step={squeezed ? 'done' : step.status} data-plan-step-id={step.id}>
-          <StepMark step={step} paused={paused} />
-          <PlanRow chips={chips} title={<span className="plan-sheet-line">
-            <span className={`min-w-0 truncate ${squeezed ? 'text-ink-soft' : 'text-ink'}${step.status === 'skipped' ? ' line-through' : ''}`} title={step.title}>{step.title}</span>
-            <Pass step={step} />
-          </span>} />
-        </li>;
-      })}
-    </ol>
+    <div className="plan-sheet-scroll">
+      <ol className="plan-sheet-steps">{visible.map(renderRow)}</ol>
+      {!!completed.length && <details className="plan-completed"><summary>Completed ({completed.length})</summary>
+        <ol className="plan-sheet-steps">{completed.map(renderRow)}</ol>
+      </details>}
+    </div>
     <SubagentCards children={childSessions} running={running} onOpen={openChild} />
   </div></div>;
 }
