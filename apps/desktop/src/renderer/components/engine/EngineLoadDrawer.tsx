@@ -89,7 +89,8 @@ export function EngineLoadDrawer({
   const moe = isMoe(model);
   const mlx = model.format === 'mlx';
   const contextId = useId();
-  const stops = useMemo(() => contextStops(model.maxContext), [model.maxContext]);
+  const recommendedContext = rec?.request.contextTokens;
+  const stops = useMemo(() => contextStops(model.maxContext, recommendedContext), [model.maxContext, recommendedContext]);
 
   const patch = (p: Partial<LoadParams>) => setParams((prev) => ({ ...prev, ...p }));
   /** A hand edit to placement is a custom split. */
@@ -190,6 +191,8 @@ export function EngineLoadDrawer({
   const perSession = contextPerSession(params);
   const sessions = sessionsOf(params);
   const ctxIndex = Math.max(0, stops.indexOf(nearest(stops, perSession)));
+  const recommendedIndex = recommendedContext === undefined ? -1 : stops.indexOf(recommendedContext);
+  const stopPosition = (index: number) => `${100 * index / Math.max(1, stops.length - 1)}%`;
   const setContext = (perSessionTokens: number) => {
     if (split === 'coding') setSplit('custom');
     patch({ contextTokens: perSessionTokens * sessions });
@@ -226,18 +229,30 @@ export function EngineLoadDrawer({
           <label htmlFor={contextId} className="text-xs font-medium">
             Context {matches.context && <RecommendedTag />}
           </label>
-          <span className="font-mono text-2xs" data-context-label>
-            {formatTokens(perSession)} per session{sessions > 1 ? ` · ${formatTokens(perSession * sessions)} total` : ''}
-          </span>
+          <div className="flex flex-wrap items-center gap-x-2">
+            <span className="font-mono text-2xs" data-context-label>
+              {formatTokens(perSession)} per session{sessions > 1 ? ` · ${formatTokens(perSession * sessions)} total` : ''}
+            </span>
+            {recommendedContext !== undefined && <button type="button" data-context-reset className="btn btn-ghost px-2 py-0.5 text-2xs"
+              aria-label="Reset context to recommended" title="Reset context only; other settings stay as set"
+              disabled={perSession === recommendedContext} onClick={() => setContext(recommendedContext)}>Reset</button>}
+          </div>
         </div>
-        <div className="model-context-range" style={{ '--context-stop': `${100 * ctxIndex / Math.max(1, stops.length - 1)}%` } as CSSProperties}>
-          <div className="model-context-range__track" aria-hidden="true"><i /><i /><i /></div>
+        <div className="model-context-range" style={{ '--context-stop': stopPosition(ctxIndex),
+          '--context-recommended': recommendedIndex >= 0 ? stopPosition(recommendedIndex) : undefined } as CSSProperties}>
+          <div className="model-context-range__track" aria-hidden="true"><i /><i /><i />
+            {recommendedIndex >= 0 && <span className="model-context-range__marker" />}
+          </div>
           <input id={contextId} type="range" min={0} max={stops.length - 1} step={1} value={ctxIndex}
             disabled={stops.length === 1} aria-valuetext={`${formatTokens(perSession)} tokens per session`}
+            aria-describedby={recommendedIndex >= 0 ? `${contextId}-recommendation` : undefined}
             onChange={(e) => setContext(stops[Number(e.target.value)])} />
         </div>
-        <div className="flex justify-between gap-2 text-2xs text-ink-faint">
+        <div className="flex flex-wrap justify-between gap-x-2 gap-y-1 text-2xs text-ink-faint">
           <span>{formatTokens(stops[0])}</span>
+          {recommendedIndex >= 0 && <span id={`${contextId}-recommendation`} data-context-recommendation className="text-accent">
+            <span aria-hidden="true">◆ </span>Recommended: {formatTokens(recommendedContext!)}
+          </span>}
           <span>{formatTokens(stops[stops.length - 1])}{model.maxContext ? ' (model max)' : ''}</span>
         </div>
         <p className="mt-1 text-xs leading-relaxed text-ink-faint">
@@ -370,7 +385,7 @@ export function EngineLoadDrawer({
               readout={sessions === 1 ? '1 session' : `${sessions} sessions`}
               ends={['1', rec ? `Recommended here: ${rec.request.sessions}` : '', '8']}
               onChange={(i) => setSessions(SESSION_STOPS[i])}
-              hint={`How many chats or agents can get answers at the same time. Each one keeps its own context, so more sessions use more memory.${sessions > 1 ? ` Each of the ${sessions} gets ${formatTokens(perSession)}.` : ''}`}
+              hint={`How many chats or agents can get answers at the same time. Adding sessions increases the total context and can slow replies.${sessions > 1 ? ` Each of the ${sessions} gets ${formatTokens(perSession)}.` : ''}`}
             />
             <Slider
               id="engine-precision"

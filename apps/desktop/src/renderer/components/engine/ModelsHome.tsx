@@ -4,7 +4,7 @@ import { ModelLibrary } from './ModelLibrary.js';
 import { ModelDetail } from './ModelDetail.js';
 import { RecommendedModels, imageFitText } from './RecommendedModels.js';
 import { CheckIcon, ChevronIcon, ListIcon, WarningIcon } from '../../icons.js';
-import { StatusDot } from '../primitives/index.js';
+import { Rule, StatusDot } from '../primitives/index.js';
 import { familyKind, groupModelFamilies, gpuGuidance, modelFamilyName, MODEL_SORT_LABELS, setUpPictureModels, shelveCatalog, smallestVariant, sortModelFamilies, type FamilyKind, type LibraryModel, type ModelFamily, type ModelSort } from './modelFamilies.js';
 import { ModelRowActions, useModelRowActions } from './ModelRowActions.js';
 import { pictureModelBlurb, pictureTimeText } from './pictureModelText.js';
@@ -284,9 +284,10 @@ export function ModelsHome({
           {!searching && !visible.length && !extra.length && !note && <p className="py-4 text-xs text-ink-faint">{mode === 'find' ? 'No matching models. Try a shorter search.' : 'Nothing on this machine matches. Try Find new models.'}</p>}
         </div>
       </div>
-      <div id={detailId} className="min-w-0" aria-label="Model details">
+      <section id={detailId} className="min-w-0" aria-labelledby={`${detailId}-title`}>
+        <h3 id={`${detailId}-title`} className="quiet-group-label mb-(--q-heading)">Model Details</h3>
         {selected ? <>
-          <h3 className="break-words text-xl font-semibold">
+          <h4 className="break-words text-xl font-semibold">
             {mode === 'installed' ? (
               <button type="button" data-model-family-header aria-expanded="true" className="inline-flex max-w-full items-center gap-1 text-left hover:text-accent" onClick={() => {
                 selectFamily(null);
@@ -296,21 +297,22 @@ export function ModelsHome({
                 <span className="min-w-0">{setUpModelOf(selected, picks)?.name ?? selected.name}</span>
               </button>
             ) : setUpModelOf(selected, picks)?.name ?? selected.name}
-          </h3>
+          </h4>
           <p className="mt-(--q-tight) text-xs text-ink-faint" data-family-summary>
             {[paramsLabel(selected.name, firstVariant?.parameterSize ?? selected.catalog.find(m => m.parameterSize)?.parameterSize),
               selected.local.length ? `${selected.local.length} variant${selected.local.length === 1 ? '' : 's'} on this machine, ${formatBytes(selected.local.reduce((n, m) => n + m.sizeBytes, 0))}` : 'Not downloaded yet',
             ].filter(Boolean).join(' · ')}
           </p>
           {selected.local.length > 0 && <>
-            <h4 className="mt-(--q-group) quiet-group-label">Variants on this machine</h4>
+            <h5 className="mt-(--q-group) quiet-group-label">Variants on this machine</h5>
             <div className="mt-(--q-heading)"><ModelLibrary key={selected.key} providerId={providerId} models={selected.local} actions={actions} resident={resident} memory={memory} canLoad={canLoad} onChanged={onChanged} autoloadIds={new Set(settings.autoload ?? [])} sortBy={mode === 'installed' ? sortBy : undefined} /></div>
             {firstVariant && <ModelGpuFacts key={firstVariant.id} providerId={providerId} model={firstVariant} resident={residentById.get(firstVariant.id)} others={residentNames(resident, models, firstVariant.id)} />}
           </>}
+          {selected.local.length > 0 && repositories.length > 0 && <Rule />}
           {repositories.length > 0 && <div className="mt-(--q-group)"><label className="block text-xs text-ink-faint" htmlFor="model-source">{selected.local.length ? 'Other builds from' : 'Variant provider / repository'}</label><select id="model-source" className="quiet-field mt-(--q-tight) w-full text-xs" value={selectedRepo} onChange={e => setRepoId(e.target.value)}>{repositories.map(id => <option key={id} value={id}>{id}</option>)}</select></div>}
           {selectedRepo && <ModelDetail key={selectedRepo} modelId={selectedRepo} installed={selected.local.filter(m => m.sourceRepo === selectedRepo || m.id.includes(selectedRepo.replace('/', '_')))} memory={memory} onBack={() => setSelectedKey(null)} onQueued={onChanged} embedded />}
         </> : <p className="py-8 text-sm text-ink-faint">Select a model to see its details and variants.</p>}
-      </div>
+      </section>
     </div>
     )}
     </>
