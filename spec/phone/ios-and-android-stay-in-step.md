@@ -155,5 +155,5 @@ Nothing is recorded as a true OS exclusive yet.
 | --- | --- | --- | --- |
 | Chat re-reads skip the skills read | Implemented (#3388) | Implemented (#3415) | None |
 | Paged chat open (`session:page`, tail first, older on scroll) | Waits for the engine | Waits for the engine | Engine: [#3439](https://github.com/nekko-labs/nekko-agent/issues/3439); client: iPhone [#3388](https://github.com/nekko-labs/nekko-agent/issues/3388), Android [#3415](https://github.com/nekko-labs/nekko-agent/issues/3415). Both use the contract in #3439. |
-| Search inside chat messages (`sessions:finderText`, a snippet of the matching line) | Planned | Planned | [#3448](https://github.com/nekko-labs/nekko-agent/issues/3448): the engine side ships first; both apps follow in the same stack. See [search-inside-chat-messages.md](search-inside-chat-messages.md). |
+| Search inside chat messages (`sessions:finderText`, a snippet of the matching line) | Planned | Implemented (2026-11-27) | [#3448](https://github.com/nekko-labs/nekko-agent/issues/3448): the engine side ships first; both apps follow in the same stack. See [search-inside-chat-messages.md](search-inside-chat-messages.md). |
 
