@@ -39,6 +39,23 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Chat finder reads text only, not every full transcript (#3446, 2026-11-26)
+Area: engine daemon, renderer
+Result: improvement
+
+Conditions: Apple M1 Max, 64 GB, macOS 27.2.1, release `nekkod` (this branch), Node v26.8.1 client over loopback HTTP (the Local Web UI transport; Electron IPC carries the same JSON), one run per row, each phase on a fresh daemon with the data dir in a temp folder (never `~/.nekko-agent`). Synthetic chats from `scripts/perf/finder-index-bench.mjs`: 12 to 31 turns each with reasoning, tool calls and 2,000 characters of tool output, 20% with a 60 KB photo, 4% long agent chats of 250 turns with 250 KB screenshots in tool results (about 10 MB each). 500 chats are about 201 MB on disk, 2,000 chats are 806 MB. "Index build" is what the first message search in the finder or palette waits for: every chat indexed, newest first. Old is `session:get` for each chat, 6 at a time (as `chatFinderIndex.ts` did); new is `sessions:finderText`, 25 chats a call, 2 calls at a time. "First 25" is the time until 25 chats are searchable. Daemon CPU is user plus system from `ps` over the phase (10 ms resolution). Client parse is the total `JSON.parse` time of the replies.
+
+| Metric | 500 old | 500 new | 2,000 old | 2,000 new |
+|---|---|---|---|---|
+| First 25 chats searchable | 42 ms | 14 ms | 16 ms | 12 ms |
+| Whole index built | 580 ms | 167 ms | 1693 ms | 455 ms |
+| Bytes moved | 201.38 MB | 13.44 MB | 805.51 MB | 53.77 MB |
+| Client JSON.parse | 128 ms | 19 ms | 520 ms | 70 ms |
+| Daemon CPU | 0.44 s | 0.19 s | 1.68 s | 0.65 s |
+
+Repeat and incremental work, new path only: asking for all chats again with the daemon's per-file cache warm took 85 ms and 0.04 s CPU (500) and 225 ms and 0.17 s CPU (2,000), the cost of building the reply (same 13.44 MB and 53.77 MB), but the app asks only for chats whose `updatedAt` changed: after one chat was saved, re-reading it took 14 ms (500) and 6 ms (2,000), 0.03 MB. The old path re-fetched each changed chat whole.
+
+Why: the finder keeps only message text and file names, so the daemon now serves exactly that (no pictures, reasoning or tool output, parsed by skipping them) and caches it per chat file version. The first-25 times are within run-to-run noise of each other (a single sample each); the wins are bytes, total time, parse time and CPU. The daemon still reads and scans each changed chat file once, so cold CPU is not zero. Source: #3446.
 ## iPhone chat re-reads stop re-reading the runnable skills (#3388, 2026-11-26)
 Area: renderer
 Result: improvement (reads per re-read)

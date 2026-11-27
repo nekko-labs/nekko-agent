@@ -529,6 +529,7 @@ function makeWebClient(): NekkoApi {
     listSessionSummaries: () => call(IpcChannels.sessionsSummaries),
     createSession: (workspaceId) => call(IpcChannels.sessionCreate, workspaceId),
     getSession: (id) => call(IpcChannels.sessionGet, id),
+    finderChatText: (ids) => call(IpcChannels.sessionsFinderText, ids),
     deleteSession: (id) => call(IpcChannels.sessionDelete, id),
     setSessionWorkspace: (sessionId, workspaceId) => call(IpcChannels.sessionSetWorkspace, sessionId, workspaceId),
     setSessionSupportingWorkspaces: (sessionId, workspaceIds) =>

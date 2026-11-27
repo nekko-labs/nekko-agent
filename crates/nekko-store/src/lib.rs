@@ -12,6 +12,7 @@
 
 pub mod blobs;
 pub mod client_ids;
+pub mod finder;
 pub mod meta;
 mod meta_event;
 mod phase;
@@ -90,6 +91,8 @@ pub struct SessionStore {
     /// ever reads a chat older than the turn has made it.
     deferred: Mutex<HashMap<String, Deferred>>,
     holds: std::sync::atomic::AtomicU64,
+    /// Each chat's finder view, valid while its file stands as it did ([`finder`]).
+    finder: Mutex<finder::ViewCache>,
     /// The small fields a `session_meta` event carries, as of each chat's last
     /// write here ([`meta_event`]).
     meta_fields: Mutex<HashMap<String, Value>>,
@@ -187,6 +190,7 @@ impl SessionStore {
             all: RwLock::new(()),
             chats: Mutex::new(HashMap::new()),
             deferred: Mutex::new(HashMap::new()),
+            finder: Mutex::new(finder::ViewCache::default()),
         }
     }
 
@@ -383,6 +387,31 @@ impl SessionStore {
             return None;
         }
         Self::read(&self.dir.join(format!("{id}.json")))
+    }
+
+    /// A chat's searchable text only (see [`finder`]): user and assistant
+    /// messages without pictures, reasoning or tool output, and the file-naming
+    /// arguments of its tool calls. Kept per chat while the file's mtime and
+    /// size are unchanged, so asking again reads no file. `None` for no such
+    /// chat, or one the finder cannot read.
+    pub fn finder_text(&self, id: &str) -> Option<Arc<Value>> {
+        if !valid_id(id) {
+            return None;
+        }
+        let _ = self.flush(id);
+        let path = self.dir.join(format!("{id}.json"));
+        let lock = || self.finder.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(meta) = std::fs::metadata(&path).ok().filter(|m| m.is_file()) else {
+            lock().forget(id);
+            return None;
+        };
+        let stamp = (meta.modified().unwrap_or(SystemTime::UNIX_EPOCH), meta.len());
+        if let Some(hit) = lock().get(id, stamp) {
+            return Some(hit);
+        }
+        let view = Arc::new(finder::text_view(&std::fs::read(&path).ok()?)?);
+        lock().put(id, stamp, view.clone());
+        Some(view)
     }
 
     /// A chat without its transcript (see [`meta`]), or `None` when there is
