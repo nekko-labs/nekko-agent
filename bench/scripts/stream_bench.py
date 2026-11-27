@@ -86,8 +86,12 @@ WORKLOADS = {
 
 
 def code_block(text):
-    """The first ```python block of a reply, or None."""
-    start = text.find("```python")
+    """The last ```python block of a reply, or None.
+
+    The last, not the first: models that think inline (Qwen3.8 ignores
+    /no_think) can name the fence in their reasoning before writing the file.
+    """
+    start = text.rfind("```python")
     if start < 0:
         return None
     start = text.find("\n", start) + 1
