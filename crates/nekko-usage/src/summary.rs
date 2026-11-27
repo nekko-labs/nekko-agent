@@ -1,7 +1,7 @@
 //! `usageSummary()` (`packages/host/src/usage.ts`) and `summarizeReplies` /
 //! `replyStats` (`replies.ts`), over the same files the TS host reads.
 
-use crate::pricing::{Tokens, estimate_cost};
+use crate::pricing::{Tokens, estimate_cost, model_price};
 use crate::{get, js_order, key_of, num, or_zero, strict_eq};
 use serde_json::{Map, Value, json};
 use std::collections::HashMap;
@@ -196,6 +196,29 @@ impl Default for Daily {
     }
 }
 
+/// Older turns didn't stamp Claude Code's billing route. The login providers
+/// created by the Claude subscription flow used the CLI login by default;
+/// an explicitly configured API key or cloud route was still metered.
+fn recorded_auth<'a>(record: &'a Value, provider: Option<&'a Value>) -> Option<&'a str> {
+    if let Some(auth) = get(record, "auth").and_then(Value::as_str) {
+        return Some(auth);
+    }
+    match provider.and_then(|p| get(p, "kind")).and_then(Value::as_str) {
+        Some("claude-code") => match provider.and_then(|p| p.pointer("/claudeCode/authSource")).and_then(Value::as_str)
+        {
+            Some("nekko-anthropic-key") => Some("apikey"),
+            Some("bedrock" | "vertex" | "foundry") => Some("cloud"),
+            None | Some("cli" | "") => Some("subscription"),
+            _ => Some("unknown"),
+        },
+        _ => provider.and_then(|p| get(p, "auth")).and_then(Value::as_str),
+    }
+}
+
+fn has_paid_comparison(model: Option<&Value>) -> bool {
+    model.and_then(Value::as_str).and_then(model_price).is_some_and(|p| p.input > 0.0 || p.output > 0.0)
+}
+
 /// `usageSummary()` for the given files. `Err` where the TS throws: a record
 /// whose `ts` is not a valid date (`toISOString`), a `null` line, or a model
 /// id that is not a string.
@@ -244,7 +267,7 @@ pub fn usage_summary(files: &UsageFiles) -> Result<Value, String> {
                     get(p, "kind").and_then(Value::as_str).is_some_and(|k| LOCAL_PROVIDER_KINDS.contains(&k))
                 }),
             };
-            let subscription = get(&r, "auth").and_then(Value::as_str) == Some("subscription");
+
             let tokens = Tokens {
                 input: get(&r, "inputTokens"),
                 output: get(&r, "outputTokens"),
@@ -259,18 +282,39 @@ pub fn usage_summary(files: &UsageFiles) -> Result<Value, String> {
             // A line with the provider's own charge (`costUsd`, a paid cloud
             // picture) costs that, not a token estimate.
             let reported = get(&r, "costUsd").and_then(Value::as_f64).filter(|c| c.is_finite() && *c >= 0.0);
-            let picture = get(&r, "kind").and_then(Value::as_str) == Some("picture");
+            let kind = get(&r, "kind").and_then(Value::as_str);
+            let picture = kind == Some("picture");
+            let auth = if matches!(kind, Some("picture" | "video")) { None } else { recorded_auth(&r, provider) };
+            let subscription = auth == Some("subscription");
             let exact = match reported {
                 Some(c) => Some(c),
                 None => estimate_cost(model, tokens)?,
             };
             let list_cost = exact.unwrap_or(0.0);
-            let cost = if local || subscription { 0.0 } else { list_cost };
+            let cost = if local || subscription {
+                0.0
+            } else if auth == Some("unknown") {
+                reported.unwrap_or(0.0)
+            } else {
+                list_cost
+            };
             let day = crate::date::iso_date(crate::date::from_value(get(&r, "ts"))).ok_or("Invalid time value")?;
             let d = daily.entry(day);
             if local || subscription {
-                let bench = if local && exact.is_none() { estimate_cost(Some(&benchmark), tokens)? } else { None };
-                let equivalent = exact.or(bench);
+                // A free hosted variant (or a reported $0 local charge) is not
+                // a paid comparison. Use catalog prices, then the chosen fallback.
+                let (equivalent, bench) = if local && !has_paid_comparison(model) {
+                    let bench = if has_paid_comparison(Some(&benchmark)) {
+                        estimate_cost(Some(&benchmark), tokens)?
+                    } else {
+                        None
+                    };
+                    (bench, bench)
+                } else if local {
+                    (estimate_cost(model, tokens)?, None)
+                } else {
+                    (exact, None)
+                };
                 let session = get(&r, "sessionId").filter(|s| nekko_js::truthy(Some(s))).map(|s| key_of(Some(s)));
                 let apply = |bucket: &mut Avoided| {
                     match equivalent {
@@ -488,6 +532,79 @@ pub fn summarize_replies(records: &[Value]) -> Result<Option<Value>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn claude_code_plan_usage_is_not_metered_in_old_or_new_records() {
+        let day = 1_762_732_800_000_u64;
+        let settings = json!({"providers": [
+            {"id":"cli","kind":"claude-code"},
+            {"id":"key","kind":"claude-code","claudeCode":{"authSource":"nekko-anthropic-key"}},
+            {"id":"cloud","kind":"claude-code","claudeCode":{"authSource":"bedrock"}}
+        ]});
+        let row = |provider: &str, auth: Option<&str>| {
+            let mut v = json!({"ts":day,"providerId":provider,"sessionId":provider,"modelId":"claude-sonnet-4",
+                "inputTokens":1_000_000,"outputTokens":0,"local":false,"origin":"user"});
+            if let Some(a) = auth {
+                v["auth"] = json!(a);
+            }
+            v.to_string()
+        };
+        let entries = [
+            row("cli", None),
+            row("key", Some("subscription")),
+            row("removed", Some("subscription")),
+            row("unreadable", Some("unknown")),
+            row("used-to-be-key", Some("api_key")),
+            row("key", None),
+            row("cloud", None),
+        ];
+        let s = usage_summary(&UsageFiles {
+            settings: Some(settings.to_string()),
+            usage: Some(entries.join("\n")),
+            replies: None,
+        })
+        .unwrap();
+        let list = model_price("claude-sonnet-4").unwrap().input;
+        assert_eq!(s["totalCost"].as_f64(), Some(list * 3.0));
+        assert_eq!(s["daily"][0]["cost"].as_f64(), Some(list * 3.0));
+        assert_eq!(s["bySessionCost"]["cli"], json!(0));
+        assert_eq!(s["bySessionCost"]["unreadable"], json!(0));
+        assert_eq!(s["bySessionCost"]["key"].as_f64(), Some(list));
+        assert_eq!(s["bySessionCost"]["cloud"].as_f64(), Some(list));
+        assert_eq!(s["daily"][0]["avoidedCosts"]["subscription"].as_f64(), Some(list * 3.0));
+        assert_eq!(s["bySessionAvoidedCosts"]["removed"]["subscription"].as_f64(), Some(list));
+    }
+
+    #[test]
+    fn local_usage_compares_to_paid_catalog_rates_or_the_configured_fallback() {
+        let day = 1_762_732_800_000_u64;
+        let unknown = json!({"ts":day,"providerId":"local","sessionId":"one","modelId":"unlisted.gguf",
+            "inputTokens":1_000_000,"outputTokens":0,"local":true, "costUsd":0});
+        let known = json!({"ts":day,"providerId":"local","sessionId":"two","modelId":"qwen3-32b",
+            "inputTokens":1_000_000,"outputTokens":0,"local":true, "costUsd":0});
+        let mut free = unknown.clone();
+        free["modelId"] = json!("inclusionai/ling-3.1-flash");
+        let usage = format!("{unknown}\n{known}\n{free}");
+        let list = model_price("qwen3-32b").unwrap().input;
+        let summary = |benchmark: &str| {
+            usage_summary(&UsageFiles {
+                settings: Some(json!({"localCostBenchmark":benchmark}).to_string()),
+                usage: Some(usage.clone()),
+                replies: None,
+            })
+            .unwrap()
+        };
+        let s = summary("qwen3-32b");
+        let d = &s["daily"][0];
+        assert_eq!(d["cost"], json!(0));
+        assert_eq!(d["localTokens"], json!(3_000_000));
+        assert_eq!(d["avoidedCosts"]["local"].as_f64(), Some(list * 3.0));
+        assert_eq!(d["avoidedCosts"]["benchmarkTokens"], json!(2_000_000));
+        assert_eq!(s["bySessionAvoidedCosts"]["two"]["local"].as_f64(), Some(list));
+        let s = summary("");
+        assert_eq!(s["avoidedCosts"]["local"].as_f64(), Some(list));
+        assert_eq!(s["avoidedCosts"]["unpricedTokens"], json!(2_000_000));
+    }
 
     #[test]
     fn a_paid_picture_costs_what_the_provider_charged() {

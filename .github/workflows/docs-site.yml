@@ -28,6 +28,7 @@ on:
     paths:
       - 'docs/**'
       - 'ASSETS.md'
+      - 'TRADEMARKS.md'
       - 'CONTRIBUTING.md'
       - 'scripts/build-docs.mjs'
       - 'apps/website/llms.txt'
@@ -38,6 +39,7 @@ on:
     paths:
       - 'docs/**'
       - 'ASSETS.md'
+      - 'TRADEMARKS.md'
       - 'CONTRIBUTING.md'
       - 'scripts/build-docs.mjs'
       - 'apps/website/llms.txt'

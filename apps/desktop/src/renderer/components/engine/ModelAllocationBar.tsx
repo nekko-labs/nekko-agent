@@ -1,5 +1,5 @@
 import type { EngineMemory, LoadParams, PlacementPlan } from '@nekko-agent/shared';
-import { formatBytes } from '../runtimes/verdict.js';
+import { formatBytes, formatTokens } from '../runtimes/verdict.js';
 import { ASPECT_COLOR, MemoryBar, Swatch } from './MemoryBar.js';
 import { loadMemoryEstimate, type LoadMemoryModel } from './loadMemory.js';
 
@@ -15,7 +15,7 @@ export function ModelAllocationBar({ model, params = {}, plan = null, previous, 
   const prior = pending && previous?.plan ? previous : null;
   const displayPlan = prior?.plan ?? plan;
   const estimate = loadMemoryEstimate(displayPlan, prior?.params ?? params, model);
-  const { totalBytes, parts, mlxContext, unknownParts, fileBytes } = estimate;
+  const { totalBytes, parts, context, mlxContext, unknownParts, fileBytes } = estimate;
   const unified = model.format === 'mlx' || displayPlan?.unified || memory?.kind === 'unified';
   const label = unified ? 'Unified memory' : estimate.vramBytes && estimate.ramBytes ? 'VRAM + RAM' :
     estimate.ramBytes || (!estimate.vramBytes && memory?.kind === 'ram') ? 'RAM' : 'VRAM';
@@ -23,8 +23,8 @@ export function ModelAllocationBar({ model, params = {}, plan = null, previous, 
     key: part.aspect,
     bytes: part.vramBytes + part.ramBytes,
     color: ASPECT_COLOR[part.aspect],
-    title: unified ? part.label : `${part.label} · ${[part.vramBytes && `${formatBytes(part.vramBytes)} VRAM`, part.ramBytes && `${formatBytes(part.ramBytes)} RAM`].filter(Boolean).join(' + ')}`,
-    label: part.label,
+    title: unified ? `${part.label} · ${part.driver}` : `${part.label} · ${[part.vramBytes && `${formatBytes(part.vramBytes)} VRAM`, part.ramBytes && `${formatBytes(part.ramBytes)} RAM`].filter(Boolean).join(' + ')}`,
+    label: part.aspect === 'context' && context ? `Context (${context.sessions} ${context.sessions === 1 ? 'session' : 'sessions'} × ${formatTokens(context.perSession)})` : part.label,
     slices: part.slices,
   }));
   const segments = mlxContext

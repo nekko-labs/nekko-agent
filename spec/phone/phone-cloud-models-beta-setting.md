@@ -5,7 +5,7 @@ area: phone
 
 # Cloud models on the phone are a beta setting (2026-11-27)
 
-Issue: [#3606](https://github.com/nekko-labs/nekko-agent/issues/3606). Decision: [0126](../../docs/decisions/0126-cloud-models-on-the-phone-are-a-beta-setting.md). The feature itself: [iPhone](iphone-chats-on-this-iphone-and-group-by-computer.md), [Android](android-direct-cloud-chats.md).
+Issue: [#3606](https://github.com/nekko-labs/nekko-agent/issues/3606). Decision: [0127](../../docs/decisions/0127-cloud-models-on-the-phone-are-a-beta-setting.md). The feature itself: [iPhone](iphone-chats-on-this-iphone-and-group-by-computer.md), [Android](android-direct-cloud-chats.md).
 
 ## User intent
 

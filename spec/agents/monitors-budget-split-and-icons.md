@@ -19,13 +19,13 @@ User intent (Philip): the icons on the monitor headers should have the colour an
 - Saved docks that still name `insights` load without it (unknown keys are dropped, as the Vitals panel was on 2026-10-13). An old wall's `insights` window is dropped on load; an old `automations` window still turns on the Automations monitor. A saved wall's `insights` panel choices are ignored and no longer written back.
 - The split compass no longer offers an Insights window.
 
-## Budget: actual and theoretical spend `[implemented; unit-tested; renderer-verified in an isolated fixture]`
+## Budget: metered spend and estimated savings
 
-- **Actual spend** is the recorded API-price cost of turns on metered API keys and cloud usage (the usage summary's daily `cost`). Local-model turns and subscription turns record $0 here, so a subscription never shows up as actual spend.
-- **Theoretical spend** is the sum of the two avoided-cost estimates: local models (`avoidedCosts.local`) and subscriptions (`avoidedCosts.subscription`), i.e. what those tokens would have cost at API prices. It is shown in the success colour as money saved.
-- Layout, top to bottom: the time-range toggles; two headline tiles side by side (Actual spend, Theoretical spend), whose values line up even when a label wraps; a thin split bar of the API-price total (accent for paid, green for saved) with "`$X` at API prices · you paid `N`%"; a quiet breakdown list (Local models with its token count, Subscriptions, Top paid agent, Tokens in/out in compact notation with exact numbers on hover); one footnote on what theoretical means; the Cloud pricing comparison disclosure, unchanged.
-- Every figure follows the selected UTC range, as before. Unpriced and fallback-token notes are unchanged.
-- Limitation: cloud models priced at $0 in the pricing catalog (for example OpenRouter free models) count as $0 in both actual and theoretical spend; they are not yet valued at a paid equivalent.
+- **API & cloud spend** counts metered API and cloud usage: a recorded provider cost when available, otherwise a token-price estimate. It does not read invoices or include subscription fees. Local-model and subscription tokens add no spend. New Claude Code records use the billing route known at turn time; unknown auth does not get a list-price charge. For older untagged records, the saved Claude Code route is the best available proxy (a CLI login defaults to plan usage; configured API and cloud routes remain metered). The ledger is not rewritten.
+- **Estimated savings** compares local and subscription tokens to API prices. **Local model savings** shows the local estimate and token count separately. Local models without a paid catalog price use the configured fallback or are left unpriced if there is none. Hosted free models do not get a paid equivalent. These are not net savings after plan fees, hardware or electricity.
+- **Top paid agent** uses the highest metered session total in the selected time range. Its name opens the matching chat by ID, read-only if archived. If the chat no longer exists, the row keeps the cost but has no link.
+- All totals follow the selected UTC range; the split bar shows the metered share of the API-price comparison, not a percentage of an invoice. The panel reads local usage data without querying provider billing or exposing chat contents.
+- Status (#3597): implementation and isolated desktop fixture verification; not verified against a provider invoice or deployed desktop build.
 
 ## Utilization provider logos `[implemented; unit-tested; renderer-verified in an isolated fixture]`
 

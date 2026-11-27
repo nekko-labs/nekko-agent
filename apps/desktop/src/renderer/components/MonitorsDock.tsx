@@ -384,7 +384,7 @@ export function MonitorsDock(props: MonitorsDockProps) {
           <ResizableMonitorBody label={p.label}>
             {p.key === 'automations' && <div className="monitors-dock__app"><AutomationsPane tasks={props.tasks} running={props.running} now={props.now} onOpen={props.onOpenChat} /></div>}
             {p.key === 'utilization' && <Utilization providers={props.providers} usage={props.usage} now={props.now} onOpenModels={props.onOpenModels} />}
-            {p.key === 'budget' && <Budget usage={props.usage} sessions={props.sessions} providers={props.providers} now={props.now} />}
+            {p.key === 'budget' && <Budget usage={props.usage} sessions={props.sessions} onOpenChat={props.onOpenChat} now={props.now} />}
             {p.key === 'hardware' && <Hardware providers={props.providers} />}
             {p.key === 'localModels' && <LocalModels />}
           </ResizableMonitorBody>
@@ -630,7 +630,7 @@ function UsageAttributionRows({ a, compact }: { a: NonNullable<ReturnType<typeof
   </dl>;
 }
 
-function Budget({ usage, now, sessions, providers }: Pick<MonitorsDockProps, 'usage' | 'now' | 'sessions' | 'providers'>) {
+function Budget({ usage, now, sessions, onOpenChat }: Pick<MonitorsDockProps, 'usage' | 'now' | 'sessions' | 'onOpenChat'>) {
   const benchmark = useStore((s) => s.settings?.localCostBenchmark ?? DEFAULT_LOCAL_COST_BENCHMARK);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -651,45 +651,46 @@ function Budget({ usage, now, sessions, providers }: Pick<MonitorsDockProps, 'us
     } catch { setError('Could not update cloud comparison. Please try again.'); }
     finally { setSaving(false); }
   };
-  // Actual: what metered API keys and cloud usage cost. Theoretical: what the
-  // local and subscription tokens would have cost at API prices, i.e. saved.
-  const theoretical = avoided ? avoided.local + avoided.subscription : null;
-  const atApiPrices = spend != null && theoretical != null ? spend + theoretical : null;
-  const paidShare = atApiPrices ? (spend! / atApiPrices) * 100 : null;
-  const topTitle = top && top[1] > 0 ? sessions.find(s => s.id === top[0])?.title ?? 'Chat' : null;
+  const savings = avoided ? avoided.local + avoided.subscription : null;
+  const atApiPrices = spend != null && savings != null ? spend + savings : null;
+  const meteredShare = atApiPrices ? (spend! / atApiPrices) * 100 : null;
+  const topSpend = top && top[1] > 0 ? top[1] : null;
+  const topChat = topSpend != null ? sessions.find(s => s.id === top?.[0]) : undefined;
   const compact = (n: number) => new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(n);
   return <div className="monitors-dock__metrics monitors-dock__budget">
     <RangeToggles chart="Budget" range={range} onChange={setRange} />
     <div className="monitors-dock__spend-grid">
-      <section className="monitors-dock__spend" data-spend="actual" aria-label="Actual spend">
-        <span className="monitors-dock__spend-label">Actual spend</span>
+      <section className="monitors-dock__spend" data-spend="actual" aria-label="API & cloud spend">
+        <span className="monitors-dock__spend-label">API &amp; cloud spend</span>
         <strong className="monitors-dock__spend-value">{spend == null ? 'Unavailable' : formatUSD(spend)}</strong>
-        <span className="monitors-dock__spend-hint">API and cloud bills</span>
+        <span className="monitors-dock__spend-hint">Includes estimates · no plan fees</span>
       </section>
-      <section className="monitors-dock__spend" data-spend="theoretical" aria-label="Theoretical spend">
-        <span className="monitors-dock__spend-label">Theoretical spend</span>
-        <strong className="monitors-dock__spend-value">{theoretical == null ? 'Unavailable' : formatUSD(theoretical)}</strong>
+      <section className="monitors-dock__spend" data-spend="theoretical" aria-label="Estimated savings">
+        <span className="monitors-dock__spend-label">Estimated savings</span>
+        <strong className="monitors-dock__spend-value">{savings == null ? 'Unavailable' : formatUSD(savings)}</strong>
         <span className="monitors-dock__spend-hint">Local and subscriptions</span>
       </section>
     </div>
-    {paidShare != null && <div className="monitors-dock__split">
-      <div className="monitors-dock__split-bar" role="img" aria-label={`You paid ${Math.round(paidShare)}% of the ${formatUSD(atApiPrices!)} this usage costs at API prices`}>
-        {paidShare > 0 && <span data-part="actual" style={{ width: `${paidShare}%` }} />}
-        {paidShare < 100 && <span data-part="theoretical" style={{ width: `${100 - paidShare}%` }} />}
+    {meteredShare != null && <div className="monitors-dock__split">
+      <div className="monitors-dock__split-bar" role="img" aria-label={`${Math.round(meteredShare)}% metered out of ${formatUSD(atApiPrices!)} total at API prices`}>
+        {meteredShare > 0 && <span data-part="actual" style={{ width: `${meteredShare}%` }} />}
+        {meteredShare < 100 && <span data-part="theoretical" style={{ width: `${100 - meteredShare}%` }} />}
       </div>
-      <p className="monitors-dock__note">{formatUSD(atApiPrices!)} at API prices · you paid {Math.round(paidShare)}%</p>
+      <p className="monitors-dock__note">{formatUSD(atApiPrices!)} at API prices · {Math.round(meteredShare)}% metered</p>
     </div>}
     <dl className="monitors-dock__breakdown" aria-label={`Budget breakdown, ${BUDGET_RANGE_LABEL[range].toLowerCase()}`}>
-      <div data-row="local"><dt>Local models</dt><dd>{avoided ? formatUSD(avoided.local) : 'Unavailable'}{ranged?.localTokens != null && <small>{ranged.localTokens.toLocaleString()} tokens</small>}</dd></div>
-      <div data-row="subscription"><dt>Subscriptions</dt><dd>{avoided ? formatUSD(avoided.subscription) : 'Unavailable'}</dd></div>
+      <div data-row="local"><dt>Local model savings</dt><dd>{avoided ? formatUSD(avoided.local) : 'Unavailable'}{ranged?.localTokens != null && <small>{ranged.localTokens.toLocaleString()} tokens</small>}</dd></div>
+      <div data-row="subscription"><dt>Plan usage value</dt><dd>{avoided ? formatUSD(avoided.subscription) : 'Unavailable'}</dd></div>
       {ranged && ranged.pictures > 0 && <div data-row="pictures"><dt>Paid pictures</dt><dd>{formatUSD(ranged.pictureCost)}<small>{ranged.pictures === 1 ? '1 picture' : `${ranged.pictures.toLocaleString()} pictures`}</small></dd></div>}
-      <div data-row="top"><dt>Top paid agent</dt><dd>{topTitle ? <><span className="monitors-dock__breakdown-name" title={topTitle}>{topTitle}</span>{formatUSD(top![1])}</> : ranged?.bySessionCost == null ? 'Unavailable' : 'No API spend'}</dd></div>
+      <div data-row="top"><dt>Top paid agent</dt><dd>{topSpend != null ? <>{topChat
+        ? <button type="button" className="monitors-dock__breakdown-name monitors-dock__chat-link" title={`Open ${topChat.title || 'chat'}`} onClick={() => onOpenChat(topChat.id)}>{topChat.title || 'Chat'}</button>
+        : <span className="monitors-dock__breakdown-name">Chat unavailable</span>}{formatUSD(topSpend)}</> : ranged?.bySessionCost == null ? 'Unavailable' : 'No API spend'}</dd></div>
       <div data-row="tokens"><dt>Tokens</dt><dd title={ranged ? `${ranged.input.toLocaleString()} in · ${ranged.output.toLocaleString()} out` : undefined}>{ranged ? `${compact(ranged.input)} in · ${compact(ranged.output)} out` : 'Unavailable'}</dd></div>
     </dl>
     {ranged?.attribution && <UsageAttributionRows a={ranged.attribution} compact={compact} />}
-    <p className="monitors-dock__note">{BUDGET_RANGE_LABEL[range]} · UTC. Theoretical is the API price of the same tokens, before plan fees, hardware and electricity.</p>
+    <p className="monitors-dock__note">{BUDGET_RANGE_LABEL[range]} · UTC. Savings compare the same tokens at API prices, before plan fees, hardware and electricity.</p>
     <details><summary>Cloud pricing comparison</summary>
-      <label className="monitors-dock__benchmark">Fallback for unpriced local models
+      <label className="monitors-dock__benchmark">Fallback when local models lack a paid price
         <select value={benchmark} disabled={saving} onChange={(e) => void changeBenchmark(e.target.value)}>
           <option value="">None (leave unpriced)</option>
           {MODEL_COMPARISON_TIERS.map(tier => <optgroup key={tier.label} label={tier.label}>
@@ -698,7 +699,7 @@ function Budget({ usage, now, sessions, providers }: Pick<MonitorsDockProps, 'us
           <optgroup label="Legacy comparisons">{MODEL_PRICING.filter(p => !MODEL_COMPARISON_TIERS.some(t => (t.models as readonly string[]).includes(p.match))).map(p => <option key={p.match} value={p.match}>{p.match} · ${p.input} in / ${p.output} out</option>)}</optgroup>
         </select>
       </label>
-      <p className="monitors-dock__note">USD per million tokens. Matched models use their published price; the fallback is a comparison, not the same model.</p>
+      <p className="monitors-dock__note">USD per million tokens. Local models without a paid catalog price use the fallback, a comparison rather than an exact match.</p>
       {price && <p className="monitors-dock__note">Fallback: ${price.input} input / ${price.output} output per 1M tokens.</p>}
       <p className="monitors-dock__note"><a href={MODEL_PRICING_SOURCE} target="_blank" rel="noreferrer">OpenRouter pricing catalog</a> · checked {MODEL_PRICING_CHECKED_AT}. <a href="https://ollama.com/pricing" target="_blank" rel="noreferrer">Ollama cloud rates</a></p>
       <p className="monitors-dock__note">Standard text-token estimates, not invoices. Provider routes, long context, tools and batch rates can differ. Tiers are comparison choices, not verified capability rankings. No monthly plan fees are included.</p>

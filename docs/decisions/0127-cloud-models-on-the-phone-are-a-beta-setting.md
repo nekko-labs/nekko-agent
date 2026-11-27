@@ -3,7 +3,7 @@ status: accepted
 date: 2026-11-27
 ---
 
-# 0126. Cloud models on the phone are a beta setting, off for a new install
+# 0127. Cloud models on the phone are a beta setting, off for a new install
 
 ## Context
 

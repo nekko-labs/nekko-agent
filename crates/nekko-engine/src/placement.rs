@@ -300,7 +300,13 @@ pub fn place(facts: &ModelFacts, req: &Request, hw: &Hardware, resident_vram: f6
     }
 
     if unified {
-        // One pool: what the GPU may wire is the device's free figure.
+        // The GPU probe sees GPU allocations, not memory used only by apps and
+        // the OS. Use the tighter live reading for the shared pool. A reload
+        // gets its own allocation back; no system reading means use the GPU.
+        if hw.ram_total > 0.0 && hw.ram_free.is_finite() {
+            plan.vram_avail = plan.vram_avail.min(jmax(0.0, ram_free + resident_vram - OS_RESERVE));
+            plan.vram_other = jmax(0.0, plan.vram_total - plan.vram_avail);
+        }
         let need = plan.vram.sum() + plan.ram.sum();
         plan.ram_avail = plan.vram_avail;
         if need > plan.vram_avail {
@@ -516,15 +522,16 @@ pub fn recommend(facts: &ModelFacts, hw: &Hardware, resident_vram: f64, goal: Go
         (Goal::Fill, Some(b)) => solve(facts, hw, resident_vram, goal, b),
         (Goal::Context, _) => solve(facts, hw, resident_vram, goal, &Request::base(layers)),
         _ => {
-            // More sessions only when each still gets a full working context and room to spare.
-            let want = max.min(65536.0);
-            [4.0, 2.0]
-                .iter()
-                .map(|n| {
-                    solve(facts, hw, resident_vram, Goal::Speed, &Request { sessions: *n, ..Request::base(layers) })
-                })
-                .find(|(r, p)| r.context_per_session >= want && p.verdict == "fits")
-                .unwrap_or_else(|| solve(facts, hw, resident_vram, Goal::Speed, &Request::base(layers)))
+            // A fit estimate doesn't predict throughput or responsiveness. On
+            // shared memory or CPU, start with one; on a discrete GPU, offer
+            // two only if both get useful context entirely on the GPU.
+            let single = Request::base(layers);
+            let pair = (!hw.unified && has_gpu)
+                .then(|| solve(facts, hw, resident_vram, Goal::Speed, &Request { sessions: 2.0, ..single.clone() }))
+                .filter(|(r, p)| {
+                    r.run_on == RunOn::Gpu && r.context_per_session >= max.min(65536.0) && p.verdict == "fits"
+                });
+            pair.unwrap_or_else(|| solve(facts, hw, resident_vram, Goal::Speed, &single))
         }
     };
 
@@ -593,16 +600,18 @@ pub fn recommend(facts: &ModelFacts, hw: &Hardware, resident_vram: f64, goal: Go
         if req.context_per_session >= max {
             "The most this model supports, and it fits."
         } else {
-            "The most that fits beside the model. Lower it to free memory."
+            "Recommended for this setup. Lower it to free memory."
         },
     );
     add(
         "Sessions at once",
         nekko_js::number_to_string(req.sessions),
         if req.sessions > 1.0 {
-            "Room for agents and chats to answer at the same time, each with its full context."
+            "Estimated to fit with the context shown for each session. Simultaneous requests can still slow replies."
+        } else if hw.unified {
+            "A safer starting point on shared memory. More simultaneous requests can slow replies and use more memory."
         } else {
-            "One at a time keeps the most memory for context on this machine."
+            "One at a time leaves more memory for context. More simultaneous requests can slow replies."
         },
     );
     let (precision, why_precision) = precision_label(&req.kv_cache_dtype);
