@@ -44,6 +44,23 @@ describe('Greeting Nekko', () => {
     for (const token of ['--surface', '--ink']) expect(markup).toContain(`var(${token})`);
     expect(markup).not.toMatch(/href=|tabindex=|<image|<animate/);
   });
+
+  it("laughs as the videos' happy Nekko: ^ ^ eyes, small mouth and twinkling sparkles", async () => {
+    const { PeekNekkoArt } = await import('./GreetingNekko.js');
+    const calm = renderToStaticMarkup(<PeekNekkoArt className="x" look={{ x: 0, y: 0 }} />);
+    expect(calm).not.toContain('peek-sparkles');
+    const happy = renderToStaticMarkup(<PeekNekkoArt className="x" look={{ x: 0, y: 0 }} laugh />);
+    expect(happy).toContain('data-nekko-laugh');
+    expect(happy).toContain('M10 17V15H11V14H13V15H14V17H13V16H11V17Z');
+    expect(happy).not.toContain('M14 20H19V22H18V23H15V22H14Z');
+    expect(happy).toContain('data-part="peek-mouth"');
+    expect(happy.match(/data-part="peek-sparkles" d="([^"]+)"/)?.[1].match(/Z/g)).toHaveLength(20);
+    // The sparkles sit outside the 32-unit box, so the svg must not clip them.
+    expect(happy).toContain('overflow="visible"');
+    const css = stylesheet('styles.css');
+    expect(hasKeyframes(css, 'peek-twinkle')).toBe(true);
+    expect(cssRule(css, '[data-part="peek-sparkles"]', { media: 'prefers-reduced-motion: reduce' })).toMatchObject({ animation: 'none' });
+  });
 });
 
 describe('Per-chat Nekko', () => {
