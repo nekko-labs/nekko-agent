@@ -30,6 +30,8 @@ In the desktop and Local Web UI plan sheet, each active step has an accent-colou
 
 ## Following subagents and plan links
 
+The delegation row shows elapsed time first. A quiet child shows one **no progress** badge after a full minute without reported work. The next child update clears the badge without restarting the elapsed timer. Expand the row to see individual calls.
+
 Subagents stay listed beneath their parent in the Agents panel when you switch to another chat. Completed children remain accessible until archived; explicitly collapsed groups stay collapsed.
 
 Subagents appear as live cards beneath the plan, whether the plan is open or folded. Select a card or a step’s subagent chip to open its chat. Link chips say what they open: **PR**, **CI**, **Task**, **File**, or **Preview**. A reported check appears on its step’s status mark, not as a separate verification chip; hover the mark for its reported state, device and freshness, or select it to open attached evidence.
