@@ -164,7 +164,7 @@ async fn orchestrate_spawn_honors_live_fusion_across_two_providers() {
                 .expect("coordinator turn should finish");
         assert_eq!(status, 200, "{body}");
     };
-    send("Coordinator-only request").await;
+    send("Delegate the coordinator task").await;
     let granted = trace.lock().unwrap().clone();
     // The two catalog reads validate the saved route, then fill the worker context window.
     assert_eq!(
@@ -211,7 +211,7 @@ async fn orchestrate_spawn_honors_live_fusion_across_two_providers() {
     assert_eq!(spawned[0]["messages"][0]["content"], TASK);
     assert!(!spawned[0].to_string().contains("Orchestrate turn data"));
 
-    let sending = tokio::spawn(send("Try the same assignment again"));
+    let sending = tokio::spawn(send("Delegate the same assignment again"));
     tokio::time::timeout(Duration::from_secs(10), held.notified()).await.expect("second coordinator request");
     let (status, patched) =
         post(port, "session:setOptions", json!([SESSION, {"autoProviderSwitch":false}]), Some(TOKEN)).await;

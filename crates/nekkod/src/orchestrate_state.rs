@@ -57,6 +57,92 @@ pub(crate) fn can_coordinate(session: &Value, settings: &Value) -> bool {
         })
 }
 
+/// Pick only from the current user request (or the one being retried), never
+/// from assistant replies, retrieved context, or raw attachment contents.
+/// This is deliberately conservative: an unrecognized request stays direct.
+pub(crate) fn coordination_reason(session: &Value, opts: &Value) -> Option<&'static str> {
+    let text = string(opts, "text").filter(|text| !text.trim().is_empty()).or_else(|| {
+        if !truthy(opts.get("resume")) && !truthy(opts.get("regenerate")) {
+            return None;
+        }
+        let last = session.get("messages")?.as_array()?.iter().rfind(|m| string(m, "role") == Some("user"))?;
+        string(last, "content")
+    })?;
+    let lower = text.trim().to_lowercase();
+    let words = lower.split(|c: char| !c.is_alphanumeric()).filter(|w| !w.is_empty()).collect::<Vec<_>>();
+    let phrase = |p: &[&str]| words.windows(p.len()).any(|w| w == p);
+    if phrase(&["do", "not", "delegate"])
+        || phrase(&["don", "t", "delegate"])
+        || phrase(&["no", "sub", "agents"])
+        || phrase(&["no", "subagents"])
+        || phrase(&["without", "delegation"])
+        || phrase(&["do", "it", "yourself"])
+    {
+        return None;
+    }
+    let head = words.first().copied().unwrap_or_default();
+    if matches!(head, "delegate" | "orchestrate" | "coordinate")
+        || phrase(&["use", "a", "subagent"])
+        || phrase(&["use", "a", "sub", "agent"])
+        || phrase(&["use", "subagents"])
+        || phrase(&["ask", "a", "worker"])
+        || phrase(&["call", "spawn", "agent"])
+        || phrase(&["review", "the", "worker"])
+        || phrase(&["review", "the", "workers"])
+    {
+        return Some("requested");
+    }
+    let independent = phrase(&["independent", "tasks"])
+        || phrase(&["independent", "workstreams"])
+        || phrase(&["separate", "workstreams"]);
+    let items = text
+        .lines()
+        .filter(|line| {
+            let line = line.trim_start();
+            line.starts_with("- ")
+                || line.starts_with("* ")
+                || line.starts_with("• ")
+                || line.split_once(". ").is_some_and(|(n, _)| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+        })
+        .take(2)
+        .count();
+    (independent && items == 2).then_some("separable")
+}
+
+#[cfg(test)]
+mod strategy_tests {
+    use super::*;
+
+    #[test]
+    fn direct_by_default_and_explicit_opt_out_wins() {
+        for text in [
+            "Hello",
+            "Review this file",
+            "What does delegate mean?",
+            "Delegate this, but do not delegate.",
+            "Run a benchmark comparing direct and delegated runs",
+            "Fix these steps in order:\n1. Read the file\n2. Update it",
+        ] {
+            assert_eq!(coordination_reason(&json!({}), &json!({"text": text})), None, "{text}");
+        }
+    }
+
+    #[test]
+    fn explicit_or_independent_list_and_retry_only() {
+        assert_eq!(
+            coordination_reason(&json!({}), &json!({"text":"Delegate the audit to a worker"})),
+            Some("requested")
+        );
+        assert_eq!(
+            coordination_reason(&json!({}), &json!({"text":"Independent tasks:\n- Check the docs\n- Check the tests"})),
+            Some("separable")
+        );
+        let chat = json!({"messages":[{"role":"user", "content":"Delegate the audit"}, {"role":"assistant", "content":"Later"}]});
+        assert_eq!(coordination_reason(&chat, &json!({"resume":true})), Some("requested"));
+        assert_eq!(coordination_reason(&chat, &json!({"text":"Thanks"})), None);
+    }
+}
+
 /// Default and UI bounds for the advisory maxParallel setting.
 pub(crate) fn parallel_limit(settings: &Value) -> u64 {
     settings
