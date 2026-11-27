@@ -186,6 +186,34 @@ fn guesses_modality_and_context_as_the_host_does() {
 }
 
 #[test]
+fn discovers_a_renamed_gguf_dflash_head_from_its_header() {
+    let dir = scratch("gguf-dflash-discovery");
+    let head = dir.join("renamed.gguf");
+    std::fs::write(
+        &head,
+        build(&json!({ "pairs": [
+            ["general.architecture", { "type": "string", "value": "dflash" }],
+            ["dflash.block_size", { "type": "u32", "value": 8 }],
+            ["dflash.selector_rank", { "type": "u32", "value": 256 }]
+        ] })),
+    )
+    .unwrap();
+    let cfg = LibraryConfig {
+        models_dir: dir.to_string_lossy().into_owned(),
+        folders: vec![],
+        mlx_runnable: false,
+        now: 1.0,
+    };
+    let rows = library::list(&cfg).unwrap();
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    let row = &rows[0];
+    assert_eq!(row["architecture"], "dflash");
+    assert_eq!(row["modality"], "draft");
+    assert!(nekko_engine::launch::unsupported_load_reason(row).unwrap().contains("not on its own"));
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
 fn finds_the_other_apps_folders_as_the_host_does() {
     let g = golden();
     for case in g["candidates"].as_array().unwrap() {
@@ -532,4 +560,67 @@ fn lists_imports_deletes_and_reports_as_the_host_does() {
         }
     }
     std::fs::remove_dir_all(dir).ok();
+}
+
+#[test]
+fn discovers_mlx_dflash2_heads_from_the_config_not_the_folder_name() {
+    let dir = scratch("mlx-dflash2-discovery");
+    let head = dir.join("local-head");
+    std::fs::create_dir_all(&head).unwrap();
+    std::fs::write(head.join("model.safetensors"), [0; 32]).unwrap();
+    let cfg =
+        LibraryConfig { models_dir: dir.to_string_lossy().into_owned(), folders: vec![], mlx_runnable: true, now: 1.0 };
+    let mut config = json!({ "model_type": "qwen3", "quantization": { "group_size": 64, "bits": 4 } });
+    let write = |v: &Value| std::fs::write(head.join("config.json"), v.to_string()).unwrap();
+    write(&config);
+    assert_eq!(library::list(&cfg).unwrap()[0]["modality"], "chat");
+    config["architectures"] = json!(["DFlash2DraftModel"]);
+    config.as_object_mut().unwrap().remove("quantization");
+    write(&config);
+    let row = library::list(&cfg).unwrap().remove(0);
+    assert_eq!(row["format"], "mlx");
+    assert_eq!(row["modality"], "draft");
+    assert_eq!(row["hasProjector"], false);
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn imports_keep_external_dflash_heads_visible_by_id_without_copying_them() {
+    let dir = scratch("external-dflash-import");
+    let cfg = LibraryConfig {
+        models_dir: dir.join("models").to_string_lossy().into_owned(),
+        folders: vec![],
+        mlx_runnable: false,
+        now: 0.0,
+    };
+    let head = build(&json!({"pairs": [
+        ["general.name", {"type":"string", "value":"Qwen3.8-27B-DFlash2"}],
+        ["general.architecture", {"type":"string", "value":"dflash"}]
+    ]}));
+    let add = |sub: &str| {
+        let p = dir.join(sub).join("head.gguf");
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(&p, &head).unwrap();
+        let added = library::import_file(&cfg, &p.to_string_lossy()).unwrap();
+        assert_eq!(added["ok"], true);
+        (p, added["model"]["id"].as_str().unwrap().to_string())
+    };
+    let (first, a) = add("one");
+    let (second, b) = add("two");
+    assert_ne!(a, b);
+    assert!(!Path::new(&cfg.models_dir).join("head.gguf").exists());
+    assert_eq!(library::list(&cfg).unwrap().len(), 2);
+    for (path, id) in [(&first, &a), (&second, &b)] {
+        let row = library::find(&cfg, id).unwrap().unwrap();
+        assert_eq!(row["path"], path.to_string_lossy().as_ref());
+        assert_eq!(row["name"], "Qwen3.8-27B-DFlash2");
+        assert_eq!(row["architecture"], "dflash");
+        assert_eq!(row["modality"], "draft");
+    }
+    library::save_preset(&cfg, &b, &json!({"contextTokens":2048})).unwrap();
+    assert_eq!(library::import_file(&cfg, &second.to_string_lossy()).unwrap()["model"]["id"], b);
+    assert_eq!(library::find(&cfg, &b).unwrap().unwrap()["preset"]["contextTokens"], 2048);
+    std::fs::remove_file(first).unwrap();
+    assert!(library::find(&cfg, &a).unwrap().is_none());
+    std::fs::remove_dir_all(dir).unwrap();
 }
