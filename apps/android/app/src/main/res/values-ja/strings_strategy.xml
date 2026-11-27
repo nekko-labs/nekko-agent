@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Translated from values/strings_strategy.xml (scripts/translations.py fill). -->
+<resources>
+    <string name="strategy_heading">戦略</string>
+    <string name="strategy_code">コードモード</string>
+    <string name="strategy_list">ツール一覧</string>
+    <string name="strategy_none">ツールなし</string>
+    <string name="strategy_claude_code">Claude Code</string>
+    <string name="strategy_direct">直接</string>
+    <string name="strategy_coordinator">オーケストレーション</string>
+    <string name="strategy_worker">ワーカー</string>
+    <string name="strategy_external">Claude Code は独自にツールを管理します。</string>
+</resources>

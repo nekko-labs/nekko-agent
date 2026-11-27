@@ -131,10 +131,13 @@ struct ChatView: View {
                     // Simple folds each turn's reasoning and tool steps to one line, unless chosen in Settings.
                     let rows = rowCache.rows(chat)
                     let footers = chat.turnDetails
-                    let items = prefs.shows("thinking") ? TranscriptRow.detailed(rows, footers: footers)
-                        : TranscriptRow.folded(rows, open: openSteps, running: chat.turn.running, footers: footers)
+                    let strategies = chat.turnStrategies
+                    let items = prefs.shows("thinking") ? TranscriptRow.detailed(rows, footers: footers, strategies: strategies)
+                        : TranscriptRow.folded(rows, open: openSteps, running: chat.turn.running, footers: footers, strategies: strategies)
                     ForEach(items) { item in
                         switch item {
+                        case .strategy(_, let strategy):
+                            TurnStrategyView(strategy: strategy)
                         case .details(let details):
                             TurnDetailsView(details: details)
                         case .summary(let turn, let steps, let thought, let running):
@@ -636,7 +639,8 @@ enum TranscriptRow: Identifiable {
     /// Simple's transcript: each turn's tool steps and reasoning folded behind one
     /// summary line at the first of them, unless the turn is in `open`. The
     /// last turn is the running one while `running`.
-    static func folded(_ rows: [TranscriptRow], open: Set<String>, running: Bool = false, footers: [String: TurnDetails] = [:]) -> [FoldItem] {
+    static func folded(_ rows: [TranscriptRow], open: Set<String>, running: Bool = false, footers: [String: TurnDetails] = [:],
+                       strategies: [String: TurnStrategy] = [:]) -> [FoldItem] {
         // Turns start at each prompt; rows before the first one are turn "start".
         var turnOf: [Int] = []
         var turnIds: [String] = ["start"]
@@ -664,7 +668,10 @@ enum TranscriptRow: Identifiable {
             if first[t] == i {
                 out.append(.summary(turn: turnIds[t], steps: steps[t], thought: thought[t], running: running && t == turnIds.count - 1))
             }
-            if !row.isStep || isOpen { out.append(.row(row, reasoning: isOpen)) }
+            if !row.isStep || isOpen {
+                if let section = row.strategyItem(strategies) { out.append(section) }
+                out.append(.row(row, reasoning: isOpen))
+            }
             // End-of-turn details stay visible even when Simple folds the tool-only turn.
             out += row.footerItems(footers)
         }
@@ -695,8 +702,18 @@ enum TranscriptRow: Identifiable {
         return false
     }
 
-    static func detailed(_ rows: [TranscriptRow], footers: [String: TurnDetails]) -> [FoldItem] {
-        rows.flatMap { [.row($0, reasoning: true)] + $0.footerItems(footers) }
+    static func detailed(_ rows: [TranscriptRow], footers: [String: TurnDetails], strategies: [String: TurnStrategy] = [:]) -> [FoldItem] {
+        rows.flatMap { row in
+            var items: [FoldItem] = []
+            if let section = row.strategyItem(strategies) { items.append(section) }
+            items.append(.row(row, reasoning: true))
+            return items + row.footerItems(footers)
+        }
+    }
+
+    private func strategyItem(_ strategies: [String: TurnStrategy]) -> FoldItem? {
+        guard case .block(.user(let id, _, _, _)) = self, let strategy = strategies[id] else { return nil }
+        return .strategy(promptId: id, strategy)
     }
 
     private func footerItems(_ footers: [String: TurnDetails]) -> [FoldItem] {
@@ -1847,12 +1864,14 @@ enum FoldItem: Identifiable {
     case row(TranscriptRow, reasoning: Bool)
     case summary(turn: String, steps: Int, thought: Bool, running: Bool)
     case details(TurnDetails)
+    case strategy(promptId: String, TurnStrategy)
 
     var id: String {
         switch self {
         case .row(let row, _): return row.id
         case .summary(let turn, _, _, _): return "steps-" + turn
         case .details(let details): return "turn-details-" + details.id
+        case .strategy(let promptId, _): return "turn-strategy-" + promptId
         }
     }
 }

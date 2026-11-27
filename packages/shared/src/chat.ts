@@ -57,7 +57,15 @@ export interface AgentWatchView {
   clipStage?: string;
 }
 
+/** The daemon's admitted strategy, not a claim that any tool or worker ran. */
+export interface TurnStrategy {
+  tools: 'code' | 'list' | 'none' | 'claude-code';
+  orchestration: 'direct' | 'coordinator' | 'worker' | 'external';
+  reason?: 'not-needed' | 'requested' | 'separable' | 'unavailable' | 'off';
+}
+
 export interface ChatMessage {
+  turnStrategy?: TurnStrategy;
   id: string;
   role: Role;
   content: string;
