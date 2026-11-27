@@ -194,6 +194,63 @@ fn the_service_record_gives_the_same_id_as_arp() {
 }
 
 #[test]
+fn only_the_physical_interfaces_scoped_router_can_identify_the_network() {
+    let route = "gateway: 192.168.1.1\ninterface: en0\n";
+    let gateway = scoped_gateway(route, "en0").unwrap();
+    assert_eq!(scoped_gateway(route, "en1"), None);
+    assert_eq!(scoped_gateway("gateway: 100.64.0.1\ninterface: utun9\n", "en0"), None);
+    assert_eq!(scoped_gateway("gateway: link#4\ninterface: en0\n", "en0"), None);
+
+    let service = "InterfaceName : en0\nConfirmedInterfaceName : en0\nRouter : 192.168.1.1\nARPResolvedIPAddress : 192.168.1.1\nARPResolvedHardwareAddress : 2:1b:2c:3d:4e:5\n";
+    let id = Some("gw:02:1b:2c:3d:4e:05");
+    assert_eq!(scoped_service_network_id(service, "en0", gateway).as_deref(), id);
+    assert_eq!(scoped_service_network_id(service, "en1", gateway), None);
+    assert_eq!(
+        scoped_service_network_id(
+            &service.replace("ConfirmedInterfaceName : en0", "ConfirmedInterfaceName : en1"),
+            "en0",
+            gateway
+        ),
+        None
+    );
+    assert_eq!(
+        scoped_service_network_id(
+            &service.replace("ARPResolvedIPAddress : 192.168.1.1", "ARPResolvedIPAddress : 192.168.2.1"),
+            "en0",
+            gateway
+        ),
+        None
+    );
+    assert_eq!(scoped_service_network_id(service, "en0", Ipv4Addr::new(192, 168, 2, 1)), None);
+
+    let arp = "? (192.168.1.1) at 10:11:12:13:14:15 on en1 ifscope [ethernet]\n? (192.168.1.1) at 2:1b:2c:3d:4e:5 on en0 ifscope [ethernet]";
+    assert_eq!(scoped_network_id(arp, gateway, "en0").as_deref(), id);
+    assert_eq!(scoped_network_id(arp, gateway, "en2"), None);
+    assert_eq!(scoped_network_id(&format!("{arp}\n{arp}"), gateway, "en0"), None);
+    for bad in ["(incomplete)", "ff:ff:ff:ff:ff:ff", "0:0:0:0:0:0"] {
+        assert_eq!(scoped_network_id(&arp.replace("2:1b:2c:3d:4e:5", bad), gateway, "en0"), None);
+    }
+}
+
+#[test]
+fn disagreed_router_ids_fail_closed() {
+    let id = "gw:02:11:22:33:44:55".to_string();
+    assert_eq!(network_id_consensus(vec![]), None);
+    assert_eq!(network_id_consensus(vec![id.clone(), id.clone()]), Some(id.clone()));
+    assert_eq!(network_id_consensus(vec![id, "gw:02:aa:bb:cc:dd:ee".into()]), None);
+}
+
+#[tokio::test]
+async fn no_physical_egress_does_not_fall_back_to_the_primary_network() {
+    let egress = RwLock::new(None);
+    assert_eq!(read_physical_network_id(&egress).await, None);
+    let mut no_physical = mac().egress.unwrap();
+    no_physical.physical = None;
+    *egress.write().unwrap() = Some(no_physical);
+    assert_eq!(read_physical_network_id(&egress).await, None);
+}
+
+#[test]
 fn unread_updates_hold_new_vms() {
     assert!(!signals_for(&MacState { updates_read: false, ..mac() }, &trusting()).host_known);
 }

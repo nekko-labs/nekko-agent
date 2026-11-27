@@ -543,7 +543,7 @@ function Utilization({ providers, usage: localUsage, now, onOpenModels }: Pick<M
           const meaning = showRemaining ? 'left' : 'used';
           return <div className="monitors-dock__quota" key={`${w.label}-${i}`}>
           <div className="monitors-dock__metric-row"><span>{w.label}</span><strong>{Number.isFinite(percent) ? `${Math.round(percent)}% ${meaning}` : 'Unavailable'}</strong></div>
-          {Number.isFinite(percent) && <div className="monitors-dock__bar" role="meter" aria-label={`${provider.label} ${w.label} ${meaning}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}><span style={{ width: `${percent}%`, background: used >= 80 ? 'var(--danger)' : used >= 40 ? 'var(--warning)' : 'var(--success)' }} /></div>}
+          {Number.isFinite(percent) && <div className="monitors-dock__bar" role="meter" aria-label={`${provider.label} ${w.label} ${meaning}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}><span style={{ width: `${percent}%`, background: used >= 80 ? 'var(--danger)' : used > 60 ? 'var(--warning)' : 'var(--success)' }} /></div>}
           <p className="monitors-dock__note">{w.resetAt ? w.resetAt <= now ? 'Reset due · awaiting refresh' : `Resets in ${resetPeriod(w.resetAt - now)} · ${new Date(w.resetAt).toLocaleString()}` : 'Reset time unavailable'}</p>
         </div>;
         })}

@@ -183,6 +183,7 @@
  "remote:status",
  "remote:stop",
  "resource:queue",
+ "runner:approveNetwork",
  "runner:connect",
  "runner:githubAccounts",
  "runner:githubCancel",

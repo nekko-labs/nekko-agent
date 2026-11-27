@@ -396,6 +396,7 @@ export const IpcChannels = {
   runnerList: 'runner:list',
   runnerConnect: 'runner:connect',
   runnerUpdate: 'runner:update',
+  runnerApproveNetwork: 'runner:approveNetwork',
   runnerRemove: 'runner:remove',
   runnerSetEnabled: 'runner:setEnabled',
   /** The end of a recent job's log, from GitHub or GitLab. */
@@ -1409,6 +1410,7 @@ export interface NekkoApi {
   /** Resolves with the settings the daemon kept, which may be clamped. */
   /** A patch: only the keys to change. */
   updateRunner(id: string, settings: Partial<RunnerSettings>): Promise<RunnerView>;
+  approveRunnerNetwork(id: string, settings: Partial<RunnerSettings>, networkId: string): Promise<RunnerView>;
   removeRunner(id: string): Promise<null>;
   setRunnerEnabled(id: string, enabled: boolean): Promise<RunnerView>;
   /** The end of a recent job's log; rejects with a sentence when it cannot be read. */

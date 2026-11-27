@@ -16,6 +16,10 @@ The layout selector sits to the left of the All/Agents/Terminals filter, orders 
 
 Verification: shared renderer web build and desktop typecheck pass; isolated wide/narrow light/dark fixtures and pointer/keyboard panel resizing inspected. Usage-accounting regression tests cover default comparison, exact Qwen/Ollama identifiers, opt-out and separate subscription/local amounts. Full desktop/daemon build also passed. Published evidence and CI/landing status are tracked in PR #345.
 
+## Utilization quota colours
+
+Implemented with renderer regression coverage: Utilization quota bars use the success colour through 60% used (inclusive), warning above 60% and below 80%, and danger from 80% used. The colour follows usage even on ChatGPT plan bars, whose width, label and accessible meter value show the remaining quota. This is a display-only rule for the Utilization monitor, not a provider status or a change to other quota surfaces.
+
 ## Background visual evidence
 
 Desktop chats prefer native app-window capture for visual evidence. Listing and capturing windows never raises, focuses, restores, or sends OS keyboard/mouse input to the target. Background capture of obscured, hidden, minimized or protected third-party windows depends on the OS and app; unavailable frames are reported without changing the user's workspace. Applications launched through arbitrary shell commands can still choose to activate themselves. Nekko does not promise to suppress those applications or OS permission dialogs.

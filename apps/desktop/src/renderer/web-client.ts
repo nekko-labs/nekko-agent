@@ -752,6 +752,7 @@ function makeWebClient(): NekkoApi {
     listRunners: () => call(IpcChannels.runnerList),
     connectRunner: (req) => call(IpcChannels.runnerConnect, req),
     updateRunner: (id, settings) => call(IpcChannels.runnerUpdate, id, settings),
+    approveRunnerNetwork: (id, settings, networkId) => call(IpcChannels.runnerApproveNetwork, id, settings, networkId),
     removeRunner: (id) => call(IpcChannels.runnerRemove, id),
     setRunnerEnabled: (id, enabled) => call(IpcChannels.runnerSetEnabled, id, enabled),
     runnerJobLog: (id, jobId) => call(IpcChannels.runnerJobLog, id, jobId),

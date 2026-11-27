@@ -71,11 +71,21 @@ describe('wall dock presentation', () => {
     expect(html).not.toContain('Stale quota · awaiting refresh');
     quota.byToken = {};
   });
-  it.each([[17, 83, 'var(--success)'], [83, 17, 'var(--danger)'], [0, 100, 'var(--success)'], [100, 0, 'var(--danger)']])('shows ChatGPT %i used as %i left with usage-based warnings', (used, left, tone) => {
+  it.each([
+    [0, 100, 'var(--success)'],
+    [17, 83, 'var(--success)'],
+    [40, 60, 'var(--success)'],
+    [60, 40, 'var(--success)'],
+    [60.25, 39.75, 'var(--warning)'],
+    [79, 21, 'var(--warning)'],
+    [80, 20, 'var(--danger)'],
+    [83, 17, 'var(--danger)'],
+    [100, 0, 'var(--danger)'],
+  ])('shows ChatGPT quota used %s as %s left with usage-based warnings', (used, left, tone) => {
     quota.byToken = { synthetic: { windows: [{ label: '7-day', usedPercent: used, resetAt: 0 }], updatedAt: 0, staleAfterMs: 60000 } };
     const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: true, budget: false, hardware: false, localModels: false } } };
     const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[{ id: 'chatgpt', baseUrl: '', kind: 'openai', auth: 'subscription', tokenKey: 'synthetic', enabled: true, label: 'ChatGPT' }]} usage={null} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
-    expect(html).toContain(`${left}% left`);
+    expect(html).toContain(`${Math.round(left)}% left`);
     expect(html).toContain(`aria-valuenow="${left}"`);
     expect(html).toContain(`width:${left}%;background:${tone}`);
     quota.byToken = {};

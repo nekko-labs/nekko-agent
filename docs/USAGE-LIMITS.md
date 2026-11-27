@@ -30,6 +30,8 @@ Provider groups have dividers and more breathing room. The dropdown has 12px inn
 
 Utilization lists every enabled cloud provider on its own row, led by the provider's logo. A Claude plan card left over from an older build says the plan sign-in is no longer available and points to adding an API key in Models.
 
+Each quota bar is green through 60% used, yellow above 60% and below 80%, and red from 80% used. ChatGPT bars show how much quota is left, but their colour still follows how much you've used: for example, **40% left** is still green. These colours don't change the provider's limits.
+
 Budget defaults to **1m**. Its ranges use inclusive **UTC** days: today, 1wk (7 days), 1m (30), 6m (180), 1y (365), and all-time through today. The active button has an accent tint and pressed state. All recorded details follow that selection: estimated API spend, input/output tokens, top agent by API cost, local tokens, local/subscription savings, fallback and unpriced-token counts, and which used models appear in the pricing comparison. Catalog unit prices and the selected fallback are reference/configuration values, not range totals. Older hosts without daily detail show unavailable details rather than substituting lifetime totals.
 
 Budget leads with two numbers. **Actual spend** is what metered API keys and cloud usage cost; subscription and local-model turns never count toward it. **Theoretical spend** is what your local-model and subscription tokens would have cost at API prices, in other words what they saved. A bar under them shows the paid share of the API-price total, and a short list breaks theoretical spend into local models and subscriptions, with the top paid agent and the range's tokens.

@@ -33,7 +33,8 @@ import {
 import { StatusDot, Toggle } from './primitives/index.js';
 import type { StatusTone } from '../tokens.js';
 import { connectToWorkflow } from './RunnerReady.js';
-import { ChevronIcon } from '../icons.js';
+import { HoverTip } from './HoverTip.js';
+import { ChevronIcon, SleepIcon } from '../icons.js';
 import { SettingsIcon } from '../gentleface-icons.js';
 import { useStore } from '../store.js';
 
@@ -316,11 +317,12 @@ function Jobs({ view, now, compact }: { view: RunnerView; now: number; compact: 
   const queue = view.queue ?? [];
   const running = view.slots.filter((s) => s.state === 'running' || s.state === 'draining');
   const recent = view.recent;
-  if (!queue.length && !running.length && !recent.length) return null;
+  const empty = !queue.length && !running.length && <p className="text-xs text-ink-faint">No pending jobs</p>;
   // The panel is one flat list (each row's dot says queued or running), and completed jobs wait behind one row.
   if (compact) {
     return (
       <div className="flex flex-col gap-2 text-xs text-ink-soft" data-runner-jobs>
+        {empty}
         {(running.length > 0 || queue.length > 0) && (
           <ul>
             {running.map((s, i) => <RunningJob key={s.vm ?? i} slot={s} runnerId={view.config.id} now={now} compact />)}
@@ -345,6 +347,7 @@ function Jobs({ view, now, compact }: { view: RunnerView; now: number; compact: 
   }
   return (
     <div className="flex flex-col gap-4 text-xs text-ink-soft" data-runner-jobs>
+      {empty}
       {queue.length > 0 && (
         <section>
           <GroupLabel title="Queued" count={queue.length} />
@@ -368,18 +371,6 @@ function Jobs({ view, now, compact }: { view: RunnerView; now: number; compact: 
         </section>
       )}
     </div>
-  );
-}
-
-/** An idle runner's latest job: its action (workflow and job, linked to the run) and its PR, so the runner says what it last served. */
-function LastJob({ line: l }: { line: AuditLine }) {
-  const name = [l.workflow, l.job].filter(Boolean).join(' · ') || 'A job';
-  return (
-    <p className="flex min-w-0 items-center gap-2 text-xs text-ink-faint" title={l.repo ?? undefined} data-runner-last-job>
-      <span className="shrink-0">Last job</span>
-      <span className="min-w-0 truncate">{l.url ? <ExternalLink url={l.url}>{name}</ExternalLink> : name}</span>
-      {l.pr && <ExternalLink url={l.pr.url}>PR #{l.pr.number}</ExternalLink>}
-    </p>
   );
 }
 
@@ -515,10 +506,8 @@ export function RunnerCard({ view: given, now, image = null, compact = false, on
   const idleVms = new Set(view.slots.filter((s) => s.state === 'ready' && s.vm).map((s) => s.vm));
   const slots = slotLines(view, now).filter((s) => !s.busy && (!compact || (s.vm && !idleVms.has(s.vm))));
   const stateLabel = `${STATE_LABELS[state] ?? state}${compact && idleVms.size ? ` · ${idleVms.size} idle` : ''}`;
-  const reasons = (state === 'waiting' || state === 'draining') ? view.reasons.slice(0, compact ? 1 : undefined) : [];
-  // A running or queued job already shows its action and PR in the job rows; an idle runner names its latest one.
-  const busyJobs = (view.queue?.length ?? 0) > 0 || view.slots.some((s) => s.state === 'running' || s.state === 'draining');
-  const last = busyJobs ? undefined : view.recent[0];
+  const waitingTip = [stateLabel, ...view.reasons.map((r) => reasonText(r).sentence)].join('\n');
+  const reasons = state === 'draining' ? view.reasons.slice(0, compact ? 1 : undefined) : [];
 
   const setEnabled = async (enabled: boolean) => {
     setBusy(true);
@@ -536,14 +525,20 @@ export function RunnerCard({ view: given, now, image = null, compact = false, on
     <section className={`quiet-group mt-2 flex min-w-0 flex-col ${compact ? 'gap-2' : 'gap-5'}`} data-runner-card={config.id} data-compact={compact || undefined}>
       <div className="flex min-w-0 flex-col gap-2">
         <div className="flex min-w-0 items-center gap-2" data-quiet-row={compact || undefined}>
-          <StatusDot tone={TONE[state] ?? 'neutral'} />
+          {state === 'waiting' ? (
+            <HoverTip label={waitingTip} multiline>
+              <span tabIndex={0} role="img" aria-label={waitingTip} className="inline-flex shrink-0 text-ink-faint" data-runner-state>
+                <SleepIcon className="h-3 w-3" />
+              </span>
+            </HoverTip>
+          ) : <StatusDot tone={TONE[state] ?? 'neutral'} />}
           <h3 className="min-w-0 truncate text-sm font-semibold" title={`${runnerTitle(view)}\n${runnerSubtitle(view)}`}>{name}</h3>
-          <span className="shrink-0 text-xs transition-colors" style={{ color: state === 'error' ? 'var(--danger-text)' : 'var(--ink-soft)' }} data-runner-state>{stateLabel}</span>
+          {state !== 'waiting' && <span className="shrink-0 text-xs transition-colors" style={{ color: state === 'error' ? 'var(--danger-text)' : 'var(--ink-soft)' }} data-runner-state>{stateLabel}</span>}
           <span className="ml-auto flex shrink-0 items-center gap-1">
-            <Toggle value={config.settings.enabled} disabled={busy} onChange={(v) => void setEnabled(v)} label={`Runner on for ${name}`} />
-            <button className={`btn btn-ghost px-1.5!${compact ? ' quiet-row-action' : ''}`} aria-label={`Runner settings for ${name}`} title="Runner settings" onClick={onSettings}>
+            <button className="btn btn-ghost px-1.5!" aria-label={`Runner settings for ${name}`} title="Runner settings" onClick={onSettings}>
               <SettingsIcon className="h-3.5 w-3.5" />
             </button>
+            <Toggle value={config.settings.enabled} disabled={busy} onChange={(v) => void setEnabled(v)} label={`Runner on for ${name}`} />
           </span>
         </div>
 
@@ -562,7 +557,6 @@ export function RunnerCard({ view: given, now, image = null, compact = false, on
             {reasons.map((r) => <li key={r}>{reasonText(r).sentence}</li>)}
           </ul>
         )}
-        {last && <LastJob line={last} />}
       </div>
 
       {slots.length > 0 && (
