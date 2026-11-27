@@ -167,3 +167,7 @@ Implemented: hovering or keyboard-focusing an individual activity step reveals i
 ## Persistent desktop subagent rows
 
 Implemented: all unarchived direct children retain their rows beneath the parent in the Agents panel, regardless of which chat is selected or whether the parent or child is working. Explicit group collapse and archive filtering still apply. Switching focus does not close, archive, route or restart any agent. Regression coverage checks child retention and an isolated Electron fixture switches to another parent and verifies the finished child remains listed.
+
+## Slimmer transcript between working steps (2026-11-27)
+
+Implemented; unit-tested and checked in a hidden synthetic renderer. Inside a turn, a working-steps line ("Built the app", "Looked through the code") sits 6px from the notes and steps around it, in history and in the live turn alike, instead of the 20px gap between messages. A prompt keeps the full gap on both sides, and PR cards keep their own spacing. A note between steps no longer holds an empty line open below it for its hover actions: Copy and Restart from here float over the note's top-right corner on hover. On touch screens, where those actions always show, they stay in a line below the note so they never cover its text. Final replies are unchanged. Acceptance: the notes and steps of one turn read as a compact list, and a turn is still clearly separated from the next prompt.

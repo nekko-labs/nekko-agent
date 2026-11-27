@@ -83,6 +83,21 @@ describe('toTranscriptRows', () => {
     expect(new Set(r.map((x) => x.key)).size).toBe(r.length);
   });
 
+  it('keeps working steps close to the turn text, but not to the prompt', () => {
+    const r = rows([
+      msg('u', 'user', 'fix it'),
+      msg('a1', 'assistant', '', { toolCalls: [{ id: 'c', name: 'read_file', input: {} }] }),
+      msg('t', 'tool', 'contents', { toolResult: { toolCallId: 'c', output: 'contents' } }),
+      msg('a2', 'assistant', 'Reading done.', { toolCalls: [{ id: 'd', name: 'read_file', input: {} }] }),
+      msg('t2', 'tool', 'contents', { toolResult: { toolCallId: 'd', output: 'contents' } }),
+      msg('a3', 'assistant', 'Fixed.'),
+      msg('u2', 'user', 'thanks'),
+    ]);
+    expect(r.map((x) => [x.kind, x.gapAfter])).toEqual([
+      ['msg', undefined], ['activity', 6], ['msg', 6], ['activity', 6], ['msg', undefined], ['msg', undefined],
+    ]);
+  });
+
   it('stops at the live turn\'s prompt while the run draws that turn', () => {
     // The daemon checkpoints the transcript after every tool result. Mid-turn
     // the persisted copy already holds the turn's narration and tool calls,

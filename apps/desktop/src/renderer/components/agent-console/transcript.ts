@@ -170,6 +170,8 @@ export function transcriptBeforeLiveTurn(messages: ChatMessage[], transcriptThro
 
 /** A PR card's own vertical margin, which used to set the gap after it. */
 const PR_CARD_GAP = 8;
+/** Space between a working-steps line and the turn's text or steps around it (matches .vt-row's live rule). */
+export const ACTIVITY_GAP = 6;
 
 /**
  * One row of the windowed transcript: a message, working steps, or an anchored
@@ -300,6 +302,12 @@ export function toTranscriptRows(
     }
     rows.splice(insert, 0, { key: unique('s_' + m.id), kind: 'stats', stats: m.turnStats });
   }
+  // Inside a turn, a working-steps line sits close to its neighbours; a prompt keeps the full gap.
+  const isPrompt = (r: TranscriptRow | undefined) => r?.kind === 'msg' && r.message.role === 'user';
+  rows.forEach((r, i) => {
+    const next = rows[i + 1];
+    if (r.kind !== 'prs' && (r.kind === 'activity' || next?.kind === 'activity') && !isPrompt(r) && !isPrompt(next)) r.gapAfter = Math.min(r.gapAfter ?? 20, ACTIVITY_GAP);
+  });
   return rows;
 }
 
