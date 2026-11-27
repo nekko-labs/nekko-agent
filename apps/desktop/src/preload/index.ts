@@ -709,6 +709,10 @@ const chrome: WindowChromeBridge = {
   setTitleBarOverlay: (theme: TitleBarOverlayTheme) => ipcRenderer.send(TITLEBAR_OVERLAY_CHANNEL, theme),
   setPageZoom: (factor) => { if (Number.isFinite(factor) && factor >= 0.8 && factor <= 1.5) webFrame.setZoomFactor(factor); },
   onPageReloading: (listener) => { ipcRenderer.on(PAGE_RELOADING_EVENT, (_event, fadeMs: number) => listener(fadeMs)); },
+  spellingSuggestions: (word) => {
+    if (!process.isMainFrame || typeof word !== 'string' || word.length > 128 || !/^\p{L}[\p{L}\p{M}'’]*$/u.test(word)) return [];
+    return [...new Set(webFrame.getWordSuggestions(word))].filter(suggestion => suggestion && suggestion !== word).slice(0, 3);
+  },
   displays: {
     displayId: process.argv.find((a) => a.startsWith(DISPLAY_ARG))?.slice(DISPLAY_ARG.length) ?? null,
     list: () => ipcRenderer.invoke(DISPLAYS_LIST_CHANNEL),

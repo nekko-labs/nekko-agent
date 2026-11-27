@@ -21,6 +21,8 @@ interface WindowChrome {
   /** Absent on a preload older than this page, as in a dev reload. */
   setPageZoom?: (factor: number) => void;
   onPageReloading: (listener: (fadeMs: number) => void) => void;
+  /** Local dictionary suggestions for one composer word. */
+  spellingSuggestions?: (word: string) => string[];
 }
 
 /** The bridge, or `undefined` when this isn't the desktop shell. */

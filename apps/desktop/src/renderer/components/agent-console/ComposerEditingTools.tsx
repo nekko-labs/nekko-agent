@@ -1,5 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { windowChrome } from '../../chrome.js';
+import { composerSpellingWord } from './composerSpelling.js';
 import { composerToolbarPlacement, type SelectionAnchor } from './composerToolbarPlacement.js';
 import './ComposerEditingTools.css';
 import { ContextAction, ContextMenu } from '../ContextMenu.js';
@@ -19,7 +21,10 @@ export function ComposerEditingTools({ editor, disabled, value, apply, onPaste, 
   onPaste?: (e: React.ClipboardEvent<MarkdownEditorElement>) => void;
   composing: React.RefObject<boolean>;
 }) {
-  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [menu, setMenu] = useState<{
+    x: number; y: number;
+    spelling?: { start: number; end: number; draft: string; suggestions: string[] };
+  } | null>(null);
   const [toolbar, setToolbar] = useState<SelectionAnchor | null>(null);
   const [placement, setPlacement] = useState<ReturnType<typeof composerToolbarPlacement> | null>(null);
   const [error, setError] = useState('');
@@ -53,7 +58,11 @@ export function ComposerEditingTools({ editor, disabled, value, apply, onPaste, 
     const context = (e: MouseEvent) => {
       if (composing.current) return;
       e.preventDefault(); saved.current = [el.selectionStart, el.selectionEnd];
-      setToolbar(null); setError(''); setMenu({ x: e.clientX, y: e.clientY });
+      const getSuggestions = windowChrome?.spellingSuggestions;
+      const word = getSuggestions && composerSpellingWord(el, e);
+      const suggestions = getSuggestions && word && getSuggestions(word.word);
+      const spelling = word && suggestions?.length ? { start: word.start, end: word.end, draft: el.value, suggestions } : undefined;
+      setToolbar(null); setError(''); setMenu({ x: e.clientX, y: e.clientY, spelling });
     };
     const dismiss = () => setToolbar(null);
     const outside = (e: PointerEvent) => { if (!tools.current?.contains(e.target as Node) && !el.contains(e.target as Node)) dismiss(); };
@@ -80,6 +89,19 @@ export function ComposerEditingTools({ editor, disabled, value, apply, onPaste, 
     restore();
     const edit = formatMarkdown(el.value, ...saved.current, action);
     apply(el, edit); saved.current = [edit.start, edit.end]; setMenu(null);
+  };
+  const correct = (suggestion: string) => {
+    const el = editor.current;
+    const spelling = menu?.spelling;
+    if (!el || disabled || composing.current || !spelling) return;
+    setMenu(null);
+    const { draft, start, end } = spelling;
+    // The draft may have been replaced while the menu was open. Never edit at stale offsets.
+    if (el.value !== draft) return;
+    el.focus(); el.setSelectionRange(start, end);
+    const caret = start + suggestion.length;
+    apply(el, { text: draft.slice(0, start) + suggestion + draft.slice(end), start: caret, end: caret });
+    saved.current = [caret, caret];
   };
   const clipboard = async (mode: 'copy' | 'paste' | 'markdown' | 'plain') => {
     const el = editor.current;
@@ -130,6 +152,11 @@ export function ComposerEditingTools({ editor, disabled, value, apply, onPaste, 
   </div>;
   return <>
     {menu && !disabled && <ContextMenu x={menu.x} y={menu.y} onClose={() => { setMenu(null); restore(); }}>
+      {menu.spelling && <div role="group" aria-label="Spelling" className="mb-2">
+        <div aria-hidden="true" className="px-3 pt-1 text-xs font-medium text-ink-soft">Spelling</div>
+        {menu.spelling.suggestions.map(suggestion =>
+          <ContextAction key={suggestion} onClick={() => correct(suggestion)}>{suggestion}</ContextAction>)}
+      </div>}
       {controls}<hr className="my-1 opacity-20" />
       <ContextAction disabled={saved.current[0] === saved.current[1]} onClick={() => { void clipboard('copy'); }}>Copy</ContextAction>
       <ContextAction onClick={() => { void clipboard('paste'); }}>Paste</ContextAction>
