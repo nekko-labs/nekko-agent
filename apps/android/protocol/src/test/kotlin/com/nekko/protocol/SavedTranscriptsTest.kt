@@ -47,6 +47,19 @@ class SavedTranscriptsTest {
         assertEquals("a cat", store(files).saved("a")!!.session.messages[1].content)
     }
 
+    @Test fun `a strategy-only refresh rewrites an existing offline transcript`() {
+        val files = Files()
+        val cache = store(files)
+        val legacy = session("a", "Check the build", "Okay")
+        cache.save(legacy)
+        assertNull(store(files).saved("a")!!.session.messages.first().turnStrategy)
+
+        val strategy = TurnStrategy(TurnStrategy.Tools.CODE, TurnStrategy.Orchestration.COORDINATOR, TurnStrategy.Reason.SEPARABLE)
+        val revised = legacy.copy(messages = listOf(legacy.messages.first().copy(turnStrategy = strategy), legacy.messages.last()))
+        cache.save(revised)
+        assertEquals(strategy, store(files).saved("a")!!.session.messages.first().turnStrategy)
+    }
+
     @Test fun `the last opened stay, by count and by size, least recent out first`() {
         val files = Files()
         val s = store(files, maxChats = 2)

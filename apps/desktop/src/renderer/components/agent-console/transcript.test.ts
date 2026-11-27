@@ -200,6 +200,20 @@ describe('toTranscriptRows', () => {
     expect(r[0].key).not.toBe(r[1].key);
   });
 
+  it('shows admitted strategy above the first known user turn and when it changes', () => {
+    const direct = { tools: 'list', orchestration: 'direct', reason: 'not-needed' } as const;
+    const coordinator = { tools: 'code', orchestration: 'coordinator', reason: 'requested' } as const;
+    const r = rows([
+      msg('old', 'user', 'Old chat'),
+      msg('u1', 'user', 'Quick lookup', { turnStrategy: direct }),
+      msg('a1', 'assistant', 'Found it'),
+      msg('u2', 'user', 'Another lookup', { turnStrategy: { ...direct } }),
+      msg('u3', 'user', 'Delegate', { turnStrategy: coordinator }),
+    ]);
+    expect(r.map(r => r.kind)).toEqual(['msg', 'strategy', 'msg', 'msg', 'msg', 'strategy', 'msg']);
+    expect(r.filter(r => r.kind === 'strategy').map(r => r.strategy)).toEqual([direct, coordinator]);
+  });
+
   it('skips an assistant message that would render nothing', () => {
     expect(rows([msg('u', 'user', 'hi'), msg('a', 'assistant', '')])).toHaveLength(1);
   });

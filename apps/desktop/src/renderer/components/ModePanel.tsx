@@ -477,7 +477,7 @@ export function ModePanel({
             <p className="mode-sec"><CompassIcon /> Approach</p>
             <div className="mode-row">
               <span className="mode-ic"><RouteIcon /></span>
-              <span className="min-w-0 flex-1">{title('Orchestrate', 'Have this chat coordinate work across agents and review their results. Tool style and approvals stay the same.')}</span>
+              <span className="min-w-0 flex-1">{title('Orchestrate', 'Coordinate when you request delegation or list independent work. Ordinary turns stay direct. Tool style and approvals stay the same.')}</span>
               {sw(orchestrate, () => void actions.setOrchestrate(!orchestrate), 'Orchestrate')}
             </div>
             {flyRow('skills', <SparkleIcon />, 'Skills', workMode.label, workMode.id === 'default' ? 'No extra skills. Pick a work mode to bring its skills along.' : `${workMode.description} Applies ${WORK_MODES.find((m) => m.id === workMode.id)!.skills.map((n) => `/${n}`).join(', ')}.`)}

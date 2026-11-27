@@ -1356,13 +1356,16 @@ impl Turns {
             "noTools": js::truthy(opts.get("noTools")),
         });
         let mut tools = turn::turn_tools(&tool_input);
+        let opted_in = loaded.get("orchestrate") == Some(&Value::Bool(true));
+        let worker = shared.admitted && facts.get(orchestrate_state::WORKER_FACT) == Some(&Value::Bool(true));
+        let coordination =
+            (opted_in && !worker).then(|| orchestrate_state::coordination_reason(&loaded, opts)).flatten();
         let role = if shared.admitted
             && !sandbox
             && !claude_code
             && !crate::connections::offline(&loaded)
             && self.dispatch.get().is_some()
-            && (loaded.get("orchestrate") == Some(&Value::Bool(true))
-                || facts.get(orchestrate_state::WORKER_FACT) == Some(&Value::Bool(true)))
+            && (coordination.is_some() || worker)
         {
             // Admission sends only a subset of settings. Read the same exact
             // capability overrides that the worker router uses, without copying
@@ -1374,8 +1377,8 @@ impl Turns {
         } else {
             None
         };
-        let worker = shared.admitted && facts.get(orchestrate_state::WORKER_FACT) == Some(&Value::Bool(true));
-        if worker {
+        let direct_opt_in = shared.admitted && opted_in && role.is_none();
+        if worker || direct_opt_in {
             tools.retain(|t| !matches!(turn::catalog::name(t), "spawn_agent" | "delegation_targets"));
         } else if role.is_none()
             && let Some(spawn) = tools.iter_mut().find(|t| turn::catalog::name(t) == "spawn_agent")
@@ -1406,6 +1409,33 @@ impl Turns {
             })
         } else {
             None
+        };
+        let strategy = if claude_code {
+            json!({"tools": "claude-code", "orchestration": "external"})
+        } else {
+            let tools = if code_mode.is_some() {
+                "code"
+            } else if tools.is_empty() {
+                "none"
+            } else {
+                "list"
+            };
+            let (orchestration, reason) = if worker {
+                ("worker", None)
+            } else if role.is_some() {
+                ("coordinator", coordination)
+            } else if !opted_in {
+                ("direct", Some("off"))
+            } else if coordination.is_none() {
+                ("direct", Some("not-needed"))
+            } else {
+                ("direct", Some("unavailable"))
+            };
+            let mut value = json!({"tools":tools, "orchestration":orchestration});
+            if let Some(reason) = reason {
+                value["reason"] = json!(reason);
+            }
+            value
         };
         let workspaces: Vec<Value> = if sandbox {
             turn::variants::sandbox_workspaces(&loaded)
@@ -1473,6 +1503,16 @@ impl Turns {
         let messages_before = session_value.get("messages").and_then(Value::as_array).map_or(0, Vec::len);
         if !wake {
             turn::apply_turn_input(&mut session_value, opts, nekko_js::now_ms());
+        }
+        if shared.admitted
+            && !wake
+            && !facts.get("providerError").is_some_and(|v| !v.is_null())
+            && let Some(messages) = session_value["messages"].as_array_mut()
+            && let Some(input) = messages
+                .get_mut(messages_before..)
+                .and_then(|m| m.iter_mut().rfind(|m| str_at(m, "role") == Some("user")))
+        {
+            input["turnStrategy"] = strategy;
         }
         keep_turn_context(&mut session_value, messages_before, parts);
         // Attach fresh role data to this request's user message only. A spawn
