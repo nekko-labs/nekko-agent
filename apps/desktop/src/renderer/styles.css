@@ -3292,8 +3292,11 @@ select:not([multiple]):not([size]) {
 .plan-sheet-dock::after { right: -12px; background: radial-gradient(circle at 100% 0, transparent 11.5px, var(--plan-sheet-bg) 12px); }
 .plan-sheet { background: var(--plan-sheet-bg); border-radius: 14px 14px 0 0; padding: 8px 12px 12px; font-size: var(--text-xs); line-height: 1.45; animation: plan-sheet-rise 160ms ease-out; }
 @keyframes plan-sheet-rise { from { transform: translateY(100%); } }
-.plan-sheet-head { display: flex; align-items: center; gap: 8px; padding: 0 2px 4px; font-size: var(--text-2xs); color: var(--ink-faint); }
-.plan-sheet-toggle { display: flex; min-width: 0; align-items: center; gap: 8px; text-align: left; border-radius: 6px; }
+.plan-sheet-head { display: grid; grid-template-columns: minmax(0, 1fr) 24px auto; align-items: stretch; gap: 8px; padding: 0 2px 4px; font-size: var(--text-2xs); color: var(--ink-faint); }
+/* The real button spans the bar; the independent settings control sits above its middle column. */
+.plan-sheet-toggle { grid-area: 1 / 1 / 2 / -1; display: grid; grid-template-columns: subgrid; align-items: center; min-width: 0; text-align: left; border-radius: 6px; cursor: pointer; }
+.plan-sheet-toggle:focus-visible { outline: 2px solid var(--ring); }
+.plan-sheet-progress { grid-column: 3; display: flex; align-items: center; gap: 8px; }
 .plan-sheet-fold { display: block; width: 100%; text-align: left; border-radius: 6px; }
 .plan-sheet-line { display: flex; min-width: 0; align-items: center; gap: 8px; }
 .plan-sheet-fold-chips { padding-left: 20px; }
@@ -3302,7 +3305,7 @@ select:not([multiple]):not([size]) {
 @media (hover: hover) {
   .plan-sheet-chip:hover { background: color-mix(in srgb, var(--ink) 10%, transparent); color: var(--ink); }
 }
-.plan-config { position: relative; display: grid; place-items: center; width: 24px; height: 24px; color: var(--ink-soft); border-radius: 6px; }
+.plan-config { grid-area: 1 / 2; position: relative; display: grid; place-items: center; width: 24px; height: 24px; color: var(--ink-soft); border-radius: 6px; }
 .plan-config:hover, .plan-config:focus-within { color: var(--ink); background: var(--surface-2); }
 .plan-config:focus-within { outline: 2px solid var(--ring); }
 .plan-config select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
