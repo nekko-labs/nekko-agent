@@ -4,6 +4,7 @@ import {
   PHONE_UPLOAD,
   PHONE_AGENT_CHANNELS,
   PHONE_MAX_FRAME_BYTES,
+  PHONE_FINDER_VIEW,
   PHONE_GUARDED_OPTION_KEYS,
   PHONE_ALWAYS_DENIED,
   PHONE_CHANNELS,
@@ -214,6 +215,49 @@ describe('settings from a phone', () => {
     const [view] = redactPhoneResult('session:watches', [watch, 'junk', null]) as Record<string, unknown>[];
     expect(view).toEqual({ id: 'w1', kind: 'pr', url: 'https://github.com/o/r/pull/5', status: 'active', deadlineAt: 10, nextPollAt: 5, pending: false, failures: 1, lastError: 'x'.repeat(600) });
     expect(redactPhoneResult('session:watches', null)).toEqual([]);
+  });
+
+  it("reads chats' text for a phone's search, a few chats at a time (sessions:finderText, #3448)", () => {
+    expect(phoneChannelClass('sessions:finderText')).toBe('read');
+    expect(screenPhoneCall('sessions:finderText', [['s1', 's2']])).toEqual({});
+    for (const bad of [[], [[]], [['']], [[1]], [Array.from({ length: PHONE_FINDER_VIEW.chats + 1 }, (_, i) => `s${i}`)], ['s1']]) {
+      expect(() => screenPhoneCall('sessions:finderText', bad)).toThrow(PhoneAccessError);
+    }
+    expect(() => screenPhoneCall('sessions:finderText', [['s1'], 'extra'])).toThrow(PhoneAccessError);
+    const chat = {
+      id: 's1', title: 'Release notes', updatedAt: 5, workspaceId: 'w1', gitWorktrees: { w1: { path: '/Users/me/app' } },
+      messages: [
+        { id: 'm1', role: 'user', content: 'Group the release notes', createdAt: 1, skill: { input: 'by area' } },
+        { id: 'm2', role: 'assistant', content: 'x'.repeat(PHONE_FINDER_VIEW.textChars + 50), createdAt: 2, toolCalls: [{ name: 'write_file', input: { path: 'NOTES.md' } }, { name: 'edit', input: { file_path: 'src/a.ts' } }] },
+        { id: 'm3', role: 'tool', content: 'tool output' },
+      ],
+    };
+    const view = redactPhoneResult('sessions:finderText', { s1: chat, gone: null }) as Record<string, Record<string, unknown>>;
+    expect(Object.keys(view)).toEqual(['s1', 'gone']);
+    expect(view.gone).toBeNull();
+    expect(view.s1).toEqual({
+      title: 'Release notes', updatedAt: 5,
+      messages: [
+        { role: 'user', text: 'Group the release notes\nby area' },
+        { role: 'assistant', text: 'x'.repeat(PHONE_FINDER_VIEW.textChars), files: ['NOTES.md', 'src/a.ts'] },
+      ],
+    });
+    expect(redactPhoneResult('sessions:finderText', null)).toEqual({});
+  });
+
+  it('keeps a sessions:finderText reply under its byte budget: later chats wait, a huge first chat loses its oldest messages', () => {
+    const big = (n: number) => ({ title: 't', updatedAt: 1, messages: Array.from({ length: n }, (_, i) => ({ role: 'user', content: `${i} ${'y'.repeat(PHONE_FINDER_VIEW.textChars - 10)}` })) });
+    const perChat = Math.ceil(PHONE_FINDER_VIEW.bytes / 3 / PHONE_FINDER_VIEW.textChars);
+    const view = redactPhoneResult('sessions:finderText', { a: big(perChat), b: big(perChat), c: big(perChat), d: big(perChat) }) as Record<string, unknown>;
+    expect(Object.keys(view)).toEqual(['a', 'b']);
+    expect(new TextEncoder().encode(JSON.stringify(view)).length).toBeLessThanOrEqual(PHONE_FINDER_VIEW.bytes);
+    // Three UTF-8 bytes a character: 300 full messages are over the budget on their own.
+    const huge = { title: 't', updatedAt: 1, messages: Array.from({ length: PHONE_FINDER_VIEW.messages }, (_, i) => ({ role: 'user', content: `${i} ${'€'.repeat(PHONE_FINDER_VIEW.textChars - 10)}` })) };
+    const one = redactPhoneResult('sessions:finderText', { h: huge, next: big(1) }) as Record<string, { messages: { text: string }[]; omittedMessages: number }>;
+    expect(Object.keys(one)[0]).toBe('h');
+    expect(new TextEncoder().encode(JSON.stringify(one)).length).toBeLessThanOrEqual(PHONE_FINDER_VIEW.bytes);
+    expect(one.h.omittedMessages + one.h.messages.length).toBe(PHONE_FINDER_VIEW.messages);
+    expect(one.h.messages.at(-1)!.text.startsWith(`${PHONE_FINDER_VIEW.messages - 1} `)).toBe(true);
   });
 
   it("cancels one watch of a chat for a phone (session:cancelWatch), nothing more", () => {
