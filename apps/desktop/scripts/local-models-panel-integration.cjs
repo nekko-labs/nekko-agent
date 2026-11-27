@@ -14,7 +14,7 @@ async function main() {
   if (process.env.NEKKO_TEST_REVISION) {
     const source = path.join(out, 'base-source'); fs.rmSync(source, { recursive: true, force: true }); fs.mkdirSync(source, { recursive: true });
     const tar = path.join(out, 'base.tar');
-    cp.execFileSync('git', ['archive', '--format=tar', `--output=${tar}`, process.env.NEKKO_TEST_REVISION, 'apps/desktop/src', 'packages/shared/src'], { cwd: repo, windowsHide: true });
+    cp.execFileSync('git', ['archive', '--format=tar', `--output=${tar}`, process.env.NEKKO_TEST_REVISION, 'apps/desktop/src', 'packages/shared/src', 'docs/hub/whats-new.json'], { cwd: repo, windowsHide: true });
     cp.execFileSync('tar', ['-xf', tar, '-C', source], { windowsHide: true });
     entry = path.join(out, 'base-fixture.tsx');
     fs.writeFileSync(entry, fs.readFileSync(path.join(__dirname, 'local-models-panel-fixture.tsx'), 'utf8')
