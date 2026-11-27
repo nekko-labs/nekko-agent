@@ -639,6 +639,7 @@ function makeWebClient(): NekkoApi {
     removeChatWorktree: (root) => call(IpcChannels.chatWorktreesRemove, root),
     getStorageUsage: (refresh) => call(IpcChannels.storageUsage, { refresh: !!refresh }),
     getDiskSpace: () => call(IpcChannels.storageDisk),
+    hasOldMergedWorktrees: () => call(IpcChannels.storageMergedReminder),
     previewIdleWorktrees: () => call(IpcChannels.storageIdleWorktrees),
     removeWorktrees: (roots) => call(IpcChannels.storageRemoveWorktrees, roots),
     listRunnerImages: () => call(IpcChannels.storageRunnerImages),

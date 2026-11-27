@@ -31,6 +31,7 @@ const bridge: any = {
   listSkillSources: async () => [], skillTargets: async () => [],
   listConnectors: async () => [], getMessagingStatus: async () => ({}),
   // A sandbox can seed agent states (localStorage 'fixture.pending' / 'fixture.running') before a reload.
+  hasOldMergedWorktrees: async () => localStorage.getItem('fixture.merged') === 'true',
   pendingInput: async () => JSON.parse(localStorage.getItem('fixture.pending') ?? '{}'), getDiskSpace: async () => JSON.parse(localStorage.getItem('fixture.disk') ?? 'null'), runningSessions: async () => JSON.parse(localStorage.getItem('fixture.running') ?? '[]'), listTasks: async () => [],
   listInstalledSkills: async () => [], listExternalSkills: async () => [], listTools: async () => [], getMcpStatus: async () => [], listSkills: async () => [], listShells: async () => [], listChanges: async () => [], listFiles: async () => [], getUsageSummary: async () => null,
   previewContext: async () => ({ items: [], totalTokens: 0, budget: 128000 }), getGitStatus: async () => ({ repo: false }),

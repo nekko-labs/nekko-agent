@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import type { CloudStatus, IdlePreview, KeptReason, RunnerImage, StorageCategory, StorageCategoryId, StorageUsage } from '@nekko-agent/shared';
+import { StorageAuditButton } from './StorageAudit.js';
 import { SettingsSection } from './SettingsSection.js';
 import { HistorySettings } from './HistorySettings.js';
 import { thisComputerName } from './ComputerChip.js';
@@ -325,6 +326,7 @@ export function StorageSettings({ goTo, openView, refreshSessions }: { goTo: (gr
   return (
     <SettingsSection id="storage" title={thisComputerName()} help="Where Nekko's disk space goes, and cleanup that never touches models, Library files, prompts or commits." data-storage
       meta={disk ? <span className="font-mono text-xs text-ink-soft">{formatBytes(disk.free)} free of {formatBytes(disk.total)}</span> : undefined}>
+      <div className="mt-(--q-tight) flex flex-wrap items-center gap-2 text-xs text-ink-soft"><StorageAuditButton /> Start a read-only chat about these measurements.</div>
       <p className="mt-(--q-tight) text-xs text-ink-faint">
         {usage?.measuring ? 'Measuring…' : usage?.measuredAt ? `Measured ${ago(usage.measuredAt)}` : 'Not measured yet'}
         {' · '}<button type="button" className="btn btn-ghost py-1 text-xs text-(--accent)" disabled={usage?.measuring} onClick={() => void load(true)}>Measure again</button>

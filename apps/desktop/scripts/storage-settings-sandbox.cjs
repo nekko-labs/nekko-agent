@@ -51,10 +51,12 @@ app.whenReady().then(async () => {
     for (let i = 0; i < 100 && !(await run('!!window.layoutFixture')); i++) await sleep(100);
     // The low-disk notice reads the disk as the App mounts: seed it, then load again.
     await run(`localStorage.setItem('fixture.disk', ${JSON.stringify(JSON.stringify(fixture.usage.disk))})`);
+    await run(`localStorage.setItem('fixture.merged', 'true'); localStorage.removeItem('nekko.storageAudit.snoozedUntil')`);
     await win.reload();
     for (let i = 0; i < 100 && !(await run('!!window.layoutFixture')); i++) await sleep(100);
     await run(`(() => {
       const f = layoutFixture, d = ${JSON.stringify(fixture)};
+      f.bridge.setSessionOptions = async (id, options) => Object.assign(f.records.find(s => s.id === id), options);
       f.bridge.getRemoteStatus = async () => ({ enabled: false });
       f.bridge.getStorageUsage = async () => d.usage;
       f.bridge.getDiskSpace = async () => d.usage.disk;
@@ -70,6 +72,9 @@ app.whenReady().then(async () => {
     await sleep(1200);
     await check('low-disk notice shows', `document.querySelector('[data-low-disk="low"]')?.textContent.includes('Your disk is almost full: 14 GB free.')`);
     await shot('low-disk-notice');
+    await check('old merged reminder visible', `!!document.querySelector('[data-merged-reminder]')`);
+    await run(`document.querySelector('[data-merged-reminder] button:last-child').click()`);
+    await check('not now snoozes for a week without starting a chat', `!document.querySelector('[data-merged-reminder]') && Number(localStorage.getItem('nekko.storageAudit.snoozedUntil')) > Date.now() + 6 * 86400000 && !layoutFixture.lastSend`);
     await run(`${button("See what's using it")}.click()`); await sleep(1200);
     await check('notice opens Storage', `!document.querySelector('#settings-storage').hidden && document.querySelector('[data-storage-row="worktrees"]')?.textContent.includes('180 GB')`);
     await check('rows largest first', `[...document.querySelectorAll('[data-storage-row]')].map(r => r.dataset.storageRow).join() === 'worktrees,runners,models,caches,history,other'`);
@@ -112,6 +117,13 @@ app.whenReady().then(async () => {
     await shot('storage-mobile');
     await run(`document.documentElement.dataset.theme = 'light'`); await sleep(300);
     await shot('storage-mobile-light');
+    await run(`${button('Run storage audit')}.click()`); await sleep(700);
+    await check('Storage starts a folderless audit with no acting tools', `layoutFixture.lastSend?.noTools === true && layoutFixture.lastSend.text.includes('3 protected; 1 unused') && !layoutFixture.lastSend.text.includes('old-image-tart') && layoutFixture.store.getState().view === 'command'`);
+    await run(`localStorage.removeItem('nekko.storageAudit.snoozedUntil')`);
+    await win.reload();
+    for (let i = 0; i < 100 && !(await run(`!!document.querySelector('[data-merged-reminder]') && !!window.layoutFixture`)); i++) await sleep(100);
+    await run(`(() => { const f = layoutFixture, d = ${JSON.stringify(fixture)}; f.bridge.getStorageUsage = async () => d.usage; f.bridge.listRunnerImages = async () => d.images; f.bridge.setSessionOptions = async (id, opts) => Object.assign(f.records.find(s => s.id === id), opts); document.querySelector('[data-merged-reminder] button').click(); })()`); await sleep(800);
+    await check('reminder starts audit with merge context and does not remove anything', `layoutFixture.lastSend?.noTools === true && layoutFixture.lastSend.text.includes('at least 15 merged') && !window.removed && !window.removedImage && !window.cachesCleared`);
     report.bounds = win.getBounds(); report.visible = win.isVisible();
     if (report.visible) throw Error('fixture became visible');
   } catch (e) { report.errors.push(String(e.stack || e)); }
