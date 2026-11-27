@@ -140,6 +140,7 @@ const api: NekkoApi = {
   orgDelete: (orgId) => inv(IpcChannels.orgDelete, orgId),
   fleetSetSharing: (orgId, on) => inv(IpcChannels.fleetSetSharing, orgId, on),
   fleetList: (orgId) => inv(IpcChannels.fleetList, orgId),
+  fleetRunners: () => inv(IpcChannels.fleetRunners),
   fleetStatus: () => inv(IpcChannels.fleetStatus),
   voiceStatus: () => inv(IpcChannels.voiceStatus),
   voiceInstall: (engine) => inv(IpcChannels.voiceInstall, engine),

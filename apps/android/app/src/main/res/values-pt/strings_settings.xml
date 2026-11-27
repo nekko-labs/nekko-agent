@@ -420,6 +420,10 @@
     <string name="customize_skills_none">Nenhum skill disponível. Instale skills em Personalizar no seu computador.</string>
     <!-- Nekko Agent's service from the phone (#2059), the iPhone's. -->
     <string name="service_title">Serviço do Nekko Agent</string>
+    <string name="fleet_runners_title">Executores de CI</string>
+    <string name="fleet_runners_you">%1$s (este computador)</string>
+    <string name="fleet_runners_offline">Offline</string>
+    <string name="fleet_runners_footer">Macs compartilhados pelas suas organizações, como %1$s os vê.</string>
     <string name="service_footer">Estes controles gerenciam o Nekko Agent, não o sistema operacional. Uma reinicialização ou instalação pode interromper os chats. Uma solicitação aceita não prova que terminou.</string>
     <string name="service_offline">Conecte-se a este computador para ver o status do serviço e gerenciar atualizações.</string>
     <string name="service_reading">Lendo o status do serviço</string>

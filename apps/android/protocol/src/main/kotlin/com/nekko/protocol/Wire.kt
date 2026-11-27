@@ -41,6 +41,8 @@ object Channels {
     /** A mono 16 kHz 16-bit PCM WAV as a JSON array of byte values → the text. */
     const val VOICE_TRANSCRIBE = "voice:transcribe"
     const val ENGINE_MODELS = "engine:models"
+    /** The organizations' computers that run CI runners (decision 0064), through the paired computer. */
+    const val FLEET_RUNNERS = "fleet:runners"
     const val CHAT_GENERATE_IMAGE = "chat:generateImage"
     const val SESSION_PHOTO = "session:photo"
     const val CHAT_SEND = "chat:send"

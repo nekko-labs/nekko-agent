@@ -84,6 +84,15 @@ private final class ComputerEvidenceConnection: RemoteConnection, @unchecked Sen
             return ["protocolVersion": 1, "agentRunning": true, "manageServiceFromPhone": .bool(enabled),
                     "capabilities": ["restart": capability, "updateState": capability, "updateCheck": capability,
                                      "updateDownload": capability, "updateInstall": capability]]
+        case Channels.fleetRunners where ProcessInfo.processInfo.arguments.contains("-uiTestFleetRunners"):
+            return ["orgs": [["orgName": "Nekko Labs", "computers": [
+                ["deviceId": "d1", "name": "Studio Mac", "os": "macos", "online": true, "you": true, "runners": [
+                    ["label": "nekko-cloud-mac", "state": "running", "busy": 1, "slots": 2],
+                    ["label": "nekko-cloud-mac-mini", "state": "error", "busy": 0, "slots": 0]]],
+                ["deviceId": "d2", "name": "Office mini", "os": "macos", "online": true, "runners": [
+                    ["label": "office", "state": "ready", "busy": 0, "slots": 2]]],
+                ["deviceId": "d3", "name": "Travel laptop", "os": "macos", "online": false, "runners": [
+                    ["label": "laptop", "state": "ready", "busy": 0, "slots": 1]]]]]]]
         case "service:updateState":
             return ["state": "idle", "currentVersion": "1.0.0", "notesUrl": "https://example.invalid", "edition": "desktop"]
         default: return .null

@@ -82,6 +82,7 @@
   "files:read",
   "files:search",
   "files:write",
+  "fleet:runners",
   "git:branches",
   "git:commit",
   "git:commitMessage",
@@ -225,6 +226,7 @@
   "changes:list",
   "chat:pending",
   "engine:models",
+  "fleet:runners",
   "limits:get",
   "machine:summary",
   "models:list",
@@ -475,6 +477,20 @@
  "toolView": [
   "description",
   "name"
+ ],
+ "fleetComputerView": [
+  "deviceId",
+  "name",
+  "online",
+  "os",
+  "seenAt",
+  "you"
+ ],
+ "fleetRunnerView": [
+  "busy",
+  "label",
+  "slots",
+  "state"
  ],
  "queueKeys": [
   "clientMessageId",

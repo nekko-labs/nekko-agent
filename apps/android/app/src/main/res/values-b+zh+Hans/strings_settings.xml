@@ -420,6 +420,10 @@
     <string name="customize_skills_none">没有可用的技能。请在电脑的“自定义”中安装技能。</string>
     <!-- Nekko Agent's service from the phone (#2059), the iPhone's. -->
     <string name="service_title">Nekko Agent 服务</string>
+    <string name="fleet_runners_title">CI 运行器</string>
+    <string name="fleet_runners_you">%1$s（这台电脑）</string>
+    <string name="fleet_runners_offline">离线</string>
+    <string name="fleet_runners_footer">你的组织共享的 Mac，以 %1$s 看到的状态显示。</string>
     <string name="service_footer">这些控件管理的是 Nekko Agent，而不是操作系统。重启或安装可能会中断聊天。请求被接受并不代表已经完成。</string>
     <string name="service_offline">连接到这台电脑后才能查看服务状态并管理更新。</string>
     <string name="service_reading">正在读取服务状态</string>

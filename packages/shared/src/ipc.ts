@@ -567,6 +567,7 @@ export const IpcChannels = {
   fleetSetSharing: 'fleet:setSharing',
   fleetList: 'fleet:list',
   fleetStatus: 'fleet:status',
+  fleetRunners: 'fleet:runners',
   // Settings > Connections (crates/nekkod/src/connections.rs).
   connectionsStatus: 'connections:status',
   connectionsEvents: 'connections:events',
@@ -746,6 +747,8 @@ export interface NekkoApi {
   /** The computers shared with an organization, decrypted on this device. */
   fleetList(orgId: string): Promise<import('./cloud.js').FleetList>;
   fleetStatus(): Promise<import('./cloud.js').FleetStatus>;
+  /** Each organization's computers that run CI runners (decision 0064). */
+  fleetRunners(): Promise<import('./cloud.js').FleetRunners>;
   onCloudStatus(cb: (s: import('./cloud.js').CloudStatus) => void): () => void;
   voiceStatus(): Promise<import('./voice.js').VoiceStatus>;
   voiceInstall(engine?: import('./voice.js').VoiceEngine): Promise<import('./voice.js').VoiceStatus>;

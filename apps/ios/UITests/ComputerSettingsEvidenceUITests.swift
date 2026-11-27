@@ -90,6 +90,27 @@ final class ComputerSettingsEvidenceUITests: XCTestCase {
         enabled.buttons["Cancel"].tap()
     }
 
+    func testFleetRunners() {
+        // Without runners in the organizations (the default fixture), the section is absent.
+        let plain = launch()
+        openComputer(plain)
+        let list = plain.collectionViews.firstMatch
+        let service = plain.staticTexts["service.optInInstructions"]
+        scrollTo(service, in: list)
+        XCTAssertTrue(service.waitForExistence(timeout: 10))
+        XCTAssertFalse(plain.staticTexts["CI runners"].exists)
+        attach(plain, "computer-fleet-runners-none")
+        plain.terminate()
+        let app = launch(["-uiTestFleetRunners"])
+        openComputer(app)
+        let row = app.descendants(matching: .any)["fleetRunners.computer"].firstMatch
+        scrollTo(row, in: app.collectionViews.firstMatch)
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "running a job (1 of 2 VMs)")).firstMatch.exists)
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Travel laptop, Offline")).firstMatch.exists)
+        attach(app, "computer-fleet-runners")
+    }
+
     private func launch(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-uiTestReset", "YES",

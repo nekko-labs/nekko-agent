@@ -50,6 +50,8 @@ public enum Channels {
     public static let appInfo = "app:info"
     /// Service discovery is Read; updater reads additionally require the owner's opt-in.
     public static let serviceStatus = "service:status"
+    /// The organizations' computers that run CI runners (decision 0064), through the paired computer.
+    public static let fleetRunners = "fleet:runners"
     public static let serviceUpdateState = "service:updateState"
     public static let serviceRestart = "service:restart"
     public static let serviceUpdateCheck = "service:updateCheck"

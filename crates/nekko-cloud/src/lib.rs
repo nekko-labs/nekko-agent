@@ -100,6 +100,7 @@ pub const CHANNELS: &[&str] = &[
     "fleet:setSharing",
     "fleet:list",
     "fleet:status",
+    "fleet:runners",
 ];
 
 /// Pushed whenever the status changes (the animation follows `sync.phase` and `sync.progress`).

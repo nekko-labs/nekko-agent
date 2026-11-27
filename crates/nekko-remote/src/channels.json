@@ -97,6 +97,7 @@
  "files:read",
  "files:search",
  "files:write",
+ "fleet:runners",
  "git:branches",
  "git:commit",
  "git:commitMessage",

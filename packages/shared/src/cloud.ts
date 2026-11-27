@@ -229,6 +229,11 @@ export interface FleetRunner {
   slots: number;
 }
 
+/** `fleet:runners`: per organization, the computers that run CI runners. */
+export interface FleetRunners {
+  orgs: { orgId?: string; orgName: string; computers: Pick<FleetComputerView, 'deviceId' | 'name' | 'os' | 'online' | 'seenAt' | 'you' | 'runners'>[] }[];
+}
+
 /** A local model a shared computer can serve. No URLs, ports or paths. */
 export interface FleetModel {
   id: string;

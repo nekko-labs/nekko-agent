@@ -164,6 +164,7 @@ export const PHONE_CHANNELS = [
   'files:read',
   'files:search',
   'files:write',
+  'fleet:runners',
   'git:branches',
   'git:commit',
   'git:commitMessage',
@@ -388,6 +389,8 @@ export const PHONE_CHAT_READ_CHANNELS: readonly string[] = [
   'changes:list',
   'chat:pending',
   'engine:models',
+  // Each organization's computers that run CI runners, and their runners' state (decision 0064).
+  'fleet:runners',
   'limits:get',
   'machine:summary',
   'models:list',
@@ -833,6 +836,10 @@ export const PHONE_SKILL_VIEW = ['category', 'description', 'name', 'source'] as
 
 /** What a phone receives of each tool (`tools:list`): the name a chat's `disabledTools` holds, and what it does. */
 export const PHONE_TOOL_VIEW = ['description', 'name'] as const;
+
+/** What a phone receives of a fleet computer that runs CI runners (`fleet:runners`, decision 0064), and of each runner. */
+export const PHONE_FLEET_COMPUTER_VIEW = ['deviceId', 'name', 'online', 'os', 'seenAt', 'you'] as const;
+export const PHONE_FLEET_RUNNER_VIEW = ['busy', 'label', 'slots', 'state'] as const;
 
 /**
  * `attachment:upload` (#2777, #2635): a clip from the phone, in order, as
@@ -1320,6 +1327,24 @@ export function phoneSettingsUpdate(sets: Array<[string, unknown]>, current: unk
 }
 
 /** What a phone receives for a channel's result: secrets never leave the computer. */
+/** `fleet:runners`: per organization, its name and the computers that run CI runners, each with its runners. */
+function phoneFleetRunnersView(result: unknown): { orgs: { orgName: string; computers: Obj[] }[] } {
+  const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+  const orgs = list((result as { orgs?: unknown } | null)?.orgs);
+  return {
+    orgs: orgs.map((o) => {
+      const org = (o ?? {}) as { orgName?: unknown; computers?: unknown };
+      return {
+        orgName: typeof org.orgName === 'string' ? org.orgName : '',
+        computers: list(org.computers).map((c) => ({
+          ...pick(c, PHONE_FLEET_COMPUTER_VIEW),
+          runners: list((c as { runners?: unknown } | null)?.runners).map((r) => pick(r, PHONE_FLEET_RUNNER_VIEW)),
+        })),
+      };
+    }),
+  };
+}
+
 export function redactPhoneResult(channel: string, result: unknown): unknown {
   switch (channel) {
     case 'sessions:finderText':
@@ -1340,6 +1365,8 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
       return Array.isArray(result) ? result.map((s) => pick(s, PHONE_SKILL_VIEW)) : [];
     case 'tools:list':
       return Array.isArray(result) ? result.map((t) => pick(t, PHONE_TOOL_VIEW)) : [];
+    case 'fleet:runners':
+      return phoneFleetRunnersView(result);
     case 'session:get':
     case 'chat:steer':
       return phoneSessionView(result);
@@ -1675,6 +1702,8 @@ export function phoneAccessPolicy() {
     machineResidentView: [...PHONE_MACHINE_RESIDENT_VIEW],
     skillView: [...PHONE_SKILL_VIEW],
     toolView: [...PHONE_TOOL_VIEW],
+    fleetComputerView: [...PHONE_FLEET_COMPUTER_VIEW],
+    fleetRunnerView: [...PHONE_FLEET_RUNNER_VIEW],
     queueKeys: [...PHONE_QUEUE_KEYS],
     sessionOptionKeys: [...PHONE_SESSION_OPTION_KEYS],
     guardedOptionKeys: [...PHONE_GUARDED_OPTION_KEYS],
