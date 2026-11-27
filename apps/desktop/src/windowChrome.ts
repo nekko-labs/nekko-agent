@@ -64,6 +64,8 @@ export interface WindowChromeBridge {
   /** Settings' text size: Chromium's page zoom, so every coordinate scales alike. */
   setPageZoom: (factor: number) => void;
   onPageReloading: (listener: (fadeMs: number) => void) => void;
+  /** Local dictionary suggestions for one composer word. */
+  spellingSuggestions: (word: string) => string[];
   /** Multi-monitor screen windows (see `displayWindows.ts`). */
   displays: import('./displayWindows.js').DisplaysBridge;
 }

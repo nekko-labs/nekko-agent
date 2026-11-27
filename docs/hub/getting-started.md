@@ -56,6 +56,8 @@ A new chat greets you with a welcome phrase, such as “What’s next?” or “
 
 Opening an agent composer puts the caret after any restored draft once a usable model provider is available. If you are already typing in another visible text field, that field keeps focus. Normal background agent and provider updates do not pull you back into the composer.
 
+In the desktop chat composer, right-click an underlined misspelling and choose a suggestion under **Spelling**. It replaces just that word. Use Cmd+Z on Mac or Ctrl+Z on Windows and Linux to undo. Suggestions come from the local spelling dictionary.
+
 ## Returning to the latest message
 
 When you scroll up in a chat, a floating **↓ Scroll to latest** pill appears at the bottom of the conversation, above the message box. Click it to return to the newest message and follow new output again. It also works in archived chats, without waiting for another reply. The pill disappears when you reach the bottom.
