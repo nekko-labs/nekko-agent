@@ -12,4 +12,11 @@
     <string name="chats_showupdated">Hora de actualización</string>
     <string name="chats_showcontext">Ventana de contexto</string>
     <string name="chats_showpullrequests">Pull requests</string>
+    <string name="plan_display">Vista del plan</string>
+    <string name="plan_display_configure">Configurar la vista del plan</string>
+    <string name="plan_display_full">Mostrar el plan completo</string>
+    <string name="plan_display_balanced">Equilibrado · 3 filas (predeterminado)</string>
+    <string name="plan_display_one">Mostrar 1 fila</string>
+    <string name="plan_display_hidden">Ocultar por completo</string>
+    <string name="plan_completed_group">Completados (%1$d)</string>
 </resources>
