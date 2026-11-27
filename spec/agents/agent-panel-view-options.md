@@ -157,3 +157,9 @@ Implemented for desktop and Local Web UI. **Show** combines panel visibility set
 At 520px and below, Show stacks its sections; the viewport-bounded submenu scrolls on short windows. Its toggles retain menuitemcheckbox semantics and keyboard navigation. Escape backs out of Show, then closes the parent without updating the sidebar during a React state updater. Simple/Detailed and Customize were removed from this panel menu and moved to the app-wide View menu.
 
 Verification: focused static-render tests and isolated real-renderer interaction checks cover the seven toggles, metadata restoration, reopening, and viewport bounds. Wide and 320px captures inspected on Windows. Native iOS/Android card menus are unchanged.
+
+### The sample card looks like a real agent card (2026-11-27)
+
+The sample is laid out as an agent card in the panel is, not as a list of boxes: the status glyph, title and reply time on the first line; the model (with its provider's logo) and context fill on the second; the branch on the third; sub-agents and windows on the fourth, with the PR chip at the end of that line. Each detail keeps its real card's colour and sits in its own dotted box in its real position, so the box you click is the place on the card it changes. A hidden detail keeps its box in place as "+ label"; lines wrap when hidden labels are longer than the values they replace.
+
+Verification: static-render test covers the card-order layout; hidden off-screen Electron captures (dark theme, all details on and three off) inspected on macOS. Implemented for desktop; native phone menus are unchanged.

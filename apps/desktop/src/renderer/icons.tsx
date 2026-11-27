@@ -1,4 +1,4 @@
-export { InfoIcon, GfArchiveIcon as ArchiveIcon, FolderOpenIcon as FolderIcon, GfTerminalIcon as TerminalIcon, GfServerIcon as ServerIcon, GfSendIcon as SendIcon, GfLockIcon as LockIcon, GfGaugeIcon as GaugeIcon } from './gentleface-icons.js';
+export { InfoIcon, HelpIcon, GfArchiveIcon as ArchiveIcon, FolderOpenIcon as FolderIcon, GfTerminalIcon as TerminalIcon, GfServerIcon as ServerIcon, GfSendIcon as SendIcon, GfLockIcon as LockIcon, GfGaugeIcon as GaugeIcon } from './gentleface-icons.js';
 import React from 'react';
 import type { ComputerIcon as ComputerIconName } from '@nekko-agent/shared';
 
