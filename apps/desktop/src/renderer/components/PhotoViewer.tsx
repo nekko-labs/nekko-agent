@@ -64,7 +64,7 @@ export function PhotoViewer({ items, index: start, trusted, onClose, onMenu, onC
               src={src}
               alt={caption}
               referrerPolicy="no-referrer"
-              className="block max-h-full max-w-[calc(100%-7rem)] object-contain"
+              className={`block max-h-full object-contain ${many ? 'max-w-[calc(100%-7rem)]' : 'max-w-full'}`}
               onClick={(e) => e.stopPropagation()}
               onContextMenu={(e) => onMenu(e, shown)}
               title="Right-click to copy or save"
