@@ -14,7 +14,13 @@ const state = { autoload: new Set<string>(), calls: [] as unknown[][] };
 Object.assign(window, { cardFixture: state, nekko: {
   engineSetAutoload: async (id: string, on: boolean) => { state.calls.push(['start', id, on]); if (on) state.autoload.add(id); else state.autoload.delete(id); },
   runtimeLoad: async (...args: unknown[]) => { state.calls.push(['load', ...args]); return { ok: true }; },
-  runtimePlace: async () => null,
+  runtimePlace: async (_provider: string, _id: string, request: { contextTokens: number }) => ({
+    verdict: 'fits', unified: true, deviceName: 'Fixture GPU', spareVramBytes: 32 * GiB,
+    vram: { totalBytes: 64 * GiB, availBytes: 60 * GiB, otherBytes: 4 * GiB,
+      model: { weightsBytes: 3.4 * GiB, kvCacheBytes: request.contextTokens * 240000, overheadBytes: .6 * GiB, pinnedBytes: 0 } },
+    ram: { totalBytes: 0, availBytes: 0, otherBytes: 0, model: { weightsBytes: 0, kvCacheBytes: 0, overheadBytes: 0, pinnedBytes: 0 } },
+    disk: { tableBytes: 0, overflowBytes: 0 },
+  }),
   runtimeRecommend: async () => null,
 } });
 const actions = { ready: true, busy: false, isFavorite: () => false, isDefault: () => false, favorite: async () => {}, setDefault: async () => {}, remove: async () => {} };

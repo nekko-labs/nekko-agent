@@ -40,7 +40,11 @@ app.whenReady().then(async () => {
       await verify(`visible rows at width ${width}`, `innerWidth === ${width} && ${row}.getBoundingClientRect().width > 0`);
       await capture(`models-${width}-collapsed`);
       await run(`${toggle}.click()`);
-      await sleep(450);
+      await run(`new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => {
+        const reveal = ${row}.querySelector('.model-library-card__reveal');
+        Promise.allSettled(reveal.getAnimations().map(a => a.finished)).then(resolve);
+      })))`);
+      await sleep(200);
       await verify(`settings visible at width ${width}`, `!!${row}.querySelector('[data-engine-load-drawer]')`);
       await capture(`models-${width}-expanded`);
       await run(`${toggle}.click()`);
@@ -77,16 +81,57 @@ app.whenReady().then(async () => {
       await sleep(320);
       await verify('startup setting can be turned off', `cardFixture.calls.at(-1).join(',') === 'start,qwen,false'`);
 
+      await verify('format and capabilities appear as chips', `['Format:', 'MLX', 'Supports:', 'Vision', 'Chat'].every(label => ${row}.querySelector('[data-model-chips]').innerText.includes(label))`);
+      await run(`${toggle}.click()`);
+      await sleep(350);
+      await verify('missing estimates get a dashed track with no invented bytes', `!!${row}.querySelector('[data-allocation-unknown]') && !${row}.querySelector('[role=meter]')`);
+      await run(`${toggle}.click()`);
+      await sleep(350);
+      const known = `document.querySelector('[data-library-row="gemma"]')`;
+      const slider = `${known}.querySelector('[data-context-control] input')`;
+      const contextSegment = `${known}.querySelector('[data-allocation-bar] [data-segment=context]')`;
+      await run(`${known}.querySelector('[data-model-row-toggle]').click()`);
+      await sleep(470);
+      await verify('one allocation bar sits immediately above the context slider', `${known}.querySelectorAll('[role=meter]').length === 1 && ${known}.querySelector('[data-allocation-bar]').nextElementSibling.matches('[data-context-control]')`);
+      const widthBefore = await run(`parseFloat(${contextSegment}.style.width)`);
+      const sliderFrames = [];
+      const sliderFrame = async () => sliderFrames.push((await win.capturePage({ x: 0, y: 190, width: 390, height: 440 }, { stayHidden: true })).resize({ width: 390 }).toPNG());
+      await run(`${slider}.focus()`);
+      await sliderFrame();
+      await sliderFrame();
+      win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Right' });
+      win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Right' });
+      for (let i = 0; i < 8; i++) { await sliderFrame(); await sleep(55); }
+      await verify('native keyboard slider increases the context allocation', `parseFloat(${contextSegment}.style.width) > ${widthBefore} && ${slider}.getAttribute('aria-valuetext').includes('16k')`);
+      require('./evidence-gif.cjs')(path.join(out, 'models-context-change.gif'), sliderFrames, 11);
+      await capture('models-390-live-context');
+      win.setContentSize(1280, 1000);
+      await sleep(260);
+      await capture('models-1280-live-context');
+      await run(`${known}.querySelector('[data-model-row-toggle]').click()`);
+      win.setContentSize(390, 1000);
+      await sleep(350);
+
       const frames = [];
       const sample = async (count) => {
-        const heights = [];
+        // Sampling geometry inside Chromium avoids missing a short transition
+        // when the main process waits for a screenshot/compositor frame.
+        const geometry = run(`new Promise(resolve => {
+          const heights = [];
+          const start = performance.now();
+          const tick = () => {
+            heights.push(${reveal}.getBoundingClientRect().height);
+            if (performance.now() - start >= 360) resolve(heights);
+            else requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        })`);
         for (let i = 0; i < count; i++) {
-          heights.push(await run(`${reveal}.getBoundingClientRect().height`));
           const img = await win.capturePage({ x: 0, y: 0, width: 390, height: 680 }, { stayHidden: true });
           frames.push(img.resize({ width: 390 }).toPNG());
           await sleep(24);
         }
-        return heights;
+        return geometry;
       };
       await sample(6);
       await run(`${toggle}.click()`);

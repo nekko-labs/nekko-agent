@@ -162,7 +162,9 @@ saw in memory and the models your local chats used, newest first. **Load** uses 
 saved settings, or the recommended ones when it has none, and starts the engine if it is
 stopped.
 
-**Installed model cards.** The bar under each model name previews a rough load estimate where there is enough information. A striped bar shows file weights against the memory capacity for comparison; it does not predict how much memory the model will actually use. **Load** is at the far right. Open the model name to expand its settings underneath the row, including **Load when the engine starts**.
+**Installed model cards.** **Format** and **Supports** show how each model is packaged and what it can do. The collapsed card previews estimated load memory or shows a striped comparison with the on-disk weights. Open the model name to see a single memory breakdown, followed by the context slider. Known context allocations resize as you change the setting; a dashed section means part or all of the estimate is unknown. **Load** still uses saved settings, and **Load when the engine starts** is in the expanded card.
+
+**Deleting models from another folder.** Check the source and path in the required confirmation: deleting a model may make it unavailable in the app that downloaded it. The action leaves shared companions alone. For a Hugging Face-style MLX cache, it removes weight links, not the files they point to. For Ollama, it removes only the selected tag manifest; use Ollama to manage the retained blobs if you need to reclaim disk space.
 
 **Reading the VRAM bar.** In a model family’s GPU facts, the bar starts with the model and adds the extra memory for minimum, recommended and maximum context. A plain tail is memory left after maximum context; a striped tail is memory the load would need beyond what is available. Hover a band or focus its label for the numbers.
 

@@ -652,7 +652,7 @@ export interface LocalModel {
   folderId?: string;
   /** The app whose layout that folder belongs to, when we recognised one. */
   folderProvider?: ModelFolderProviderId;
-  /** False for a folder we only read: deleting there would break another app. */
+  /** False for a folder owned by another app or added by the user. */
   managed?: boolean;
   addedAt: number;
   /** Per-model saved load settings, applied when it is loaded. */

@@ -21,6 +21,7 @@ use nekko_tools::path::native as path;
 use regress::Regex;
 use serde_json::{Map, Value, json};
 use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex, OnceLock};
 use std::time::SystemTime;
 
@@ -524,6 +525,7 @@ pub struct OllamaModel {
     pub name: String,
     pub path: String,
     pub size: f64,
+    manifest: String,
 }
 
 /// Every model in an Ollama store, read from its manifests (`listOllamaModels`).
@@ -566,7 +568,7 @@ pub fn list_ollama(root: &str) -> Vec<OllamaModel> {
         if size == 0.0 {
             continue;
         }
-        out.push(OllamaModel { name: ollama_name(&manifest_root, &file), path: blob, size });
+        out.push(OllamaModel { name: ollama_name(&manifest_root, &file), path: blob, size, manifest: file });
     }
     out.sort_by(|a, b| nekko_js::locale_compare(&a.name, &b.name));
     out
@@ -1096,27 +1098,103 @@ fn in_use(e: &std::io::Error) -> bool {
     cfg!(windows) && matches!(e.raw_os_error(), Some(32 | 33))
 }
 
-/// Delete the file and its row; shards and projectors go with it (`remove`).
-pub fn remove(cfg: &LibraryConfig, id: &str) -> Result<Value, String> {
+/// Only unlink entries whose parent stays in the selected model root. A
+/// symlink to a weight can be unlinked without touching its shared target.
+fn checked_entry(root: &Path, entry: &Path) -> Result<PathBuf, String> {
+    let refused = || "Cannot safely delete these linked model files. Use the app that downloaded them.".to_string();
+    let rel = entry.strip_prefix(root).map_err(|_| refused())?;
+    let root = root.canonicalize().map_err(|e| e.to_string())?;
+    let parent = root.join(rel.parent().ok_or_else(refused)?);
+    if parent.canonicalize().map_err(|e| e.to_string())? != parent {
+        return Err(refused());
+    }
+    let entry = root.join(rel);
+    let metadata = std::fs::symlink_metadata(&entry).map_err(|e| e.to_string())?;
+    if !(metadata.is_file() || metadata.file_type().is_symlink()) {
+        return Err(refused());
+    }
+    Ok(entry)
+}
+
+/// A stale or missing confirmation may not unload or delete an external model.
+pub fn can_delete(model: &Value, confirmed_path: Option<&str>) -> bool {
+    (model.get("managed") != Some(&Value::Bool(false)) && model["format"] != "mlx")
+        || confirmed_path.is_some_and(|p| model["path"].as_str() == Some(p))
+}
+
+/// Delete the selected model; do not mutate another app's shared sidecars.
+pub fn remove(cfg: &LibraryConfig, id: &str, confirmed_path: Option<&str>) -> Result<Value, String> {
     let Some(model) = find(cfg, id)? else {
         return Ok(reply(false, "That model is not in the library.".into()));
     };
     let name = model.get("name").map(nekko_js::display).unwrap_or_default();
-    if model.get("managed") == Some(&Value::Bool(false)) {
-        return Ok(reply(
-            false,
-            format!("{name} lives in a folder Nekko Agent only reads. Delete it in the app that downloaded it."),
-        ));
+    let model_path = model.get("path").and_then(Value::as_str).unwrap_or_default();
+    let external = model.get("managed") == Some(&Value::Bool(false));
+    let mlx = model.get("format").and_then(Value::as_str) == Some("mlx");
+    if !can_delete(&model, confirmed_path) {
+        return Ok(reply(false, format!("Confirm the current location of {name} before deleting it.")));
     }
-    let model_path = model.get("path").and_then(Value::as_str).unwrap_or_default().to_string();
-    let primary = cfg.roots().remove(0);
-    let companions: Vec<String> =
-        scan_folder(&primary).into_iter().filter(|p| is_companion_of(p, &model_path)).collect();
-    for p in std::iter::once(&model_path).chain(&companions) {
+    let roots = cfg.roots();
+    let mut manifest_only = false;
+    let files = if external || mlx {
+        let location = Path::new(model_path);
+        let Some(root) =
+            roots.iter().find(|root| model.get("folderId") == Some(&root.id) && location.starts_with(&root.path))
+        else {
+            return Ok(reply(false, "The model folder has changed. Refresh the library and try again.".into()));
+        };
+        let dir = Path::new(&root.path);
+        if root.is_ollama() {
+            // An Ollama tag may share every blob with other tags.
+            let Some(entry) =
+                list_ollama(&root.path).into_iter().find(|entry| entry.path == model_path && entry.name == name)
+            else {
+                return Ok(reply(false, "The Ollama tag has changed. Refresh the library and try again.".into()));
+            };
+            manifest_only = true;
+            vec![checked_entry(dir, Path::new(&entry.manifest))?]
+        } else if mlx {
+            // The model is discoverable only with weights present. Leave the
+            // directory, non-weight files, and any shared blob targets alone.
+            let entries = std::fs::read_dir(location)
+                .and_then(Iterator::collect::<Result<Vec<_>, _>>)
+                .map_err(|e| e.to_string())?;
+            entries
+                .into_iter()
+                .map(|entry| entry.path())
+                .filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("safetensors")))
+                .map(|p| checked_entry(dir, &p))
+                .collect::<Result<Vec<_>, _>>()?
+        } else {
+            let mut files = vec![checked_entry(dir, location)?];
+            if let Some(split) = regex!(r"-00001-of-\d{5}\.gguf$").find(model_path) {
+                let stem = &model_path[..split.start()];
+                let count = &model_path[split.start() + "-00001-of-".len()..model_path.len() - ".gguf".len()];
+                if let Ok(count) = count.parse::<u32>() {
+                    for i in 2..=count {
+                        let shard = format!("{stem}-{i:05}-of-{count:05}.gguf");
+                        match std::fs::symlink_metadata(&shard) {
+                            Ok(_) => files.push(checked_entry(dir, Path::new(&shard))?),
+                            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                            Err(e) => return Err(e.to_string()),
+                        }
+                    }
+                }
+            }
+            files
+        }
+    } else {
+        std::iter::once(model_path.to_string())
+            .chain(scan_folder(&roots[0]).into_iter().filter(|p| is_companion_of(p, model_path)))
+            .map(PathBuf::from)
+            .collect()
+    };
+    // Delete later shards first so a partial failure doesn't hide the row.
+    for p in files.iter().rev() {
         // `rm(p, { force: true })`: a missing file is fine, a directory is not.
         match std::fs::symlink_metadata(p) {
             Ok(m) if m.is_dir() => {
-                return Err(format!("Path is a directory: rm returned EISDIR (is a directory) {p}"));
+                return Err(format!("Path is a directory: rm returned EISDIR (is a directory) {}", p.display()));
             }
             Ok(_) => match std::fs::remove_file(p) {
                 Ok(()) => {}
@@ -1128,7 +1206,8 @@ pub fn remove(cfg: &LibraryConfig, id: &str) -> Result<Value, String> {
                 }
                 Err(e) => return Err(e.to_string()),
             },
-            Err(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.to_string()),
         }
     }
     let sidecars = companions_dir(&cfg.models_dir, id);
@@ -1138,7 +1217,14 @@ pub fn remove(cfg: &LibraryConfig, id: &str) -> Result<Value, String> {
     let mut index = Index::read(cfg);
     index.models().shift_remove(id);
     index.write(cfg)?;
-    Ok(reply(true, format!("Deleted {name}.")))
+    Ok(reply(
+        true,
+        if manifest_only {
+            format!("Removed {name} from Ollama. Shared downloads were kept.")
+        } else {
+            format!("Deleted {name}.")
+        },
+    ))
 }
 
 /// Save per-model load settings (`savePreset`); an unknown id is ignored.

@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { GpuFit, LoadParams, LocalModel, PlacementPlan, Recommendation, SplitPreset } from '@nekko-agent/shared';
+import { useCallback, useEffect, useId, useMemo, useState, type CSSProperties } from 'react';
+import type { EngineMemory, GpuFit, LoadParams, LocalModel, PlacementPlan, Recommendation, SplitPreset } from '@nekko-agent/shared';
 import { ENGINE_KV_CACHE_DTYPE } from '@nekko-agent/shared';
 import { Toggle } from '../primitives/index.js';
 import { formatBytes, formatTokens } from '../runtimes/verdict.js';
 import { useStore } from '../../store.js';
 import { Shown } from '../ModeViews.js';
 import { LoadMemoryMeter, useLoadPlacement } from './LoadMemoryMeter.js';
+import { ModelAllocationBar } from './ModelAllocationBar.js';
 import { dflash2DraftName, draftModelCandidates, isStockDflash2Target } from './draftModels.js';
 import {
   KEEP_LABELS,
@@ -23,7 +24,6 @@ import {
   keepOf,
   keepParams,
   matchesRecommendation,
-  pagesOf,
   precisionOf,
   runOnOf,
   sessionsOf,
@@ -56,6 +56,7 @@ export function EngineLoadDrawer({
   onClose,
   initialSurface = 'simple',
   attached = false,
+  memory,
 }: {
   providerId: string;
   model: LocalModel & { loaded: boolean; gpuFit?: GpuFit };
@@ -72,6 +73,7 @@ export function EngineLoadDrawer({
   initialSurface?: 'simple' | 'advanced';
   /** The installed card already supplies the name and outer surface. */
   attached?: boolean;
+  memory?: EngineMemory;
 }) {
   const pushToast = useStore((s) => s.pushToast);
   const saved = useMemo(() => fromPreset(model.preset), [model.preset]);
@@ -86,6 +88,7 @@ export function EngineLoadDrawer({
   const layers = model.layers;
   const moe = isMoe(model);
   const mlx = model.format === 'mlx';
+  const contextId = useId();
   const stops = useMemo(() => contextStops(model.maxContext), [model.maxContext]);
 
   const patch = (p: Partial<LoadParams>) => setParams((prev) => ({ ...prev, ...p }));
@@ -215,9 +218,35 @@ export function EngineLoadDrawer({
         {plan && plan.verdict !== 'unknown' && <VerdictChip plan={plan} />}
       </div>
 
-      <LoadMemoryMeter model={model} plan={plan} params={params} pending={pending} previous={previous} />
+      {attached ? <ModelAllocationBar model={model} plan={plan} params={params} pending={pending} previous={previous} memory={memory} />
+        : <LoadMemoryMeter model={model} plan={plan} params={params} pending={pending} previous={previous} />}
 
-      <div className="mt-3">
+      <div className="mt-3" data-context-control>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+          <label htmlFor={contextId} className="text-xs font-medium">
+            Context {matches.context && <RecommendedTag />}
+          </label>
+          <span className="font-mono text-2xs" data-context-label>
+            {formatTokens(perSession)} per session{sessions > 1 ? ` · ${formatTokens(perSession * sessions)} total` : ''}
+          </span>
+        </div>
+        <div className="model-context-range" style={{ '--context-stop': `${100 * ctxIndex / Math.max(1, stops.length - 1)}%` } as CSSProperties}>
+          <div className="model-context-range__track" aria-hidden="true"><i /><i /><i /></div>
+          <input id={contextId} type="range" min={0} max={stops.length - 1} step={1} value={ctxIndex}
+            disabled={stops.length === 1} aria-valuetext={`${formatTokens(perSession)} tokens per session`}
+            onChange={(e) => setContext(stops[Number(e.target.value)])} />
+        </div>
+        <div className="flex justify-between gap-2 text-2xs text-ink-faint">
+          <span>{formatTokens(stops[0])}</span>
+          <span>{formatTokens(stops[stops.length - 1])}{model.maxContext ? ' (model max)' : ''}</span>
+        </div>
+        <p className="mt-1 text-xs leading-relaxed text-ink-faint">
+          Context is used for the content your model reads. Roughly: a book is 100k tokens, a picture can be 250–2,000,
+          a codebase can be 10k–1M+, and a 1–2 paragraph prompt is about 100–300. Counts vary by model and input.
+        </p>
+      </div>
+
+      {(!attached || rec) && <div className="mt-3">
         <button
           className="btn btn-outline text-xs"
           title={rec ? undefined : 'A fitting recommendation is unavailable'}
@@ -242,11 +271,11 @@ export function EngineLoadDrawer({
             </div>
           </div>
         )}
-      </div>
+      </div>}
 
-      {mlx ? (
+      {mlx ? (!attached &&
         <Section title="Run on" hint="MLX models live on the GPU; a Mac shares one memory pool between it and the CPU." />
-      ) : unified ? (
+      ) : unified ? (!attached &&
         <Section
           title="Run on"
           hint="Your Mac shares one pool of memory between the GPU and the CPU, so there is nothing to split. The model runs on the GPU."
@@ -327,35 +356,6 @@ export function EngineLoadDrawer({
           ) : null}
         </div>
       )}
-
-      <div className="mt-4">
-        <div className="flex items-baseline justify-between gap-3">
-          <label htmlFor="engine-ctx" className="text-sm font-medium">
-            Context {matches.context && <RecommendedTag />}
-          </label>
-          <span className="font-mono text-xs" data-context-label>
-            {formatTokens(perSession)} per session{sessions > 1 ? ` · ${formatTokens(perSession * sessions)} total` : ''}
-          </span>
-        </div>
-        <input
-          id="engine-ctx"
-          type="range"
-          className="mt-1 w-full"
-          min={0}
-          max={stops.length - 1}
-          step={1}
-          value={ctxIndex}
-          onChange={(e) => setContext(stops[Number(e.target.value)])}
-        />
-        <div className="flex justify-between text-2xs text-ink-faint">
-          <span>{formatTokens(stops[0])}</span>
-          <span>{formatTokens(stops[stops.length - 1])} (model max)</span>
-        </div>
-        <p className="mt-1 text-xs text-ink-faint">
-          How much the model can keep in mind at once: your messages, its replies and any files it reads.{' '}
-          {formatTokens(perSession)} is roughly {pagesOf(perSession)} pages of text.{mlx ? ' MLX allocates its cache as tokens are used.' : ' More context uses more memory. The meter shows an estimate when available.'}
-        </p>
-      </div>
 
       <div className="mt-4 rounded-lg border" style={{ borderColor: 'var(--line)' }}>
         <Fold label="More controls" open={more} onToggle={() => setMore((v) => !v)} id="more" />
