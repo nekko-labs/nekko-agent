@@ -9,6 +9,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.Density
@@ -64,11 +65,15 @@ class ComposerHeightTest {
         assertEquals("empty box height (px) vs one typed line", typed, empty)
     }
 
+    /**
+     * Saves the whole composer and returns the message box's own height. Typing focuses the
+     * box, which brings up the formatting toolbar under it (#2450): that is not the box.
+     */
     private fun shot(name: String): Int {
         compose.waitForIdle()
         val bitmap = compose.onRoot().captureToImage().asAndroidBitmap()
         val dir = File(ApplicationProvider.getApplicationContext<NekkoApp>().getExternalFilesDir(null), "evidence").apply { mkdirs() }
         File(dir, "$theme-$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-        return bitmap.height
+        return compose.onNodeWithTag("composer.card").fetchSemanticsNode().size.height
     }
 }
