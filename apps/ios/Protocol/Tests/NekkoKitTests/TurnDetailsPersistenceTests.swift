@@ -49,6 +49,7 @@ struct TurnDetailsPersistenceTests {
         let chat = ChatModel(sessionId: "s", store: store, now: { 42 })
         await chat.start()?.value
         defer { chat.stop() }
+        chat.deltaInterval = 0
         chat.onEvent(.text(sessionId: "s", delta: "Hi"))
         let shown = try #require(chat.blocks.last?.id)
         #expect(shown.hasPrefix("live-"))

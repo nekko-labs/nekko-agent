@@ -241,6 +241,7 @@ public final class ChatModel {
     }
 
     public func stop() {
+        flushDeltas()
         if let subscription { store.unsubscribe(subscription) }
         subscription = nil
         agentStateTask?.cancel()
@@ -257,6 +258,7 @@ public final class ChatModel {
     }
 
     public func reload() async {
+        flushDeltas()
         let cardChangesBefore = cardChanges
         do {
             let r = try store.remote()
@@ -383,8 +385,16 @@ public final class ChatModel {
         guard e.sessionId == sessionId else { return }
         cardChanges += 1
         switch e {
-        case .text(_, let delta), .reasoning(_, let delta): streamed = delta.utf16.count
-        default: break
+        case .text(_, let delta), .reasoning(_, let delta):
+            // Streamed text arrives faster than the screen draws. Fold it once per frame.
+            guard deltaInterval > 0 else { streamed = delta.utf16.count; break }
+            pendingDeltas.append(e)
+            pendingDeltaChars += delta.utf16.count
+            scheduleDeltaFlush()
+            return
+        default:
+            // Anything else lands after the text before it.
+            flushDeltas()
         }
         turn = Transcript.apply(turn, e)
         switch e {
@@ -402,6 +412,41 @@ public final class ChatModel {
         case .toolResult(_, let result) where changesAgentState(result): requestAgentStateRefresh()
         default: break
         }
+    }
+
+    /// How long streamed text waits to be folded in: one display frame. Zero applies
+    /// every delta as it arrives. The app sets this from the screen's refresh rate.
+    public static var defaultDeltaInterval: TimeInterval = 1.0 / 60
+    public var deltaInterval: TimeInterval = ChatModel.defaultDeltaInterval
+    private var pendingDeltas: [AgentEvent] = []
+    private var pendingDeltaChars = 0
+    private var deltaTick: Task<Void, Never>?
+    /// How many times streamed text was folded into the turn (one per frame, not per delta).
+    public private(set) var deltaApplications = 0
+
+    private func scheduleDeltaFlush() {
+        guard deltaTick == nil else { return }
+        let nanos = UInt64(deltaInterval * 1_000_000_000)
+        deltaTick = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: nanos)
+            guard !Task.isCancelled else { return }
+            self?.flushDeltas()
+        }
+    }
+
+    /// Fold the text and reasoning deltas that arrived since the last frame into the
+    /// turn in one write: one projection, one set of changes for the view, however many arrived.
+    public func flushDeltas() {
+        deltaTick?.cancel()
+        deltaTick = nil
+        guard !pendingDeltas.isEmpty else { return }
+        var t = turn
+        for e in pendingDeltas { t = Transcript.apply(t, e) }
+        streamed = pendingDeltaChars
+        pendingDeltas = []
+        pendingDeltaChars = 0
+        deltaApplications += 1
+        turn = t
     }
 
     private func scheduleReload() {
@@ -423,6 +468,7 @@ public final class ChatModel {
     @discardableResult
     public func send(_ text: String, skill: SkillSummary? = nil, images: [String] = []) async throws -> String {
         try Task.checkCancellation()
+        flushDeltas()
         promptsSent += 1
         // Load the authoritative chat kind before routing. Never guess text for an unread chat.
         if session == nil { await reload() }
@@ -486,6 +532,7 @@ public final class ChatModel {
                     self.store.flushOutbox()
                 }
             } catch {
+                self.flushDeltas()
                 self.promptedTurn = false
                 var t = self.turn
                 let started = t.blocks.contains { $0.id != "pending-\(at)" }
@@ -550,6 +597,7 @@ public final class ChatModel {
         let r = try store.remote()
         // Reserve before discovery's first await: a second send must not pass the same guard.
         sending = true
+        flushDeltas()
         turn = LiveTurn(running: true, blocks: [], startedAt: now())
         let task = Task { @MainActor in
             do {
@@ -636,6 +684,7 @@ public final class ChatModel {
     }
 
     public func abort() {
+        flushDeltas()
         // A stopped reply never counts toward the star ask, whatever event ends it.
         promptedTurn = false
         imageSendTask?.cancel()
@@ -669,6 +718,7 @@ public final class ChatModel {
     }
 
     public func approve(_ ok: Bool) async throws {
+        flushDeltas()
         guard store.activeId == computerId else { throw RelayError("This chat belongs to another computer.") }
         guard let a = responseApproval else { return }
         store.responses.approve(sessionId, approval: a, ok: ok)
@@ -766,6 +816,7 @@ public final class ChatModel {
     }
 
     public func answer(_ answers: [AskAnswer]) async throws {
+        flushDeltas()
         guard store.activeId == computerId else { throw RelayError("This chat belongs to another computer.") }
         guard let q = responseQuestion else { return }
         store.responses.answer(sessionId, question: q, answers: answers)
