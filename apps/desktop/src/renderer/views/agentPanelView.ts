@@ -35,6 +35,8 @@ export type AgentPanelView = {
   showComputer: boolean;
   /** A computer's icon on its card and group heading, when it has one. */
   showComputerIcons: boolean;
+  /** Chats of the same chat group sit together under a sub-heading inside each group. */
+  clusterChatGroups: boolean;
 };
 
 export const DEFAULT_AGENT_PANEL_VIEW: AgentPanelView = {
@@ -53,6 +55,7 @@ export const DEFAULT_AGENT_PANEL_VIEW: AgentPanelView = {
   showEmptyGroups: false,
   showComputer: true,
   showComputerIcons: true,
+  clusterChatGroups: true,
 };
 
 export const GROUP_BY_LABELS: Record<AgentGroupBy, string> = {
@@ -99,6 +102,7 @@ export function parseAgentPanelView(raw: string | null): AgentPanelView {
     showEmptyGroups: bool(saved.showEmptyGroups, d.showEmptyGroups),
     showComputer: bool(saved.showComputer, d.showComputer),
     showComputerIcons: bool(saved.showComputerIcons, d.showComputerIcons),
+    clusterChatGroups: bool(saved.clusterChatGroups, d.clusterChatGroups),
   };
 }
 
@@ -133,6 +137,25 @@ export function withSort(view: AgentPanelView, sortBy: AgentSortBy): AgentPanelV
 
 /** What a card is sorted and dated by. */
 export type SortableCard = { title: string; updatedAt: number; createdAt: number; order?: number };
+
+/**
+ * When a chat last had activity, as its card shows it: the last reply while the
+ * card shows that time (idle or done), else the save time. Saving also happens
+ * when the user only files the chat under a group or tag, which is not activity.
+ */
+export function activityAt(chat: { updatedAt: number; lastReplyAt?: number }, status: string | undefined): number {
+  return shownReplyAt(chat, status) ?? chat.updatedAt;
+}
+
+/**
+ * The time a card prints as "x ago": the last reply, while the chat is idle, done
+ * or unstatused; undefined otherwise. The card and every sort read this one
+ * helper, so the order can never disagree with the time on screen.
+ */
+export function shownReplyAt(chat: { lastReplyAt?: number }, status: string | undefined): number | undefined {
+  const shown = !status || status === 'done' || status === 'idle';
+  return shown && chat.lastReplyAt ? chat.lastReplyAt : undefined;
+}
 
 /** Compare two cards for the chosen order. */
 export function compareCards(view: Pick<AgentPanelView, 'sortBy' | 'direction'>) {

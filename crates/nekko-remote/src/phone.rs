@@ -58,6 +58,8 @@ pub struct Policy {
     pub photo_chars: usize,
     /// `PHONE_MAX_FRAME_BYTES`: the largest sealed reply frame sent to a phone.
     pub max_frame_bytes: usize,
+    /// `PHONE_FINDER_VIEW`: what a phone's chat search reads (`sessions:finderText`, #3448).
+    pub finder: crate::phone_finder::Limits,
     /// `PHONE_UPLOAD`: a clip's pieces (`attachment:upload`, #2777).
     pub upload: Upload,
     /// `PHONE_CHANGES_VIEW`: the limits of a phone's Changes view.
@@ -180,6 +182,7 @@ pub fn policy() -> &'static Policy {
             photo_side: v["sessionView"]["photoSide"].as_u64().unwrap_or(0) as u32,
             photo_chars: v["sessionView"]["photoChars"].as_u64().unwrap_or(0) as usize,
             max_frame_bytes: v["maxFrameBytes"].as_u64().unwrap_or(9 * 1024 * 1024) as usize,
+            finder: crate::phone_finder::Limits::from_policy(&v["finderView"]),
             upload: Upload::from(&v["upload"]),
             changes_view: crate::phone_changes::Limits::from_policy(&v["changesView"]),
             views: crate::phone_views::Views::from_policy(&v),
@@ -494,6 +497,9 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
             }
         }
         "changes:list" | "session:watches" => id(0, "chat id")?,
+        "sessions:finderText" => {
+            crate::phone_finder::screen(args, &policy().finder).map_err(|(code, what)| denied(code, what))?
+        }
         "providers:saveSealed" => {
             crate::phone_providers::screen_save(arg(0)).map_err(|r| denied(r.code, r.detail))?;
             if args.len() > 1 {
@@ -789,6 +795,7 @@ pub fn redact(channel: &str, result: Value) -> Value {
         "task:runNow" | "session:cancelWatch" => Value::Null,
         "pr:sessionList" => crate::phone_views::prs(&result, &policy().views),
         "session:watches" => crate::phone_views::watches(&result, &policy().watch_view, policy().views.text_chars),
+        "sessions:finderText" => crate::phone_finder::view(&result, &policy().finder),
         "machine:summary" => {
             crate::phone_views::machine(&result, &policy().machine_view, &policy().machine_resident_view)
         }

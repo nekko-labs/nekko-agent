@@ -246,16 +246,19 @@ data class ChatMessage(
     val turnStats: TurnStats? = null,
     /** A picture an image chat made (`generated`), for Edit under it (#2230). */
     val generated: GeneratedPicture? = null,
+    /** The computer’s admitted strategy, present only on a persisted user message. */
+    val turnStrategy: TurnStrategy? = null,
 ) {
     val imageCount: Int get() = images.size
 
     companion object {
         fun from(e: JsonElement?): ChatMessage? {
             val o = e.obj() ?: return null
+            val role = o.str("role") ?: return null
             val skill = o["skill"].obj()?.let { s -> (s.str("name") ?: return@let null) to (s.str("input") ?: "") }
             return ChatMessage(
                 id = o.str("id") ?: return null,
-                role = o.str("role") ?: return null,
+                role = role,
                 content = o.str("content") ?: "",
                 reasoning = o.str("reasoning"),
                 createdAt = o.long("createdAt"),
@@ -267,7 +270,8 @@ data class ChatMessage(
                 toolResult = ToolResult.from(o["toolResult"]),
                 interrupted = o.bool("interrupted"),
                 turnStats = TurnStats.from(o["turnStats"]),
-                generated = if (o.str("role") == "assistant") GeneratedPicture.from(o["generated"]) else null,
+                generated = if (role == "assistant") GeneratedPicture.from(o["generated"]) else null,
+                turnStrategy = if (role == "user") TurnStrategy.from(o["turnStrategy"]) else null,
             )
         }
     }

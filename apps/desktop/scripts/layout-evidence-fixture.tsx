@@ -67,6 +67,21 @@ import('@nekko-agent/shared').then(async ({ summarizeSession }) => {
     const { ThemeStep } = await import('../src/renderer/components/onboarding/ThemeStep');
     root.render(React.createElement('main', { style: { padding: 24, minHeight: '100vh', background: 'var(--paper)', color: 'var(--ink)' } },
       React.createElement('div', { style: { maxWidth: 640, margin: 'auto' } }, React.createElement(ThemeStep))));
+  }, showStrategy: async () => {
+    const { ChatPane } = await import('../src/renderer/components/ChatPane');
+    const record = records[0] as any;
+    const direct = { tools: 'list', orchestration: 'direct', reason: 'not-needed' };
+    record.messages = [
+      { id: 'u1', role: 'user', content: 'Read the project brief.', createdAt: now - 6000, turnStrategy: direct },
+      { id: 'a1', role: 'assistant', content: 'The brief calls for checking both ledgers before the audit.', createdAt: now - 5000 },
+      { id: 'u2', role: 'user', content: 'What is the current review cycle?', createdAt: now - 4000, turnStrategy: direct },
+      { id: 'a2', role: 'assistant', content: 'The current review cycle is 17 days.', createdAt: now - 3000 },
+      { id: 'u3', role: 'user', content: 'Delegate the ledger review and summarize the findings.', createdAt: now - 2000, turnStrategy: { tools: 'code', orchestration: 'coordinator', reason: 'requested' } },
+      { id: 'a3', role: 'assistant', content: 'The two ledgers agree with the audit totals.', createdAt: now - 1000 },
+    ];
+    putCachedSession(record);
+    useStore.setState({ providers: [provider], models: [{ id: 'gpt-fixture', providerId: 'fixture', name: 'GPT fixture', contextWindow: 500000 }], settings, activeSessionId: 'a' } as any);
+    root.render(React.createElement('div', { style: { height: '100vh' } }, React.createElement(ChatPane, { sessionId: 'a' })));
   }, showRetry: async () => {
     const { ChatPane } = await import('../src/renderer/components/ChatPane');
     const record = records[0] as any;

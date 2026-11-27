@@ -96,3 +96,27 @@ export function summarizeSession(session: Session): SessionSummary {
     imageCount: messages.reduce((n, m) => n + (m.role === 'assistant' && m.generated ? m.images?.length ?? 0 : 0), 0),
   };
 }
+
+/**
+ * One chat's searchable text, as `sessions:finderText` serves it to the chat
+ * finder and the command palette: user and assistant messages with their text
+ * (and a skill's input), and of a tool call only its name and the two
+ * arguments that can name a file. No pictures, videos, reasoning or tool
+ * output. Fields the file lacked or held in another shape are `null`.
+ */
+export interface FinderChatText {
+  id: string | null;
+  title: string;
+  updatedAt: number | null;
+  workspaceId?: string | null;
+  /** Only the primary folder's checkout, the one links resolve against. */
+  gitWorktrees?: Record<string, { path: string }>;
+  messages: Array<{
+    id: string | null;
+    role: 'user' | 'assistant';
+    content: string;
+    createdAt: number | null;
+    skill?: { input: string };
+    toolCalls?: Array<{ name: string; input: { path?: string; file_path?: string } }>;
+  }>;
+}

@@ -1276,16 +1276,21 @@ pub fn forward_terminal_events(ctx: &Ctx) {
     });
 }
 
+/// Most chats one `sessions:finderText` call answers for.
+const FINDER_TEXT_MAX: usize = 200;
+
 /// The channels `nekko-store` serves when the daemon knows the data dir.
 /// Running-turn checkpoints still stay with the TS host (PF14).
 const SESSION_CHANNELS: &[&str] = &[
     "sessions:summaries",
+    "sessions:finderText",
     "sessions:list",
     "sessions:clear",
     "sessions:clearHistory",
     "sessions:historyUsage",
     "sessions:purgeArchived",
     "session:get",
+    "session:blob",
     "session:page",
     "session:photo",
     "session:images",
@@ -1386,6 +1391,16 @@ async fn session_op(
                 }
                 Ok(Value::Array(sessions))
             }
+            // The chat finder's index: each asked chat's text without pictures,
+            // reasoning or tool output, kept per file version (nekko-store's finder).
+            "sessions:finderText" => {
+                let mut out = serde_json::Map::new();
+                for id in arg(&args, 0).as_array().into_iter().flatten().filter_map(Value::as_str).take(FINDER_TEXT_MAX)
+                {
+                    out.insert(id.to_string(), store.finder_text(id).map_or(Value::Null, |v| (*v).clone()));
+                }
+                Ok(Value::Object(out))
+            }
             "sessions:clear" => store.clear_with(id, delete_log).map(|n| json!(n)),
             "sessions:clearHistory" => store
                 .clear_history_with(id, |id| protected.as_ref().is_some_and(|protected| protected(id)), delete_log)
@@ -1395,7 +1410,18 @@ async fn session_op(
                 Ok(json!({ "bytes": bytes, "count": count }))
             }
             "sessions:purgeArchived" => store.purge_archived(delete_log).map(|n| json!(n)),
+            // `session:get(id, { pictures: 'refs' })`: the window's opt-in to keep
+            // `nekko-blob:` references where pictures are (decision 0072, `session:blob`).
+            // Every other caller, the phones, CLI and MCP included, gets data URLs as ever.
+            "session:get" if arg(&args, 1).get("pictures").and_then(Value::as_str) == Some("refs") => {
+                Ok(store.get_refs(id).unwrap_or(Value::Null))
+            }
             "session:get" => Ok(store.get(id).unwrap_or(Value::Null)),
+            // `session:blob(name)`: one picture a `pictures: 'refs'` chat named (the bare name or the
+            // `nekko-blob:` reference), as a data URL, or null when it is not on this computer.
+            "session:blob" => {
+                Ok(str_arg(&args, 0).and_then(|name| store.blob_data_url(name)).map_or(Value::Null, Value::String))
+            }
             "session:page" => Ok(nekko_remote::phone::message_page(
                 &store.get(id).unwrap_or(Value::Null),
                 arg(&args, 1).as_str(),

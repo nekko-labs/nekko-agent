@@ -13,6 +13,25 @@ import { SubagentList } from './SubagentList.js';
 const children = Array.from({ length: 4 }, (_, i) => ({ id: `k${i}`, title: `Task ${i}`, providerId: 'local', modelId: 'community/Qwen3-32B:latest' })) as SessionSummary[];
 const render = (kids = children, expandByDefault = false) => renderToStaticMarkup(<SubagentList children={kids} statuses={new Map()} expandByDefault={expandByDefault} onOpen={() => {}} />);
 
+describe('sub-agent done check', () => {
+  const one = [children[0]];
+  const row = (status: 'done' | 'working') => renderToStaticMarkup(<SubagentList children={one} statuses={new Map([['k0', status]])} expandByDefault={false} onOpen={() => {}} />);
+
+  it('trails a done row, after its text, and leaves nothing before the title', () => {
+    const html = row('done');
+    const at = (needle: string) => html.indexOf(needle);
+    expect(html.match(/aria-label="Done"/g)).toHaveLength(1);
+    expect(at('aria-label="Done"')).toBeGreaterThan(at('Task 0'));
+    expect(at('aria-label="Done"')).toBeGreaterThan(at('Qwen3-32B'));
+    expect(html).toMatch(/data-subagent-tree="last" class="subagent-tree"><\/span><span class="min-w-0 flex-1">/);
+  });
+  it('keeps the other glyphs where they are, before the title', () => {
+    const html = row('working');
+    expect(html).toContain('aria-label="Working"');
+    expect(html.indexOf('aria-label="Working"')).toBeLessThan(html.indexOf('Task 0'));
+  });
+});
+
 describe('compact subagent tree', () => {
   it('shows the first two and hides the extra region from keyboard and assistive technology by default', () => {
     const html = render();

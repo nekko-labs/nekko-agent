@@ -7,7 +7,7 @@ import { ChatIcon, ThoughtIcon } from '../../icons.js';
 import { Markdown } from '../Markdown.js';
 import type { Activity, ActivityRow, IndexedActivity } from './transcript.js';
 import { activityRows, fmtTime, stepKey } from './transcript.js';
-import { SubagentCue, SubagentModelChip, subagentSummary, SubagentHeadline, SubagentOpenButton } from './SubagentCue.js';
+import { SubagentCue, SubagentProgressChip, SubagentModelChip, subagentSummary, SubagentHeadline, SubagentOpenButton } from './SubagentCue.js';
 import { WatchClockChip, WatchDetail, WatchIcon, WatchThen, watchCallHeadline } from './WatchRow.js';
 import { parseWatchCall, thenSummary } from '../../agentWatches.js';
 import { useRowState } from './rowState.js';
@@ -70,6 +70,11 @@ const ToolActivityGroup = memo(function ToolActivityGroup({ items, streaming = f
   const tools = items.filter((it): it is Extract<Activity, { kind: 'tool' }> => it.kind === 'tool');
   const toolCount = tools.length;
   const agents = tools.filter((it) => it.call.name === 'spawn_agent');
+  const agent = agents.at(-1);
+  // A collapsed delegation describes one child, never its siblings' silence.
+  const summaryTools = agent ? [agent] : tools;
+  const quiets = !open && turnRunning ? summaryTools.filter(t => isRunningTool(t, pendingCallId))
+    .map(t => toolQuietSince(toolActivity, t.call.id)).filter((q): q is number => q !== undefined) : [];
   // A run that only arms watches reads as that watch, as a delegation run does.
   const watches = tools.filter((it) => it.call.name === 'agent_watch' && parseWatchCall(it.call).action === 'create');
   const watchOnly = !agents.length && watches.length > 0 && tools.every((it) => it.call.name === 'agent_watch');
@@ -109,6 +114,7 @@ const ToolActivityGroup = memo(function ToolActivityGroup({ items, streaming = f
           onClick={() => setOpen(!open)}
           aria-expanded={open}
         >
+          {agent?.startedAt !== undefined && <ToolElapsed startedAt={agent.startedAt} endedAt={agent.endedAt} live={turnRunning && isRunningTool(agent, pendingCallId)} />}
           <span className="w-3 shrink-0 text-2xs">{open ? '▾' : '▸'}</span>
           {agents.length ? <SubagentCue /> : watchOnly ? <WatchIcon /> : <ToolActivityIcon kind={iconRow ? rowIconKind(iconRow) : 'other'} className="h-3 w-3 shrink-0 text-accent" />}
           {streaming && !paused && !!lastRow && <LeadDots />}
@@ -117,11 +123,7 @@ const ToolActivityGroup = memo(function ToolActivityGroup({ items, streaming = f
           {agents.length > 0 && <SubagentModelChip call={agents[agents.length - 1].call} />}
           {agents.length > 0 && !(agents.length === 1 && items.length === 1) && <span className="min-w-0 truncate text-accent" title={agents.map(({ call }) => subagentSummary(call)).join(', ')}>· {agents.length} subagent{agents.length === 1 ? '' : 's'}</span>}
           {watchOnly && <WatchClockChip call={lastWatch.call} result={lastWatch.result} />}
-          {!open && tools.map(({ call }) => {
-            // A call waiting for approval is not quiet; it is waiting on the person (#3288).
-            const since = call.id === pendingCallId ? undefined : toolQuietSince(toolActivity, call.id);
-            return since === undefined ? null : <ToolProgressChip key={call.id} since={since} />;
-          })}
+          {quiets.length > 0 && (agent ? <SubagentProgressChip call={agent.call} since={quiets[0]} /> : <ToolProgressChip since={Math.max(...quiets)} />)}
         </button>
         </HoverTip>
         {agents.length === 1 && <SubagentOpenButton call={agents[0].call} />}
@@ -178,7 +180,7 @@ function IndexedStepRow({ step, streaming, total, toolActivity, pendingCallId }:
     <StepRow
       index={index}
       item={item}
-      quietSince={item.kind === 'tool' && item.call.id !== pendingCallId ? toolQuietSince(toolActivity, item.call.id) : undefined}
+      quietSince={streaming && item.kind === 'tool' && isRunningTool(item, pendingCallId) ? toolQuietSince(toolActivity, item.call.id) : undefined}
       // Tools stay live until their own result, not until a newer row arrives.
       live={streaming && (item.kind === 'tool' ? isRunningTool(item, pendingCallId) : index === total)}
     />
@@ -315,7 +317,7 @@ function StepRow({ index, item, live, quietSince }: { index: number; item: Activ
           {headline && <span className="min-w-0 truncate">{kind === 'agent' && item.kind === 'tool' ? <SubagentHeadline call={item.call} result={item.result} /> : kind === 'watch' ? headline : `· ${headline}`}</span>}
           {kind === 'agent' && item.kind === 'tool' && <span className="self-center"><SubagentModelChip call={item.call} /></span>}
           {kind === 'watch' && item.kind === 'tool' && <span className="self-center"><WatchClockChip call={item.call} result={item.result} /></span>}
-          {quietSince !== undefined && <ToolProgressChip since={quietSince} />}
+          {quietSince !== undefined && (kind === 'agent' && item.kind === 'tool' ? <SubagentProgressChip call={item.call} since={quietSince} /> : <ToolProgressChip since={quietSince} />)}
         </button>
         </HoverTip>
         {kind === 'agent' && item.kind === 'tool' && <SubagentOpenButton call={item.call} />}

@@ -1,5 +1,5 @@
 import { setChatOptionsAndDefaults, settingsPatchWithModeReset } from '../chatDefaults.js';
-import { AGENT_REPLAY, HTML_PREVIEW_CHANNELS, IpcChannels, IpcEvents, challengeIsGenuine, deriveKey, ephemeralKeys, publicKeyText, relayAuth, RELAY_PAIRING_VERSION, REMOTE_PROTOCOL_VERSION, helloProof, seal, sessionInfo, sessionKey, open, withApiServerDefaults, RELEASE_NOTES_URL, LOCAL_RELAY_PORT } from '@nekko-agent/shared';
+import { AGENT_REPLAY, HTML_PREVIEW_CHANNELS, IpcChannels, IpcEvents, sessionGetArgs, challengeIsGenuine, deriveKey, ephemeralKeys, publicKeyText, relayAuth, RELAY_PAIRING_VERSION, REMOTE_PROTOCOL_VERSION, helloProof, seal, sessionInfo, sessionKey, open, withApiServerDefaults, RELEASE_NOTES_URL, LOCAL_RELAY_PORT } from '@nekko-agent/shared';
 import type { AgentReplay, LocalRelayStatus, NetworkVisibilityStatus, AppSettings, AgentEvent, IndexStatus, NekkoApi, AppInfo, ClaudeCapabilityStatus, ClaudeCodeStatus, ClaudePlanUsageStatus, ClaudePolicyStatus, UpdateInfo, TerminalEvent, OAuthStatus, SubscriptionLimits } from '@nekko-agent/shared';
 import { readBrandKey } from './brandStorage.js';
 import { openTerminalSocket } from './terminal-socket.js';
@@ -528,7 +528,9 @@ function makeWebClient(): NekkoApi {
     listAgentWatches: (sessionId) => call(IpcChannels.sessionWatches, sessionId),
     listSessionSummaries: () => call(IpcChannels.sessionsSummaries),
     createSession: (workspaceId) => call(IpcChannels.sessionCreate, workspaceId),
-    getSession: (id) => call(IpcChannels.sessionGet, id),
+    getSession: (id, opts) => call(IpcChannels.sessionGet, ...sessionGetArgs(id, opts)),
+    sessionPicture: (reference) => call(IpcChannels.sessionBlob, reference),
+    finderChatText: (ids) => call(IpcChannels.sessionsFinderText, ids),
     deleteSession: (id) => call(IpcChannels.sessionDelete, id),
     setSessionWorkspace: (sessionId, workspaceId) => call(IpcChannels.sessionSetWorkspace, sessionId, workspaceId),
     setSessionSupportingWorkspaces: (sessionId, workspaceIds) =>

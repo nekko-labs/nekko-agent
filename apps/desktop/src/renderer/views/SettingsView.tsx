@@ -43,6 +43,7 @@ import { SkillsColorIcon, ConnectorsColorIcon } from '../navIcons.js';
 import { StorageSettings, formatBytes } from '../components/StorageSettings.js';
 import { SETTINGS_PAGE_EVENT, takePendingSettingsPage } from '../settingsPage.js';
 import { DeleteEverythingDialog, wipeEverything } from '../components/DeleteEverythingDialog.js';
+import { PLAN_DISPLAYS, type PlanDisplay } from '../planDisplay.js';
 import { StyleSection } from './StyleSection.js';
 import { openCustomize } from '../components/CustomizeExperience.js';
 import { SimpleModeSettings } from '../components/SimpleModeSettings.js';
@@ -374,6 +375,10 @@ export function SettingsView() {
                 <AnimationsSection settings={settings} update={update} />
               </div>
               <SettingsSection id="agents-wall" title="Agents wall">
+                <SettingRow title="Plan display" htmlFor="plan-display" detail="Choose how much of the plan appears above the message box."
+                  control={<select id="plan-display" className="quiet-field" value={settings.planDisplay ?? 'balanced'} onChange={e => update({ planDisplay: e.target.value as PlanDisplay })}>
+                    {PLAN_DISPLAYS.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
+                  </select>} />
                 <WallLayoutSettings settings={settings} update={update} />
                 <SettingRow
                   title="Auto-add new agents"

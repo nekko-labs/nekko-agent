@@ -25,7 +25,7 @@ export function legacyUserDataDirs(home = homedir(), appData?: string): string[]
 
 // Only these known Agent entries move from the old shared parent. Unknown files
 // and other products remain in ~/.nekko; the new destination is never traversed.
-const LEGACY_PROFILE_ENTRIES = new Set([
+export const LEGACY_PROFILE_ENTRIES: ReadonlySet<string> = new Set([
   'settings.json', 'sessions', 'tokens.json', 'secrets.json', 'security.json',
   'models', 'engine', 'desktop', 'logs', 'memory', 'memory.json', 'scratch',
   'attachments', 'changes', 'commands', 'audit', 'audit.jsonl', 'backups',

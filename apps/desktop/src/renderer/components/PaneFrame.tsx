@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { Direction, DropTarget, PaneKind, WbPane } from '../layout.js';
+import { ChatBreadcrumb } from './ChatBreadcrumb.js';
 import { ArchiveIcon, CloseIcon, TrashIcon, MinimizeIcon } from '../icons.js';
 import { useStore } from '../store.js';
 import { ContextAction, ContextMenu } from './ContextMenu.js';
@@ -263,9 +264,11 @@ export function PaneFrame({
       >
         {icon}
         {statusIndicator}
-        <span className="min-w-0 max-w-[35%] truncate text-xs" style={{ fontWeight: isActive ? 500 : 400 }}>
-          {title}
-        </span>
+        {/* A chat with a group or tags says so before its title: group / #tags / title. */}
+        {(() => {
+          const titleNode = <span className="min-w-0 max-w-[35%] truncate text-xs" style={{ fontWeight: isActive ? 500 : 400 }}>{title}</span>;
+          return pane.kind === 'chat' ? <ChatBreadcrumb sessionId={pane.refId} titleNode={titleNode} /> : titleNode;
+        })()}
         {/* The "/" leads the window's location: the project it belongs to, the
             git branch it is on. It hides when neither has anything to say, and
             it sits between the name and that context, never trailing after. */}

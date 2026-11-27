@@ -21,6 +21,7 @@ pub(crate) const OPTION_KEYS: &[&str] = &[
     "turnFailure",
     "pinned",
     "tags",
+    "chatGroup",
     "order",
     "mode",
     "disabledTools",
@@ -157,6 +158,7 @@ fn apply_mode(s: &mut JsObject, options: &Value) {
 pub(crate) const USER_FIELDS: &[&str] = &[
     "pinned",
     "tags",
+    "chatGroup",
     "order",
     "mode",
     "disabledTools",

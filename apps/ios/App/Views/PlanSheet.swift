@@ -21,7 +21,9 @@ struct PlanSheet: View {
     @Environment(\.palette) private var palette
     @Environment(\.openURL) private var openURL
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var open = false
+    @State private var openOverride: Bool?
+    @State private var completedOpen = false
+    private var open: Bool { openOverride ?? (prefs.planDisplay == .full) }
     /// Finished steps the user tapped open (true) or folded (false); the rest follow `AgentPlan.openByDefault`.
     @State private var tapped: [String: Bool] = [:]
     @State private var prs: [PullRequest] = []
@@ -44,9 +46,21 @@ struct PlanSheet: View {
                 let links = AgentPlan.links(chat.session?.messages ?? [], plan: plan, prs: Set(prs.map(\.url)), children: chat.children)
                 let paused = AgentPlan.paused(chat.session?.messages ?? [], running: chat.running)
                 VStack(alignment: .leading, spacing: 0) {
-                    if open { whole(plan, links: links, paused: paused) } else { folded(plan, current: current, links: links, paused: paused) }
+                    if open { whole(plan, links: links, paused: paused) }
+                    else if !current.squeezed {
+                        folded(plan, current: current, links: links, paused: paused)
+                        if prefs.planDisplay != .one {
+                            let remaining = plan.filter { !$0.squeezed && $0.id != current.id }
+                            let upcoming = remaining.filter { $0.status == .active } + remaining.filter { $0.status != .active }
+                            ForEach(upcoming.prefix(2)) { step in
+                                row(step, links: nil, paused: paused, opened: nil, compact: true)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        history(plan, links: links, paused: paused, compact: true)
+                    } else { whole(plan, links: links, paused: paused) }
                 }
-                .padding(.horizontal, Self.shoulder + 12).padding(.top, 8).padding(.bottom, Self.tuck + 8)
+                .padding(.horizontal, Self.shoulder + 12).padding(.top, 8).padding(.bottom, Self.tuck + 2)
                 .background {
                     let shape = PlanSheetShape(shoulder: Self.shoulder, tuck: Self.tuck)
                     ZStack { shape.fill(palette.surface2); shape.fill(palette.accent.opacity(0.1)) }
@@ -60,6 +74,7 @@ struct PlanSheet: View {
                 .accessibilityIdentifier("chat.planSheet")
             }
         }
+        .onChange(of: prefs.planDisplay) { _, _ in openOverride = nil }
         .task(id: chat.session?.updatedAt) {
             if let list = try? await chat.pullRequests() { prs = list }
         }
@@ -75,6 +90,7 @@ struct PlanSheet: View {
         let projects = own?.projects.isEmpty == false ? own!.projects : (plan.first.flatMap { links[$0.id]?.projects } ?? [])
         let position = (plan.firstIndex { $0.id == current.id } ?? 0) + 1
         return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 4) {
             Button { toggle(true) } label: {
                 HStack(spacing: 8) {
                     PlanStepMark(step: current, paused: paused)
@@ -83,8 +99,6 @@ struct PlanSheet: View {
                         .foregroundStyle(current.status == .done ? palette.inkSoft : palette.ink)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     PassLabel(step: current)
-                    Text("\(position) of \(plan.count)").font(.caption2.monospacedDigit()).foregroundStyle(palette.inkFaint)
-                    Image(systemName: "chevron.up").font(.caption2.weight(.semibold)).foregroundStyle(palette.inkFaint)
                 }
                 .frame(minHeight: 28).contentShape(Rectangle())
             }
@@ -92,6 +106,9 @@ struct PlanSheet: View {
             .accessibilityLabel("Plan, step \(position) of \(plan.count): \(current.title)")
             .accessibilityHint("Shows the whole plan")
             .accessibilityIdentifier("chat.planFolded")
+            configure
+            progressToggle("\(position) of \(plan.count)", expanded: false)
+            }
             let kids = chat.children
             if !kids.isEmpty || !shownPrs.isEmpty || !projects.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -108,12 +125,11 @@ struct PlanSheet: View {
 
     private func whole(_ plan: [PlanStep], links: [String: PlanStepLinks], paused: Bool) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Button { toggle(false) } label: {
+            HStack(spacing: 4) {
+            Button { toggle(!open) } label: {
                 HStack(spacing: 8) {
                     Text("Plan").fontWeight(.semibold).foregroundStyle(palette.inkSoft)
-                    Text("\(AgentPlan.finished(plan)) of \(plan.count) done").monospacedDigit()
                     Spacer(minLength: 0)
-                    Image(systemName: "chevron.down").fontWeight(.semibold)
                 }
                 .font(.caption2).foregroundStyle(palette.inkFaint)
                 .frame(minHeight: 28).contentShape(Rectangle())
@@ -122,10 +138,14 @@ struct PlanSheet: View {
             .accessibilityLabel("Plan, \(AgentPlan.finished(plan)) of \(plan.count) done")
             .accessibilityHint("Folds the plan")
             .accessibilityIdentifier("chat.planOpen")
+            configure
+            progressToggle("\(AgentPlan.finished(plan)) of \(plan.count) done", expanded: true)
+            }
             ScrollView {
                 let opened = AgentPlan.openByDefault(plan, links: links)
                 VStack(alignment: .leading, spacing: 2) {
-                    ForEach(plan) { step in row(step, links: links[step.id], paused: paused, opened: opened) }
+                    ForEach(plan.filter { !$0.squeezed }) { step in row(step, links: links[step.id], paused: paused, opened: opened) }
+                    history(plan, links: links, paused: paused)
                 }
             }
             .scrollBounceBehavior(.basedOnSize)
@@ -133,7 +153,49 @@ struct PlanSheet: View {
         }
     }
 
-    private func row(_ step: PlanStep, links own: PlanStepLinks?, paused: Bool, opened: String?) -> some View {
+    private func progressToggle(_ label: LocalizedStringKey, expanded: Bool) -> some View {
+        Button { toggle(!open) } label: {
+            HStack(spacing: 6) {
+                Text(label).font(.caption2.monospacedDigit())
+                Image(systemName: expanded ? "chevron.down" : "chevron.up").font(.caption2.weight(.semibold))
+            }.foregroundStyle(palette.inkFaint).frame(minHeight: 28).contentShape(Rectangle())
+        }.buttonStyle(.plain)
+        .accessibilityHint(expanded ? "Folds the plan" : "Shows the whole plan")
+    }
+
+    private var configure: some View {
+        Menu {
+            Picker("Plan display", selection: Binding(get: { prefs.planDisplay }, set: { openOverride = nil; prefs.planDisplay = $0 })) {
+                ForEach(PlanDisplay.allCases) { mode in Text(mode.label).tag(mode) }
+            }
+        } label: { Image(systemName: "slider.vertical.3").font(.caption2.weight(.semibold)).foregroundStyle(palette.inkFaint).frame(width: 28, height: 28).contentShape(Rectangle()) }
+        .accessibilityLabel("Configure plan display")
+    }
+
+    @ViewBuilder private func history(_ plan: [PlanStep], links: [String: PlanStepLinks], paused: Bool, compact: Bool = false) -> some View {
+        let completed = plan.filter(\.squeezed)
+        if !completed.isEmpty {
+            Button { completedOpen.toggle() } label: {
+                Text("Completed (\(completed.count))").font(.caption).foregroundStyle(palette.inkSoft)
+                    .frame(maxWidth: .infinity, minHeight: 24, alignment: .leading).contentShape(Rectangle())
+            }.buttonStyle(.plain).accessibilityIdentifier("chat.planCompleted")
+                .accessibilityValue(completedOpen ? "Expanded" : "Collapsed")
+            if completedOpen {
+                let rows = VStack(alignment: .leading, spacing: 2) {
+                    ForEach(completed) { step in
+                        row(step, links: links[step.id], paused: paused, opened: AgentPlan.openByDefault(plan, links: links))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                if compact {
+                    ScrollView { rows }.scrollBounceBehavior(.basedOnSize)
+                        .fixedSize(horizontal: false, vertical: true).frame(maxHeight: 180)
+                } else { rows }
+            }
+        }
+    }
+
+    private func row(_ step: PlanStep, links own: PlanStepLinks?, paused: Bool, opened: String?, compact: Bool = false) -> some View {
         let kids = (own?.subagents ?? []).compactMap { id in chat.children.first { $0.id == id } }
         let prs = prefs.shows("pr-status", pr: true) ? own?.prs ?? [] : []
         let chips = !prs.isEmpty || own?.projects.isEmpty == false || !kids.isEmpty
@@ -154,7 +216,7 @@ struct PlanSheet: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     PassLabel(step: step)
                 }
-                if more && shown {
+                if more && shown && !compact {
                     VStack(alignment: .leading, spacing: 2) {
                         if let detail = step.detail {
                             Text(detail).font(.caption).foregroundStyle(palette.inkFaint).lineLimit(1)
@@ -185,7 +247,7 @@ struct PlanSheet: View {
     }
 
     private func toggle(_ to: Bool) {
-        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) { open = to }
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) { openOverride = to }
     }
 
     // MARK: Chips
@@ -407,15 +469,13 @@ struct PlanSheetShape: Shape {
         let edge = rect.maxY - tuck
         let left = rect.minX + shoulder, right = rect.maxX - shoulder
         p.move(to: CGPoint(x: rect.minX, y: edge))
-        p.addQuadCurve(to: CGPoint(x: left, y: edge - shoulder), control: CGPoint(x: left, y: edge))
+        p.addArc(tangent1End: CGPoint(x: left, y: edge), tangent2End: CGPoint(x: left, y: edge - shoulder), radius: shoulder)
         p.addLine(to: CGPoint(x: left, y: rect.minY + radius))
         p.addQuadCurve(to: CGPoint(x: left + radius, y: rect.minY), control: CGPoint(x: left, y: rect.minY))
         p.addLine(to: CGPoint(x: right - radius, y: rect.minY))
         p.addQuadCurve(to: CGPoint(x: right, y: rect.minY + radius), control: CGPoint(x: right, y: rect.minY))
         p.addLine(to: CGPoint(x: right, y: edge - shoulder))
-        p.addQuadCurve(to: CGPoint(x: rect.maxX, y: edge), control: CGPoint(x: right, y: edge))
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        p.addArc(tangent1End: CGPoint(x: right, y: edge), tangent2End: CGPoint(x: rect.maxX, y: edge), radius: shoulder)
         p.closeSubpath()
         return p
     }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DEFAULT_AGENT_PANEL_VIEW, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, groupActivityOf, isDefaultView,
+  DEFAULT_AGENT_PANEL_VIEW, STATUS_GROUPS, activityAt, shownReplyAt, canReorder, compareCards, dateGroupOf, groupActivityOf, isDefaultView,
   parseAgentPanelView, statusGroupOf, statusWithSubagents, withSort, type SortableCard,
 } from './agentPanelView.js';
 
@@ -14,6 +14,7 @@ describe('agent panel view', () => {
       showModel: true, showContext: true, showPullRequests: true, showGit: true, showSubagents: true, showWindows: true, showUpdated: true,
       showComputer: true,
       showComputerIcons: true,
+      clusterChatGroups: true,
     });
     expect(isDefaultView(DEFAULT_AGENT_PANEL_VIEW)).toBe(true);
     expect(isDefaultView({ ...DEFAULT_AGENT_PANEL_VIEW, showMetadata: false })).toBe(false);
@@ -147,5 +148,58 @@ describe('card detail preferences', () => {
     expect(parseAgentPanelView(JSON.stringify(view))).toEqual(view);
     expect(parseAgentPanelView('{"showModel":false,"showContext":"false","showUpdated":null}')).toEqual({ ...DEFAULT_AGENT_PANEL_VIEW, showModel: false });
     expect(isDefaultView(view)).toBe(false);
+  });
+});
+
+describe('activityAt', () => {
+  const day = 86_400_000;
+  const old = { updatedAt: 1000 * day, lastReplyAt: 100 * day };
+  const filed = { updatedAt: 1000 * day, lastReplyAt: 999 * day };
+
+  it('dates an idle or done chat by the reply its card shows, not by a save that only filed it', () => {
+    expect(activityAt(old, 'idle')).toBe(100 * day);
+    expect(activityAt(old, 'done')).toBe(100 * day);
+    expect(activityAt(old, undefined)).toBe(100 * day);
+    const ordered = [old, filed].map((c) => ({ ...card('c', activityAt(c, 'idle'), 0) }));
+    expect(ordered.sort(compareCards({ sortBy: 'updated', direction: 'desc' }))[0].updatedAt).toBe(999 * day);
+  });
+
+  it('uses the save time while the chat works or has no reply', () => {
+    expect(activityAt(old, 'working')).toBe(1000 * day);
+    expect(activityAt({ updatedAt: 5 }, 'idle')).toBe(5);
+  });
+});
+
+describe('chats in a chat group, newest reply first', () => {
+  // Real field shapes from the daemon's sessions: updatedAt is bumped by filing, lastReplyAt is the card's "x ago".
+  const now = 1795675600000;
+  const chat = (title: string, updatedAt: number, lastReplyAt: number) => ({ title, updatedAt, lastReplyAt, createdAt: 1, order: undefined as number | undefined });
+  const five = [
+    chat('handover', 1795675557524, 1795675415671),
+    chat('side icons', 1795675407613, 1795077263414), // just dragged in: updatedAt = now
+    chat('logic', 1795675404604, 1795068823458), // just dragged in
+    chat('find rs', 1795675061986, 1795512757671),
+    chat('feature', 1795673166750, 1795673166703),
+  ];
+  const titles = (view: Parameters<typeof compareCards>[0]) =>
+    [...five].map((c) => ({ ...c, updatedAt: activityAt(c, 'done') })).sort(compareCards(view)).map((c) => c.title);
+
+  it('orders by the time the card shows, in every sort that is by recency', () => {
+    const want = ['handover', 'feature', 'find rs', 'side icons', 'logic'];
+    expect(titles({ sortBy: 'updated', direction: 'desc' })).toEqual(want);
+    expect(titles({ sortBy: 'manual', direction: 'desc' })).toEqual(want);
+    expect(now - shownReplyAt(five[1], 'done')!).toBeGreaterThan(5 * 86_400_000);
+  });
+
+  it('keeps the card time and the sort key one value, with the save time only as a fallback', () => {
+    for (const c of five) expect(activityAt(c, 'idle')).toBe(shownReplyAt(c, 'idle'));
+    expect(shownReplyAt(five[0], 'working')).toBeUndefined();
+    expect(activityAt({ updatedAt: 9 }, 'done')).toBe(9);
+  });
+
+  it('does not move a chat when it is filed again (updatedAt = now)', () => {
+    const before = titles({ sortBy: 'updated', direction: 'desc' });
+    five[4].updatedAt = now;
+    expect(titles({ sortBy: 'updated', direction: 'desc' })).toEqual(before);
   });
 });

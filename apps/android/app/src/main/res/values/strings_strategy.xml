@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="strategy_heading">Strategy</string>
+    <string name="strategy_code">Code mode</string>
+    <string name="strategy_list">Tool list</string>
+    <string name="strategy_none">No tools</string>
+    <string name="strategy_claude_code">Claude Code</string>
+    <string name="strategy_direct">Direct</string>
+    <string name="strategy_coordinator">Orchestration</string>
+    <string name="strategy_worker">Worker</string>
+    <string name="strategy_external">Claude Code manages its own tools.</string>
+</resources>
