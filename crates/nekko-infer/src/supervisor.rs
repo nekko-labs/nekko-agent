@@ -47,6 +47,14 @@ pub struct SpawnSpec {
     /// 503 or `loading model` until it is ready, and `"ok"` once it is).
     #[serde(default)]
     pub health_expect: Option<String>,
+    /// Some servers can report ready after falling back without a drafter.
+    /// Require their positive startup marker in addition to HTTP health.
+    #[serde(default)]
+    pub health_ready_log: Option<String>,
+    /// A child that resolves request model names itself needs its local path,
+    /// not the daemon's public library ID.
+    #[serde(default)]
+    pub upstream_model: Option<String>,
     #[serde(default)]
     pub budget_secs: Option<u64>,
 }
@@ -76,6 +84,7 @@ pub struct Child {
     pub port: u16,
     pub pid: u32,
     pub started_at: u64,
+    pub(crate) upstream_model: Option<String>,
     last_used: AtomicU64,
     active: AtomicUsize,
     /// Dropping the handle kills the process (`kill_on_drop`).
@@ -241,6 +250,7 @@ impl Supervisor {
             port,
             pid,
             started_at: nekko_js::now_ms(),
+            upstream_model: spec.upstream_model,
             last_used: AtomicU64::new(nekko_js::now_ms()),
             active: AtomicUsize::new(0),
             proc: Mutex::new(Some(proc)),
@@ -258,6 +268,7 @@ impl Supervisor {
                 return SpawnOutcome::Failed { message: format!("bad health path: {e}"), log: vec![] };
             }
         };
+        let mut saw_http_ready = false;
         loop {
             if let Some(status) = exited(&child) {
                 return SpawnOutcome::Failed {
@@ -266,12 +277,23 @@ impl Supervisor {
                 };
             }
             if healthy(&http, &url, spec.health_expect.as_deref()).await {
-                break;
+                saw_http_ready = true;
+                if spec
+                    .health_ready_log
+                    .as_ref()
+                    .is_none_or(|marker| log.lock().unwrap().iter().any(|l| l.contains(marker)))
+                {
+                    break;
+                }
             }
             if Instant::now() >= deadline {
                 child.kill();
                 return SpawnOutcome::Failed {
-                    message: "The model did not finish loading in time.".into(),
+                    message: if saw_http_ready {
+                        "The model server became ready but did not confirm that the selected draft loaded.".into()
+                    } else {
+                        "The model did not finish loading in time.".into()
+                    },
                     log: log.lock().unwrap().iter().cloned().collect(),
                 };
             }

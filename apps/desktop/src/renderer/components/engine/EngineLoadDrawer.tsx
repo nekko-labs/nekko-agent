@@ -6,6 +6,7 @@ import { formatBytes, formatTokens } from '../runtimes/verdict.js';
 import { useStore } from '../../store.js';
 import { Shown } from '../ModeViews.js';
 import { LoadMemoryMeter, useLoadPlacement } from './LoadMemoryMeter.js';
+import { dflash2DraftName, draftModelCandidates, isStockDflash2Target } from './draftModels.js';
 import {
   KEEP_LABELS,
   PRECISIONS,
@@ -624,6 +625,7 @@ export function ExpertControls({
 }) {
   const layers = model.layers;
   const moe = isMoe(model);
+  const mlxDflash2 = model.format === 'mlx' && isStockDflash2Target(model);
   return (
     <div className="space-y-4 border-t px-3 pb-3 pt-3" style={{ borderColor: 'var(--line)' }}>
       <Group title="Where it runs">
@@ -703,7 +705,13 @@ export function ExpertControls({
       </Group>
 
       <Group title="Guessing ahead">
-        <Row label="Speculative decoding" flag="--spec-default" hint="Guesses the next few words from text already in the chat and checks them in one step. Edits that repeat existing code come out several times faster.">
+        <Row
+          label="Speculative decoding"
+          flag={mlxDflash2 ? undefined : '--spec-default'}
+          hint={mlxDflash2
+            ? 'Lets the selected draft guess ahead for the main model to check.'
+            : 'Guesses the next few words from text already in the chat and checks them in one step. Edits that repeat existing code come out several times faster.'}
+        >
           <Toggle value={params.speculative !== false} onChange={(on) => onChange({ speculative: on ? undefined : false })} label="Speculative decoding" />
         </Row>
         {params.speculative !== false && <DraftModelRow model={model} value={params.draftModelId} onChange={(id) => onChange({ draftModelId: id })} />}
@@ -755,10 +763,10 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
-function Row({ label, hint, flag, children }: { label: string; hint: string; flag?: string; children: React.ReactNode }) {
+function Row({ label, hint, flag, wrap, children }: { label: string; hint: string; flag?: string; wrap?: boolean; children: React.ReactNode }) {
   return (
     <div>
-      <div className="flex items-center justify-between gap-3">
+      <div className={`flex items-center justify-between gap-x-3 ${wrap ? 'flex-wrap gap-y-1' : ''}`}>
         <label className="text-xs">{label}</label>
         {children}
       </div>
@@ -798,47 +806,55 @@ function NumberInput({
   );
 }
 
-/**
- * An optional second guesser: a small model of the same family. Offered only
- * from the same architecture and well under the target's size, because a
- * draft that is too large slows ordinary replies down (measured: a 7.5B draft
- * on a 12B model halved prose speed while it sped edits up).
- */
+/** An explicit local selection; listing the models never chooses or fetches one. */
 function DraftModelRow({ model, value, onChange }: { model: LocalModel; value?: string; onChange: (id: string | undefined) => void }) {
-  const [candidates, setCandidates] = useState<LocalModel[]>([]);
+  const [models, setModels] = useState<LocalModel[] | null>(null);
   useEffect(() => {
     let live = true;
     window.nekko
       .engineModels()
       .then((all) => {
         if (!live || !all) return;
-        const family = model.architecture;
-        setCandidates(
-          all.filter(
-            (m) =>
-              m.id !== model.id &&
-              Boolean(family) &&
-              m.architecture === family &&
-              (m.modality === 'draft' || m.modality === 'chat' || !m.modality) &&
-              m.sizeBytes <= model.sizeBytes / 4,
-          ),
-        );
+        setModels(all);
       })
       .catch(() => {});
     return () => {
       live = false;
     };
-  }, [model.id, model.architecture, model.sizeBytes]);
+  }, [model.id]);
+  const candidates = draftModelCandidates(model, models ?? []);
   if (candidates.length === 0 && !value) return null;
+  const heads = candidates.filter(dflash2DraftName);
+  const mlx = model.format === 'mlx';
   return (
-    <Row label="Draft model" flag="--spec-draft-model" hint="A small model from the same family that guesses ahead. Optional; the guessing above needs none.">
-      <select className="input w-40 py-1 text-xs" value={value ?? ''} onChange={(e) => onChange(e.target.value || undefined)}>
+    <Row
+      label="Draft model"
+      wrap={heads.length > 0}
+      flag={mlx ? '--draft-model' : '--spec-draft-model'}
+      hint={heads.length
+        ? mlx
+          ? 'DFlash2 is experimental, slower in tests, and can change greedy output. Needs mlx-vlm 0.8.1. None uses usual MLX.'
+          : 'Stock Qwen3.8-27B only. Use Full (f16) cache, which matched greedy output in tests.'
+        : 'A small model from the same family that guesses ahead. Optional; the guessing above needs none.'}
+    >
+      <select
+        aria-label="Draft model"
+        className={`input ${heads.length ? 'w-60 max-w-full' : 'w-40'} py-1 text-xs`}
+        value={value ?? ''}
+        onChange={(e) => onChange(e.target.value || undefined)}
+      >
         <option value="">None</option>
-        {candidates.map((m) => (
-          <option key={m.id} value={m.id}>
-            {m.id}
-          </option>
-        ))}
+        {value && !candidates.some((m) => m.id === value) && (
+          <option value={value} disabled>{models ? 'Saved draft unavailable' : 'Saved draft'}</option>
+        )}
+        {candidates.map((m) => {
+          const name = dflash2DraftName(m);
+          return (
+            <option key={m.id} value={m.id} title={name ? m.id : undefined}>
+              {name ? (heads.length === 1 ? name : `${name} · ${m.id}`) : m.id}
+            </option>
+          );
+        })}
       </select>
     </Row>
   );
