@@ -1,10 +1,10 @@
-import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync } from 'node:fs';
+import { chmodSync, closeSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, readlinkSync, readSync, renameSync, rmSync, statSync, symlinkSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { CLI_LINK_FILE, modelModality } from '@nekko-agent/shared';
 import { writeTextAtomic } from './secure-file.js';
-import { defaultUserDataDir } from './user-data.js';
+import { defaultUserDataDir, LEGACY_PROFILE_ENTRIES } from './user-data.js';
 import { applyToDataRoot, planDedupe, providerIdentity, type AccountOf, type FolderLike, type Plan, type ProviderLike } from './profile-repair.js';
 
 /**
@@ -57,6 +57,49 @@ const BROWSER_DIRS = new Set(['Cache', 'Code Cache', 'GPUCache', 'Local Storage'
 const SKIP_JSON = new Set(['window-state.json', 'cli-link.json', 'migration.json', 'keystore-scope.json']);
 const MAX_JSON_BYTES = 32 * 1024 * 1024;
 
+/** Data folders `mergeRoot` merges on their own terms. */
+const MERGED_DIRS = new Set(['sessions', 'models', 'memory', 'engine', 'runners']);
+
+/**
+ * One machine's caches, downloads and running state, never something a person
+ * made: left behind and deleted with the old folder. A browser profile cannot
+ * be merged into another one.
+ */
+const DISPOSABLE_DIRS = new Set(['desktop', 'run', 'logs', 'bin', 'runtime', 'fonts', 'agent-browser', 'catalog']);
+
+/**
+ * Chromium's own folders, found where an old build used its Electron app-data
+ * folder as the data root: disposable. Any other folder `unmerged` does not
+ * know keeps the old folder. Chromium's `Sessions` is left out on purpose: on
+ * a case-insensitive disk it is the chats folder.
+ */
+const CHROMIUM_DIRS = new Set([
+  'Cache', 'Code Cache', 'GPUCache', 'DawnCache', 'DawnGraphiteCache', 'DawnWebGPUCache', 'GrShaderCache', 'ShaderCache',
+  'Crashpad', 'IndexedDB', 'Local Storage', 'Session Storage', 'Network', 'Service Worker', 'Shared Dictionary',
+  'WebStorage', 'Partitions', 'Dictionaries', 'blob_storage', 'databases', 'shared_proto_db', 'VideoDecodeStats',
+  'Local Extension Settings', 'Extension State', 'File System',
+]);
+
+/** Per-install state under `runners/`: the target keeps its own. */
+const RUNNER_LOCAL = new Set(['install-id', 'memory.json', 'vms']);
+
+/** Under `runners/`, moved when the target lacks them, but a clash does not keep the old folder: rotated VM console logs. */
+const RUNNER_DISPOSABLE = new Set(['logs']);
+
+/** Under `runners/images/`, one install's unfinished builds, replaced images and downloads: left behind. */
+const imageLocal = (name: string): boolean => name === 'cache' || name.endsWith('-cache') || name.endsWith('.new') || name.endsWith('.old');
+
+const isOtherDataDir = (name: string): boolean => LEGACY_PROFILE_ENTRIES.has(name) && !MERGED_DIRS.has(name) && !DISPOSABLE_DIRS.has(name);
+
+/**
+ * The other known data folders in a root: they move file by file, and any left
+ * behind keeps the old folder. A symlink to a folder (a `skills` kept
+ * elsewhere) counts, and moves as a link.
+ */
+const otherDataDirs = (root: string): string[] => dirEntries(root)
+  .filter((e) => isOtherDataDir(e.name) && (e.isDirectory() || (e.isSymbolicLink() && isDir(join(root, e.name)))))
+  .map((e) => e.name);
+
 export function legacyEnv(over: Partial<LegacyEnv> = {}): LegacyEnv {
   const home = over.home ?? homedir();
   const platform = over.platform ?? process.platform;
@@ -69,6 +112,15 @@ const isDir = (p: string): boolean => { try { return statSync(p).isDirectory(); 
 const isFile = (p: string): boolean => { try { return statSync(p).isFile(); } catch { return false; } };
 const same = (a: string, b: string, ci: boolean): boolean => (ci ? resolve(a).toLowerCase() === resolve(b).toLowerCase() : resolve(a) === resolve(b));
 const dirEntries = (dir: string) => { try { return readdirSync(dir, { withFileTypes: true }); } catch { return []; } };
+
+/** The text of the symlink at `p`, or null when `p` is not one. */
+const linkAt = (p: string): string | null => { try { return lstatSync(p).isSymbolicLink() ? readlinkSync(p) : null; } catch { return null; } };
+
+/** Where the symlink at `p` points, resolved, or null when `p` is not one. */
+const linkTarget = (p: string): string | null => { const t = linkAt(p); return t === null ? null : resolve(dirname(p), t); };
+
+/** Something is at `p`, a dangling symlink included. */
+const present = (p: string): boolean => { try { lstatSync(p); return true; } catch { return false; } };
 
 function inside(path: string, root: string, ci: boolean): boolean {
   const rel = relative(ci ? resolve(root).toLowerCase() : resolve(root), ci ? resolve(path).toLowerCase() : resolve(path));
@@ -208,11 +260,18 @@ function writeJson(path: string, value: unknown, pretty = true): void {
 /** Copy one JSON file, rewriting paths that pointed into the old root. Raw copy when it will not parse. */
 function copyJson(src: string, dst: string, pairs: Pairs, ci: boolean): void {
   mkdirSync(dirname(dst), { recursive: true, mode: 0o700 });
-  if (statSync(src).size > MAX_JSON_BYTES) return void copyFileSync(src, dst);
+  // A rewrite in place leaves a file it cannot rewrite exactly as it is. A copy
+  // keeps the bytes but is owner-only, like every file the merge writes.
+  const raw = () => { if (resolve(src) !== resolve(dst)) { copyFileSync(src, dst); chmodSync(dst, 0o600); } };
+  if (statSync(src).size > MAX_JSON_BYTES) return raw();
   const text = readFileSync(src, 'utf8');
   let value: unknown;
-  try { value = JSON.parse(text.replace(/^\uFEFF/, '')); } catch { return void copyFileSync(src, dst); }
-  writeTextAtomic(dst, JSON.stringify(remap(value, pairs, ci), null, text.includes('\n  ') ? 2 : undefined));
+  try { value = JSON.parse(text.replace(/^\uFEFF/, '')); } catch { return raw(); }
+
+  // Only a file holding an old path is reformatted: anything else (a checkout's package.json) keeps its bytes.
+  const out = remap(value, pairs, ci);
+  if (JSON.stringify(out) !== JSON.stringify(value)) writeTextAtomic(dst, JSON.stringify(out, null, text.includes('\n  ') ? 2 : undefined));
+  else raw();
 }
 
 function copyMissing(src: string, dst: string, pairs: Pairs, ci: boolean): number {
@@ -230,25 +289,55 @@ function copyMissing(src: string, dst: string, pairs: Pairs, ci: boolean): numbe
   return copied;
 }
 
+/** Move one file or folder to a path that does not exist yet, copying across filesystems. */
+function moveOne(from: string, to: string): void {
+  mkdirSync(dirname(to), { recursive: true, mode: 0o700 });
+  try { renameSync(from, to); } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'EXDEV') throw err;
+    cpSync(from, to, { recursive: true });
+    rmSync(from, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Move a symlink the target lacks, as the link: what it points at is never
+ * touched. A relative link is made absolute, so it still points at the same
+ * place. One the target has pointing elsewhere, or that cannot be made, is a
+ * conflict and stays in the source.
+ */
+function moveLink(from: string, to: string, moved: string[], conflicts: string[]): void {
+  const where = linkTarget(from)!;
+  if (present(to)) { if (linkTarget(to) !== where) conflicts.push(from); return; }
+  try {
+    if (isAbsolute(linkAt(from)!)) moveOne(from, to);
+    else {
+      mkdirSync(dirname(to), { recursive: true, mode: 0o700 });
+      symlinkSync(where, to, isDir(from) ? 'dir' : 'file');
+      rmSync(from, { force: true });
+    }
+    moved.push(to);
+  } catch {
+    conflicts.push(from);
+  }
+}
+
 /** Move what the target lacks. Same-name files are conflicts and stay in the source. */
 function moveMissing(src: string, dst: string, moved: string[], conflicts: string[]): void {
   mkdirSync(dst, { recursive: true, mode: 0o700 });
   for (const e of dirEntries(src)) {
-    if (e.isSymbolicLink()) continue;
     const from = join(src, e.name), to = join(dst, e.name);
-    if (!existsSync(to)) {
-      try { renameSync(from, to); } catch (err) {
-        if ((err as NodeJS.ErrnoException).code !== 'EXDEV') throw err;
-        cpSync(from, to, { recursive: true });
-        rmSync(from, { recursive: true, force: true });
-      }
+    if (e.isSymbolicLink()) moveLink(from, to, moved, conflicts);
+    else if (!present(to)) {
+      moveOne(from, to);
       moved.push(to);
     } else if (e.isDirectory() && isDir(to)) moveMissing(from, to, moved, conflicts);
     else conflicts.push(from);
   }
 }
 
+/** JSON files under `path`, never through a symlink: a moved link may point at a person's own folder. */
 function jsonFilesUnder(path: string): string[] {
+  if (linkAt(path) !== null) return [];
   if (isFile(path)) return path.endsWith('.json') ? [path] : [];
   return dirEntries(path).flatMap((e) => (e.isSymbolicLink() ? [] : jsonFilesUnder(join(path, e.name))));
 }
@@ -270,6 +359,57 @@ function unionLines(src: string, dst: string): number {
   return added.length;
 }
 
+/** Every line of `src` is already in `dst`. */
+function linesCovered(src: string, dst: string): boolean {
+  const have = new Set(lines(dst));
+  return lines(src).every((l) => have.has(l));
+}
+
+const sameSize = (a: string, b: string): boolean => isFile(b) && statSync(a).size === statSync(b).size;
+
+const COMPARE_CHUNK = 1024 * 1024;
+
+/** Larger clashing files (VM disks, sandbox state) are not read: cleanup runs before the window opens. */
+const MAX_COMPARE_BYTES = 256 * 1024 * 1024;
+
+/**
+ * `b` is a file with exactly the bytes of `a`. Read in chunks, so a large file
+ * is never held whole. One that cannot be read, or is too large to read
+ * quickly, is not the same: the old folder is kept and names it.
+ */
+function sameFile(a: string, b: string): boolean {
+  if (!sameSize(a, b) || statSync(a).size > MAX_COMPARE_BYTES) return false;
+  let fa: number | undefined, fb: number | undefined;
+  try {
+    fa = openSync(a, 'r');
+    fb = openSync(b, 'r');
+    const ba = Buffer.alloc(COMPARE_CHUNK), bb = Buffer.alloc(COMPARE_CHUNK);
+    for (;;) {
+      const n = readSync(fa, ba, 0, COMPARE_CHUNK, null);
+      const m = readSync(fb, bb, 0, COMPARE_CHUNK, null);
+      if (n !== m || !ba.subarray(0, n).equals(bb.subarray(0, m))) return false;
+      if (n === 0) return true;
+    }
+  } catch {
+    return false;
+  } finally {
+    if (fa !== undefined) closeSync(fa);
+    if (fb !== undefined) closeSync(fb);
+  }
+}
+
+/**
+ * `dst` holds every entry of the JSON file `src`, as `mergeJsonFile` merges
+ * them: array items by id, object keys at the top, after the same path
+ * rewrite. A file that does not parse is only covered by an identical one.
+ */
+function jsonCovered(src: string, dst: string, pairs: Pairs, ci: boolean): boolean {
+  const a = remap(readJson(src), pairs, ci), b = readJson(dst);
+  if (Array.isArray(a)) return Array.isArray(b) && a.every((x) => b.some((y) => itemKey(y) === itemKey(x)));
+  if (isObj(a)) return isObj(b) && Object.keys(a).every((k) => Object.hasOwn(b, k));
+  return sameFile(src, dst);
+}
+
 type Json = Record<string, unknown>;
 const isObj = (v: unknown): v is Json => !!v && typeof v === 'object' && !Array.isArray(v);
 
@@ -282,6 +422,31 @@ const itemKey = (item: unknown): string => {
 function unionArray(a: unknown[], b: unknown[]): unknown[] {
   const seen = new Set(a.map(itemKey));
   return [...a, ...b.filter((x) => !seen.has(itemKey(x)) && (seen.add(itemKey(x)), true))];
+}
+
+/**
+ * A JSON file of independent entries: copied when the target has none, else
+ * arrays union by id and objects gain the keys the target lacks (the target
+ * wins). Returns how many entries the target gained.
+ */
+function mergeJsonFile(from: string, to: string, pairs: Pairs, ci: boolean): number {
+  if (!existsSync(to)) {
+    copyJson(from, to, pairs, ci);
+    const v = readJson(to);
+    return Array.isArray(v) ? v.length : isObj(v) ? Object.keys(v).length : 0;
+  }
+  const a = readJson(to), b = remap(readJson(from), pairs, ci);
+  let added = 0;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    const u = unionArray(a, b);
+    added = u.length - a.length;
+    if (added) writeJson(to, u);
+  } else if (isObj(a) && isObj(b)) {
+    const u = { ...b, ...a };
+    added = Object.keys(u).length - Object.keys(a).length;
+    if (added) writeJson(to, u);
+  }
+  return added;
 }
 
 /** Settings arrays that are lists of independent things; the rest follow "target wins". */
@@ -325,6 +490,8 @@ export interface RootReport {
   source: string;
   sessions: number;
   usageRecords: number;
+  /** CI runner records the target gained. */
+  runners: number;
   files: string[];
   moved: string[];
   conflicts: string[];
@@ -381,6 +548,11 @@ function backupSmallFiles(dirs: Array<{ label: string; dir: string }>, backupDir
       const from = join(dir, e.name), to = join(backupDir, label, e.name);
       if (e.isFile()) { mkdirSync(dirname(to), { recursive: true }); copyFileSync(from, to); }
       else if (e.isDirectory() && (e.name === 'sessions' || e.name === 'memory')) cpSync(from, to, { recursive: true });
+      // The runner records are small and the one part of a runner nobody can rebuild.
+      else if (e.isDirectory() && e.name === 'runners' && isFile(join(from, 'runners.json'))) {
+        mkdirSync(to, { recursive: true });
+        copyFileSync(join(from, 'runners.json'), join(to, 'runners.json'));
+      }
     }
   }
 }
@@ -405,7 +577,7 @@ export function consolidate(items: LegacyItem[], env: LegacyEnv = legacyEnv(), o
 }
 
 function mergeRoot(src: string, target: string, ci: boolean): RootReport {
-  const report: RootReport = { source: src, sessions: 0, usageRecords: 0, files: [], moved: [], conflicts: [] };
+  const report: RootReport = { source: src, sessions: 0, usageRecords: 0, runners: 0, files: [], moved: [], conflicts: [] };
   const pairs: Pairs = [[src, target]];
   const modelMoves: Pairs = [];
   const srcModels = join(src, 'models');
@@ -415,8 +587,10 @@ function mergeRoot(src: string, target: string, ci: boolean): RootReport {
   if (isDir(srcModels)) {
     const library = readJson(join(srcModels, 'library.json')) as { models?: Record<string, { file?: string; name?: string; architecture?: string; readable?: boolean; hasProjector?: boolean }> } | undefined;
     for (const e of dirEntries(srcModels)) {
-      if (e.name === 'library.json' || e.isSymbolicLink()) continue;
+      if (e.name === 'library.json') continue;
       const from = join(srcModels, e.name);
+      // A model folder kept on another disk: the link moves, so library paths through it still resolve.
+      if (e.isSymbolicLink()) { moveLink(from, join(tgtModels, e.name), report.moved, report.conflicts); continue; }
       if (!e.isDirectory() || e.name === '.companions' || MODEL_TYPES.test(e.name)) {
         const to = join(tgtModels, e.name);
         if (e.isDirectory()) moveMissing(from, to, report.moved, report.conflicts);
@@ -459,10 +633,8 @@ function mergeRoot(src: string, target: string, ci: boolean): RootReport {
       if (e.name === 'usage.jsonl') report.usageRecords += added;
       if (added) report.files.push(e.name);
     } else if (e.name.endsWith('.json') && !SKIP_JSON.has(e.name)) {
-      if (!existsSync(to)) { copyJson(from, to, allPairs, ci); report.files.push(e.name); continue; }
-      const a = readJson(to), b = remap(readJson(from), allPairs, ci);
-      if (Array.isArray(a) && Array.isArray(b)) { const u = unionArray(a, b); if (u.length !== a.length) { writeJson(to, u); report.files.push(e.name); } }
-      else if (isObj(a) && isObj(b)) { const u = { ...b, ...a }; if (Object.keys(u).length !== Object.keys(a).length) { writeJson(to, u); report.files.push(e.name); } }
+      const had = existsSync(to);
+      if (mergeJsonFile(from, to, allPairs, ci) || !had) report.files.push(e.name);
     }
   }
 
@@ -493,18 +665,123 @@ function mergeRoot(src: string, target: string, ci: boolean): RootReport {
     for (const path of moved.flatMap(jsonFilesUnder)) copyJson(path, path, allPairs, ci);
     report.moved.push(...moved);
   }
+
+  mergeRunners(join(src, 'runners'), join(target, 'runners'), allPairs, ci, report);
+
+  for (const name of otherDataDirs(src)) {
+    const from = join(src, name), to = join(target, name);
+
+    // A linked data folder moves as the link, never its contents.
+    if (linkAt(from) !== null) { moveLink(from, to, report.moved, report.conflicts); continue; }
+
+    const moved: string[] = [];
+    moveMissing(from, to, moved, report.conflicts);
+    for (const path of moved.flatMap(jsonFilesUnder)) copyJson(path, path, allPairs, ci);
+    report.moved.push(...moved);
+  }
   return report;
 }
 
-/** Files in a data root that the target does not already have. Empty means the root is safe to delete. */
-export function unmerged(root: string, target: string): string[] {
+/**
+ * `runners/`: the CI runner records and what they run. Records union by id
+ * (the target's win), logs by line, and an image moves only when the target
+ * has none of that name (one it has supersedes it, like an engine build). An
+ * unfinished GitHub App setup moves only when the target has none. The rest
+ * moves when missing; per-install state, unfinished image builds, replaced
+ * images and downloads stay behind. A clashing VM log is not a conflict.
+ */
+function mergeRunners(src: string, dst: string, pairs: Pairs, ci: boolean, report: RootReport): void {
+  if (!isDir(src)) return;
+  const moved: string[] = [];
+  for (const e of dirEntries(src)) {
+    if (e.isSymbolicLink() || RUNNER_LOCAL.has(e.name)) continue;
+    const from = join(src, e.name), to = join(dst, e.name);
+
+    if (e.name === 'runners.json') {
+      report.runners += mergeJsonFile(from, to, pairs, ci);
+    } else if (e.name === 'images' && e.isDirectory()) {
+      for (const image of dirEntries(from)) {
+        const target = join(to, image.name);
+        if (image.isSymbolicLink() || imageLocal(image.name) || existsSync(target)) continue;
+        moveOne(join(from, image.name), target);
+        moved.push(target);
+      }
+    } else if (e.name === 'pending-app.json') {
+      if (!existsSync(to)) copyJson(from, to, pairs, ci);
+    } else if (e.isFile() && e.name.endsWith('.jsonl')) {
+      unionLines(from, to);
+    } else if (e.isFile() && e.name.endsWith('.json')) {
+      mergeJsonFile(from, to, pairs, ci);
+    } else if (e.isDirectory()) {
+      moveMissing(from, to, moved, RUNNER_DISPOSABLE.has(e.name) ? [] : report.conflicts);
+    } else if (!existsSync(to)) {
+      moveOne(from, to);
+      moved.push(to);
+    } else if (!sameFile(from, to)) {
+      report.conflicts.push(from);
+    }
+  }
+  for (const path of moved.flatMap(jsonFilesUnder)) copyJson(path, path, pairs, ci);
+  report.moved.push(...moved);
+}
+
+/**
+ * Files under `dir` (at `rel` in a data root) whose counterpart in `target` is
+ * missing or differs. `bySize` compares sizes only: for multi-gigabyte model
+ * and engine downloads, which nobody edits.
+ */
+function leftover(dir: string, rel: string, target: string, bySize = false): string[] {
+  return dirEntries(dir).flatMap((f) => {
+    const p = join(dir, f.name), counterpart = join(target, rel, f.name);
+    // A symlink counts once the target has one pointing the same way. Engine
+    // links are part of a download, not something a person made.
+    const engine = rel === 'engine' || rel.startsWith('engine/');
+    if (f.isSymbolicLink()) return engine || linkTarget(counterpart) === linkTarget(p) ? [] : [`${rel}/${f.name}`];
+    if (f.isDirectory()) return leftover(p, `${rel}/${f.name}`, target, bySize);
+    if (rel === 'models' && f.name === 'library.json') return [];
+    return (bySize ? sameSize(p, counterpart) : sameFile(p, counterpart)) ? [] : [`${rel}/${f.name}`];
+  });
+}
+
+/** What in a root's `runners/` the target does not have yet. */
+function runnersLeft(src: string, target: string, pairs: Pairs, ci: boolean): string[] {
+  const dst = join(target, 'runners');
+  const missing: string[] = [];
+  for (const e of dirEntries(src)) {
+    if (e.isSymbolicLink() || RUNNER_LOCAL.has(e.name) || RUNNER_DISPOSABLE.has(e.name)) continue;
+    const from = join(src, e.name), to = join(dst, e.name), rel = `runners/${e.name}`;
+
+    if (e.name === 'images' && e.isDirectory()) {
+      for (const image of dirEntries(from)) if (!image.isSymbolicLink() && !imageLocal(image.name) && !existsSync(join(to, image.name))) missing.push(`${rel}/${image.name}`);
+    } else if (e.isFile() && e.name.endsWith('.jsonl')) {
+      if (!linesCovered(from, to)) missing.push(rel);
+    } else if (e.name === 'pending-app.json') {
+      // The merge keeps the target's own unfinished setup and drops this one.
+      if (!existsSync(to)) missing.push(rel);
+    } else if (e.isFile() && e.name.endsWith('.json')) {
+      if (!jsonCovered(from, to, pairs, ci)) missing.push(rel);
+    } else if (e.isDirectory()) {
+      missing.push(...leftover(from, rel, target));
+    } else if (e.isFile() && !sameFile(from, to)) {
+      missing.push(rel);
+    }
+  }
+  return missing;
+}
+
+/**
+ * Files in a data root that the target does not already have. Empty means the
+ * root is safe to delete. `otherRoots`: the item's other data roots, checked
+ * on their own, so a folder that is one is not reported here. `ci`: paths
+ * compare case-insensitively, as on Windows and macOS.
+ */
+export function unmerged(root: string, target: string, otherRoots: string[] = [], ci = process.platform === 'win32' || process.platform === 'darwin'): string[] {
   const missing: string[] = [];
   for (const e of dirEntries(root)) {
     const from = join(root, e.name), to = join(target, e.name);
     if (e.isFile()) {
       if (e.name.endsWith('.jsonl')) {
-        const have = new Set(lines(to));
-        if (lines(from).some((l) => !have.has(l))) missing.push(e.name);
+        if (!linesCovered(from, to)) missing.push(e.name);
       } else if (e.name === 'settings.json') {
         const a = readJson(from), b = readJson(to);
         if (isObj(a) && (!isObj(b) || !coversSettings(a, b))) missing.push(e.name);
@@ -516,15 +793,21 @@ export function unmerged(root: string, target: string): string[] {
       for (const f of dirEntries(from)) if (f.isFile() && !existsSync(join(to, f.name))) missing.push(`sessions/${f.name}`);
     } else if (e.isDirectory() && e.name === 'engine' && hasEngine(target)) {
       // A superseded engine build: the target downloaded its own, so nothing here is lost.
-    } else if (e.isDirectory() && (e.name === 'models' || e.name === 'engine' || e.name === 'memory')) {
-      const leftover = (dir: string, rel: string): string[] => dirEntries(dir).flatMap((f) => {
-        const p = join(dir, f.name);
-        if (f.isDirectory()) return leftover(p, `${rel}/${f.name}`);
-        if (e.name === 'models' && rel === 'models' && f.name === 'library.json') return [];
-        const counterpart = join(target, rel, f.name);
-        return isFile(counterpart) && statSync(counterpart).size === statSync(p).size ? [] : [`${rel}/${f.name}`];
-      });
-      missing.push(...leftover(from, e.name));
+    } else if (e.isDirectory() && e.name === 'runners') {
+      missing.push(...runnersLeft(from, target, [[root, target]], ci));
+    } else if (e.isDirectory() && (DISPOSABLE_DIRS.has(e.name) || CHROMIUM_DIRS.has(e.name))) {
+      // Caches and running state: deleted with the old folder.
+    } else if (e.isDirectory() && LEGACY_PROFILE_ENTRIES.has(e.name)) {
+      // models, engine and memory, and every other known data folder: a file
+      // the merge could not place keeps the old folder.
+      missing.push(...leftover(from, e.name, target, e.name === 'models' || e.name === 'engine'));
+    } else if (e.isSymbolicLink() && isOtherDataDir(e.name) && isDir(from)) {
+      // A linked data folder: merged once the target links the same way.
+      if (linkTarget(to) !== linkTarget(from)) missing.push(e.name);
+    } else if (e.isDirectory() && !otherRoots.includes(from)) {
+      // A folder the merge does not know (a newer feature, another product)
+      // keeps the old folder.
+      missing.push(`${e.name}/`);
     }
   }
   return missing;
@@ -562,7 +845,7 @@ export function cleanup(items: LegacyItem[], env: LegacyEnv = legacyEnv(), opts:
   const ci = env.platform === 'win32' || env.platform === 'darwin';
   for (const item of items) {
     if (inside(item.path, env.target, ci) || inside(env.target, item.path, ci)) continue;
-    const left = item.dataRoots.filter((r) => !same(r, env.target, ci)).flatMap((r) => unmerged(r, env.target).map((f) => `${basename(r)}/${f}`));
+    const left = item.dataRoots.filter((r) => !same(r, env.target, ci)).flatMap((r) => unmerged(r, env.target, item.dataRoots, ci).map((f) => `${basename(r)}/${f}`));
     if (left.length) { report.kept.push({ path: item.path, reason: `${left.length} item(s) not yet in ${env.target}, e.g. ${left.slice(0, 3).join(', ')}` }); continue; }
     try {
       if (item.kind === 'install') (opts.uninstall ?? defaultUninstall)(item);
