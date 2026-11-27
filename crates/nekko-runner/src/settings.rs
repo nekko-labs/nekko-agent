@@ -63,6 +63,9 @@ pub struct RunnerSettings {
     pub allow_fork_prs: bool,
     pub rerun_lost_jobs: bool,
     pub trusted_cache: bool,
+    /// "Let the Nekko Cloud picker send jobs here" (decision 0064): tell Nekko Cloud
+    /// this runner's label, repos and free VMs. Off by default.
+    pub cloud_picker: bool,
     /// Networks the owner approved, as `gw:<router MAC>` ids.
     pub trusted_networks: Vec<String>,
 }
@@ -89,6 +92,7 @@ impl Default for RunnerSettings {
             allow_fork_prs: false,
             rerun_lost_jobs: true,
             trusted_cache: true,
+            cloud_picker: false,
             trusted_networks: Vec::new(),
         }
     }
