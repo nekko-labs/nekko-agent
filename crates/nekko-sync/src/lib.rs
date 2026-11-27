@@ -70,8 +70,8 @@ pub use fleet_link::{
 pub use join::{JoinCode, unwrap_join, wrap_for_join, wrap_for_join_with};
 pub use pad::{frame, padme, unframe};
 pub use record::{
-    EPOCH_PROOF_LABEL, Keyring, OBJECT_ID_LEN, epoch_proof, object_id, open_record, record_aad, seal_record,
-    seal_record_with,
+    DEFLATE_AAD, EPOCH_PROOF_LABEL, Keyring, MAX_PLAINTEXT, MIN_COMPRESS, OBJECT_ID_LEN, epoch_proof, object_id,
+    open_record, record_aad, seal_record, seal_record_compressed, seal_record_compressed_with, seal_record_with,
 };
 pub use recovery::{RecoveryKey, open_recovery, seal_recovery, seal_recovery_with};
 pub use wrap::{

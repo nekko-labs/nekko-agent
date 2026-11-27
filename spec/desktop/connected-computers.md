@@ -1,5 +1,5 @@
 ---
-title: "Connected computers (link and host class implemented 2026-11-02)"
+title: "Connected computers (all phases implemented by 2026-11-26)"
 area: desktop
 ---
 
@@ -21,6 +21,7 @@ One desktop runs and watches every agent its owner has, wherever each one runs. 
 - A phone's link refuses a computer and a computer's link refuses a phone, with what to do next.
 - A computer stays paired across restarts of either side and reconnects by itself: nearest route first (LAN, tailnet, relay), retrying as a phone does. Revoking it on the host stops the link for good.
 - Removing a computer signs it out of the other computer when that computer can hear, and deletes what was kept here. Its agents keep running there.
+- **Pairing without a link** `[implemented 2026-11-26; two real daemons through a stand-in relay, the window in a fixture, not yet between two machines]` (decision [0123](../../docs/decisions/0123-a-computer-on-the-network-pairs-through-a-relay-lobby-and-a-compared-code.md)). While a link made with *Make a link* works, this computer joins a one-off lobby room on its own relay and names it in its network advert, even with *Visible on this network* off. **Add a computer** on another computer on the same network lists it under *On this network*, with *Look again*. **Connect** there shows *Check that gomi shows 482 913, then tap Pair there*; this computer shows *MacBook on this network wants to connect. Pair only if it shows 482 913* with **Pair** and **Don't pair**. The code comes from both sides' one-use keys, so a stranger or a relay that swaps them shows a different one. Only after **Pair** does the link go across, sealed under a key the two made, and the other computer pairs with it as if pasted. **Don't pair**, the other computer leaving, closing this page, or the link's ten minutes end the lobby, which takes one exchange. The tailnet has no multicast: there, paste the link, or use computers of the same account (decision 0102). Phones still pair by QR code or link.
 - **Connections** has a *Connected computers* row. Off, or with All connections off, every link closes within 30 seconds and the computers read as offline.
 
 ## Agents from every computer
@@ -59,7 +60,7 @@ Where the agent runs and where the model runs are separate choices. Whichever co
 
 ## Every run setting, from any client
 
-`[gate implemented 2026-11-02 for phones and computers; the phone section built on iOS and Android, with memory, project rules, Privacy Shield and tools added 2026-11-06 (unit-tested, the iPhone rows captured in a fixture, not yet against a real computer); model-loading controls not built on any client]`
+`[gate implemented 2026-11-02 for phones and computers; the phone section built on iOS and Android, with memory, project rules, Privacy Shield and tools added 2026-11-06 (unit-tested, the iPhone rows captured in a fixture, not yet against a real computer); model-loading controls implemented 2026-11-06, see below]`
 
 - A phone or a desktop can set everything `setSessionOptions` takes on the computer running a chat. The phone's model sheet has *Run settings*: choosing the model automatically, offline, cloud only, incognito, a separate Git branch, work mode, tool style, memory (Everything, Project, Off), project rules (Rules, Root files, Off) and Privacy Shield (Default, which follows the computer, On or Off). Privacy Shield changes only the chat's mode and keeps its kinds and allowed values. *Tools* opens the computer's tools (`tools:list`, which reaches a phone or computer as names and descriptions only) with a switch each, written as the chat's `disabledTools`. Each of these needs the change proof (Face ID, the fingerprint or the screen lock), on or off, like the other guarded options.
 - **Options that change what an agent may touch or where its data goes need the same proof as raising a mode, in either direction:** execution mode, Git isolation, disabled tools, MCP servers and connectors, memory, guidance, privacy, offline, cloud only and incognito. A fork keeps its chat's offline, cloud-only, privacy and incognito settings, since it carries the transcript.
@@ -83,7 +84,6 @@ Refused from a computer, always: provider keys and sign-ins, sync, remote-access
 
 ## Status
 
-Phases are in the design's Plan; the frozen task list is in `docs/history/tasks-archive.md`, section *Connected computers*, and what is left is tracked on #1492.
+Phases are in the design's Plan; the frozen task list is in `docs/history/tasks-archive.md`, section *Connected computers*. Every phase is implemented (#1492 closed 2026-11-26): messages during a run (CC0, #1516), link and host class, federation, see and drive, start and monitor with *Keep this computer awake* (#2017, #2020), model sources, every run setting from any client with model loading (#2023, #2025), a host with no window, pairing without pasting (CC8), icons on phones and the host proving itself. None of it has run between two real machines yet.
 
-- Done: messages during a run (CC0, #1516), link and host class, federation, see and drive, model sources, a host with no window, icons on phones, the host proving itself, and the monitors following the computer switch (2026-11-06).
-- Left: *Keep this computer awake while agents run* (CC4), model-loading controls on any client and the guarded options on phones (CC6), pairing without pasting (CC8).
+Tracked on their own: phones pairing through the lobby (#3510) and per-device relay credentials, CC10's leftover (#3511). Not planned: terminals and SSH across a link, and an uploaded icon.

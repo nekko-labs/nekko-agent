@@ -489,6 +489,11 @@ const api: NekkoApi = {
   computerModelServer: (id, channel, args = []) => inv(IpcChannels.computersCall, id, channel, args),
   createSessionOn: (computerId, workspaceId) => inv(IpcChannels.computersCreateSession, computerId, workspaceId),
   connectFleetComputer: (orgId, deviceId) => inv(IpcChannels.computersConnectFleet, orgId, deviceId),
+  nearbyComputers: () => inv(IpcChannels.computersNearby),
+  openComputerLobby: (link) => inv(IpcChannels.computersLobbyOpen, link),
+  answerComputerLobby: (pair) => inv(IpcChannels.computersLobbyAnswer, pair),
+  closeComputerLobby: () => inv(IpcChannels.computersLobbyClose),
+  joinComputerLobby: (found) => inv(IpcChannels.computersLobbyJoin, found),
   computerCatalog: (id) => inv(IpcChannels.computersCatalog, id),
   listRemoteDevices: () => inv(IpcChannels.remoteDevices),
   revokeRemoteDevice: (deviceId) => inv(IpcChannels.remoteRevoke, deviceId),
@@ -588,6 +593,11 @@ const api: NekkoApi = {
     const listener = (_: unknown, e: { path: string }) => cb(e);
     bus.on(IpcEvents.gitChanged, listener);
     return () => bus.removeListener(IpcEvents.gitChanged, listener);
+  },
+  onComputerLobby: (cb) => {
+    const listener = (_: unknown, e: import('@nekko-agent/shared').ComputerLobbyEvent) => cb(e);
+    bus.on(IpcEvents.computersLobby, listener);
+    return () => bus.removeListener(IpcEvents.computersLobby, listener);
   },
   onComputersUpdated: (cb) => {
     const listener = () => cb();

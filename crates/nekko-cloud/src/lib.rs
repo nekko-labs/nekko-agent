@@ -444,6 +444,22 @@ impl Cloud {
         }
     }
 
+    /// Tells Nekko Cloud which CI runners its picker may send jobs to (decision 0064), or
+    /// takes this computer out with `None`. Errors are what the owner reads.
+    pub async fn runner_presence(&self, body: Option<Value>) -> Result<(), String> {
+        let token = self.token().map_err(|_| "Sign in to Nekko Cloud to use the Nekko Cloud picker.".to_string())?;
+        let method = if body.is_some() { reqwest::Method::PUT } else { reqwest::Method::DELETE };
+        match self.api.send(&token, method, "/v1/runners/presence", body).await {
+            Ok(_) => Ok(()),
+            Err(err) => Err(match (err.status, err.code.as_str()) {
+                (402, _) => "The Nekko Cloud picker is part of Nekko Cloud Pro.".into(),
+                (404, _) => "The Nekko Cloud picker isn't available for this account yet.".into(),
+                (401, _) => "Sign in to Nekko Cloud again to use the Nekko Cloud picker.".into(),
+                _ => format!("Nekko Cloud didn't take this Mac's runners: {}", err.message),
+            }),
+        }
+    }
+
     fn key_id(&self) -> u32 {
         lock(&self.state).key_id.unwrap_or(0)
     }
@@ -1137,7 +1153,13 @@ impl Cloud {
         let record = AccountRecord {
             epoch: 1,
             recovery_public: b64_encode(&recovery_public),
-            devices: vec![TrustedDevice { id: device_id, public_key: b64_encode(&me), label }],
+            devices: vec![TrustedDevice {
+                id: device_id,
+                public_key: b64_encode(&me),
+                label,
+                caps: vec![records::CAP_DEFLATE.into()],
+            }],
+            compressed: false,
         };
         // Held before it is pushed, so a failed push leaves a record to push again.
         let oid = Self::account_oid(&keyring, 1)?;
@@ -1214,7 +1236,12 @@ impl Cloud {
             s.last_error = None;
         })?;
         let label = lock(&self.state).device_label.clone();
-        let me = TrustedDevice { id: device_id, public_key: b64_encode(&me), label };
+        let me = TrustedDevice {
+            id: device_id,
+            public_key: b64_encode(&me),
+            label,
+            caps: vec![records::CAP_DEFLATE.into()],
+        };
         self.update_account(&token, |r| r.add(me.clone())).await?;
         self.sync_once().await?;
         Ok(self.changed())
@@ -1336,7 +1363,8 @@ impl Cloud {
         if !code.verifies(&account_id, &public, &tag) {
             return Err(format!("That code doesn't match {label}. Check the code on that device and type it again."));
         }
-        let joining = TrustedDevice { id: device_id.into(), public_key: b64_encode(&public), label };
+        // Its caps are its own to say: it lists them itself once it syncs (`compression_step`).
+        let joining = TrustedDevice { id: device_id.into(), public_key: b64_encode(&public), label, caps: Vec::new() };
         self.update_account(&token, |r| r.add(joining.clone())).await?;
         let key_id = self.key_id();
         let keyring = self.keyring(key_id).ok_or("This device has no sync keys.")?;
@@ -1538,6 +1566,12 @@ impl Cloud {
         if remote_key > self.key_id() && !self.adopt(token, remote_key).await? {
             return Ok(()); // the new epoch's record isn't written yet
         }
+        self.edit(|s| {
+            if !s.z_ready {
+                s.z_ready = true;
+                s.z_catchup = s.cursor > 0;
+            }
+        })?;
         for _ in 0..3 {
             if !self.pull(token).await? {
                 // A newer epoch appeared mid-pull.
@@ -1546,6 +1580,9 @@ impl Cloud {
                     return Ok(());
                 }
                 continue;
+            }
+            if !pull_only && self.compression_step(token).await? {
+                self.pull(token).await?;
             }
             // Pictures chats here are still waiting for; one that fails waits for the next pass.
             let _ = self.fetch_wanted_pictures(token).await;
@@ -1559,6 +1596,46 @@ impl Cloud {
         // Org keys written under an older account epoch are written again for the other devices.
         let _ = self.reseal_org_keys(token).await;
         Ok(())
+    }
+
+    /// After a pull has read the account record (decision 0124): pull again from the start once if
+    /// this computer predates deflated records and the account has used them (true then), and list
+    /// that this computer opens them. Listing it is a one-time write that never fails a pass.
+    async fn compression_step(&self, token: &str) -> Result<bool, String> {
+        let key_id = self.key_id();
+        let Some(record) = self.account_record().filter(|r| r.epoch == key_id) else { return Ok(false) };
+        let mut again = false;
+        if lock(&self.state).z_catchup {
+            // The saved copy may come from a build that dropped the mark: ask for the newest.
+            let mut used = record.compressed;
+            if !used
+                && let (Ok(account_id), Some(keyring)) = (self.account_id(), self.keyring(key_id))
+                && let Ok(Some((fresh, _, _))) = self.fetch_account(token, &keyring, &account_id, key_id).await
+            {
+                used = fresh.compressed;
+            }
+            self.edit(|s| {
+                s.z_catchup = false;
+                if used {
+                    s.cursor = 0;
+                    s.rewinds += 1;
+                }
+            })?;
+            again = used;
+        }
+        let me = lock(&self.state).device_id.clone().unwrap_or_default();
+        if record.devices.iter().any(|d| d.id == me && !d.can(records::CAP_DEFLATE)) {
+            let _ = self
+                .update_account(token, |r| {
+                    if let Some(d) = r.devices.iter_mut().find(|d| d.id == me)
+                        && !d.can(records::CAP_DEFLATE)
+                    {
+                        d.caps.push(records::CAP_DEFLATE.into());
+                    }
+                })
+                .await;
+        }
+        Ok(again)
     }
 
     /// Pull and apply everything new. False when it stopped at a record under
@@ -2474,6 +2551,8 @@ fn picture_work(
     (sends.into_iter().map(|l| split(l)).collect(), removes)
 }
 
+#[cfg(test)]
+mod compression_tests;
 #[cfg(test)]
 mod idle_tests;
 

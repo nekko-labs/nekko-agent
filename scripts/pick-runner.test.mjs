@@ -88,3 +88,34 @@ test('ios_native_calls_the_picker_only_for_trusted_events', () => {
   assert.match(y, /runs-on: \$\{\{ fromJSON\(needs\.pick\.outputs\.runs-on \|\| '"xcode-27"'\) \}\}/);
   assert.match(y, /needs: pick\n    # .*\n    if: \$\{\{ !inputs\.turn_details_diagnostic && !inputs\.streaming_baseline_ref && !inputs\.relay_baseline_ref && !inputs\.photos_baseline_ref && !inputs\.baseline_ref && !inputs\.groups_baseline_ref && !cancelled\(\) && /);
 });
+
+const cloudEnv = { PICK_CLOUD: 'https://api.nekko.test', ACTIONS_ID_TOKEN_REQUEST_URL: 'https://gh.test/id?x=1', ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'rt', PICK_REPO: 'nekko-labs/nekko-agent', PICK_FALLBACK: 'macos-14' };
+const cloudFetch = (runsOn, calls = []) => async (url, init = {}) => {
+  calls.push([url, init.headers?.Authorization, init.body]);
+  if (url.startsWith('https://gh.test/')) return new Response(JSON.stringify({ value: 'oidc-jwt' }));
+  return new Response(JSON.stringify({ runsOn }));
+};
+
+test('cloud_answers_first_with_the_jobs_oidc_token', async () => {
+  const calls = [];
+  assert.equal(await main(cloudEnv, cloudFetch(['self-hosted', 'nekko-cloud-mac'], calls)), '["self-hosted","nekko-cloud-mac"]');
+  assert.deepEqual(calls.map((c) => c.slice(0, 2)), [['https://gh.test/id?x=1&audience=nekko-cloud', 'bearer rt'], ['https://api.nekko.test/v1/runners/pick', 'Bearer oidc-jwt']]);
+  assert.deepEqual(JSON.parse(calls[1][2]), { label: 'nekko-cloud-mac', guest: 'macos' });
+});
+
+test('cloud_none_free_goes_hosted_without_asking_github', async () => {
+  const calls = [];
+  assert.equal(await main({ ...cloudEnv, PICK_TOKEN: 't' }, cloudFetch(null, calls)), '"macos-14"');
+  assert.equal(calls.length, 2);
+});
+
+test('cloud_failures_and_odd_answers_fall_through_to_the_runner_list', async () => {
+  for (const runsOn of [['ubuntu-latest'], ['self-hosted', 'someone-else'], 'x', undefined]) {
+    assert.equal(await main(cloudEnv, cloudFetch(runsOn)), '"macos-14"', JSON.stringify(runsOn));
+  }
+  // No OIDC (a fork PR) or a non-https address: Cloud is never called.
+  const calls = [];
+  await main({ ...cloudEnv, ACTIONS_ID_TOKEN_REQUEST_TOKEN: '' }, cloudFetch(['self-hosted', 'nekko-cloud-mac'], calls));
+  await main({ ...cloudEnv, PICK_CLOUD: 'http://evil.test' }, cloudFetch(['self-hosted', 'nekko-cloud-mac'], calls));
+  assert.equal(calls.length, 0);
+});

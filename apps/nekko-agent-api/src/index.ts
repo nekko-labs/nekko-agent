@@ -6,12 +6,12 @@ import { expireDonations } from "./donations.js";
 import { migrate } from "./migrate.js";
 import { FlyDriver } from "./fly.js";
 import { deleteUnusedMachines, sweepMachineHours } from "./machines.js";
-import { resendMailer } from "./confirmations.js";
+import { resendMailer, retryConfirmations } from "./confirmations.js";
 import { purgeFeedbackScreenshots, purgeSignups } from "./retention.js";
 import { purgeLibraryHistory } from "./shares.js";
 import { Stripe } from "./billing.js";
 import { parseSigningKey } from "./relay.js";
-import { buildServer, DEFAULT_ORIGINS } from "./server.js";
+import { buildServer, DEFAULT_ORIGINS, DEFAULT_PUBLIC_URL } from "./server.js";
 import { RelayPresence } from "./relay-presence.js";
 import { budgetForMachine, MemoryGate, memoryReport } from "./memory-gate.js";
 import { supabaseAdminDeleter, supabaseVerifier } from "./supabase.js";
@@ -55,10 +55,22 @@ setInterval(purgeLibrary, 6 * 60 * 60 * 1000).unref();
 // unsubscribed rows are deleted. A failed run deletes nothing (one
 // transaction) and is retried on the next tick.
 const purge = () => purgeSignups(db)
-  .then((n) => { if (n.unconfirmed || n.unsubscribed) console.log(`signups purged: ${n.unconfirmed} unconfirmed, ${n.unsubscribed} unsubscribed`); })
+  .then((n) => {
+    if (n.unconfirmed || n.undeliverable || n.suppressed || n.unsubscribed) {
+      console.log(`signups purged: ${n.unconfirmed} unconfirmed, ${n.undeliverable} undeliverable, ${n.suppressed} suppressed, ${n.unsubscribed} unsubscribed`);
+    }
+  })
   .catch(failed("purging signups"));
 startupJobs.push(purge);
 setInterval(purge, 6 * 60 * 60 * 1000).unref();
+
+// Confirmation emails that failed, or were never tried, are sent again hourly
+// (a signup purged above after 30 days of failures is not retried).
+const retryConfirmEmails = () => retryConfirmations(db, mailer, process.env.PUBLIC_URL || DEFAULT_PUBLIC_URL)
+  .then((n) => { if (n) console.log(`confirmation emails retried: ${n} sent`); })
+  .catch(failed("retrying confirmation emails"));
+startupJobs.push(retryConfirmEmails);
+setInterval(retryConfirmEmails, 60 * 60 * 1000).unref();
 
 // Send feedback screenshots are deleted 90 days after their note arrived.
 const purgeScreenshots = () => purgeFeedbackScreenshots(db)

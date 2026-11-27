@@ -39,6 +39,31 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## iPhone prompt photo thumbnails decode once, off the main thread (#3383, 2026-11-26)
+Area: renderer
+Result: improvement (main-thread cost per photo per row evaluation); not profiled in the running app
+Conditions: Apple M1 Max, macOS 27.2.1, Xcode 27.2, `swift test` (debug build, macOS host, not an iPhone or the simulator). `XCTClockMetric`, 5 iterations of 20 operations on a synthetic 1200x900 PNG photo (a stand-in for the computer's small copy; real JPEG decode will differ). Test source: `PhotoThumbnailsTests.testMeasureDecodeOnEveryEvaluation` and `testMeasureCacheLookup`.
+
+| Metric | Before (decode in `body`, every evaluation) | After (cache lookup) |
+|---|---|---|
+| 20 operations, average of 5 | 0.101 s (values 0.080941, 0.093835, 0.109693, 0.086324, 0.134203 s) | 0.000072 s (values 0.000080, 0.000073, 0.000072, 0.000070, 0.000071 s) |
+
+Why: `PhotoStrip` base64-decoded and ImageIO-thumbnailed each photo on the main thread every time its row re-evaluated; the decode now runs once on a background task and the result is held in a bounded `NSCache` (200 images or 24 MB). The first decode of each photo still costs the same, but off the main thread. Not measured: hitches while scrolling a photo chat on a device (Instruments Hitches). Source: #3383.
+## Warm chat switch: parked panes hold their animations without a stylesheet rule (#712, PR #3486, 2026-11-26)
+Area: renderer
+Result: improvement (fixes a regression)
+Conditions: a cloud Linux container, Intel Xeon @ 2.10GHz (4 threads), Chrome 158.0.8127.36 headless, `--no-gpu`, the production `build:web` renderer, a release `nekkod`. `node scripts/perf/run.mjs --only latency --no-gpu --report-only`, 40 warm switches per run, on `main` at `c92eac969`. Sequential runs on one machine, not interleaved, so compare the bands, not single runs.
+
+| Metric | `main` (runs 1, 2) | `main` without the rule (runs 1, 2) | This change (runs 1, 2) |
+|---|---|---|---|
+| Switch to a warm chat, to paint, p50 | 25.0 / 26.0 ms | 16.3 / 15.7 ms | 15.1 / 16.0 ms |
+| Switch to a warm chat, to paint, p95 | 32.0 / 37.7 ms | 24.7 / 24.1 ms | 23.2 / 22.7 ms |
+| Switch to a cold chat, frame painted, p50 | 30.2 ms (run 1) | - | 29.3 / 30.6 ms |
+
+CI's own numbers show when it started. The PR speed contract's warm switch read 11 to 15 ms p50 (14 to 19 ms p95) on every runner type up to the 22:47 UTC run on 2026-11-25, and 18 to 26 ms p50 (24 to 33 ms p95) from 23:44 on, over the 30 ms gate on unchanged base about half the time. The nightly perf job on `main` read 10 to 16 ms p50 from 2026-11-06 to 2026-11-25. Of the four PRs merged between those runs, #3407 was the only renderer change.
+
+Why: #3407 paused a parked pane's animations with `[data-pane-hidden] * { animation-play-state: paused !important }`. `data-pane-hidden` flips on both panes in every warm switch, and a rule that matches every descendant makes the browser restyle each pane's whole transcript inside the switch. The rule is gone. `useParkedAnimations` (`parkedAnimations.ts`) pauses the animations that are actually running through the Web Animations API one frame after the pane parks, and plays them when it is shown. `data-pane-hidden` stays for the decor clock, which no stylesheet rule reads now. What it gives up: an animation that starts inside a parked pane runs until the pane parks again. Source: #712, PR #3486.
+
 ## Renderer code splitting: non-default tabs, QR and Remotion load after first paint (#3445, PR #3455, 2026-11-26)
 Area: renderer
 Result: improvement (startup); no effect on chat switching or keypress
@@ -1772,6 +1797,7 @@ speed. Source: [#152](https://github.com/nekko-labs/nekko-agent/pull/152).
 
 ## Unmeasured
 
+- Nekko Cloud client retries (2026-11-26, #3363): traffic-shape change, nothing measured. By the code: a busy answer used to get 2 more attempts at 0.5 s and 2 s from every client (3 sends within 2.5 s); it now gets at most 2 more at 5 s and 10 s or the server's longer `Retry-After` (cap 60 s) plus 0-50% jitter, so 3 sends spread over at least 15 s; a 504 on `/v1/sync/push` and `/v1/sync/pull` is sent once instead of 3 times. Not measured: how often the live API answers busy, or its load while stalled. Unit tests check the schedule with injected sleeps only.
 - Relay reconnect jitter (2026-11-26, #3385, iPhone): the backoff of 1, 2, 4 ... 30 s now gets 0 to 50% random extra, so clients that lose a relay together spread their redials. Tested for bounds and spread (200 draws at attempt 3 all fall in 8 s to under 12 s and more than 100 distinct values), but the effect on a relay restart is not measured. Counting dials per second at the relay after restarting it with many connected clients, before and after, would settle it.
 - Visible-interval timers, hidden-pane animations and watch reads (2026-11-26): the ChatPane 500 ms and 4 s timers, the active-watch chips, `agentWatches`, the local-models monitor, `VoiceSettings` (1 s), `RemoteAccess` (5 s, several), `ConnectionsSettings`, `RunnerCard` and the limits clock (now one shared ticker) pause while the window is hidden or their pane is parked; the mascot and pixel animations hold their frame in a parked pane; a chat's next-wake read runs on `agent_watch` results and turn ends, with a 60 s fallback, not after every tool result and every 15 s. Unit tests show the pause and resume, but no CPU, wakeup or energy figure was measured, and neither was the count of `session:nextWatch` calls per turn. The idle-CPU-with-the-window-hidden probe being added to `scripts/perf` would settle the timers; a count of `nextAgentWatchAt` calls over one 20-tool-call turn on both revisions would settle the watch reads.
 - Replies queued for one socket are bounded, and live `tool_result` frames drop their pictures (2026-11-26): `rpc_socket`'s per-socket reply queue (`out_tx`) was unbounded, and the hub's `tool_result` frames carried each screenshot as a base64 data URL (replayed to every window that connects mid-turn, queued for every socket, the relay and the API client). Now a socket whose writer holds more than 64 MiB of replies is dropped (as a send past 30 s already was; a lone reply is always queued), and a live `tool_result` event carries `nekko-blob:<sha256>.<ext>` references for pictures of 4 KB or more (the saved chat still has the data URLs). Only unit-level sizes were checked: a 20,000-byte PNG made the event's JSON about 26.7 KB as a data URL and under 300 bytes as a reference (asserted in `a_tool_results_pictures_leave_the_event_as_blob_references`). Not measured: the hub ring's resident bytes, the relay's bytes per tool result, or nekkod's memory with a stalled socket during a screenshot-heavy turn, before and after. A turn of 30 one-megabyte screenshots with one window deliberately not reading, `private bytes` sampled every second on both revisions, would settle it.

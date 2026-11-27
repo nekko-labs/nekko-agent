@@ -29,6 +29,21 @@ const card = (status: 'working' | 'done' | 'idle' | 'input' | 'error' = 'working
   <WorkspaceCard workspace={null} session={chat} terminal={null} status={status} isActive={false} now={0} projects={[]} onOpen={() => {}} onClose={() => {}} />,
 );
 
+describe("folding a card's sub-agents", () => {
+  const withKids = (extra: Record<string, unknown>) => renderToStaticMarkup(
+    <WorkspaceCard workspace={null} session={session} terminal={null} status="idle" isActive={false} now={0} projects={[]} subAgentCount={2} onOpen={() => {}} onClose={() => {}} {...extra} />,
+  );
+  it('makes the sub-agent count a toggle that says whether the tree is shown', () => {
+    const shown = withKids({ onToggleSubagents: () => {} });
+    expect(shown).toMatch(/<button type="button" data-subagent-fold="true" aria-expanded="true"[^>]*title="Hide this chat&#x27;s sub-agents"/);
+    expect(shown).toContain('2 sub-agents');
+    const hidden = withKids({ subagentsHidden: true, onToggleSubagents: () => {} });
+    expect(hidden).toMatch(/data-subagent-fold="true" aria-expanded="false"[^>]*title="Show this chat&#x27;s sub-agents"/);
+    // Without a handler the count stays plain text.
+    expect(withKids({})).not.toContain('data-subagent-fold');
+  });
+});
+
 describe('workspace card archive control', () => {
   it('groups row actions outside timestamp space with hover, keyboard and touch access', () => {
     const html = card('idle', { ...session, lastReplyAt: -60_000 } as SessionSummary);
