@@ -616,6 +616,14 @@ impl Table {
             }),
         );
         t.add(
+            crate::storage_runners::CHANNELS,
+            handler!(|ctx, channel, args| crate::storage_runners::route(ctx, channel, &args).await),
+        );
+        t.add(
+            crate::storage::CHANNELS,
+            handler!(|ctx, channel, args| crate::storage::route(ctx, channel, &args).await),
+        );
+        t.add(
             crate::worktrees::CHANNELS,
             handler!(|ctx, channel, args| crate::worktrees::route(ctx, channel, &args).await),
         );
@@ -1268,10 +1276,14 @@ pub fn forward_terminal_events(ctx: &Ctx) {
     });
 }
 
+/// Most chats one `sessions:finderText` call answers for.
+const FINDER_TEXT_MAX: usize = 200;
+
 /// The channels `nekko-store` serves when the daemon knows the data dir.
 /// Running-turn checkpoints still stay with the TS host (PF14).
 const SESSION_CHANNELS: &[&str] = &[
     "sessions:summaries",
+    "sessions:finderText",
     "sessions:list",
     "sessions:clear",
     "sessions:clearHistory",
@@ -1378,6 +1390,16 @@ async fn session_op(
                     }
                 }
                 Ok(Value::Array(sessions))
+            }
+            // The chat finder's index: each asked chat's text without pictures,
+            // reasoning or tool output, kept per file version (nekko-store's finder).
+            "sessions:finderText" => {
+                let mut out = serde_json::Map::new();
+                for id in arg(&args, 0).as_array().into_iter().flatten().filter_map(Value::as_str).take(FINDER_TEXT_MAX)
+                {
+                    out.insert(id.to_string(), store.finder_text(id).map_or(Value::Null, |v| (*v).clone()));
+                }
+                Ok(Value::Object(out))
             }
             "sessions:clear" => store.clear_with(id, delete_log).map(|n| json!(n)),
             "sessions:clearHistory" => store

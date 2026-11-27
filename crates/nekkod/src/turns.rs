@@ -1506,7 +1506,7 @@ impl Turns {
         }
         if shared.admitted
             && !wake
-            && !facts.get("providerError").is_some_and(|v| !v.is_null())
+            && facts.get("providerError").is_none_or(|v| v.is_null())
             && let Some(messages) = session_value["messages"].as_array_mut()
             && let Some(input) = messages
                 .get_mut(messages_before..)

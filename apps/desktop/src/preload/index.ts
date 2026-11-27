@@ -208,6 +208,7 @@ const api: NekkoApi = {
   createSession: (workspaceId) => inv(IpcChannels.sessionCreate, workspaceId),
   getSession: (id, opts) => inv(IpcChannels.sessionGet, ...sessionGetArgs(id, opts)),
   sessionPicture: (reference) => inv(IpcChannels.sessionBlob, reference),
+  finderChatText: (ids) => inv(IpcChannels.sessionsFinderText, ids),
   deleteSession: (id) => inv(IpcChannels.sessionDelete, id),
   setSessionWorkspace: (sessionId, workspaceId) => inv(IpcChannels.sessionSetWorkspace, sessionId, workspaceId),
   setSessionSupportingWorkspaces: (sessionId, workspaceIds) => inv(IpcChannels.sessionSetSupportingWorkspaces, sessionId, workspaceIds),
@@ -308,6 +309,12 @@ const api: NekkoApi = {
   getGitStatus: (id, force) => inv(IpcChannels.workspaceGitStatus, id, force),
   listChatWorktrees: () => inv(IpcChannels.chatWorktreesList),
   removeChatWorktree: (root) => inv(IpcChannels.chatWorktreesRemove, root),
+  getStorageUsage: (refresh) => inv(IpcChannels.storageUsage, { refresh: !!refresh }),
+  getDiskSpace: () => inv(IpcChannels.storageDisk),
+  previewIdleWorktrees: () => inv(IpcChannels.storageIdleWorktrees),
+  removeWorktrees: (roots) => inv(IpcChannels.storageRemoveWorktrees, roots),
+  listRunnerImages: () => inv(IpcChannels.storageRunnerImages),
+  removeRunnerImage: (name) => inv(IpcChannels.storageRemoveRunnerImage, name),
 
   readFile: (path) => inv(IpcChannels.fileRead, path),
   // The main process serves these on loopback, not the engine (main/htmlPreview.ts).

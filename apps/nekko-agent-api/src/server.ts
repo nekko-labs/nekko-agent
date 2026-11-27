@@ -122,7 +122,7 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
   const features: Features = {
     staff: new Set((opts.staffEmails ?? DEFAULT_STAFF_EMAILS).map((e) => e.trim().toLowerCase()).filter(Boolean)),
     // library-multiplayer joins once the service runs its relay (#2751).
-    available: new Set<Feature>([...(opts.stripe ? ["billing"] as const : []), "library-cloud", "ci-fleet", ...(opts.relay ? ["cloud-relay"] as const : [])]),
+    available: new Set<Feature>([...(opts.stripe ? ["billing"] as const : []), "library-cloud", "ci-fleet", ...(opts.relay ? ["cloud-relay"] as const : []), ...(opts.machines ? ["cloud-machines"] as const : [])]),
   };
   const gate = accountGateFrom(opts.accountsAllowedDomains, opts.accountsAllowedEmails);
   if (gate) app.decorate("accountGate", gate);

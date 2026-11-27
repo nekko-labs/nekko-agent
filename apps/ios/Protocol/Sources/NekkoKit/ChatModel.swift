@@ -177,7 +177,7 @@ public final class ChatModel {
         guard subscription == nil else { return nil }
         subscription = store.subscribe { [weak self] e in self?.onEvent(e) }
         showSavedCopy()
-        let first = Task { await reload() }
+        let first = Task { await reload(refreshSkills: true) }
         pollAgentState()
         return first
     }
@@ -241,6 +241,7 @@ public final class ChatModel {
     }
 
     public func stop() {
+        flushDeltas()
         if let subscription { store.unsubscribe(subscription) }
         subscription = nil
         agentStateTask?.cancel()
@@ -253,10 +254,15 @@ public final class ChatModel {
     /// The connection came back: re-read, in case events were missed.
     public func connectionChanged(_ state: RelayState) {
         defer { lastConn = state }
-        if state == .online && lastConn != .online && subscription != nil { Task { await reload() } }
+        if state == .online && lastConn != .online && subscription != nil { Task { await reload(refreshSkills: true) } }
     }
 
-    public func reload() async {
+    /// Read the chat again. The runnable skills are read with it only when this is the
+    /// first read, the connection came back, or none has been read yet; the turn ending,
+    /// a card answered or a setting changed do not change them (#3388, audit item 10).
+    public func reload(refreshSkills: Bool = false) async {
+        flushDeltas()
+        let readSkills = refreshSkills || !skillsRead
         let cardChangesBefore = cardChanges
         do {
             let r = try store.remote()
@@ -264,7 +270,7 @@ public final class ChatModel {
             async let pendingRaw = orNil { try await r.call(Channels.chatPending) }
             let (s, p) = (try await raw, await pendingRaw)
             // Alongside the rest of the read, and part of it: awaiting a reload awaits these too.
-            async let skillsRead: Void = loadSkills()
+            async let skillsDone: Void = readSkills ? loadSkills() : ()
             // Between turns only: while one runs the live estimate covers it, and the
             // computer is busy with the reply (done, send and session_meta all re-read).
             async let contextRead: Void = loadContext(unless: turn.running)
@@ -315,7 +321,7 @@ public final class ChatModel {
                 }
             }
             await refreshAgentState()
-            _ = await (skillsRead, contextRead)
+            _ = await (skillsDone, contextRead)
         } catch {
             // Out of reach: the saved copy (if any) says so itself, under "Saved copy from …".
             showSavedCopy()
@@ -373,9 +379,13 @@ public final class ChatModel {
     /// The chat's own effort; nil follows the computer's setting.
     public var effort: Effort? { session?.effort.flatMap(Effort.init(rawValue:)) }
 
+    /// The skills list has been read at least once (a reload skips re-reading it).
+    private var skillsRead = false
+
     public func loadSkills() async {
         guard let r = try? store.remote(), let raw = try? await r.call(Channels.skillsRunnable) else { return }
         skills = SkillSummary.list(raw)
+        skillsRead = true
     }
 
     /// Fold one event; re-reads the saved transcript when the turn ends.
@@ -383,8 +393,16 @@ public final class ChatModel {
         guard e.sessionId == sessionId else { return }
         cardChanges += 1
         switch e {
-        case .text(_, let delta), .reasoning(_, let delta): streamed = delta.utf16.count
-        default: break
+        case .text(_, let delta), .reasoning(_, let delta):
+            // Streamed text arrives faster than the screen draws. Fold it once per frame.
+            guard deltaInterval > 0 else { streamed = delta.utf16.count; break }
+            pendingDeltas.append(e)
+            pendingDeltaChars += delta.utf16.count
+            scheduleDeltaFlush()
+            return
+        default:
+            // Anything else lands after the text before it.
+            flushDeltas()
         }
         turn = Transcript.apply(turn, e)
         switch e {
@@ -402,6 +420,41 @@ public final class ChatModel {
         case .toolResult(_, let result) where changesAgentState(result): requestAgentStateRefresh()
         default: break
         }
+    }
+
+    /// How long streamed text waits to be folded in: one display frame. Zero applies
+    /// every delta as it arrives. The app sets this from the screen's refresh rate.
+    public static var defaultDeltaInterval: TimeInterval = 1.0 / 60
+    public var deltaInterval: TimeInterval = ChatModel.defaultDeltaInterval
+    private var pendingDeltas: [AgentEvent] = []
+    private var pendingDeltaChars = 0
+    private var deltaTick: Task<Void, Never>?
+    /// How many times streamed text was folded into the turn (one per frame, not per delta).
+    public private(set) var deltaApplications = 0
+
+    private func scheduleDeltaFlush() {
+        guard deltaTick == nil else { return }
+        let nanos = UInt64(deltaInterval * 1_000_000_000)
+        deltaTick = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: nanos)
+            guard !Task.isCancelled else { return }
+            self?.flushDeltas()
+        }
+    }
+
+    /// Fold the text and reasoning deltas that arrived since the last frame into the
+    /// turn in one write: one projection, one set of changes for the view, however many arrived.
+    public func flushDeltas() {
+        deltaTick?.cancel()
+        deltaTick = nil
+        guard !pendingDeltas.isEmpty else { return }
+        var t = turn
+        for e in pendingDeltas { t = Transcript.apply(t, e) }
+        streamed = pendingDeltaChars
+        pendingDeltas = []
+        pendingDeltaChars = 0
+        deltaApplications += 1
+        turn = t
     }
 
     private func scheduleReload() {
@@ -423,6 +476,7 @@ public final class ChatModel {
     @discardableResult
     public func send(_ text: String, skill: SkillSummary? = nil, images: [String] = []) async throws -> String {
         try Task.checkCancellation()
+        flushDeltas()
         promptsSent += 1
         // Load the authoritative chat kind before routing. Never guess text for an unread chat.
         if session == nil { await reload() }
@@ -486,6 +540,7 @@ public final class ChatModel {
                     self.store.flushOutbox()
                 }
             } catch {
+                self.flushDeltas()
                 self.promptedTurn = false
                 var t = self.turn
                 let started = t.blocks.contains { $0.id != "pending-\(at)" }
@@ -550,6 +605,7 @@ public final class ChatModel {
         let r = try store.remote()
         // Reserve before discovery's first await: a second send must not pass the same guard.
         sending = true
+        flushDeltas()
         turn = LiveTurn(running: true, blocks: [], startedAt: now())
         let task = Task { @MainActor in
             do {
@@ -636,6 +692,7 @@ public final class ChatModel {
     }
 
     public func abort() {
+        flushDeltas()
         // A stopped reply never counts toward the star ask, whatever event ends it.
         promptedTurn = false
         imageSendTask?.cancel()
@@ -669,6 +726,7 @@ public final class ChatModel {
     }
 
     public func approve(_ ok: Bool) async throws {
+        flushDeltas()
         guard store.activeId == computerId else { throw RelayError("This chat belongs to another computer.") }
         guard let a = responseApproval else { return }
         store.responses.approve(sessionId, approval: a, ok: ok)
@@ -766,6 +824,7 @@ public final class ChatModel {
     }
 
     public func answer(_ answers: [AskAnswer]) async throws {
+        flushDeltas()
         guard store.activeId == computerId else { throw RelayError("This chat belongs to another computer.") }
         guard let q = responseQuestion else { return }
         store.responses.answer(sessionId, question: q, answers: answers)

@@ -52,6 +52,39 @@ Conditions: release `nekkod` from this branch on an Apple M1 Max, behind the Loc
 | Text chat `session:get` time | 4.6 ms | 4.4 ms |
 
 Why: the daemon no longer reads every blob file and base64-encodes it when the caller asks for references ([decision 0125](decisions/0125-chat-pictures-load-on-demand.md)). The window's own numbers (heap, first paint) follow in the renderer PR. Source: this PR.
+## Chat finder reads text only, not every full transcript (#3446, 2026-11-26)
+Area: engine daemon, renderer
+Result: improvement
+
+Conditions: Apple M1 Max, 64 GB, macOS 27.2.1, release `nekkod` (this branch), Node v26.8.1 client over loopback HTTP (the Local Web UI transport; Electron IPC carries the same JSON), one run per row, each phase on a fresh daemon with the data dir in a temp folder (never `~/.nekko-agent`). Synthetic chats from `scripts/perf/finder-index-bench.mjs`: 12 to 31 turns each with reasoning, tool calls and 2,000 characters of tool output, 20% with a 60 KB photo, 4% long agent chats of 250 turns with 250 KB screenshots in tool results (about 10 MB each). 500 chats are about 201 MB on disk, 2,000 chats are 806 MB. "Index build" is what the first message search in the finder or palette waits for: every chat indexed, newest first. Old is `session:get` for each chat, 6 at a time (as `chatFinderIndex.ts` did); new is `sessions:finderText`, 25 chats a call, 2 calls at a time. "First 25" is the time until 25 chats are searchable. Daemon CPU is user plus system from `ps` over the phase (10 ms resolution). Client parse is the total `JSON.parse` time of the replies.
+
+| Metric | 500 old | 500 new | 2,000 old | 2,000 new |
+|---|---|---|---|---|
+| First 25 chats searchable | 42 ms | 14 ms | 16 ms | 12 ms |
+| Whole index built | 580 ms | 167 ms | 1693 ms | 455 ms |
+| Bytes moved | 201.38 MB | 13.44 MB | 805.51 MB | 53.77 MB |
+| Client JSON.parse | 128 ms | 19 ms | 520 ms | 70 ms |
+| Daemon CPU | 0.44 s | 0.19 s | 1.68 s | 0.65 s |
+
+Repeat and incremental work, new path only: asking for all chats again with the daemon's per-file cache warm took 85 ms and 0.04 s CPU (500) and 225 ms and 0.17 s CPU (2,000), the cost of building the reply (same 13.44 MB and 53.77 MB), but the app asks only for chats whose `updatedAt` changed: after one chat was saved, re-reading it took 14 ms (500) and 6 ms (2,000), 0.03 MB. The old path re-fetched each changed chat whole.
+
+Why: the finder keeps only message text and file names, so the daemon now serves exactly that (no pictures, reasoning or tool output, parsed by skipping them) and caches it per chat file version. The first-25 times are within run-to-run noise of each other (a single sample each); the wins are bytes, total time, parse time and CPU. The daemon still reads and scans each changed chat file once, so cold CPU is not zero. Source: #3446.
+## iPhone chat re-reads stop re-reading the runnable skills (#3388, 2026-11-26)
+Area: renderer
+Result: improvement (reads per re-read)
+Conditions: `swift test` on an Apple M1 Max, macOS 27.2.1, with a counting fake connection (`ReloadFanOutTests.testSkillsAreReadOnceNotOnEveryReload`): open a chat, then four re-reads (three turn ends and one explicit reload). Counts are `skills:runnable` calls, not time.
+## iPhone folds streamed text into the chat once per display frame (#3387, 2026-11-26)
+Area: renderer
+Result: improvement (model work per frame); not profiled in the running app
+Conditions: Apple M1 Max, macOS 27.2.1, Xcode 27.2, `swift test` (debug build on a macOS host, not an iPhone or the simulator), other builds running on the same machine so timings drift between runs. `XCTClockMetric`, 5 iterations. A chat of 300 saved messages and 2,000 streamed deltas of one word each delivered to `ChatModel.onEvent` inside one frame, then `flushDeltas()`. Tests: `StreamThrottleTests.testMeasureFoldingEveryDelta` (`deltaInterval` 0, the old per-delta behaviour) and `testMeasureFoldingOncePerFrame`.
+
+| Metric | Before (every delta applied) | After (once per frame) |
+|---|---|---|
+| Model work for 2,000 deltas, run 1 | 1.441107-2.223989 s (values 1.690859, 2.223989, 1.689969, 1.441107, 1.747766 s) | 0.004773-0.126576 s (values 0.016698, 0.004773, 0.008505, 0.062790, 0.126576 s) |
+| Model work for 2,000 deltas, run 2 | 0.321535-0.453430 s (values 0.321535, 0.355654, 0.388210, 0.421123, 0.453430 s) | 0.003622-0.018056 s (values 0.003622, 0.004890, 0.007245, 0.018056, 0.017119 s) |
+| Changes published to the view for a burst of 200 deltas | 200 (one `blocksRevision` bump each) | 1 (`testABurstWithinAFrameIsOneApplication`) |
+
+Why: each delta rewrote `turn` (an array compare, the context gauge, the last-block patch) and told SwiftUI the chat changed. Deltas now collect for one display frame and fold in as one write. The two runs differ by 4 to 5 times for the same code because the machine's load changed; compare within a run. The spread of the once-per-frame figure (a single write) is large relative to its size. Not measured: SwiftUI body evaluations per second or frame time on a device, and the added latency (at most one frame, about 16.7 ms at 60 Hz) of a token's first appearance. Source: #3387.
 ## Stock Qwen3.8-27B with a real MLX DFlash2 head (#3541, 2026-11-27)
 Area: local inference
 Result: working text streaming and draft acceptance; slower decode and no greedy text match in this sample.
@@ -222,6 +255,7 @@ Conditions: JVM unit test `ChatControllerTest` on an Apple M1 Max with a countin
 |---|---|---|
 | `skills:runnable` calls for one open plus four re-reads | 5 | 1 |
 
+Why: `ChatModel.reload` read the skills list with every re-read; it now reads it on the first read and on a reconnect. This is the part of the chat-open fan-out that needed no engine change. The paged open (`session:page`, tail first) is not implemented: phones cannot call it (#3439), so the 300-message read is unchanged and unmeasured. Source: #3388.
 Why: `ChatController.reload` read the skills list with every re-read (each turn end, answered card, setting change, reconnect); it now reads it on the first read, on a reconnect and after a failed read. This is the part of the chat-open fan-out that needs no engine change (the iPhone did the same, #3388). The paged open (`session:page`, tail first) is not implemented: phones cannot call it (#3439), so the 300-message read is unchanged and unmeasured. Source: #3415.
 ## Android: saved chats are encoded and written off the main thread (#3413, 2026-11-26)
 Area: renderer (Android app, main thread)
@@ -1894,6 +1928,8 @@ speed. Source: [#152](https://github.com/nekko-labs/nekko-agent/pull/152).
 
 ## Unmeasured
 
+- iPhone Mermaid idle teardown and cache pruning (2026-11-26, #3389): the renderer's WKWebView is now released after 60 s with no diagram drawn (and on a memory warning when idle), the memory cache is bounded to 48 MB of pixels as well as 120 drawings, and the disk cache is pruned to 30 days and 64 MB. The idle timer and the prune plan are unit-tested (`IdleReleaseTests`, `CachePrunerTests`), but the memory a live WebKit process holds, its release on a device, and the cache folder size over weeks of use are not measured. An Instruments Allocations/Activity Monitor reading of the app after drawing one diagram and then idling 70 s, before and after, and the size of `Caches/mermaid` on a heavily used phone, would settle it.
+- Nekko Cloud duplicate calls (2026-11-26, #3365): traffic-shape change. Counted against test stubs, not production: five `cloud:refresh` calls in a row made 2 stub calls (`/v1/auth/me`, `/v1/sync/state`) instead of 10, and six concurrent ones made 2 instead of 12; three overlapping iPhone `sync()` calls made 1 pull instead of 3, and a second sync 2 s after the first skipped `/v1/auth/me` and `/v1/sync/state` (the pull still ran). Wanted pictures are fetched 3 at a time (peak in-flight 3 in the unit test, with fake 15 ms fetches); the real wall-time effect is unmeasured. Not measured: how often real clients make these repeat calls.
 - **Stock Qwen3.8-27B MLX DFlash2 preload stopped (#3541, 2026-11-27).** Apple M1 Max, 64 GiB unified memory, macOS 27.2.1; isolated `mlx-vlm` 0.8.1 / MLX 0.32.5 on Metal. Verified the public Apache-2.0 [LM Studio 8-bit target at `241ebb5`](https://huggingface.co/lmstudio-community/Qwen3.8-27B-MLX-8bit/tree/241ebb5f1d60b122fd653da658836a55feb9e2b0) and [official full BF16 head at `015e795`](https://huggingface.co/incoai/Qwen3.8-27B-DFlash2/tree/015e795645c74b1a0eeef3b570031fb62e769bc5) against their manifests (31.1 GiB combined). The installed LM Studio copy was not read. The target-only `mlx_vlm.server` bound to loopback, but at 11.07 s `/health` still reported `model_ready: false` while evaluating the remaining parameters. The watchdog stopped the load as macOS memory pressure went from normal to warning (`1` to `2`), with the system-wide free percentage down from 86% to 39%. Swap was zero at the warning and 628.25 MiB at cleanup; the process exited and its port closed. **Baseline decode: not measured. DFlash2 decode: not attempted.** There is no streamed text, acceptance count, or throughput comparison. The LM Studio basename is supported when the configs match, but no successful 8-bit run was observed. The separate [4-bit run](#stock-qwen38-27b-with-a-real-mlx-dflash2-head-3541-2026-11-27) measured streaming and nonzero acceptance, with slower decode and different greedy text.
 
 - Nekko Cloud client retries (2026-11-26, #3363): traffic-shape change, nothing measured. By the code: a busy answer used to get 2 more attempts at 0.5 s and 2 s from every client (3 sends within 2.5 s); it now gets at most 2 more at 5 s and 10 s or the server's longer `Retry-After` (cap 60 s) plus 0-50% jitter, so 3 sends spread over at least 15 s; a 504 on `/v1/sync/push` and `/v1/sync/pull` is sent once instead of 3 times. Not measured: how often the live API answers busy, or its load while stalled. Unit tests check the schedule with injected sleeps only.
