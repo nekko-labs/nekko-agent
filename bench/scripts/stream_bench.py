@@ -102,10 +102,14 @@ def code_block(text):
 # Extra request fields every server gets alike (set by --no-think).
 EXTRA_BODY = {}
 
-# Thinking off through the chat template, for models that ignore /no_think.
-# llama-server reads chat_template_kwargs, LM Studio reads reasoning_effort;
-# each ignores the other, so every server gets the same body.
-NO_THINK = {"chat_template_kwargs": {"enable_thinking": False}, "reasoning_effort": "none"}
+# Thinking off (or as low as the model goes) through the chat template, for
+# models that ignore /no_think. llama-server passes chat_template_kwargs to the
+# template: Qwen3.8 reads enable_thinking, Inkling 2 reads reasoning_effort
+# (effort 0 still thinks briefly). LM Studio reads the top-level
+# reasoning_effort. Each ignores what it does not know, so every server gets
+# the same body.
+NO_THINK = {"chat_template_kwargs": {"enable_thinking": False, "reasoning_effort": "none"},
+            "reasoning_effort": "none"}
 
 
 def one_request(url, model, max_tokens, api_key, timeout, prompt=PROMPT):
