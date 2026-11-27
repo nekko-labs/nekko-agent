@@ -18,6 +18,14 @@ const call = (sessionId: string, name: string): AgentEvent => ({
 describe('liveRuns', () => {
   beforeEach(() => __resetLiveRuns());
 
+  it('keeps the matching live failure text without retaining result pictures', () => {
+    applyEvent(call('a', 'bash'));
+    applyEvent(call('a', 'read_file'));
+    applyEvent({ type: 'tool_result', sessionId: 'a', result: { toolCallId: 'c_bash', output: 'Not found', isError: true, images: ['picture'] } });
+    const [block] = getLiveRun('a')!.blocks;
+    expect(block).toMatchObject({ kind: 'activity', items: [{ failed: true, result: { output: 'Not found', images: undefined } }, { call: { id: 'c_read_file' } }] });
+  });
+
   it('keeps progress messages between their tools while a turn is still running', () => {
     applyEvent(text('a', 'I will read the source.'));
     const first = getLiveRun('a')!.blocks[0];

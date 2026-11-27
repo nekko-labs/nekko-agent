@@ -475,3 +475,15 @@ describe('reconciled lifecycle reload and measurements', () => {
     expect(new Set(cards.map(r => r.key)).size).toBe(4);
   });
 });
+
+it('attaches a saved diagnostic to the matching failure, not its successful sibling', () => {
+  const calls = ['failed', 'ok'].map(id => ({ id, name: 'bash', input: {} }));
+  const failure = { toolCallId: 'failed', isError: true, output: 'No such file' };
+  const [block] = toStreamBlocks([
+    msg('calls', 'assistant', '', { toolCalls: calls }),
+    msg('success', 'tool', '', { toolResult: { toolCallId: 'ok', output: 'done' } }),
+    msg('failure', 'tool', '', { toolResult: failure }),
+  ]);
+  expect(block).toMatchObject({ type: 'activity', items: [{ failed: true, result: failure }, { call: calls[1] }] });
+  if (block.type === 'activity') expect(block.items[1]).not.toHaveProperty('result');
+});

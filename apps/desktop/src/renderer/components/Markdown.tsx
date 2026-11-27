@@ -8,6 +8,7 @@ import { FILE_REF, ISSUE_REF_EXACT, parseFileRef } from '../replyRefs.js';
 import { FileRefChip, IssueRefChip } from './ReplyRefChips.js';
 import { remoteImageUrl } from '../remoteImages.js';
 import { RemoteImageCard, RemoteImageGallery } from './RemoteImageCard.js';
+import { HighlightedCode } from './HighlightedCode.js';
 import { MermaidDiagram } from './ArtifactPreview.js';
 
 import { ContextAction, ContextMenu } from './ContextMenu.js';
@@ -255,7 +256,7 @@ function CodeBlock({ lang, code, runnable = false, streaming = false }: { lang: 
         <span className="code-copy-float">{copyButton}</span>
       )}
       <pre className={`overflow-x-auto px-3 pb-3 font-mono text-sm leading-relaxed ${lang ? 'pt-1' : 'pt-3'}`}>
-        <code>{code}</code>
+        <HighlightedCode text={code} language={streaming ? '' : lang} />
       </pre>
       {target && inline?.block === block && <InlineChatTerminal target={target} terminalId={inline.terminalId} />}
     </div>
