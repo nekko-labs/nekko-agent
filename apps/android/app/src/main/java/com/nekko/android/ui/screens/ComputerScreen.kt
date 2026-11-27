@@ -173,12 +173,15 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
                                 leadingIcon = { Icon(Icons.Outlined.Refresh, contentDescription = null) },
                                 onClick = { menu = false; scope.launch { machine.refresh() } },
                             )
-                            HorizontalDivider()
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.settings_forget_ellipsis), color = p.danger) },
-                                leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = p.danger) },
-                                onClick = { menu = false; forgetting = true },
-                            )
+                            // A computer of the account has no pairing to forget (decision 0128): it goes on sign-out.
+                            if (c?.fromAccount != true) {
+                                HorizontalDivider()
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.settings_forget_ellipsis), color = p.danger) },
+                                    leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = p.danger) },
+                                    onClick = { menu = false; forgetting = true },
+                                )
+                            }
                         }
                     }
                 },

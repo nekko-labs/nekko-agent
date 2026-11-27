@@ -6,6 +6,8 @@ import java.net.URLDecoder
 import java.net.URLEncoder
 import java.net.UnknownHostException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -113,6 +115,8 @@ class CloudSync(
         val waitingForApproval: Boolean = false,
         /** While waiting: the one-time code to type on the computer that approves this phone. */
         val joinCode: String? = null,
+        /** The account's computers that publish how to reach them (decision 0128); none while signed out. */
+        val reach: List<Reach> = emptyList(),
     )
 
     /** What survives a relaunch, none of it secret (kept in the sealed store all the same). */
@@ -142,6 +146,9 @@ class CloudSync(
     private var error: String? = null
     private var lastSyncAt: Long? = null
     private var joinCode: String? = null
+    /** Each computer's `reach` record as its plaintext, by account device id. It holds room secrets, so it has its own sealed slot, not [State]. */
+    private var reachRecords: Map<String, String> = emptyMap()
+    private var reachDirty = false
     /** The newest key epoch on the server. */
     private var remoteKeyId: Long? = null
     /** The device the current token is bound to, per the server. */
@@ -160,6 +167,7 @@ class CloudSync(
         hasKeys = state.keyId?.let { keyring(it) } != null
         joinCode = if (state.waiting) secrets.get(JOIN_CODE) else null
         chats = decodeChats(files?.load())
+        reachRecords = secrets.get(REACH)?.let { runCatching { (json.parseToJsonElement(it) as JsonObject).mapValues { e -> (e.value as JsonPrimitive).content } }.getOrNull() } ?: emptyMap()
         publish()
     }
 
@@ -179,7 +187,29 @@ class CloudSync(
         mutable.value = View(
             account = state.account, signedIn = signedIn, phase = phase(), devices = devices, chats = chats, syncing = syncing,
             error = error, lastSyncAt = lastSyncAt, accountSyncs = remoteKeyId != null, waitingForApproval = state.waiting, joinCode = joinCode,
+            // Signing out takes the account's computers away; they come back from the kept records on the next sign-in.
+            reach = if (signedIn && hasKeys) reachList() else emptyList(),
         )
+    }
+
+    private fun reachList(): List<Reach> =
+        reachRecords.values.mapNotNull { FleetLink.parseReach(it.toByteArray(Charsets.UTF_8)) }.filter { !it.deleted }.sortedBy { it.name.lowercase() }
+
+    /**
+     * What the account HELLO needs (decision 0128): null while signed out, not joined, or when this phone's id or the
+     * account's ids can't be carried in a HELLO. Call it just before dialing; it reads the current epoch's keyring.
+     */
+    suspend fun accountIdentity(): AccountIdentity? {
+        if (!signedIn) return null
+        val accountId = state.account?.id ?: return null
+        val deviceId = state.deviceId ?: return null
+        val epoch = state.keyId?.takeIf { it in 1..0xFFFF_FFFFL && it <= Int.MAX_VALUE } ?: return null
+        val kr = keyring(epoch) ?: return null
+        return runCatching {
+            // Fails on an id that may not travel in associated data; nothing is sent then.
+            FleetLink.helloAad(accountId, epoch.toInt(), deviceId)
+            AccountIdentity(AccountKeyring(kr.bytes), accountId, epoch.toInt(), deviceId)
+        }.getOrNull()
     }
 
     /** A short code for this phone's key, to tell devices apart in the list. */
@@ -411,6 +441,21 @@ class CloudSync(
         }
     }
 
+    /**
+     * One sync for the background loop: nothing unless this phone is signed in and joined (it never starts a join or
+     * a sign-in), and no error escapes: the screens read [View.error]. True when it synced.
+     */
+    suspend fun syncQuietly(): Boolean {
+        if (!signedIn || !hasKeys || syncing || state.account?.canSync != true) return false
+        return try {
+            sync()
+            true
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            false
+        }
+    }
+
     /** The keyring a computer wrapped to this phone with its join code, once approved. */
     private suspend fun finishJoin(t: String): Boolean {
         val accountId = state.account?.id ?: return false
@@ -486,6 +531,10 @@ class CloudSync(
             }
         } finally {
             chats = byId.values.sortedByDescending { it.updatedAt }
+            if (reachDirty) {
+                reachDirty = false
+                secrets.set(REACH, JsonObject(reachRecords.mapValues { JsonPrimitive(it.value) }).toString())
+            }
             files?.save(encodeChats(chats))
             save()
         }
@@ -524,6 +573,16 @@ class CloudSync(
                 } else {
                     return
                 }
+            }
+            "reach" -> {
+                // A computer's own record (decision 0128): it must open, be in shape, and hash back to the object id it is filed under.
+                val plain = runCatching { SyncCrypto.openRecord(kr, accountId, kid, collection, oid, rev, blob) }.getOrNull() ?: return
+                val r = FleetLink.parseReach(plain) ?: return
+                if (runCatching { SyncCrypto.objectId(kr, "reach", r.deviceId) }.getOrNull() != oid) return
+                // Never our own id: this phone is not a computer to dial.
+                if (r.deviceId == state.deviceId) return
+                reachRecords = if (r.deleted) reachRecords - r.deviceId else reachRecords + (r.deviceId to plain.toString(Charsets.UTF_8))
+                reachDirty = true
             }
             else -> return
         }
@@ -672,6 +731,9 @@ class CloudSync(
         hasKeys = false
         secrets.set(JOIN_CODE, null)
         joinCode = null
+        secrets.set(REACH, null)
+        reachRecords = emptyMap()
+        reachDirty = false
         chats = emptyList()
         files?.remove()
     }
@@ -778,6 +840,8 @@ class CloudSync(
         internal const val TOKEN = "cloud.token"
         internal const val STATE = "cloud.state"
         internal const val JOIN_CODE = "cloud.joinCode"
+        /** The account's computers' `reach` records: room secrets, sealed in their own slot. */
+        internal const val REACH = "cloud.reach"
         internal fun keyringSlot(epoch: Long) = "cloud.keyring.$epoch"
 
         internal fun accountLocalId(epoch: Long) = "epoch-$epoch"
@@ -835,4 +899,42 @@ class CloudSync(
         private fun JsonObject.epoch(k: String): Long? = long(k)?.takeIf { it in 1..0xFFFF_FFFFL }
         private fun JsonElement?.present(): Boolean = this != null && this !is JsonNull
     }
+}
+
+/**
+ * Keeps the account's `reach` records fresh while the app is open (decision 0128): one sync at [start] (launch), one
+ * on [onForeground], and one every [intervalMs] after that. Each is [CloudSync.syncQuietly], so a phone that is
+ * signed out or not joined does nothing.
+ */
+class AccountSyncLoop(
+    private val scope: kotlinx.coroutines.CoroutineScope,
+    private val cloud: CloudSync,
+    private val intervalMs: Long = 3 * 60_000L,
+) {
+    private var job: kotlinx.coroutines.Job? = null
+    private val turn = kotlinx.coroutines.sync.Mutex()
+
+    /** Start the loop (at most one runs). */
+    fun start() {
+        if (job?.isActive == true) return
+        job = scope.launch {
+            while (true) {
+                once()
+                delay(intervalMs)
+            }
+        }
+    }
+
+    /** The app came to the foreground: read the account now. */
+    fun onForeground() {
+        scope.launch { once() }
+    }
+
+    fun stop() {
+        job?.cancel()
+        job = null
+    }
+
+    /** Syncs never overlap: a foreground that lands during one waits its turn. */
+    private suspend fun once() = turn.withLock { cloud.syncQuietly() }
 }

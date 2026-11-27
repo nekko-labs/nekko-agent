@@ -293,12 +293,9 @@
 .monitors-dock__local-idle { display: flex; align-items: center; gap: 8px; color: var(--ink-faint); font-size: var(--text-2xs); }
 .monitors-dock__local-idle .monitors-dock__icon { flex-shrink: 0; color: var(--ink-soft); }
 .monitors-dock__local-model button.monitors-dock__text-button:disabled { opacity: 0.5; }
-/* Starred and Recent: a group label, then rows, a step of space above each group. */
+/* Recent: a group label, then rows, a step of space above each group. */
 .monitors-dock__local-group { display: grid; gap: 8px; margin-top: 12px; }
 .monitors-dock__local-group-label { color: var(--ink-faint); font-size: var(--text-2xs); font-weight: 600; }
-.monitors-dock button.monitors-dock__star { flex-shrink: 0; display: inline-flex; border: 0; background: transparent; padding: 0; color: var(--ink-faint); }
-.monitors-dock button.monitors-dock__star[aria-pressed="true"] { color: var(--accent); }
-@media (hover: hover) { .monitors-dock button.monitors-dock__star:hover { color: var(--ink); } }
 
 /* Keep the dock alive during exit so a second toggle reverses from here. */
 .monitors-dock { --dock-enter-x: 100%; --dock-enter-y: 0px; opacity: 1; transform: translate(0, 0); overflow: visible; clip-path: inset(0 -10px); interpolate-size: allow-keywords; transition: flex-basis 220ms ease-out, height 220ms ease-out, transform 220ms ease-out; }
