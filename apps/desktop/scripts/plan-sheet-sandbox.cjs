@@ -56,35 +56,18 @@ app.whenReady().then(async () => {
     await run(`(() => { const f=layoutFixture, prs=f.store.getState().prsBySession.a; f.bridge.listSessionPrs=async()=>prs; f.bridge.getPrInfo=async()=>prs[0]; })()`);
     await run(`layoutFixture.store.getState().refreshSessions()`);
     if (process.env.NEKKO_PLAN_LAYOUT !== 'grid') await run(`layoutFixture.store.setState({ focusRequest: { sessionId: 'a' } })`);
-    await run(`layoutFixture.store.setState({settings:{...layoutFixture.store.getState().settings,theme:'dark',themePreset:'x-blueberry-dark'}}); layoutFixture.store.getState().applyTheme()`);
+    await run(`layoutFixture.store.setState({settings:{...layoutFixture.store.getState().settings,theme:'dark',themePreset:'x-blueberry-dark',planDisplay:'full'}}); layoutFixture.store.getState().applyTheme()`);
     await sleep(1200);
     // Hidden Chromium can leave CSS entrance motion at time zero. Settle only
-    // the finite sheet entrance, without touching the live SVG SMIL ripple.
+    // the finite sheet entrance.
     await run(`(() => { const style = document.createElement('style'); style.textContent = '.plan-sheet { animation: none !important; }'; document.head.append(style); })()`);
     await shot('plan-focused');
-    // SVG SMIL is not exposed by document.getAnimations(): inspect animated lengths.
     if (!process.env.NEKKO_TEST_SOURCE) {
-      await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
-      await check('working steps and running checks use the ripple, not pause bars', `document.querySelectorAll('[data-plan-sheet] .plan-working .plan-working-motion circle').length >= 3 && !document.querySelector('[data-plan-sheet] [aria-label="Paused"]')`);
-      await check('working ripple is inside the settled visible sheet', `(() => { const e = document.querySelector('[data-plan-sheet] .plan-working-motion'); if (!e) return false; const r = e.getBoundingClientRect(), s = e.closest('[data-plan-sheet]').getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.top >= s.top && r.bottom <= s.bottom && r.top >= 0 && r.bottom <= innerHeight && getComputedStyle(e).display !== 'none'; })()`);
-      const frames = [], radii = [];
-      for (let i = 0; i < 24; i++) {
-        radii.push(await run(`(() => { const c = document.querySelector('[data-plan-sheet] .plan-working-motion circle'); return c && { base: c.r.baseVal.value, animated: c.r.animVal.value }; })()`));
-        frames.push((await win.capturePage(undefined, { stayHidden: true })).toPNG());
-        await sleep(100);
-      }
-      report.rippleRadii = radii;
-      report.checks.push({ name: 'live SMIL radius changes while base radius stays fixed', value: radii.every(r => r && r.base === 6) && Math.max(...radii.map(r => r.animated)) - Math.min(...radii.map(r => r.animated)) > 1 });
-      if (!report.checks.at(-1).value) throw Error('SMIL radius did not change');
-      const gif = path.join(out, 'plan-working.gif');
-      writeGif(gif, frames, 10); report.captures.push(gif);
+      await check('working steps and running checks show the green rocket, not pause bars', `!!document.querySelector('[data-plan-sheet] .plan-mark-rocket.status-rocket svg .rocket-flame') && !document.querySelector('[data-plan-sheet] [aria-label="Paused"]')`);
+      await check('pending steps show a dotted ring', `!!document.querySelector('[data-plan-step-id="step_4"] [data-plan-pending]')`);
       await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
       await sleep(100);
-      await check('reduced motion hides ripple and shows still rings', `(() => { const e = document.querySelector('[data-plan-sheet] .plan-working'); return !!e && getComputedStyle(e.querySelector('.plan-working-motion')).display === 'none' && getComputedStyle(e.querySelector('.plan-working-still')).display !== 'none' && e.querySelectorAll('.plan-working-still circle').length === 2; })()`);
-      const stillRadius = () => run(`[...document.querySelectorAll('[data-plan-sheet] .plan-working-still circle')].map(c => c.r.animVal.value)`);
-      const before = await stillRadius(); await sleep(250); const after = await stillRadius();
-      report.checks.push({ name: 'reduced-motion ring radii stay fixed', value: before.length > 0 && JSON.stringify(before) === JSON.stringify(after) });
-      if (!report.checks.at(-1).value) throw Error('Reduced-motion ring changed');
+      await check('reduced motion holds the rocket still', `getComputedStyle(document.querySelector('[data-plan-sheet] .plan-mark-rocket')).animationName === 'none'`);
       await shot('plan-reduced-motion');
       await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
     }
@@ -129,7 +112,7 @@ app.whenReady().then(async () => {
     if (!process.env.NEKKO_TEST_SOURCE) {
       await run(`(() => { const f = layoutFixture, s = f.records[0]; s.messages = s.messages.map((m, i) => i === s.messages.length - 1 ? { ...m, interrupted: true } : m); f.putCachedSession({ ...s }); f.store.getState().refreshSessions(); })()`);
       await sleep(300);
-      await check('interrupted active steps retain pause bars without ripple', `(() => { const marks = [...document.querySelectorAll('[data-plan-sheet] [aria-label="Paused"]')]; return marks.length > 0 && marks.every(e => e.querySelector('path')?.getAttribute('d') === 'M8 5v14M16 5v14') && !document.querySelector('[data-plan-sheet] .plan-working'); })()`);
+      await check('interrupted active steps retain pause bars without the rocket', `(() => { const marks = [...document.querySelectorAll('[data-plan-sheet] [aria-label="Paused"]')]; return marks.length > 0 && marks.every(e => e.querySelector('path')?.getAttribute('d') === 'M8 5v14M16 5v14') && !document.querySelector('[data-plan-sheet] .plan-mark-rocket'); })()`);
       await shot('plan-paused');
     }
     // The Local Web UI shares this renderer at phone widths.

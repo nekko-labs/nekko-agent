@@ -3306,8 +3306,6 @@ select:not([multiple]):not([size]) {
 .plan-config:hover, .plan-config:focus-within { color: var(--ink); background: var(--surface-2); }
 .plan-config:focus-within { outline: 2px solid var(--ring); }
 .plan-config select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
-.plan-completed > summary::-webkit-details-marker { display: none; }
-.plan-completed > summary { list-style: none; width: fit-content; padding-top: var(--q-tight); color: var(--ink-faint); font-size: var(--text-2xs); cursor: pointer; }
 .plan-sheet-scroll { max-height: 40vh; overflow-y: auto; }
 /* Dense flat title rows. Only overflow chiplets open their own row. */
 .plan-sheet-steps { display: flex; flex-direction: column; gap: 2px; padding-top: 2px; }
@@ -3330,6 +3328,37 @@ select:not([multiple]):not([size]) {
 .plan-row-content .plan-sheet-pr-actions { position: fixed; z-index: 50; right: auto; bottom: auto; max-width: calc(100vw - 16px); flex-wrap: wrap; padding: 4px; border-radius: 8px; background: var(--surface); box-shadow: var(--shadow-float); }
 @keyframes plan-row-reveal { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .plan-row-more:not([hidden]) { animation: none; } .plan-row-count { transition: none; } }
+/* The plan as a timeline: dots on one line when folded, the line down the left edge when open.
+   Both lines are drawn from the first dot's centre and rotated, so the switch can turn them. */
+.plan-timeline { position: relative; }
+.plan-sheet-scroll[data-turning] { overflow: hidden; }
+.plan-timeline-line { position: absolute; z-index: 0; height: 2px; margin-top: -1px; border-radius: 1px; transform-origin: 0 50%; background: color-mix(in srgb, var(--ink) 14%, transparent); pointer-events: none; }
+.plan-timeline-line[data-filled] { background: color-mix(in srgb, var(--success) 70%, transparent); }
+.plan-timeline-dots { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 6px 2px 4px; }
+.plan-timeline-stop { display: flex; flex: 0 0 auto; }
+.plan-timeline-dot { position: relative; z-index: 1; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 999px; background: var(--plan-sheet-bg); transition: background-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
+.plan-timeline-dot:active { transform: scale(.97); }
+.plan-timeline-dot:focus-visible { outline: 2px solid var(--ring); outline-offset: 0; }
+@media (hover: hover) { .plan-timeline-dot:hover { background: color-mix(in srgb, var(--ink) 10%, var(--plan-sheet-bg)); } }
+@media (pointer: coarse) { .plan-timeline-dot { width: 32px; height: 32px; } }
+/* Open: the marks sit on the line with the sheet's surface behind them. */
+/* Open: the marks sit on the line with only the glyph's own disc cut out of it, and the
+   rows are spaced so the line between them reads. */
+.plan-timeline-rows { gap: 8px; }
+.plan-timeline-rows .plan-timeline-mark { position: relative; z-index: 1; border-radius: 999px; background: var(--plan-sheet-bg); }
+.plan-sheet-current { animation: plan-timeline-text var(--dur-fast) var(--ease-out); }
+@keyframes plan-timeline-text { from { opacity: 0; transform: translateX(-16px); } }
+.plan-timeline-card { position: fixed; z-index: 60; max-width: min(320px, calc(100vw - 16px)); padding: 8px 12px; border-radius: 8px; background: var(--surface); box-shadow: var(--shadow-float); font-size: var(--text-xs); line-height: 1.45; color: var(--ink); pointer-events: none; animation: plan-timeline-card var(--dur-med) var(--ease-out); }
+.plan-timeline-card-meta { font-size: var(--text-2xs); color: var(--ink-faint); }
+.plan-timeline-card-title { overflow-wrap: anywhere; }
+.plan-timeline-card-detail { font-size: var(--text-2xs); color: var(--ink-soft); overflow-wrap: anywhere; }
+@keyframes plan-timeline-card { from { opacity: 0; transform: translateY(4px) scale(.98); } }
+@media (prefers-reduced-motion: reduce) {
+  .plan-timeline-dot { transition: none; }
+  .plan-sheet-current { animation-name: plan-timeline-fade; }
+  .plan-timeline-card { animation-name: plan-timeline-fade; }
+}
+@keyframes plan-timeline-fade { from { opacity: 0; } }
 .plan-sheet-chips { display: flex; gap: 8px; overflow: hidden; padding: 4px 0 1px; }
 .plan-sheet-steps .plan-sheet-chips { flex-wrap: wrap; }
 .plan-sheet-chip { display: inline-flex; flex-shrink: 0; max-width: 100%; align-items: center; gap: 4px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 7%, transparent); padding: 0 8px; font-size: var(--text-2xs); line-height: 18px; color: var(--ink-soft); white-space: nowrap; }
@@ -5027,14 +5056,6 @@ html[data-library-transition="list"]::view-transition-new(library-list) { animat
 :is(button, a, [role="button"], summary, label).is-active .gf-icon > .gf-icon-solid { opacity: 1; }
 @media (prefers-reduced-motion: reduce) {
   .gf-icon > svg { transition: none; }
-}
-
-/* Plan ripple follows the supplied SVG timing; no motion in reduced-motion mode. */
-.plan-working { display: grid; place-items: center; color: var(--accent); }
-.plan-working-still { display: none; }
-@media (prefers-reduced-motion: reduce) {
-  .plan-working-motion { display: none; }
-  .plan-working-still { display: block; }
 }
 
 /* File editor syntax colours. Each hue is mixed with the theme's ink, so the

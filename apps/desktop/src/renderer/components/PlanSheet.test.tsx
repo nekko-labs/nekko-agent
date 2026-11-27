@@ -21,22 +21,25 @@ afterEach(() => { vi.restoreAllMocks(); linked.links = null; state.sessions = []
 
 describe('working and paused marks', () => {
   const active = { id: 'work', title: 'Working step', status: 'active', createdAt: now, updatedAt: now } as PlanStep;
-  it('uses an aria-hidden SMIL ripple for working active steps', () => {
-    const html = render([active]);
+  it('shows the green rocket for a step being built, a dotted ring for pending and a check for done', () => {
+    const html = render([{ ...active, id: 'built', title: 'Built', status: 'done' }, active, { ...active, id: 'next', title: 'Next', status: 'pending' }]);
     expect(html).toContain('aria-label="Working"');
-    expect(html).toContain('class="plan-working" aria-hidden="true"');
-    expect(html).toContain('attributeName="r"');
-    expect(html).toContain('repeatCount="indefinite"');
-    expect(html).toContain('class="plan-working-still"');
-    expect(html).not.toContain('M8 5v14M16 5v14');
+    const row = (id: string) => html.match(new RegExp(`<li[^>]*data-plan-step-id="${id}"[^>]*>[^]*?</li>`))![0];
+    expect(row('work')).toMatch(/class="plan-mark-rocket status-rocket[^"]*" aria-hidden="true"/);
+    expect(row('work')).toContain('rocket-flame');
+    expect(row('next')).toContain('data-plan-pending');
+    expect(row('next')).toContain('stroke-dasharray="0.01 3.99"');
+    expect(row('next')).not.toContain('status-rocket');
+    expect(row('built')).not.toContain('data-plan-pending');
+    expect(row('built')).not.toContain('status-rocket');
+    expect(html).not.toContain('plan-working');
   });
-  it('keeps pause bars instead of a ripple for interrupted inactive runs', () => {
+  it('keeps pause bars instead of the rocket for interrupted inactive runs', () => {
     const session = { agentPlan: [active], messages: [{ id: 'reply', role: 'assistant', content: 'Partial reply', interrupted: true, createdAt: now }] } as unknown as Session;
     const html = renderToStaticMarkup(<PlanSheet sessionId="s" session={session} streaming={false} prs={[]} initiallyOpen />);
     expect(html).toContain('aria-label="Paused"');
     expect(html).toContain('M8 5v14M16 5v14');
-    expect(html).not.toContain('plan-working');
-    expect(html.match(/<li[^>]*data-plan-step-id="work"[^>]*>[^]*?<\/li>/)?.[0]).not.toContain('<animate');
+    expect(html).not.toContain('status-rocket');
   });
 });
 
@@ -52,9 +55,9 @@ describe('verification marks', () => {
     expect(html).toContain('Waiting for pairing');
     expect(html).toContain('not inferred from tool results');
   });
-  it('shows the working ripple while a check runs, even on a done step, and only then', () => {
-    expect(render([step('running', 'active')])).toContain('class="plan-working"');
-    for (const status of ['pending', 'passed', 'failed', 'blocked']) expect(render([step('t', status)])).not.toContain('class="plan-working"');
+  it('shows the rocket while a check runs, even on a done step, and only then', () => {
+    expect(render([step('running', 'active')])).toContain('status-rocket');
+    for (const status of ['pending', 'passed', 'failed', 'blocked']) expect(render([step('t', status)])).not.toContain('status-rocket');
   });
   it('keeps checks and reports on their original flat rows in published order', () => {
     const kinded = (id: string, kind: PlanStep['kind'], extra = {}) => ({ id, title: id, kind, status: 'done', createdAt: now, updatedAt: now, ...extra }) as PlanStep;
@@ -69,8 +72,8 @@ describe('verification marks', () => {
     expect(html).not.toContain('verify:all');
     expect(html).not.toContain('Check the work');
     expect(html.match(/data-plan-step-id="([^"]+)"/g)).toEqual([
-      'data-plan-step-id="Screenshot it"', 'data-plan-step-id="Open the PR"',
       'data-plan-step-id="Fix the parser"', 'data-plan-step-id="Run the tests"',
+      'data-plan-step-id="Screenshot it"', 'data-plan-step-id="Open the PR"',
     ]);
     expect(html).toContain('2 of 4 done');
     const build = html.slice(html.indexOf('data-plan-step-id="Fix the parser"'), html.indexOf('data-plan-step-id="Run the tests"'));
