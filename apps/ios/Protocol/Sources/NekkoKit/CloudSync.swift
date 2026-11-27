@@ -114,6 +114,8 @@ public final class CloudSync {
         /// An iPhone that was already syncing before it could read them pulls once from the start if the
         /// account has compressed records, so the ones an older build skipped are read.
         var zCatchup: Bool?
+        /// The account's `cloud-machines` switch, as last read, so the machines screens show from launch.
+        var machines: Bool?
     }
 
     /// - Parameter key: this iPhone's agreement key, made on first use (a Secure Enclave key on a device).
@@ -130,6 +132,7 @@ public final class CloudSync {
         self.key = key
         state = secrets.get("cloud.state").flatMap { try? JSONDecoder().decode(State.self, from: Data($0.utf8)) } ?? State()
         account = state.account
+        fleetEnabled = state.machines ?? false
         waitingForApproval = state.waiting
         joinCode = state.waiting ? secrets.get("cloud.joinCode") : nil
         chats = Self.decodeChats(files?.load("cloud", "chats"))
@@ -239,6 +242,8 @@ public final class CloudSync {
         if account?.id != a.id { resetFleet() }
         state.account = a
         account = a
+        state.machines = me["account"]?["features"]?["cloud-machines"]?.bool ?? false
+        fleetEnabled = state.machines ?? false
         let remote = try await request("GET", path("/v1/sync/state"), token: t)
         // A number the server sends that doesn't fit is treated as missing, never trapped on.
         remoteKeyId = remote.long("currentKeyId").flatMap { UInt32(exactly: $0) }.flatMap { $0 >= 1 ? $0 : nil }
