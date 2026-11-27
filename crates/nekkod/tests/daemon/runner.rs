@@ -78,6 +78,20 @@ async fn runner_channels_round_trip() {
     })
     .await;
 
+    // A normal settings write cannot add a network, and an approval without
+    // live physical egress must not save the network or any accompanying edits.
+    let router = "gw:02:11:22:33:44:55";
+    let (status, refused) =
+        post(d.port, "runner:update", json!(["r1", {"trustedNetworks": [router]}]), Some(TOKEN)).await;
+    assert_ne!(status, 200, "{refused}");
+    let (status, refused) =
+        post(d.port, "runner:approveNetwork", json!(["r1", {"maxJobMinutes": 30}, router]), Some(TOKEN)).await;
+    assert_ne!(status, 200, "{refused}");
+    assert!(refused["error"].to_string().contains("could not identify its current router"), "{refused}");
+    let (_, still) = post(d.port, "runner:list", json!([]), Some(TOKEN)).await;
+    assert_eq!(still[0]["config"]["settings"]["trustedNetworks"], json!([]));
+    assert_eq!(still[0]["config"]["settings"]["maxJobMinutes"], 10);
+
     let (_, off) = post(d.port, "runner:setEnabled", json!(["r1", false]), Some(TOKEN)).await;
     assert_eq!(off["state"], "off", "{off}");
 

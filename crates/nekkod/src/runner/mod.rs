@@ -48,6 +48,7 @@ pub const CHANNELS: &[&str] = &[
     "runner:list",
     "runner:connect",
     "runner:update",
+    "runner:approveNetwork",
     "runner:remove",
     "runner:setEnabled",
     "runner:jobLog",
@@ -118,6 +119,8 @@ pub struct Runners<S: Sense = HostSense, V: Vm = HelperVm, P: Provider = ByLink<
     /// The image builder; unset in tests.
     image: OnceLock<Arc<image::ImageJob<image::RealBuildHost>>>,
     linux_image: OnceLock<Arc<linux_image::LinuxImageJob>>,
+    /// Live egress for a fresh router read when the owner approves a network.
+    network_egress: OnceLock<Arc<RwLock<Option<egress::Egress>>>>,
     /// The Mac as of the last tick, for the image builder's gates.
     mac: Arc<std::sync::Mutex<Option<signals::MacState>>>,
 }
@@ -207,6 +210,25 @@ fn may_enable(r: &RunnerRecord, enabling: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// Save only the exact router the owner chose; the daemon has just read it.
+fn approve_network(settings: &mut RunnerSettings, expected: &str, current: Option<&str>) -> Result<(), String> {
+    match current {
+        None => return Err("This Mac could not identify its current router. Reconnect and try again.".into()),
+        Some(id) if id != expected => {
+            return Err("The network changed. Choose the current network and try again.".into());
+        }
+        _ => {}
+    }
+    let networks = &mut settings.trusted_networks;
+    if !networks.iter().any(|id| id == expected) {
+        if networks.len() >= 32 {
+            return Err("Trusted networks is full. Remove a saved network first.".into());
+        }
+        networks.push(expected.into());
+    }
+    Ok(())
+}
+
 /// The `nekko-vm` helper beside the executable, or the sentence the UI shows.
 fn helper() -> Result<PathBuf, String> {
     if !cfg!(all(target_os = "macos", target_arch = "aarch64")) {
@@ -288,7 +310,7 @@ impl Runners {
             dir.clone(),
             settings,
             helper.as_ref().ok().cloned(),
-            egress,
+            egress.clone(),
             host_ok,
             running_vm_mb.clone(),
         );
@@ -317,6 +339,7 @@ impl Runners {
         let job_hub = hub.clone();
         let linux_hub = hub.clone();
         let me = Runners::new(&dir, sup, Some(connectors), vault, hub, helper.as_ref().err().cloned(), running_vm_mb);
+        let _ = me.network_egress.set(egress);
         let images = dir.join("images");
         let linux = linux_image::LinuxImageJob::new(
             images.clone(),
@@ -383,6 +406,7 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
             vm_error,
             image: OnceLock::new(),
             linux_image: OnceLock::new(),
+            network_egress: OnceLock::new(),
             mac: Arc::default(),
         })
     }
@@ -645,16 +669,30 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
         let mut records = self.store.load();
         let i = records.iter().position(|r| r.config.id == id).ok_or(NO_RUNNER)?;
         match channel {
-            "runner:update" => {
+            "runner:update" | "runner:approveNetwork" => {
                 let Value::Object(patch) = arg(1) else { return Err("The settings must be an object.".into()) };
                 let mut cur = serde_json::to_value(&records[i].config.settings).map_err(|e| e.to_string())?;
                 if let Some(cur) = cur.as_object_mut() {
                     cur.extend(patch);
                 }
-                let next: RunnerSettings =
+                let mut next: RunnerSettings =
                     serde_json::from_value(cur).map_err(|e| format!("Those settings are not valid: {e}"))?;
                 may_enable(&records[i], next.enabled)?;
-                records[i].config.settings = next.sanitized();
+                let saved = &records[i].config.settings.trusted_networks;
+                if next.trusted_networks.iter().any(|n| !saved.contains(n)) {
+                    return Err("Use Trust this network to add a network.".into());
+                }
+                next = next.sanitized();
+                if channel == "runner:approveNetwork" {
+                    let network = arg(2);
+                    let expected = network.as_str().filter(|id| !id.is_empty()).ok_or("Choose a network to trust.")?;
+                    let current = match self.network_egress.get() {
+                        Some(egress) => signals::read_physical_network_id(egress).await,
+                        None => None,
+                    };
+                    approve_network(&mut next, expected, current.as_deref())?;
+                }
+                records[i].config.settings = next;
                 self.commit(records, Some(&id)).await
             }
             "runner:setEnabled" => {

@@ -13,7 +13,6 @@ import {
   recommendationText,
   slotLimitText,
   suggestedSizeRow,
-  type HostView,
   type ImageView,
   type KeepAwake,
   type LinuxImageView,
@@ -27,13 +26,6 @@ import { useStore } from '../store.js';
 const MAX_TRUSTED_NETWORKS = 32;
 const GB = 1024;
 
-/** Appends the network this Mac is on, unless it is unknown, listed, or the list is full. */
-export function trustNetwork(draft: RunnerSettings, host: HostView): RunnerSettings {
-  const id = host.networkId;
-  if (id === null || draft.trustedNetworks.includes(id) || draft.trustedNetworks.length >= MAX_TRUSTED_NETWORKS) return draft;
-  return { ...draft, trustedNetworks: [...draft.trustedNetworks, id] };
-}
-
 /**
  * Save sends only the keys the owner changed against `base`, the settings as
  * they were when editing began (never `enabled`, which is the switch's), so a
@@ -44,11 +36,23 @@ export async function saveSettings(
   view: RunnerView,
   base: RunnerSettings,
   draft: RunnerSettings,
-  deps: { updateRunner(id: string, s: Partial<RunnerSettings>): Promise<RunnerView>; pushToast(kind: 'error', message: string): void },
+  deps: {
+    updateRunner(id: string, settings: Partial<RunnerSettings>): Promise<RunnerView>;
+    approveRunnerNetwork?(id: string, settings: Partial<RunnerSettings>, networkId: string): Promise<RunnerView>;
+    pushToast(kind: 'error', message: string): void;
+  },
+  pendingNetwork: string | null = null,
 ): Promise<{ view: RunnerView; draft: RunnerSettings } | null> {
   try {
     const { enabled: _switch, ...patch } = settingsPatch(base, draft);
-    const kept = await deps.updateRunner(view.config.id, patch);
+    let kept: RunnerView;
+    if (pendingNetwork !== null) {
+      if (pendingNetwork !== view.host.networkId) throw new Error('The network changed. Choose the current network or undo the pending approval.');
+      if (!deps.approveRunnerNetwork) throw new Error('Update Nekko to approve a network.');
+      kept = await deps.approveRunnerNetwork(view.config.id, patch, pendingNetwork);
+    } else {
+      kept = await deps.updateRunner(view.config.id, patch);
+    }
     return { view: kept, draft: kept.config.settings };
   } catch (e) {
     deps.pushToast('error', `Could not save runner settings: ${e instanceof Error ? e.message : String(e)}`);
@@ -142,7 +146,7 @@ export function LinuxImageRow({ image, onAction }: { image: LinuxImageView; onAc
 export const CLOUD_PICKER_LABEL = 'Let the Nekko Cloud picker send jobs here';
 
 /** The settings form (mockup 4); pure so tests render it statically. */
-export function SettingsBody({ view, image = null, linuxImage = null, onLinuxImage, draft, onDraft, onEnabled, onSave, onApplySize, onRemove, onCancel, onRebuild, onRefresh, saving, saveError = null, toggling = false }: {
+export function SettingsBody({ view, image = null, linuxImage = null, onLinuxImage, draft, onDraft, onEnabled, onSave, onApplySize, onRemove, onCancel, onRebuild, onRefresh, saving, saveError = null, toggling = false, pendingNetwork = null, onPendingNetwork }: {
   view: RunnerView;
   image?: ImageView | null;
   /** `null` while unknown, or where the daemon builds no Linux image. */
@@ -150,6 +154,8 @@ export function SettingsBody({ view, image = null, linuxImage = null, onLinuxIma
   onLinuxImage?(action: 'build' | 'cancel'): void;
   draft: RunnerSettings;
   onDraft(d: RunnerSettings): void;
+  pendingNetwork?: string | null;
+  onPendingNetwork?(id: string | null): void;
   onEnabled(v: boolean): void;
   onSave(): void;
   /** Saves the suggested size at once, apart from Save. */
@@ -166,6 +172,11 @@ export function SettingsBody({ view, image = null, linuxImage = null, onLinuxIma
   const set = <K extends keyof RunnerSettings>(k: K, v: RunnerSettings[K]) => onDraft({ ...draft, [k]: v });
   const enabled = view.config.settings.enabled;
   const sampled = host.ramMb > 0;
+  const currentNetwork = host.networkId;
+  const networkSaved = currentNetwork !== null && draft.trustedNetworks.includes(currentNetwork);
+  const removingCurrent = currentNetwork !== null && !networkSaved && view.config.settings.trustedNetworks.includes(currentNetwork);
+  const networkPending = currentNetwork !== null && pendingNetwork === currentNetwork;
+  const networksFull = draft.trustedNetworks.length >= MAX_TRUSTED_NETWORKS;
   const capGb = Math.max(4, Math.floor((0.75 * host.ramMb) / GB));
   const maxCpus = Math.max(2, host.cores - 2);
   const recommendation = recommendationText(host);
@@ -317,18 +328,41 @@ export function SettingsBody({ view, image = null, linuxImage = null, onLinuxIma
         </div>
       </Row>
       <Row label="Trusted networks" hint="recognised by the router's hardware address">
-        <ul className="flex flex-col gap-1">
-          {draft.trustedNetworks.map((id) => (
-            <li key={id} className="flex items-center gap-2 text-xs">
-              <code className="font-mono text-xs text-ink-soft">{id}</code>
-              {id === host.networkId && <Badge tone="success">This network</Badge>}
-              <button type="button" className="btn btn-outline ml-auto px-2! py-0.5! text-xs" onClick={() => set('trustedNetworks', draft.trustedNetworks.filter((x) => x !== id))}>Remove</button>
-            </li>
-          ))}
-        </ul>
-        {trustNetwork(draft, host) !== draft && (
-          <button type="button" className="btn btn-outline mt-1 py-1! text-xs" onClick={() => onDraft(trustNetwork(draft, host))}>Trust this network</button>
-        )}
+        <div className="flex flex-col gap-2">
+          {currentNetwork === null ? (
+            <div role="status">
+              <p className="text-sm text-ink">No network detected</p>
+              <p className="text-xs text-ink-faint">This Mac couldn’t identify its router. Reconnect to Wi-Fi or Ethernet and wait for detection before approving.</p>
+            </div>
+          ) : (
+            <div role="status" className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-ink">Current network</span>
+              <code className="font-mono text-xs text-ink-soft">{currentNetwork}</code>
+              {networkSaved ? <Badge tone="success">Trusted</Badge> : <Badge tone="neutral">{removingCurrent ? 'Will be removed after Save' : 'Not trusted'}</Badge>}
+            </div>
+          )}
+          {pendingNetwork !== null && (
+            <div className="flex flex-wrap items-center gap-2">
+              <p role="status" className="text-xs text-ink-soft">{networkPending ? 'Will be trusted after Save.' : 'Network changed. Choose the current network or undo this approval.'}</p>
+              <button type="button" className="btn btn-outline px-2! py-0.5! text-xs" onClick={() => onPendingNetwork?.(null)}>Undo approval</button>
+            </div>
+          )}
+          {currentNetwork !== null && !networkSaved && !networkPending && (
+            networksFull ? <p className="text-xs text-ink-faint">Remove a saved network before adding another (32 maximum).</p> :
+              <button type="button" className="btn btn-outline self-start py-1! text-xs" onClick={() => onPendingNetwork?.(currentNetwork)}>Trust this network</button>
+          )}
+          {draft.trustedNetworks.length > 0 && (
+            <ul className="flex flex-col gap-1" aria-label="Saved networks">
+              {draft.trustedNetworks.map((id) => (
+                <li key={id} className="flex items-center gap-2 text-xs">
+                  <code className="font-mono text-xs text-ink-soft">{id}</code>
+                  {id === currentNetwork && <Badge tone="success">This network</Badge>}
+                  <button type="button" aria-label={`Remove ${id}`} className="btn btn-outline ml-auto px-2! py-0.5! text-xs" onClick={() => set('trustedNetworks', draft.trustedNetworks.filter((x) => x !== id))}>Remove</button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </Row>
       <Row label="Safety">
         <Check label="Re-run jobs lost to sleep" checked={draft.rerunLostJobs} onChange={(v) => set('rerunLostJobs', v)} />
@@ -384,6 +418,7 @@ export function RunnerSettingsSheet({ view, image = null, onClose, onRebuild, on
   const pushToast = useStore((s) => s.pushToast);
   const [edits, setEdits] = useState<Edits | null>(null);
   const draft = shownSettings(view, edits?.draft ?? null);
+  const [pendingNetwork, setPendingNetwork] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const inFlight = useRef(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -427,8 +462,9 @@ export function RunnerSettingsSheet({ view, image = null, onClose, onRebuild, on
       const reply = beginReply();
       const res = await saveSettings(view, edits?.base ?? view.config.settings, draft, {
         updateRunner: window.nekko.updateRunner,
+        approveRunnerNetwork: window.nekko.approveRunnerNetwork,
         pushToast: (_kind, message) => setSaveError(message),
-      });
+      }, pendingNetwork);
       if (!res) return;
       reply(res.view);
       pushToast('success', 'Runner settings saved.');
@@ -481,6 +517,8 @@ export function RunnerSettingsSheet({ view, image = null, onClose, onRebuild, on
         onLinuxImage={(a) => void linuxAction(a)}
         draft={draft}
         onDraft={(d) => setEdits((e) => editDraft(e, view, d))}
+        pendingNetwork={pendingNetwork}
+        onPendingNetwork={(id) => { setPendingNetwork(id); setSaveError(null); }}
         onEnabled={(v) => void setEnabled(v)}
         onSave={() => void save()}
         onApplySize={(p) => void applySize(p)}

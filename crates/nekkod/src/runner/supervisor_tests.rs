@@ -2074,3 +2074,20 @@ async fn picker_presence_names_full_repos_and_counts_only_vms_that_could_take_a_
     held.config.settings.enabled = false;
     assert_eq!(crate::runner::picker_row(&held)["free"]["macos"], 0);
 }
+
+#[test]
+fn explicit_network_approval_requires_the_fresh_router_id_and_room() {
+    let id = "gw:02:11:22:33:44:55";
+    let other = "gw:02:aa:bb:cc:dd:ee";
+    let mut settings = RunnerSettings { trusted_networks: vec![other.into()], ..Default::default() };
+    assert!(super::super::approve_network(&mut settings, id, None).is_err());
+    assert!(super::super::approve_network(&mut settings, id, Some(other)).is_err());
+    assert_eq!(settings.trusted_networks, [other]);
+    super::super::approve_network(&mut settings, id, Some(id)).unwrap();
+    super::super::approve_network(&mut settings, id, Some(id)).unwrap();
+    assert_eq!(settings.trusted_networks, [other, id]);
+    assert!(settings.trusted_networks_only && settings.never_on_hotspot && !settings.allow_direct_with_vpn);
+    settings.trusted_networks = (0..32).map(|n| format!("gw:02:00:00:00:00:{n:02x}")).collect();
+    assert!(super::super::approve_network(&mut settings, id, Some(id)).is_err());
+    assert_eq!(settings.trusted_networks.len(), 32);
+}

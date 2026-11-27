@@ -8,7 +8,10 @@
 //! address (`lan.rs`); pending security updates from `softwareupdate` (`updates.rs`).
 
 use super::egress::{Egress, spawn_line_watch};
-use super::lan::{default_gateway, network_id, scutil_field, service_network_id};
+use super::lan::{
+    default_gateway, network_id, scoped_gateway, scoped_network_id, scoped_service_network_id, scutil_field,
+    service_network_id,
+};
 use super::updates::{UpdateLedger, os_major, security_labels, write_atomic};
 use nekko_machine::Machine;
 use nekko_machine::activity::Power;
@@ -179,10 +182,15 @@ pub struct HostSense {
     procs: Arc<Mutex<sysinfo::System>>,
     cpu: Mutex<CpuWindow>,
     memory: Mutex<MemoryHistory>,
-    network_id: Arc<RwLock<Option<String>>>,
+    network_id: Arc<RwLock<Option<PhysicalNetwork>>>,
     /// The last successful `softwareupdate` read; a failed run keeps it.
     update_labels: Arc<RwLock<Option<Vec<String>>>>,
     ledger: Mutex<UpdateLedger>,
+}
+
+struct PhysicalNetwork {
+    interface: (String, u32),
+    id: String,
 }
 
 impl HostSense {
@@ -206,7 +214,7 @@ impl HostSense {
         let update_labels = Arc::new(RwLock::new(None));
         // Without a helper nothing can start, so the slow readers stay off.
         if helper.is_some() {
-            Self::spawn_readers(network_id.clone(), update_labels.clone());
+            Self::spawn_readers(egress.clone(), network_id.clone(), update_labels.clone());
         }
         HostSense {
             machine,
@@ -225,16 +233,21 @@ impl HostSense {
         }
     }
 
-    /// The router's MAC every 30 s, and pending security updates every 6 h.
-    fn spawn_readers(network_id: Arc<RwLock<Option<String>>>, update_labels: Arc<RwLock<Option<Vec<String>>>>) {
+    /// The router's MAC every 30 s (retry when unknown), and security updates every 6 h.
+    fn spawn_readers(
+        egress: Arc<RwLock<Option<Egress>>>,
+        network_id: Arc<RwLock<Option<PhysicalNetwork>>>,
+        update_labels: Arc<RwLock<Option<Vec<String>>>>,
+    ) {
         let shared = network_id;
         tokio::spawn(async move {
             loop {
-                let id = read_network_id().await;
+                let id = current_physical_network(&egress).await;
+                let delay = if id.is_some() { NETWORK_EVERY } else { Duration::from_secs(5) };
                 if let Ok(mut s) = shared.write() {
                     *s = id;
                 }
-                tokio::time::sleep(NETWORK_EVERY).await;
+                tokio::time::sleep(delay).await;
             }
         });
         let shared = update_labels;
@@ -298,15 +311,20 @@ impl Sense for HostSense {
         let updates_read = labels.is_some();
         let security_update_overdue_days =
             labels.and_then(|l| self.ledger.lock().ok().and_then(|mut g| g.observe(&l, wall.as_secs())));
+        let egress = self.egress.read().ok().and_then(|e| e.clone());
+        let network_id = self.network_id.read().ok().and_then(|n| {
+            let n = n.as_ref()?;
+            (egress.as_ref()?.physical.as_ref()? == &n.interface).then(|| n.id.clone())
+        });
         MacState {
             wall_secs: wall.as_secs_f64(),
             idle_seconds: activity.idle_seconds,
             user_cpu_pct,
             power: activity.power,
             host: self.host.read().ok().and_then(|h| *h),
-            egress: self.egress.read().ok().and_then(|e| e.clone()),
+            egress,
             host_nets_ok: self.host_nets_ok.load(Ordering::SeqCst),
-            network_id: self.network_id.read().ok().and_then(|n| n.clone()),
+            network_id,
             free_disk_gb: disk.ok().flatten().map_or(f64::NAN, |b| b / GIB),
             available_memory_mb: total_mb - used_mb,
             ram_mb: if total_mb.is_finite() { total_mb as u64 } else { 0 },
@@ -319,7 +337,53 @@ impl Sense for HostSense {
     }
 }
 
-/// The router's hardware address, or `None` when neither source has it.
+/// Identify only the interface the runner binds to, never a VPN's gateway or
+/// an arbitrary service with a cached router address.
+async fn current_physical_network(egress: &RwLock<Option<Egress>>) -> Option<PhysicalNetwork> {
+    let current = || egress.read().ok()?.as_ref()?.physical.clone();
+    let interface = current()?;
+    let id = tokio::time::timeout(Duration::from_secs(5), physical_router(&interface.0)).await.ok()??;
+    (current()? == interface).then_some(PhysicalNetwork { interface, id })
+}
+
+/// An uncached network ID for an explicit approval, not the last tick's view.
+pub(super) async fn read_physical_network_id(egress: &RwLock<Option<Egress>>) -> Option<String> {
+    current_physical_network(egress).await.map(|network| network.id)
+}
+
+async fn physical_router(interface: &str) -> Option<String> {
+    let args = ["-n", "get", "-ifscope", interface, "default"];
+    let route = || output("/sbin/route", &args, Duration::from_secs(5));
+    let gateway = scoped_gateway(&route().await?, interface)?;
+    let keys = scutil_command("list State:/Network/Service/.*/IPv4").await?;
+    let mut ids = Vec::new();
+    for key in keys.lines().filter_map(|line| {
+        let (_, key) = line.split_once(" = ")?;
+        let service = key.strip_prefix("State:/Network/Service/")?.strip_suffix("/IPv4")?;
+        (!service.is_empty() && service.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')).then_some(key)
+    }) {
+        if let Some(id) =
+            scutil_show(key).await.as_deref().and_then(|show| scoped_service_network_id(show, interface, gateway))
+        {
+            ids.push(id);
+        }
+    }
+    let arp = output("/usr/sbin/arp", &["-n", "-i", interface, &gateway.to_string()], Duration::from_secs(5)).await;
+    // A scoped ARP result and the matching macOS service must not disagree.
+    // When ARP is unavailable, macOS may still have resolved the active router.
+    ids.extend(arp.as_deref().and_then(|arp| scoped_network_id(arp, gateway, interface)));
+    let id = network_id_consensus(ids)?;
+    (scoped_gateway(&route().await?, interface)? == gateway).then_some(id)
+}
+
+fn network_id_consensus(ids: Vec<String>) -> Option<String> {
+    let mut ids = ids.into_iter();
+    let first = ids.next()?;
+    ids.all(|id| id == first).then_some(first)
+}
+
+/// The unscoped router reading used by the existing provider-connect flow.
+/// Do not broaden its implicit approval to a LAN behind a VPN.
 pub(super) async fn read_network_id() -> Option<String> {
     match service_router().await {
         Some(id) => Some(id),
@@ -335,7 +399,11 @@ async fn service_router() -> Option<String> {
 
 /// `scutil` takes `show` only on stdin.
 async fn scutil_show(key: &str) -> Option<String> {
-    output("/bin/sh", &["-c", r#"echo "show $1" | /usr/sbin/scutil"#, "sh", key], Duration::from_secs(5)).await
+    scutil_command(&format!("show {key}")).await
+}
+
+async fn scutil_command(command: &str) -> Option<String> {
+    output("/bin/sh", &["-c", r#"printf '%s\n' "$1" | /usr/sbin/scutil"#, "sh", command], Duration::from_secs(5)).await
 }
 
 async fn arp_router() -> Option<String> {

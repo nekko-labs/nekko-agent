@@ -8,18 +8,18 @@ vi.mock('./primitives/index.js', async (original) => ({
   Modal: ({ children }: { children: React.ReactNode }) => <div role="dialog">{children}</div>,
 }));
 
-import { CLOUD_PICKER_LABEL, LinuxImageRow, SettingsBody, editDraft, saveSettings, shownSettings, trustNetwork } from './RunnerSettingsSheet.js';
+import { CLOUD_PICKER_LABEL, LinuxImageRow, SettingsBody, editDraft, saveSettings, shownSettings } from './RunnerSettingsSheet.js';
 
 const host: HostView = {
   ramMb: 36864, cores: 12, recommendedMemoryMb: 24576, runnerMemoryMb: 18432, cpusPerVm: 4,
-  onBattery: false, batteryPct: 100, networkId: 'gw:aa:bb:cc:dd:ee:ff', networkTrusted: true,
+  onBattery: false, batteryPct: 100, networkId: 'gw:aa:bb:cc:dd:ee:ff', networkTrusted: false,
 };
 const view = (over: Partial<RunnerView> = {}, settings: Partial<RunnerSettings> = {}): RunnerView => ({
   config: { id: 'r1', scope: { kind: 'repo', owner: 'nekko-labs', repo: 'nekko-agent' }, label: 'nekko-cloud-mac', settings: { ...DEFAULT_RUNNER_SETTINGS, enabled: true, ...settings } },
   state: 'ready', slots: [], reasons: [], available: 2, limit: null, awake: false, error: null, today: { jobs: 0, seconds: 0 }, host, repos: [], forkApprovalOpen: false, recent: [], suggestedSize: null, ...over,
 });
-const render = (v: RunnerView, draft = v.config.settings, image: ImageView | null = null) =>
-  renderToStaticMarkup(<SettingsBody view={v} image={image} draft={draft} onDraft={() => {}} onEnabled={() => {}} onSave={() => {}} onRemove={() => {}} saving={false} />);
+const render = (v: RunnerView, draft = v.config.settings, image: ImageView | null = null, pendingNetwork: string | null = null) =>
+  renderToStaticMarkup(<SettingsBody view={v} image={image} draft={draft} pendingNetwork={pendingNetwork} onDraft={() => {}} onEnabled={() => {}} onSave={() => {}} onRemove={() => {}} saving={false} />);
 const esc = (s: string) => renderToStaticMarkup(<>{s}</>);
 
 describe('RunnerSettingsSheet', () => {
@@ -142,14 +142,50 @@ describe('RunnerSettingsSheet', () => {
     expect(render(view({ limit: 'memory' }))).toContain('Not enough runner memory for another VM.');
   });
 
-  it('trust_this_network_adds_the_current_id', () => {
-    const d = DEFAULT_RUNNER_SETTINGS;
-    expect(trustNetwork(d, host).trustedNetworks).toEqual(['gw:aa:bb:cc:dd:ee:ff']);
-    const listed = { ...d, trustedNetworks: ['gw:aa:bb:cc:dd:ee:ff'] };
-    expect(trustNetwork(listed, host)).toBe(listed);
-    expect(trustNetwork(d, { ...host, networkId: null })).toBe(d);
-    const full = { ...d, trustedNetworks: Array.from({ length: 32 }, (_, i) => `gw:${i}`) };
-    expect(trustNetwork(full, host)).toBe(full);
+  it('explains unknown, saved, full, and changed networks without offering unsafe approval', () => {
+    const network = host.networkId!;
+    const unknown = render(view({ host: { ...host, networkId: null } }));
+    expect(unknown).toContain('No network detected');
+    expect(unknown).not.toContain('Trust this network');
+    const saved = render(view({}, { trustedNetworks: [network] }));
+    expect(saved).toContain('>Trusted<');
+    expect(saved).not.toContain('Trust this network');
+    const full = render(view({}, { trustedNetworks: Array.from({ length: 32 }, (_, i) => `gw:${i}`) }));
+    expect(full).toContain('32 maximum');
+    expect(full).not.toContain('Trust this network');
+    const pending = render(view(), undefined, null, network);
+    expect(pending).toContain('Will be trusted after Save.');
+    expect(pending).not.toContain('Trust this network');
+    const moved = render(view({ host: { ...host, networkId: 'gw:02:00:00:00:00:01' } }), undefined, null, network);
+    expect(moved).toContain('Network changed.');
+    expect(moved).toContain('Undo approval');
+    expect(moved).toContain('Trust this network');
+  });
+
+  it('sends only the explicitly chosen router and refuses to save a stale approval', async () => {
+    const v = view();
+    const network = host.networkId!;
+    const base = v.config.settings;
+    const draft = { ...base, maxJobMinutes: 30 };
+    const kept = view({}, { ...draft, trustedNetworks: [network] });
+    const deps = { updateRunner: vi.fn(), approveRunnerNetwork: vi.fn(async () => kept), pushToast: vi.fn() };
+    const stale = view({ host: { ...host, networkId: null } });
+    expect(await saveSettings(stale, base, draft, deps, network)).toBeNull();
+    expect(deps.pushToast).toHaveBeenCalledWith('error', expect.stringContaining('The network changed'));
+    expect(deps.approveRunnerNetwork).not.toHaveBeenCalled();
+    expect(deps.updateRunner).not.toHaveBeenCalled();
+    expect((await saveSettings(v, base, draft, deps, network))?.view).toBe(kept);
+    expect(deps.approveRunnerNetwork).toHaveBeenCalledExactlyOnceWith('r1', { maxJobMinutes: 30 }, network);
+  });
+
+  it('does not fall back to ordinary settings writes if explicit approval fails', async () => {
+    const v = view();
+    const base = v.config.settings;
+    const approveRunnerNetwork = vi.fn(async () => { throw new Error('This Mac could not identify its current router.'); });
+    const deps = { updateRunner: vi.fn(), approveRunnerNetwork, pushToast: vi.fn() };
+    expect(await saveSettings(v, base, base, deps, host.networkId)).toBeNull();
+    expect(deps.updateRunner).not.toHaveBeenCalled();
+    expect(deps.pushToast).toHaveBeenCalledWith('error', expect.stringContaining('could not identify its current router'));
   });
 
   it('save_shows_what_the_daemon_kept', async () => {

@@ -28,9 +28,37 @@ pub fn network_id(arp_n: &str, gateway: Ipv4Addr) -> Option<String> {
     gw_id(line.split_whitespace().skip_while(|w| *w != "at").nth(1)?)
 }
 
+/// The default router for the runner's physical interface, not the system's
+/// primary (possibly tunneled) route.
+pub fn scoped_gateway(route: &str, interface: &str) -> Option<Ipv4Addr> {
+    (route.lines().find_map(|line| line.trim().strip_prefix("interface:").map(str::trim))? == interface)
+        .then(|| default_gateway(route))?
+        .filter(|ip| !ip.is_unspecified() && !ip.is_loopback() && !ip.is_multicast() && !ip.is_broadcast())
+}
+
+/// ARP can list more than one interface for the same gateway IP.
+pub fn scoped_network_id(arp: &str, gateway: Ipv4Addr, interface: &str) -> Option<String> {
+    let mut matching = arp.lines().filter(|line| {
+        line.split_whitespace().skip_while(|w| *w != "on").nth(1) == Some(interface)
+            && line.split_whitespace().nth(1).and_then(|w| w.strip_prefix('(')?.strip_suffix(')')?.parse().ok())
+                == Some(gateway)
+    });
+    let id = network_id(matching.next()?, gateway)?;
+    matching.next().is_none().then_some(id)
+}
+
+/// Only the resolved router of the active interface and scoped route counts.
+pub fn scoped_service_network_id(ipv4: &str, interface: &str, gateway: Ipv4Addr) -> Option<String> {
+    let named = scutil_field(ipv4, "InterfaceName")?;
+    let confirmed = scutil_field(ipv4, "ConfirmedInterfaceName");
+    let router = scutil_field(ipv4, "Router")?.parse::<Ipv4Addr>().ok()?;
+    (named == interface && confirmed.is_none_or(|name| name == interface) && router == gateway)
+        .then(|| service_network_id(ipv4))?
+}
+
 fn gw_id(mac: &str) -> Option<String> {
     let octets: Vec<u8> = mac.split(':').map(|o| u8::from_str_radix(o, 16)).collect::<Result<_, _>>().ok()?;
-    (octets.len() == 6)
+    (octets.len() == 6 && octets[0] & 1 == 0 && octets.iter().any(|&o| o != 0))
         .then(|| format!("gw:{}", octets.iter().map(|o| format!("{o:02x}")).collect::<Vec<_>>().join(":")))
 }
 

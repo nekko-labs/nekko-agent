@@ -96,7 +96,7 @@ describe('RunnerCard', () => {
     expect(html).toContain('aria-expanded="false"');
     expect(html).not.toContain('data-recent-job');
     expect(html).toContain('This Mac is on battery, below what this mode allows.');
-    for (const gone of ['data-runner-facts', 'Connect to a workflow', 'This network is not one you trust']) expect(html).not.toContain(gone);
+    for (const gone of ['data-runner-facts', 'Connect to a workflow', 'data-runner-reasons']) expect(html).not.toContain(gone);
     // An idle slot without a VM says nothing the panel needs.
     expect(render(view({ slots: [] }), null, undefined, true)).not.toContain('data-runner-slots');
   });
@@ -110,8 +110,8 @@ describe('RunnerCard', () => {
     expect(at('Queued · 1')).toBeLessThan(at('In progress · 1'));
     expect(at('In progress · 1')).toBeLessThan(at('Completed'));
     expect(html).toContain('waiting 3 min');
-    // No group for what is not there.
-    expect(render(view({ slots: [], recent: [] }))).not.toContain('data-runner-jobs');
+    // An empty job list says so even before the first completed job.
+    expect(render(view({ slots: [], recent: [] }))).toContain('No pending jobs');
   });
 
   it('a running job says how far it has got, with a real percent', () => {
@@ -146,18 +146,17 @@ describe('RunnerCard', () => {
     expect(hot).toMatch(/disabled=""[^>]*title="[^"]*hot[^"]*"|title="[^"]*hot[^"]*"[^>]*disabled=""/i);
   });
 
-  it('an idle runner names its last job: the action and the PR, on the page and in the panel', () => {
-    const idle = view({ state: 'waiting', slots: [], recent: [
-      { ts: now - 600, runnerId: 'r1', repo: 'nekko-labs/nekko-agent', workflow: 'CI', job: 'gate', result: 'finished', seconds: 60, reason: [], url: 'https://github.com/nekko-labs/nekko-agent/actions/runs/7/job/8', pr: { number: 2823, url: 'https://github.com/nekko-labs/nekko-agent/pull/2823' } },
-    ] });
+  it('shows an empty pending list regardless of history, without repeating the last job', () => {
     for (const compact of [false, true]) {
-      const html = render(idle, null, undefined, compact);
-      expect(html).toContain('data-runner-last-job');
-      expect(html).toMatch(/href="https:\/\/github.com\/nekko-labs\/nekko-agent\/actions\/runs\/7\/job\/8"[^>]*>CI · gate<\/a>/);
-      expect(html).toMatch(/href="https:\/\/github.com\/nekko-labs\/nekko-agent\/pull\/2823"[^>]*>PR #(<!-- -->)?2823<\/a>/);
+      for (const recent of [[], view().recent]) {
+        const html = render(view({ state: 'waiting', slots: [], recent }), null, undefined, compact);
+        expect(html).toContain('No pending jobs');
+        expect(html).not.toContain('Last job');
+        expect(html).not.toMatch(/>Waiting</);
+        expect(html).toMatch(/<button class="btn btn-ghost px-1.5!" aria-label="Runner settings[^]*?role="switch"/);
+      }
+      expect(render(view(), null, undefined, compact)).not.toContain('No pending jobs');
     }
-    // Busy: the job rows already carry it, so it is not said twice.
-    expect(render(view())).not.toContain('data-runner-last-job');
   });
 
   it('error_card_shows_the_daemons_sentence', () => {
@@ -225,7 +224,7 @@ describe('RunnerCard', () => {
     // With the line gone, nothing may still point at an error.
     expect(html).not.toContain('error above');
     expect(html).not.toContain('>Error<');
-    expect(html).toContain('>Waiting<');
+    expect(html).toContain('data-hover-tip="Waiting');
     // Any other error still shows, and a daemon with no builder keeps the line.
     expect(render(view({ state: 'error', error: 'GitHub refused this app key.' }), image())).toContain('GitHub refused this app key.');
     expect(render(noImage)).toContain('No VM image yet.');
