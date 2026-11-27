@@ -56,7 +56,7 @@ app.whenReady().then(async () => {
     await run(`(() => { const f=layoutFixture, prs=f.store.getState().prsBySession.a; f.bridge.listSessionPrs=async()=>prs; f.bridge.getPrInfo=async()=>prs[0]; })()`);
     await run(`layoutFixture.store.getState().refreshSessions()`);
     if (process.env.NEKKO_PLAN_LAYOUT !== 'grid') await run(`layoutFixture.store.setState({ focusRequest: { sessionId: 'a' } })`);
-    await run(`layoutFixture.store.setState({settings:{...layoutFixture.store.getState().settings,theme:'dark',themePreset:'x-blueberry-dark'}}); layoutFixture.store.getState().applyTheme()`);
+    await run(`layoutFixture.store.setState({settings:{...layoutFixture.store.getState().settings,theme:'dark',themePreset:'x-blueberry-dark',planDisplay:'full'}}); layoutFixture.store.getState().applyTheme()`);
     await sleep(1200);
     // Hidden Chromium can leave CSS entrance motion at time zero. Settle only
     // the finite sheet entrance, without touching the live SVG SMIL ripple.
