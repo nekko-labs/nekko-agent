@@ -634,6 +634,8 @@ export const IpcEvents = {
   voiceLockStop: 'voice:lockStop',
   /** SK-4: a phone signed itself out, stopped remote access or quit the app (`RemoteSafetyExit`). */
   remoteSafetyExit: 'remote:safetyExit',
+  /** Decision 0064: another Mac in an organization went offline mid-job, or a runner went into Error. */
+  runnersFleetAlert: 'runners:fleetAlert',
 } as const;
 
 /**
