@@ -244,6 +244,14 @@ impl SessionStore {
         std::fs::read(blobs::dir(&self.dir).join(name)).ok()
     }
 
+    /// A picture as a data URL, by its blob name (or the `nekko-blob:<name>`
+    /// reference holding it); `None` for a name this store never writes or a
+    /// file that is not there.
+    pub fn blob_data_url(&self, name: &str) -> Option<String> {
+        let name = name.strip_prefix(blobs::REF).unwrap_or(name);
+        blobs::load(&blobs::dir(&self.dir), &format!("{}{name}", blobs::REF))
+    }
+
     /// Move the pictures of a live `tool_result` event (`result.images`, data
     /// URLs of 4 KB or more) beside the chats and leave `nekko-blob:<name>`
     /// references in the event, so the frame the hub keeps and sends every
@@ -285,9 +293,16 @@ impl SessionStore {
 
     /// A chat file, with the pictures kept beside it put back (blobs.rs).
     fn read(path: &Path) -> Option<Value> {
+        Self::read_as(path, true)
+    }
+
+    /// A chat file; `restore` puts the pictures back as data URLs, otherwise
+    /// they stay the `nekko-blob:` references the file holds.
+    fn read_as(path: &Path, restore: bool) -> Option<Value> {
         let bytes = std::fs::read(path).ok()?;
         let mut chat: Value = serde_json::from_slice(&bytes).ok()?;
-        if memchr::memmem::find(&bytes, blobs::REF.as_bytes()).is_some()
+        if restore
+            && memchr::memmem::find(&bytes, blobs::REF.as_bytes()).is_some()
             && let Some(dir) = path.parent()
         {
             blobs::restore(&mut chat, &blobs::dir(dir));
@@ -379,6 +394,20 @@ impl SessionStore {
     pub fn get(&self, id: &str) -> Option<Value> {
         let _ = self.flush(id);
         self.get_raw(id)
+    }
+
+    /// [`get`](Self::get) with the chat's pictures left as the `nekko-blob:<name>`
+    /// references the file holds (a picture under 4 KB, or one that would not
+    /// move, is still inline). The window opts into this for `session:get`:
+    /// it fetches each picture it draws with [`blob_data_url`](Self::blob_data_url).
+    /// Nothing that sends the chat to a model, exports, syncs or forwards it
+    /// may use this: they want [`get`](Self::get).
+    pub fn get_refs(&self, id: &str) -> Option<Value> {
+        let _ = self.flush(id);
+        if !valid_id(id) {
+            return None;
+        }
+        Self::read_as(&self.dir.join(format!("{id}.json")), false)
     }
 
     /// [`get`](Self::get) as the file stands, for a caller already inside the chat's lock.

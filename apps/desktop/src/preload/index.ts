@@ -22,7 +22,7 @@ import type {
   OAuthStatus,
   SubscriptionLimits,
 } from '@nekko-agent/shared';
-import { AGENT_REPLAY, HTML_PREVIEW_CHANNELS, IpcChannels, IpcEvents, LIBRARY_THUMBNAIL_CHANNELS } from '@nekko-agent/shared';
+import { AGENT_REPLAY, HTML_PREVIEW_CHANNELS, IpcChannels, IpcEvents, sessionGetArgs, LIBRARY_THUMBNAIL_CHANNELS } from '@nekko-agent/shared';
 import { ENGINE_ENDPOINT_CHANNEL, PICK_FOLDER_CHANNEL, SERVICE_CONTROL_CHANNEL } from '../engineChannels.js';
 import { createEngineSocket, type Listener } from './engine-socket.js';
 import { heldWhileHidden, pageHidden } from './hiddenReads.js';
@@ -206,7 +206,8 @@ const api: NekkoApi = {
   listAgentWatches: (sessionId) => inv(IpcChannels.sessionWatches, sessionId),
   listSessionSummaries: () => inv(IpcChannels.sessionsSummaries),
   createSession: (workspaceId) => inv(IpcChannels.sessionCreate, workspaceId),
-  getSession: (id) => inv(IpcChannels.sessionGet, id),
+  getSession: (id, opts) => inv(IpcChannels.sessionGet, ...sessionGetArgs(id, opts)),
+  sessionPicture: (reference) => inv(IpcChannels.sessionBlob, reference),
   finderChatText: (ids) => inv(IpcChannels.sessionsFinderText, ids),
   deleteSession: (id) => inv(IpcChannels.sessionDelete, id),
   setSessionWorkspace: (sessionId, workspaceId) => inv(IpcChannels.sessionSetWorkspace, sessionId, workspaceId),

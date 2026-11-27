@@ -226,6 +226,7 @@
  "service:updateDownload",
  "service:updateInstall",
  "service:updateState",
+ "session:blob",
  "session:cancelWatch",
  "session:create",
  "session:delete",
