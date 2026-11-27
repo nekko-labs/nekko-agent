@@ -7,7 +7,8 @@ import { loadCatalogDetail } from './catalogDetails.js';
 import { downloadRefusal, openBuild } from './buildChecks.js';
 import { useStore } from '../../store.js';
 import { Badge, Group } from '../primitives/index.js';
-import { CheckIcon, ChevronIcon, ExternalIcon } from '../../icons.js';
+import { CheckIcon, ChevronIcon, ExternalIcon, HelpIcon } from '../../icons.js';
+import { HoverTip } from '../HoverTip.js';
 import { formatBytes, formatCount } from '../runtimes/verdict.js';
 import { gpuGuidance, type LibraryModel } from './modelFamilies.js';
 
@@ -96,7 +97,7 @@ export function ModelDetail({
     return next[file];
   };
 
-  const recommended = useMemo(() => (model ? recommendedBuild(model.quants, memory, checks) : null), [model, memory, checks]);
+  const picks = useMemo(() => (model ? recommendedBuilds(model.quants, memory, checks) : { balanced: null, best: null }), [model, memory, checks]);
 
   const prepareDownload = async (quant: CatalogQuant) => {
     if (preparing.current) return false;
@@ -175,9 +176,11 @@ export function ModelDetail({
             <p className="mt-0.5 text-xs text-ink-faint">
               Same model, compressed differently. Lower numbers are smaller files that need less memory and answer a
               little worse; higher numbers keep more of the model and cost disk and RAM.{' '}
-              {recommended && memory && downloadFitVerdict(recommended.sizeBytes, memory.budgetBytes) === 'fits'
-                ? <><strong>{quantOf(recommended)}</strong> is our pick for this machine, the largest that fits its memory with room to spare, marked below.</>
-                : <><strong>Q4_K_M</strong> is the usual choice{recommended ? ', marked below' : ''}.</>}
+              {picks.balanced && picks.best && picks.balanced !== picks.best
+                ? <>Two are marked below: <strong>{quantOf(picks.balanced)}</strong>, balanced for speed, and <strong>{quantOf(picks.best)}</strong>, the best quality this machine holds.</>
+                : picks.best
+                  ? <><strong>{quantOf(picks.best)}</strong> is our pick for this machine, marked below.</>
+                  : <><strong>Q4_K_M</strong> is the usual choice{picks.balanced ? ', marked below' : ''}.</>}
             </p>
             {releasesOf(model.quants).map(({ variant, quants }) => (
             <Group
@@ -191,7 +194,9 @@ export function ModelDetail({
                 const have = installed.find((m) => isInstalledBuild(m, q, variant !== undefined));
                 const fit = memory ? downloadFitVerdict(q.sizeBytes, memory.budgetBytes) : 'unknown';
                 const check = checks[q.file];
-                const isPick = recommended?.label === q.label;
+                const pick = picks.best && picks.balanced !== picks.best
+                  ? (q === picks.balanced ? 'balanced' : q === picks.best ? 'best quality' : null)
+                  : q === picks.balanced ? 'our pick' : null;
                 return (
                   <div key={q.label} className="flex flex-wrap items-center gap-2 py-2 text-xs" onClick={() => { if (!have) void readBuild(q.file); }} title={have ? undefined : 'Click to check that this build runs on your engine'}>
                     <span className="w-24 shrink-0 font-mono font-medium" title={q.file}>{quantOf(q)}</span>
@@ -199,13 +204,12 @@ export function ModelDetail({
                       {q.sizeBytes ? formatBytes(q.sizeBytes) : 'size unknown'}
                     </span>
                     <span className="min-w-0 flex-1 truncate text-xs text-ink-faint">{q.note ?? ''}</span>
-                    {isPick && (
-                      <span
-                        className="shrink-0 rounded-full px-2 py-0.5 text-2xs"
-                        style={{ background: 'color-mix(in srgb, var(--accent) 16%, transparent)', color: 'var(--accent)' }}
-                        title="The build we suggest for this machine"
-                      >
-                        our pick
+                    {pick && (
+                      <span className="inline-flex shrink-0 items-center gap-1">
+                        <PickChip label={pick} />
+                        {pick !== 'best quality' && <HoverTip label={PICK_TIP} multiline side="top">
+                          <span role="button" tabIndex={0} className="mode-info" aria-label="How speed and quality trade off" onClick={(e) => e.stopPropagation()}><HelpIcon /></span>
+                        </HoverTip>}
                       </span>
                     )}
                     {check && !have && (
@@ -597,27 +601,39 @@ export function isInstalledBuild(m: LocalModel, q: CatalogQuant, releases: boole
   return m.quantization?.toUpperCase() === q.label.toUpperCase();
 }
 
+const PICK_TIP = 'Bigger builds answer a little better, but load and reply more slowly and take more memory. '
+  + 'Balanced (usually Q4_K_M) keeps most of the quality at a fraction of the size, so replies come fast. '
+  + 'Best quality is the largest build this machine holds with room to spare: the best answers, a bit slower.';
+
+function PickChip({ label }: { label: string }) {
+  return (
+    <span className="rounded-full px-2 py-0.5 text-2xs" style={{ background: 'color-mix(in srgb, var(--accent) 16%, transparent)', color: 'var(--accent)' }}>
+      {label}
+    </span>
+  );
+}
+
 /**
- * The one build to point at when the question is "which of these", from the newest
- * release (releases come newest first): the largest build this machine holds with
- * room to spare, since a bigger quant answers better and the memory is already there.
- * Unquantized builds (F16, BF16, F32) come last: Q8_0 is effectively the same answers
- * at half the size and twice the speed. With nothing that fits, or no memory reading,
- * Q4_K_M when the repo publishes it, otherwise the lightest build. A build whose
- * format the engine cannot run (`checks`) is never the pick; one that only needs a
- * newer engine still is, since Update fixes that.
+ * The builds to point at when the question is "which of these", from the newest
+ * release (releases come newest first). `best` is the largest build this machine
+ * holds with room to spare; unquantized builds (F16, BF16, F32) rank last, since
+ * Q8_0 gives effectively the same answers at half the size. `balanced` is Q4_K_M
+ * when it fits (or nothing does, or memory is unknown), otherwise `best`; without
+ * a Q4_K_M it is `best`, or the lightest build when memory is unknown. They are the
+ * same build when nothing bigger fits. A build whose format the engine cannot run
+ * (`checks`) is never a pick; one that only needs a newer engine still is, since
+ * Update fixes that.
  */
-export function recommendedBuild(quants: CatalogQuant[], memory: EngineMemory | undefined, checks: Record<string, ModelLoadCheck>): CatalogQuant | null {
+export function recommendedBuilds(quants: CatalogQuant[], memory: EngineMemory | undefined, checks: Record<string, ModelLoadCheck>): { balanced: CatalogQuant | null; best: CatalogQuant | null } {
   const allowed = quants.filter((q) => !(checks[q.file]?.level === 'blocked' && checks[q.file]?.cause !== 'engineAge'));
   const runnable = allowed.filter((q) => q.variant === allowed[0]?.variant);
-  const q4 = runnable.find((q) => quantOf(q).toUpperCase().startsWith('Q4_K_M'));
+  const fits = (q: CatalogQuant) => !!memory && downloadFitVerdict(q.sizeBytes, memory.budgetBytes) === 'fits';
   const full = (q: CatalogQuant) => /^(BF16|FP?16|FP?32)/.test(quantOf(q).toUpperCase());
-  const best = memory && runnable
-    .filter((q) => downloadFitVerdict(q.sizeBytes, memory.budgetBytes) === 'fits')
-    .sort((a, b) => Number(full(a)) - Number(full(b)) || (b.sizeBytes ?? 0) - (a.sizeBytes ?? 0))[0];
-  if (best) return best;
-  if (q4) return q4;
-  return memory ? null : runnable.filter((q) => q.sizeBytes).sort((a, b) => (a.sizeBytes ?? 0) - (b.sizeBytes ?? 0))[0] ?? null;
+  const best = runnable.filter(fits).sort((a, b) => Number(full(a)) - Number(full(b)) || (b.sizeBytes ?? 0) - (a.sizeBytes ?? 0))[0] ?? null;
+  const q4 = runnable.find((q) => quantOf(q).toUpperCase().startsWith('Q4_K_M'));
+  const lightest = runnable.filter((q) => q.sizeBytes).sort((a, b) => (a.sizeBytes ?? 0) - (b.sizeBytes ?? 0))[0] ?? null;
+  const balanced = q4 && (!best || fits(q4)) ? q4 : best ?? (memory ? null : lightest);
+  return { balanced, best };
 }
 
 /** A build's chip when the engine has a word about it, in the library rows' own words. */
