@@ -57,12 +57,7 @@ struct PlanSheet: View {
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         }
-                        if completedOpen {
-                            ScrollView { history(plan, links: links, paused: paused) }
-                                .scrollBounceBehavior(.basedOnSize).fixedSize(horizontal: false, vertical: true).frame(maxHeight: 180)
-                        } else {
-                            history(plan, links: links, paused: paused)
-                        }
+                        history(plan, links: links, paused: paused, compact: true)
                     } else { whole(plan, links: links, paused: paused) }
                 }
                 .padding(.horizontal, Self.shoulder + 12).padding(.top, 8).padding(.bottom, Self.tuck + 2)
@@ -177,7 +172,7 @@ struct PlanSheet: View {
         .accessibilityLabel("Configure plan display")
     }
 
-    @ViewBuilder private func history(_ plan: [PlanStep], links: [String: PlanStepLinks], paused: Bool) -> some View {
+    @ViewBuilder private func history(_ plan: [PlanStep], links: [String: PlanStepLinks], paused: Bool, compact: Bool = false) -> some View {
         let completed = plan.filter(\.squeezed)
         if !completed.isEmpty {
             Button { completedOpen.toggle() } label: {
@@ -186,7 +181,16 @@ struct PlanSheet: View {
             }.buttonStyle(.plain).accessibilityIdentifier("chat.planCompleted")
                 .accessibilityValue(completedOpen ? "Expanded" : "Collapsed")
             if completedOpen {
-                ForEach(completed) { step in row(step, links: links[step.id], paused: paused, opened: AgentPlan.openByDefault(plan, links: links)) }
+                let rows = VStack(alignment: .leading, spacing: 2) {
+                    ForEach(completed) { step in
+                        row(step, links: links[step.id], paused: paused, opened: AgentPlan.openByDefault(plan, links: links))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                if compact {
+                    ScrollView { rows }.scrollBounceBehavior(.basedOnSize)
+                        .fixedSize(horizontal: false, vertical: true).frame(maxHeight: 180)
+                } else { rows }
             }
         }
     }
