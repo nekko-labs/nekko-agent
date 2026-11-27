@@ -6,7 +6,7 @@ import { localImagePath } from '../localImages.js';
 import { fileUrlPath, namedOutputPath } from '../chatArtifacts.js';
 import { FILE_REF, ISSUE_REF_EXACT, parseFileRef } from '../replyRefs.js';
 import { FileRefChip, IssueRefChip } from './ReplyRefChips.js';
-import { remoteImageUrl } from '../remoteImages.js';
+import { PreviewImageAutoload, remoteImageUrl } from '../remoteImages.js';
 import { RemoteImageCard, RemoteImageGallery } from './RemoteImageCard.js';
 import { MermaidDiagram } from './ArtifactPreview.js';
 
@@ -50,8 +50,13 @@ export const MarkdownSession = React.createContext<string | undefined>(undefined
 
 export const MarkdownSandbox = React.createContext(false);
 
-export function Markdown({ text, doc = false, basePath, topics, askTail, runnable }: MarkdownProps) {
-  if (doc) return <DocMarkdown text={text} basePath={basePath} />;
+export function Markdown({ text, doc = false, basePath, topics, askTail, runnable, autoLoadImages }: MarkdownProps) {
+  const sandbox = React.useContext(MarkdownSandbox);
+  if (doc) return (
+    <PreviewImageAutoload.Provider value={!sandbox && autoLoadImages === true}>
+      <DocMarkdown text={text} basePath={basePath} />
+    </PreviewImageAutoload.Provider>
+  );
   return <ChatMarkdown text={text} basePath={basePath} topics={topics} askTail={askTail} runnable={runnable} />;
 }
 
@@ -187,6 +192,8 @@ export function markdownSegments(text: string): MarkdownSegment[] {
 }
 
 export interface MarkdownProps {
+  /** Allow the file preview to auto-load external images. Does not apply to chat. */
+  autoLoadImages?: boolean;
   text: string;
   /** Render as a document (heading scale, reflowed paragraphs, HTML stripped). */
   doc?: boolean;
@@ -698,7 +705,7 @@ function ImageRef({ alt, src, basePath }: { alt: string; src: string; basePath?:
   const label = alt || src.split(/[\\/]/).pop() || 'image';
   if (localImagePath(src, basePath)) return <LocalImageCard src={src} title={label} basePath={basePath} />;
   const remote = remoteImageUrl(src);
-  if (remote) return <RemoteImageCard url={remote} alt={alt} />;
+  if (remote) return <RemoteImageCard key={remote} url={remote} alt={alt} />;
   return <span className="text-xs text-ink-soft">{label} (preview unavailable)</span>;
 }
 
