@@ -1,4 +1,4 @@
-import { SubagentRoute } from './SubagentRoute.js';
+import { shortModelName } from './agent-console/SubagentCue.js';
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ChatMessage, IssueInfo, PlanStep, PrInfo, Session, SessionSummary } from '@nekko-agent/shared';
 import { lastReplyInterrupted, parsePrUrl, planProgress } from '@nekko-agent/shared';
@@ -187,7 +187,7 @@ const CARD_ORDER: Record<AgentStatus, number> = { input: 0, working: 1, error: 2
 /**
  * A sub-agent's card status, the glyph the agent panel draws for it: a
  * question or approval it is waiting on, a run in flight, a failed or stopped
- * run, else done. The live line says what it is doing right now.
+ * run, else done. The live detail is available in the tooltip.
  */
 export function subagentCardState(child: SessionSummary, running: boolean): { status: AgentStatus; detail: string } {
   const activity = childActivity(child, running);
@@ -202,7 +202,7 @@ export function subagentCardState(child: SessionSummary, running: boolean): { st
 
 /**
  * The chat's sub-agents as live cards along the bottom of the plan: each one's
- * status glyph, its task as a one-line title, and what it is doing now. A card
+ * status glyph, task and short model name on one line. A card
  * opens that sub-agent's chat. Those waiting on you lead, then the working ones.
  */
 function SubagentCards({ children, running, onOpen }: { children: SessionSummary[]; running: Set<string>; onOpen: (id: string) => void }) {
@@ -214,14 +214,12 @@ function SubagentCards({ children, running, onOpen }: { children: SessionSummary
     <span className="plan-sheet-agents-head" aria-hidden><GfIcon name="bots" className="h-3.5 w-3.5" />Agents</span>
     {cards.map(({ child, status, detail }) => {
       const title = child.title || 'Sub-agent';
+      const model = child.modelId && shortModelName(child.modelId);
       return <button key={child.id} type="button" className="plan-sheet-agent" data-subagent-card={child.id} data-status={status}
-        title={`Open ${title}${detail ? `\n${detail}` : ''}`} aria-label={`${title}, ${CARD_STATUS[status]}. Open sub-agent`} onClick={() => onOpen(child.id)}>
-        <span className="plan-sheet-agent-line">
-          <StatusIcon status={status} />
-          <span className="min-w-0 flex-1 truncate text-ink" dir="auto">{title}</span>
-        </span>
-        <SubagentRoute child={child} />
-        <span className="plan-sheet-agent-detail truncate" dir="auto">{CARD_STATUS[status]}{detail ? ` · ${detail}` : ''}</span>
+        title={[`Open ${title}`, child.modelId, detail || CARD_STATUS[status]].filter(Boolean).join('\n')} aria-label={`${title}, ${CARD_STATUS[status]}${model ? `, ${model}` : ''}. Open sub-agent`} onClick={() => onOpen(child.id)}>
+        <StatusIcon status={status} />
+        <span className="plan-sheet-agent-title truncate" dir="auto">{title}</span>
+        {model && <span className="plan-sheet-agent-model truncate" dir="auto">{model}</span>}
       </button>;
     })}
   </div>;
