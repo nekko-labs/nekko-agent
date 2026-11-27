@@ -116,7 +116,8 @@ export const MessageBubble = memo(function MessageBubble({
             {/* A note between steps is not the end of anything. */}
             {!entering && <DoneRow done={!message.interrupted && !message.toolCalls?.length && voice !== 'working' && voice !== 'attention'} stats={message.turnStats} />}
             {displayText && message.content && (
-              <div className="mt-1 flex gap-3 text-2xs text-ink-faint opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 touch:opacity-70">
+              // A note between steps floats its actions over its corner rather than holding an empty line open below it.
+              <div className={`${voice === 'working' ? 'absolute right-0 top-0 rounded bg-surface px-1.5 py-0.5 touch:static touch:mt-1 touch:bg-transparent touch:p-0' : 'mt-1'} flex gap-3 text-2xs text-ink-faint opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 touch:opacity-70`} data-message-actions>
                 <button onClick={copy} title="Copy message" className="inline-flex items-center gap-1 hover:text-ink">{copied ? <CheckIcon className="h-3 w-3" /> : <CopyIcon className="h-3 w-3" />}{copied ? 'Copied' : 'Copy'}</button>
                 {onRestart && (
                   <button onClick={() => onRestart(message.id)} title="Keep the chat up to this reply and delete everything after it" className="hover:text-ink" data-message-restart>

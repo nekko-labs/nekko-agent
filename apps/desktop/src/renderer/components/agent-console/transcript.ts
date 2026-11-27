@@ -132,8 +132,12 @@ export function toStreamBlocks(messages: ChatMessage[], context: ChatMessage[] =
       // Narration is written out in full as part of the conversation, and it
       // splits the run in two: what led up to it, and what it went on to do.
       if (m.content.trim() && !isFinalAnswer) say(m, i);
-      // Delegations, watches and memory saves show their outcome on the step itself.
-      m.toolCalls.forEach((c) => run.push({ kind: 'tool', call: c, startedAt: m.createdAt, endedAt: resultAt.get(c.id), ...(results.get(c.id)?.isError ? { failed: true } : {}), ...((c.name === 'spawn_agent' || c.name === 'agent_watch' || c.name === 'remember') && results.has(c.id) ? { result: results.get(c.id) } : {}) }));
+      m.toolCalls.forEach((call) => {
+        const result = results.get(call.id);
+        const showResult = result?.isError || ['spawn_agent', 'agent_watch', 'remember'].includes(call.name);
+        run.push({ kind: 'tool', call, startedAt: m.createdAt, endedAt: resultAt.get(call.id),
+          ...(result?.isError ? { failed: true } : {}), ...(result && showResult ? { result } : {}) });
+      });
       // Reasoning already has its inline activity projection above.
       if (isFinalAnswer) { flush(); blocks.push({ type: 'msg', message: { ...m, reasoning: undefined }, voice: 'reply' }); }
     } else {
@@ -170,6 +174,8 @@ export function transcriptBeforeLiveTurn(messages: ChatMessage[], transcriptThro
 
 /** A PR card's own vertical margin, which used to set the gap after it. */
 const PR_CARD_GAP = 8;
+/** Space between a working-steps line and the turn's text or steps around it (matches .vt-row's live rule). */
+export const ACTIVITY_GAP = 6;
 
 /**
  * One row of the windowed transcript: a message, working steps, or an anchored
@@ -300,6 +306,12 @@ export function toTranscriptRows(
     }
     rows.splice(insert, 0, { key: unique('s_' + m.id), kind: 'stats', stats: m.turnStats });
   }
+  // Inside a turn, a working-steps line sits close to its neighbours; a prompt keeps the full gap.
+  const isPrompt = (r: TranscriptRow | undefined) => r?.kind === 'msg' && r.message.role === 'user';
+  rows.forEach((r, i) => {
+    const next = rows[i + 1];
+    if (r.kind !== 'prs' && (r.kind === 'activity' || next?.kind === 'activity') && !isPrompt(r) && !isPrompt(next)) r.gapAfter = Math.min(r.gapAfter ?? 20, ACTIVITY_GAP);
+  });
   return rows;
 }
 

@@ -92,6 +92,10 @@ export function useComposerGaze(ref: React.RefObject<SVGSVGElement | null>, { re
  */
 export type PeekFace = 'alert' | 'smile';
 
+/** A four point pixel sparkle centred near (x, y); the same spots as the reel's (video/instagram-reel/src/reel.tsx). */
+const spark = (x: number, y: number) => `M${x} ${y - 1}H${x + 1}V${y}H${x}Z M${x - 1} ${y}H${x}V${y + 1}H${x - 1}Z M${x + 1} ${y}H${x + 2}V${y + 1}H${x + 1}Z M${x} ${y + 1}H${x + 1}V${y + 2}H${x}Z`;
+const PEEK_SPARKLES = [spark(-3, 2), spark(34, 9), spark(1, 14), spark(29, -1), spark(17, -5)].join(' ');
+
 /** The pixel head peeking over a composer edge, paws hanging over it. */
 export const PeekNekkoArt = React.forwardRef<SVGSVGElement, { className: string; look: { x: number; y: number }; laugh?: boolean; face?: PeekFace; hat?: SeasonalHat; paws?: boolean }>(function PeekNekkoArt(
   { className, look, laugh = false, face, hat, paws = true },
@@ -99,7 +103,9 @@ export const PeekNekkoArt = React.forwardRef<SVGSVGElement, { className: string;
 ) {
   const happyEyes = 'M10 17V15H11V14H13V15H14V17H13V16H11V17Z M19 17V15H20V14H22V15H23V17H22V16H20V17Z';
   return (
-    <svg ref={ref} className={className} viewBox="0 0 32 30" width="80" height="75" shapeRendering="crispEdges" aria-hidden="true" focusable="false" overflow={hat || face === 'alert' ? 'visible' : undefined}>
+    <svg ref={ref} className={className} viewBox="0 0 32 30" width="80" height="75" shapeRendering="crispEdges" aria-hidden="true" focusable="false" overflow={hat || laugh || face === 'alert' ? 'visible' : undefined}>
+      {/* The videos' happy Nekko: ^ ^ eyes and pixel sparkles twinkling around his head. */}
+      {laugh && <path data-part="peek-sparkles" d={PEEK_SPARKLES} fill="var(--accent)" />}
       {/* Only the paws hang over the composer; the chin stays behind its edge.
           The window reaches 12 units higher so the hat and the "!" fit in it,
           startled hop included: the head (and all it wears) can then sink
@@ -113,12 +119,12 @@ export const PeekNekkoArt = React.forwardRef<SVGSVGElement, { className: string;
           </g> : face === 'smile' ? <g data-nekko-face="smile" fill="var(--nekko-eyes, var(--ink))">
             <path d={happyEyes} />
           </g> : laugh ? <g data-nekko-laugh fill="var(--nekko-eyes, var(--ink))">
-            <path d={`${happyEyes} M14 20H19V22H18V23H15V22H14Z`} />
+            <path d={happyEyes} />
           </g> : <g data-nekko-look transform={`translate(${look.x} ${look.y})`} fill="var(--nekko-eyes, var(--ink))">
             <path d="M11 15H13V18H11Z M20 15H22V18H20Z" />
           </g>}
           {/* His mouth: drawn only where a theme sets --nekko-mouth (every dark theme). */}
-          {face !== 'alert' && !laugh && <path data-part="peek-mouth" d="M15 20H17V21H15Z" fill="var(--nekko-mouth, transparent)" />}
+          {face !== 'alert' && <path data-part="peek-mouth" d="M15 20H17V21H15Z" fill="var(--nekko-mouth, transparent)" />}
           {/* Same hat art as NekkoAvatar, on the peek face's identical 32px grid. */}
           {hat && <SeasonalHatArt hat={hat} />}
         </g>

@@ -64,7 +64,7 @@ Implemented; the focused desktop test and the isolated renderer checks pass, wit
 
 ## Tap-to-laugh and concrete remembered choices (#1287)
 
-Implemented: the greeting cat is a keyboard-accessible button. Clicking or tapping gives it laughing eyes, a small mouth and a short bounce for 1.2 seconds; repeated taps restart the reaction. It returns to the existing caret gaze without submitting, editing or sending anything. Reduced motion shows the expression without movement. The unchanged 64×60px slot keeps the heading and composer in place.
+Implemented: the greeting cat is a keyboard-accessible button. Clicking or tapping makes it the happy Nekko from the videos for 1.2 seconds: ^ ^ eyes, his usual small mouth, five pixel sparkles twinkling around his head (accent and soft ink, swapping every 200 ms) and a short bounce; repeated taps restart the reaction. It returns to the existing caret gaze without submitting, editing or sending anything. Reduced motion shows the expression and still sparkles without movement or twinkle. The unchanged 64×60px slot keeps the heading and composer in place.
 
 Effort shows supported concrete levels, never a Default alias. The model's general recommendation is marked independently of the current choice; changing the choice does not move the recommendation. Mode's approval policy likewise recommends Guardrails independently. Successful effort selections in the composer or Mode panel are remembered in this computer's existing settings, as approval policy selections already are. New chats snapshot those settings through the existing host defaults path; old chats keep their own values. The iPhone keeps its own per-computer choices as documented in the phone spec.
 

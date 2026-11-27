@@ -158,7 +158,7 @@ export interface Client {
   engineDownloadModel(modelId: string, quantLabel: string): Promise<{ ok: boolean; message: string; jobId?: string }>;
   engineDownloads(): Promise<DownloadJob[]>;
   engineCancelDownload(id: string): Promise<void>;
-  engineDeleteModel(id: string): Promise<{ ok: boolean; message: string }>;
+  engineDeleteModel(id: string, confirmedPath?: string): Promise<{ ok: boolean; message: string }>;
   runtimeStatus(providerId: string): Promise<RuntimeStatus | null>;
   runtimeStart(providerId: string): Promise<RuntimeStatus | { error: string }>;
   runtimeStop(providerId: string, force?: boolean): Promise<StopResult>;
@@ -332,7 +332,7 @@ function httpClient(url: string, token?: string): Client {
     engineDownloadModel: (id, quant) => call(IpcChannels.engineDownloadModel, id, quant),
     engineDownloads: () => call(IpcChannels.engineDownloads),
     engineCancelDownload: (id) => call(IpcChannels.engineCancelDownload, id).then(() => undefined),
-    engineDeleteModel: (id) => call(IpcChannels.engineDeleteModel, id),
+    engineDeleteModel: (id, confirmedPath) => call(IpcChannels.engineDeleteModel, id, confirmedPath),
     runtimeStatus: (id) => call(IpcChannels.runtimeStatus, id),
     runtimeStart: (id) => call(IpcChannels.runtimeStart, id),
     runtimeStop: (id, force) => call(IpcChannels.runtimeStop, id, force),

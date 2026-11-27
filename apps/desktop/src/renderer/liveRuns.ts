@@ -380,7 +380,7 @@ export function applyEvent(event: AgentEvent, now = Date.now()): void {
     case 'tool_result':
       next.blocks = next.blocks.map((b) => b.kind !== 'activity' ? b : {
         ...b,
-        items: b.items.map((it) => it.kind === 'tool' && it.call.id === event.result.toolCallId && it.endedAt === undefined ? { ...it, endedAt: now, ...(event.result.isError ? { failed: true } : {}) } : it),
+        items: b.items.map((it) => it.kind === 'tool' && it.call.id === event.result.toolCallId && it.endedAt === undefined ? { ...it, endedAt: now, ...(event.result.isError ? { failed: true, result: { ...event.result, images: undefined, output: clampLive(event.result.output) } } : {}) } : it),
       });
       if (!event.result.isError && event.result.output.length <= LIVE_STREAM_MAX
         && prev.prMessages?.some((m) => m.toolCalls?.some((call) => call.id === event.result.toolCallId))

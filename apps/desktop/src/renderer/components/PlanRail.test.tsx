@@ -31,15 +31,29 @@ describe('plan sheet, folded and open (#1317)', () => {
     { id: 'c', createdAt: 1, updatedAt: 1, title: 'Auth tests pass', status: 'pending', kind: 'verify' },
     { id: 'd', createdAt: 1, updatedAt: 1, title: 'Open the PR', status: 'pending', kind: 'ship' },
   ] } as unknown as Session;
-  it('starts balanced with three unfinished rows and a closed Completed group', () => {
+  it('starts folded as a timeline: one dot per step in order, and the step being worked under it', () => {
     const html = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} />);
-    const live = html.slice(0, html.indexOf('<details'));
-    expect(live).toContain('data-folded');
-    expect(live).toContain('1 of 4 done');
-    expect(live).toContain('Configure plan display');
-    expect(live).toContain('Pass 2');
-    expect(live.match(/data-plan-step-id="[^"]+"/g)).toEqual(['data-plan-step-id="b"', 'data-plan-step-id="c"', 'data-plan-step-id="d"']);
-    expect(html).toContain('<details class="plan-completed"><summary>Completed (1)</summary>');
+    expect(html).toContain('data-folded');
+    expect(html).toContain('data-plan-timeline="horizontal"');
+    expect(html).toContain('1 of 4 done');
+    expect(html).toContain('Configure plan display');
+    expect(html.match(/data-tl-dot="[^"]+"/g)).toEqual(['data-tl-dot="a"', 'data-tl-dot="b"', 'data-tl-dot="c"', 'data-tl-dot="d"']);
+    expect(html.match(/data-plan-dot="[^"]+"/g)).toEqual(['data-plan-dot="done"', 'data-plan-dot="active"', 'data-plan-dot="pending"', 'data-plan-dot="pending"']);
+    expect(html).toContain('aria-label="Step 2 of 4: Move checks into one middleware. Working"');
+    // Only the step being worked keeps a row; the rest wait behind a hover or the open plan.
+    expect(html.match(/data-plan-step-id="[^"]+"/g)).toEqual(['data-plan-step-id="b"']);
+    expect(html).toContain('Pass 2');
+    expect(html).not.toContain('plan-completed');
+  });
+  it('keeps the current step under the dots when folded, and lists every step in published order down the line when open', () => {
+    const dots = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} initiallyOpen={false} />);
+    expect(dots).toContain('data-plan-current');
+    const open = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} initiallyOpen />);
+    expect(open).toContain('data-plan-timeline="vertical"');
+    expect(open).not.toContain('data-plan-current');
+    expect(open.match(/data-plan-step-id="[^"]+"/g)).toEqual(['a', 'b', 'c', 'd'].map(id => `data-plan-step-id="${id}"`));
+    expect(open.match(/data-tl-dot="[^"]+"/g)).toHaveLength(4);
+    expect(open.match(/data-tl-text/g)).toHaveLength(4);
   });
   it('shows the sub-agents as live cards when folded, and puts each under its step when open', () => {
     store.sessions = [
@@ -60,7 +74,7 @@ describe('plan sheet, folded and open (#1317)', () => {
       expect(open).not.toContain('data-plan-kind');
       expect(open).not.toContain('data-plan-substep');
       // No plan update in the transcript yet: sub-agents land on the first step.
-      const first = open.slice(open.indexOf('data-plan-step-id="a"'), open.indexOf('</details>'));
+      const first = open.slice(open.indexOf('data-plan-step-id="a"'), open.indexOf('data-plan-step-id="b"'));
       expect(first.match(/data-plan-chip="subagent"/g)).toHaveLength(2);
       expect(first).toContain('Update routes');
       expect(open).not.toContain('Not mine');
@@ -96,5 +110,14 @@ describe('per-step plan status icons', () => {
       const markup = renderToStaticMarkup(<PlanSheet sessionId="s" session={running} streaming={running === interrupted} prs={[]} initiallyOpen />);
       expect(markup.match(/aria-label="Working"/g)).toHaveLength(2);
     }
+  });
+});
+
+describe('timeline fill', () => {
+  it('fills the line up to the last finished or skipped step, in published order', async () => {
+    const { lastFinished } = await import('./PlanTimeline.js');
+    const s = (status: string) => ({ status }) as { status: 'done' };
+    expect(lastFinished([s('pending'), s('active')])).toBe(-1);
+    expect(lastFinished([s('done'), s('active'), s('skipped'), s('pending')])).toBe(2);
   });
 });

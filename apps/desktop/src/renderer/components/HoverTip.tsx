@@ -156,7 +156,7 @@ export function HoverTip({ label, side = 'bottom', children, multiline = false, 
     {open && (
       <TipBubble id={id} anchor={anchorBox} side={side} instant={instant} className={variant} interactive={!!heading}
         onPointerEnter={() => clearTimeout(timer.current)} onPointerLeave={leave}>
-        {heading ? <><div className="hover-tip-heading">{heading}</div><pre className="hover-tip-content">{label}</pre></> : content ?? label}
+        {heading ? <><div className="hover-tip-heading">{heading}</div><pre className="hover-tip-content">{content ?? label}</pre></> : content ?? label}
       </TipBubble>
     )}
   </>;

@@ -117,23 +117,23 @@ describe('wall dock presentation', () => {
     expect(html).toContain('Claude plan sign-in is no longer available');
     expect(html).not.toContain('data-dock-signin');
   });
-  it('splits Budget into actual and theoretical spend, and never asks for a monthly budget', () => {
+  it('splits Budget into API spend and estimated savings, and never asks for a monthly budget', () => {
     const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: false, budget: true, hardware: false, localModels: false } } };
     const usage = { totalInput: 0, totalOutput: 0, totalCost: 0, byModel: {}, bySession: {}, byProvider: {}, bySessionCost: {}, daily: [{ date: '1970-01-01', input: 0, output: 0, cost: 0, avoidedCosts: { local: 1.23, subscription: 4.56, benchmarkTokens: 100, unpricedTokens: 200 } }], avoidedCosts: { local: 1.23, subscription: 4.56, benchmarkTokens: 100, unpricedTokens: 200 } };
     const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[]} usage={usage} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
     // The Vitals panel is gone from the dock.
     expect(html).not.toContain('tokens today');
-    // Actual is only metered API and cloud spend; theoretical is what local and subscription tokens saved.
-    expect(html).toContain('aria-label="Actual spend"');
-    expect(html).toContain('aria-label="Theoretical spend"');
+    // Metered spend excludes plan and local usage; savings value both at API prices.
+    expect(html).toContain('aria-label="API &amp; cloud spend"');
+    expect(html).toContain('aria-label="Estimated savings"');
     const actual = html.slice(html.indexOf('data-spend="actual"'), html.indexOf('data-spend="theoretical"'));
     expect(actual).toContain('$0.00');
     const theoretical = html.slice(html.indexOf('data-spend="theoretical"'), html.indexOf('monitors-dock__breakdown'));
     expect(theoretical).toContain('$5.79');
-    expect(html).toContain('Local models</dt><dd>$1.23');
-    expect(html).toContain('Subscriptions</dt><dd>$4.56');
+    expect(html).toContain('Local model savings</dt><dd>$1.23');
+    expect(html).toContain('Plan usage value</dt><dd>$4.56');
     // Nothing paid: the whole bar is savings.
-    expect(html).toContain('you paid 0%');
+    expect(html).toContain('0% metered');
     expect(html).not.toContain('data-part="actual"');
     expect(html).not.toContain('Local AI saved');
     expect(html).toContain('200 unpriced tokens excluded');
@@ -158,11 +158,11 @@ describe('wall dock presentation', () => {
     expect(html).toContain('$1.00');
     expect(html).toContain('$2.34');
     expect(html).toContain('$5.67');
-    // Theoretical sums both savings; the bar shows the paid share of the API-price total.
+    // Savings sum both comparisons; the bar shows the metered share of the API-price total.
     expect(html).toContain('$8.01');
-    expect(html).toContain('$9.01 at API prices · you paid 11%');
+    expect(html).toContain('$9.01 at API prices · 11% metered');
     expect(html).toContain('data-part="actual" style="width:');
-    expect(html).toContain('Top paid agent</dt><dd><span class="monitors-dock__breakdown-name" title="Chat">Chat</span>$1.00');
+    expect(html).toContain('Top paid agent</dt><dd><span class="monitors-dock__breakdown-name">Chat unavailable</span>$1.00');
     expect(html).toContain('42 tokens');
     expect(html).toContain('42 local tokens use the fallback');
     expect(html).toContain('7 unpriced tokens excluded');

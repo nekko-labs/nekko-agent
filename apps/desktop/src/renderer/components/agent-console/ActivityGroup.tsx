@@ -11,6 +11,7 @@ import { SubagentCue, SubagentProgressChip, SubagentModelChip, subagentSummary, 
 import { WatchClockChip, WatchDetail, WatchIcon, WatchThen, watchCallHeadline } from './WatchRow.js';
 import { parseWatchCall, thenSummary } from '../../agentWatches.js';
 import { useRowState } from './rowState.js';
+import { ToolDetail } from './ToolDetail.js';
 import { HoverTip } from '../HoverTip.js';
 import { MemoryCard } from './MemoryCard.js';
 import { ReasoningBlock } from './ReasoningBlock.js';
@@ -106,7 +107,7 @@ const ToolActivityGroup = memo(function ToolActivityGroup({ items, streaming = f
   // The tip lists each group with its count, then lone calls by their purpose.
   const hoverText = [summary, ...rows.flatMap((r) => (r.kind === 'group' ? [`• ${rowHeadline(r, false)} (${r.calls.length})`] : r.step.item.kind === 'tool' ? [`• ${rowHeadline(r, false)}`] : []))].join('\n');
   return (
-    <div className={`${streaming ? 'fade-in ' : ''}mt-1 font-mono text-xs`}>
+    <div className={`${streaming ? 'fade-in ' : ''}font-mono text-xs`} data-activity-group>
       <div className="flex min-w-0 items-center gap-1">
         <HoverTip label={ordinary ? hoverText : agents.length ? subagentSummary(agents[agents.length - 1].call) : watchCallHeadline(lastWatch.call, lastWatch.result)} multiline>
         <button
@@ -297,12 +298,13 @@ function StepRow({ index, item, live, quietSince }: { index: number; item: Activ
         : kind === 'watch' ? <WatchIcon />
           : kind === 'note' ? <ChatIcon className="h-3 w-3 shrink-0 text-ink-faint" />
             : <ToolActivityIcon kind={item.kind === 'tool' ? toolIconKind(item.call) : 'other'} />;
+  const detail = item.kind === 'tool' ? <ToolDetail call={item.call} result={item.result} failed={item.failed} /> : null;
   const then = kind === 'watch' && item.kind === 'tool' && parseWatchCall(item.call).action === 'create' && !item.result?.isError ? thenSummary(parseWatchCall(item.call).prompt) : '';
 
   return (
     <li className="list-none" data-vt-stamp={item.kind === 'tool' && item.startedAt ? fmtTime(item.startedAt) || undefined : undefined}>
       <div className="flex min-w-0 items-center gap-1">
-        <HoverTip label={item.kind === 'tool' ? JSON.stringify(item.call.input, null, 2) : item.text} heading={item.kind === 'tool' ? item.call.name : label} multiline>
+        <HoverTip label={item.kind === 'tool' ? JSON.stringify(item.call.input, null, 2) : item.text} heading={item.kind === 'tool' ? item.call.name : label} content={detail} multiline>
         <button
           className="flex min-w-0 flex-1 items-baseline gap-2 py-0.5 text-left text-ink-faint hover:text-ink-soft"
           onClick={() => setOpen((o) => !o)}
@@ -339,7 +341,7 @@ function StepRow({ index, item, live, quietSince }: { index: number; item: Activ
           </div>
         ) : (
           <pre className="ml-4 sm:ml-22 mt-0.5 max-h-60 overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere] border-l border-line pl-2 text-xs leading-relaxed text-ink-faint">
-            {item.kind === 'reasoning' ? item.text : JSON.stringify(item.call.input, null, 2)}
+            {item.kind === 'reasoning' ? item.text : detail}
           </pre>
         )
       )}

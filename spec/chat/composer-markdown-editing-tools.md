@@ -12,6 +12,12 @@ split-from: SPEC.md (2026-10-22)
 - Privacy/security: clipboard reads/writes happen only on explicit action. Rich clipboard HTML is parsed detached, never inserted into the app; active content and remote images are discarded, and only HTTP(S)/mailto links are retained. Clipboard permission failures show a keyboard-shortcut fallback message without changing the draft. Disabled editors and IME composition do not expose editing actions.
 - Acceptance: context menu controls precede clipboard actions; selection survives menu focus; formatting toggles and active state work for applicable source spans/blocks; conversion never executes or fetches clipboard content; toolbar dismisses on Escape, outside pointer, resize, scroll, or composition. Focused unit tests and isolated real-editor Electron interaction checks cover source edits, selection, menu state, copy, paste conversion, undo, and clipboard rejection. Full-app visual inspection, native OS clipboard integration, and mobile-native behavior remain unverified. Rich conversion is intentionally limited (no table/image import or rich CSS interpretation); this is not a general rich-text editor.
 
+## Desktop spelling corrections (implemented, verified on macOS; Windows and Linux not yet verified)
+
+- Right-click a misspelling in the desktop composer to see up to three local dictionary suggestions above the existing formatting and clipboard actions. A word without suggestions or a click on blank space retains the ordinary menu. The Local Web UI and native phone editors are unchanged.
+- Choosing a suggestion replaces only the clicked word, even if it occurs more than once, keeps the surrounding Markdown source, and returns focus and the caret to the draft. Undo and redo use the same editor history as other edits. Do not apply corrections to stale drafts, disabled editors, or during composition.
+- The dictionary receives only the clicked word, never the whole draft. It runs locally without model calls, and the app does not check text already marked as private by Privacy Shield.
+
 ## Multiline single-backtick code (verification pending)
 
 - User intent: recognise pasted multiline code wrapped in a single backtick on each delimiter line, without requiring conversion to triple-backtick Markdown fences.

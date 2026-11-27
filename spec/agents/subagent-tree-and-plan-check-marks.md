@@ -14,7 +14,7 @@ Philip saw status said twice: the plan sheet's Verify sub-bullets each had a chi
 ## Behavior
 
 - **Plan checks on the bullet.** No verification chip anywhere on the plan sheet (folded line, step rows, Verify sub-bullets). A step's bullet shows its reported check instead, and a reported check outranks the step's own status:
-  - running check (`active`): the working ripple, even when the step is done; pause bars when the run was interrupted;
+  - running check (`active`): the working ripple (the green rocket since 2026-11-27), even when the step is done; pause bars when the run was interrupted;
   - `passed`: the green check; `failed`: a red X; `blocked`: an amber warning;
   - `pending` or `unknown`: the step's own mark (ripple while the step is active, check when done, hollow circle when pending).
   - The bullet's label and tooltip carry the check wording and device ("Check pending on iOS / Android"), say it is agent-reported, and give the report's age (stale for waiting reports). With a safe evidence link the bullet is a button that opens it; an unsafe link is never offered. The report's detail line is unchanged.

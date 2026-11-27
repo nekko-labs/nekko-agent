@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ToolCall } from '@nekko-agent/shared';
+import { ToolDetail } from './ToolDetail.js';
 import { SubagentCue, SubagentModelChip, useSubagentSummary, SubagentOpenButton } from './SubagentCue.js';
 import { WatchClockChip, WatchDetail, WatchIcon, WatchThen, watchCallHeadline } from './WatchRow.js';
 import { parseWatchCall, thenSummary } from '../../agentWatches.js';
@@ -36,7 +37,7 @@ export function ToolCard({ call }: { call: ToolCall }) {
       {then && <WatchThen text={then} className="pl-10" />}
       {open && (isWatch
         ? <div className="ml-5"><WatchDetail call={call} /></div>
-        : <pre className={`ml-5 mt-0.5 whitespace-pre-wrap [overflow-wrap:anywhere] text-ink-faint max-h-60 overflow-auto ${isSpawn ? '' : 'border-l border-line pl-2'}`}>{isSpawn && typeof call.input.task === 'string' ? call.input.task : JSON.stringify(call.input, null, 2)}</pre>)}
+        : <pre className={`ml-5 mt-0.5 whitespace-pre-wrap [overflow-wrap:anywhere] text-ink-faint max-h-60 overflow-auto ${isSpawn ? '' : 'border-l border-line pl-2'}`}>{isSpawn && typeof call.input.task === 'string' ? call.input.task : <ToolDetail call={call} />}</pre>)}
     </div>
   );
 }

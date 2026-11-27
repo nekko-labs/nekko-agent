@@ -276,7 +276,8 @@ impl Library {
             }
             "engine:deleteModel" => {
                 let id = text(0);
-                self.run(move |cfg| lib::remove(&cfg, &id)).await
+                let confirmed = args.get(1).and_then(Value::as_str).map(str::to_string);
+                self.run(move |cfg| lib::remove(&cfg, &id, confirmed.as_deref())).await
             }
             "engine:saveModelPreset" => {
                 let (id, preset) = (text(0), arg(1));

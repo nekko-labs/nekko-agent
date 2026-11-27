@@ -155,7 +155,7 @@ fn experts_in_ram_move_bytes_but_layers_stay_on_the_gpu() {
 fn a_dense_model_that_fits_runs_gpu_only_with_two_sessions() {
     let out = recommend(&dense_14b(), &machine(24.0, 23.0, 64.0, 50.0), 0.0);
     assert_eq!(out["request"]["runOn"], "gpu", "{out}");
-    assert!(n(&out, &["request", "sessions"]) >= 1.0);
+    assert_eq!(out["request"]["sessions"], 2, "{out}");
     assert_eq!(out["plan"]["verdict"], "fits");
 }
 
@@ -175,6 +175,7 @@ fn no_gpu_means_cpu_only() {
     let hw = Hardware { devices: vec![], unified: false, ram_total: 32.0 * GB, ram_free: 24.0 * GB };
     let out = recommend(&dense_14b(), &hw, 0.0);
     assert_eq!(out["request"]["runOn"], "cpu", "{out}");
+    assert_eq!(out["request"]["sessions"], 1);
     assert!(out["why"][0]["sentence"].as_str().unwrap().contains("no graphics card"));
 }
 
@@ -190,6 +191,36 @@ fn a_mac_puts_everything_in_one_pool() {
     assert!(plan.unified);
     assert_eq!(plan.ram.weights, 0.0, "nothing counted twice");
     assert_eq!(plan.disk_tables, 21.0 * GB);
+}
+
+#[test]
+fn m1_max_uses_live_shared_memory_and_starts_at_one_session() {
+    let facts = ModelFacts {
+        weights: Some(25.9 * GB),
+        layers: Some(24.0),
+        head_dim: Some(128.0),
+        max_context: Some(1048576.0),
+        kv_layout: Some(KvLayout { full_per_token: 8192.0, sliding_per_token: 40960.0, sliding_window: 1024.0 }),
+        ..ModelFacts::default()
+    };
+    let hw = Hardware { unified: true, ..machine(64.0, 58.0, 64.0, 52.0) };
+    let out = recommend(&facts, &hw, 0.0);
+    assert_eq!(out["request"]["sessions"], 1);
+    assert_eq!(out["request"]["contextTokens"], 262144);
+    let single = Request::from_value(&out["request"], 24.0);
+    let four = Request { sessions: 4.0, ..single.clone() };
+    let roomy = place(&facts, &single, &hw, 0.0);
+    let parallel = place(&facts, &four, &hw, 0.0);
+    assert_eq!(roomy.vram_avail, 50.0 * GB);
+    assert_eq!(parallel.vram.weights, roomy.vram.weights);
+    assert_eq!(parallel.vram.kv, 4.0 * roomy.vram.kv);
+    assert_eq!(parallel.verdict, "fits", "a fit is not a performance recommendation");
+    let busy = Hardware { ram_free: 33.0 * GB, ..hw };
+    assert_eq!(place(&facts, &four, &busy, 0.0).verdict, "wont-load");
+    assert_eq!(place(&facts, &single, &busy, 0.0).verdict, "fits");
+    assert_eq!(place(&facts, &four, &busy, 5.0 * GB).verdict, "fits", "credit the loaded model on reload");
+    let crowded = Hardware { ram_free: 29.0 * GB, ..busy };
+    assert!(n(&recommend(&facts, &crowded, 0.0), &["request", "contextTokens"]) < 262144.0);
 }
 
 #[test]
@@ -238,6 +269,15 @@ fn an_older_build_gets_override_tensor_patterns() {
     );
     let ffn = args(json!({ "cpuFfnLayers": 2 }), &[]);
     assert!(has(&ffn, &["--override-tensor", r"blk\.(0|1)\.ffn_(up|down|gate|gate_up)\.=CPU"]), "{ffn:?}");
+}
+
+#[test]
+fn single_session_does_not_use_llama_servers_automatic_parallelism() {
+    for params in [json!({}), json!({ "parallelSlots": 1 })] {
+        let a = args(params, &["--kv-unified"]);
+        assert!(has(&a, &["--parallel", "1"]), "{a:?}");
+        assert!(!a.contains(&"--kv-unified".to_string()), "{a:?}");
+    }
 }
 
 #[test]

@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { CLOUD_RELAY_URL, type CloudStatus } from '@nekko-agent/shared';
-import { cloudAvailability, cloudRelayOffer, ConnectThroughView, currentPicks, DeviceRoutePicks, pairingRoutes, picksOf, routeOf, routeTargets } from './RemoteAccess.js';
+import { cloudAvailability, cloudRelayOffer, ConnectThroughView, currentPicks, DeviceRoutePicks, pairingRoutes, picksOf, routeOf, routeTargets, tailnetUrlOf } from './RemoteAccess.js';
 
 vi.mock('../store.js', () => ({ useStore: Object.assign(() => undefined, { getState: () => ({}) }) }));
 
@@ -88,6 +88,24 @@ describe('currentPicks', () => {
 
   it('knows a tailnet relay before this computer\'s relay status loads', () => {
     expect(currentPicks({ enabled: true, relayUrl: TAILNET }, null).tailscale).toBe(true);
+  });
+});
+
+describe('tailnetUrlOf', () => {
+  const stopped = { available: true, running: true, enabled: true, port: 4400 };
+  it('is this computer\'s relay address while Tailscale runs here', () => {
+    expect(tailnetUrlOf({ enabled: true, relayUrl: CLOUD_RELAY_URL }, { ...stopped, tailnetIp: '100.1.2.3', url: TAILNET })).toBe(TAILNET);
+  });
+
+  it('keeps the address in use when Tailscale stops here, so Nekko Cloud Relay can be ticked beside it', () => {
+    const url = tailnetUrlOf({ enabled: true, relayUrl: TAILNET }, stopped);
+    expect(url).toBe(TAILNET);
+    expect(routeTargets({ tailscale: true, cloud: true }, url)).toEqual({ main: TAILNET, also: [CLOUD_RELAY_URL] });
+  });
+
+  it('has none when Tailscale was never the route', () => {
+    expect(tailnetUrlOf({ enabled: true, relayUrl: CLOUD_RELAY_URL }, stopped)).toBeUndefined();
+    expect(tailnetUrlOf({ enabled: false, relayUrl: TAILNET }, stopped)).toBeUndefined();
   });
 });
 
