@@ -115,7 +115,6 @@ export function ModelsHome({
   memory,
   resident,
   settings,
-  running,
   onChanged,
   onFind,
   mlx = false,
@@ -129,7 +128,6 @@ export function ModelsHome({
   /** The models actually in memory right now, for where each loaded variant sits. */
   resident: ResidentModel[];
   settings: EngineSettings;
-  running: boolean;
   onChanged: () => void;
   onOpenModel?: (id: string) => void;
   /** Switch to Find new models, from the empty library. */
@@ -306,7 +304,7 @@ export function ModelsHome({
           </p>
           {selected.local.length > 0 && <>
             <h4 className="mt-(--q-group) quiet-group-label">Variants on this machine</h4>
-            <div className="mt-(--q-heading)"><ModelLibrary key={selected.key} providerId={providerId} models={selected.local} actions={actions} resident={resident} memory={memory} canLoad={canLoad} onChanged={onChanged} autoloadIds={new Set(settings.autoload ?? [])} running={running} sortBy={mode === 'installed' ? sortBy : undefined} /></div>
+            <div className="mt-(--q-heading)"><ModelLibrary key={selected.key} providerId={providerId} models={selected.local} actions={actions} resident={resident} memory={memory} canLoad={canLoad} onChanged={onChanged} autoloadIds={new Set(settings.autoload ?? [])} sortBy={mode === 'installed' ? sortBy : undefined} /></div>
             {firstVariant && <ModelGpuFacts key={firstVariant.id} providerId={providerId} model={firstVariant} resident={residentById.get(firstVariant.id)} others={residentNames(resident, models, firstVariant.id)} />}
           </>}
           {repositories.length > 0 && <div className="mt-(--q-group)"><label className="block text-xs text-ink-faint" htmlFor="model-source">{selected.local.length ? 'Other builds from' : 'Variant provider / repository'}</label><select id="model-source" className="quiet-field mt-(--q-tight) w-full text-xs" value={selectedRepo} onChange={e => setRepoId(e.target.value)}>{repositories.map(id => <option key={id} value={id}>{id}</option>)}</select></div>}

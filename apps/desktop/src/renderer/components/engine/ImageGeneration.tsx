@@ -9,7 +9,7 @@ import { LoadMemoryMeter } from './LoadMemoryMeter.js';
  * settings. Generating happens in chat (an Image chat), where prompts and
  * pictures stay together as a history; this panel opens one on this model.
  */
-export function ImageGeneration({ model, onChanged }: { model: LocalModel; onChanged: () => void }) {
+export function ImageGeneration({ model, onChanged, attached = false }: { model: LocalModel; onChanged: () => void; attached?: boolean }) {
   const pushToast = useStore(s => s.pushToast);
   const newImageChat = useStore(s => s.newImageChat);
   const [paths, setPaths] = useState(model.preset?.diffusion ?? {});
@@ -24,9 +24,9 @@ export function ImageGeneration({ model, onChanged }: { model: LocalModel; onCha
       await newImageChat(model.id, defaults ?? undefined);
     } catch (e) { pushToast('error', (e as Error).message); }
   };
-  return <div className="mt-3 space-y-3 border-t border-line py-3">
+  return <div className={attached ? 'space-y-3' : 'mt-3 space-y-3 border-t border-line py-3'}>
     <div className="flex flex-wrap items-center gap-2">
-      <h3 className="text-sm font-semibold">{model.name}</h3>
+      {!attached && <h3 className="text-sm font-semibold">{model.name}</h3>}
       <button className="btn btn-primary ml-auto py-1 text-xs" onClick={() => void openChat()}>Open Photo</button>
     </div>
     <LoadMemoryMeter model={model} />

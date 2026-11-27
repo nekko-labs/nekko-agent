@@ -83,9 +83,12 @@ app.whenReady().then(async () => {
       await check('Clicking the variant row opens its own settings', `${toggle('gemma')}.getAttribute('aria-expanded')==='true' && !!document.querySelector('[data-library-row=gemma] [data-engine-load-drawer]')`);
       await capture('wide-variant-expanded', 1280, 1050, 'dark', 'library');
       await run(`${toggle('gemma')}.click()`);
-      await check('Clicking the variant row again closes settings, not the family', `${toggle('gemma')}.getAttribute('aria-expanded')==='false' && !document.querySelector('[data-engine-load-drawer]') && !!document.querySelector('[data-model-family-header]')`);
-      await run(`Array.from(document.querySelectorAll('[data-library-row=gemma] button')).find(b=>b.textContent.trim()==='On start').click()`);
-      await check('On start targets the variant, without opening settings', `fixture.autoload().join(',')==='gemma' && ${toggle('gemma')}.getAttribute('aria-expanded')==='false'`);
+      await check('Clicking the variant row again closes settings, not the family', `${toggle('gemma')}.getAttribute('aria-expanded')==='false' && document.getElementById(${toggle('gemma')}.getAttribute('aria-controls')).inert && !!document.querySelector('[data-model-family-header]')`);
+      await wait(`!document.querySelector('[data-engine-load-drawer]')`);
+      await run(`${toggle('gemma')}.click()`);
+      await run(`document.querySelector('[data-library-row=gemma] [role=switch][aria-label="Load when the engine starts"]').click()`);
+      await check('Startup loading targets the variant inside its settings', `fixture.autoload().join(',')==='gemma' && ${toggle('gemma')}.getAttribute('aria-expanded')==='true'`);
+      await run(`${toggle('gemma')}.click()`);
       await run(`Array.from(document.querySelectorAll('[data-library-row=gemma] button')).find(b=>b.textContent.trim()==='Load').click()`);
       await check('Load targets the variant, without opening settings', `fixture.loaded.join(',')==='nekko-engine::gemma' && ${toggle('gemma')}.getAttribute('aria-expanded')==='false'`);
       await click('Favorite Gemma-4-E4B');

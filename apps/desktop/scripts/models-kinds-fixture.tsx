@@ -49,7 +49,7 @@ void (async () => {
   const { ModelsHome } = await import('../src/renderer/components/engine/ModelsHome');
   createRoot(document.getElementById('root')!).render(
     <main style={{ minHeight: '100vh', background: 'var(--paper)', color: 'var(--ink)', padding: 24 }}>
-      <ModelsHome providerId="nekko-engine" models={[]} canLoad={false} resident={[]} settings={{ autoload: [] } as any} running={false} onChanged={() => {}} onOpenModel={() => {}} />
+      <ModelsHome providerId="nekko-engine" models={[]} canLoad={false} resident={[]} settings={{ autoload: [] } as any} onChanged={() => {}} onOpenModel={() => {}} />
     </main>,
   );
 })();

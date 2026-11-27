@@ -55,6 +55,7 @@ export function EngineLoadDrawer({
   onDone,
   onClose,
   initialSurface = 'simple',
+  attached = false,
 }: {
   providerId: string;
   model: LocalModel & { loaded: boolean; gpuFit?: GpuFit };
@@ -69,6 +70,8 @@ export function EngineLoadDrawer({
   onClose: () => void;
   /** A jump from "where does it run" opens with More controls unfolded. */
   initialSurface?: 'simple' | 'advanced';
+  /** The installed card already supplies the name and outer surface. */
+  attached?: boolean;
 }) {
   const pushToast = useStore((s) => s.pushToast);
   const saved = useMemo(() => fromPreset(model.preset), [model.preset]);
@@ -192,21 +195,23 @@ export function EngineLoadDrawer({
   const keep = keepOf(params);
 
   return (
-    <div className="mt-2 rounded-xl border p-4" style={{ borderColor: 'var(--line)' }} data-engine-load-drawer>
-      <div className="flex flex-wrap items-start gap-2">
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">{model.name}</p>
-          <p className="text-xs text-ink-faint">
-            {[
-              model.parameterSize,
-              model.quantization,
-              moe && model.weightLayout?.experts && `${model.weightLayout.experts} experts`,
-              model.maxContext && `${formatTokens(model.maxContext)} max`,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-          </p>
-        </div>
+    <div className={attached ? undefined : 'mt-2 rounded-xl border border-line p-4'} data-engine-load-drawer>
+      <div className="flex flex-wrap items-start justify-end gap-2">
+        {!attached && (
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">{model.name}</p>
+            <p className="text-xs text-ink-faint">
+              {[
+                model.parameterSize,
+                model.quantization,
+                moe && model.weightLayout?.experts && `${model.weightLayout.experts} experts`,
+                model.maxContext && `${formatTokens(model.maxContext)} max`,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
+          </div>
+        )}
         {plan && plan.verdict !== 'unknown' && <VerdictChip plan={plan} />}
       </div>
 
