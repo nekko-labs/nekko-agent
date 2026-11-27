@@ -23,7 +23,9 @@ import { basename, dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Marked } from 'marked';
 import { writeContributors } from './build-contributors.mjs';
-import { writeDesignSystem } from './build-design-system.mjs';
+import { build as buildDesignSystem, writeDesignSystem } from './build-design-system.mjs';
+import { decorateEnglish, localize, pageSources } from './site-languages/catalog.mjs';
+import { runtimeMessages } from './site-languages/runtime-messages.mjs';
 
 // The text of a rendered heading: its tags dropped and marked's entities turned
 // back into characters, so the layout can escape it once like any other string.
@@ -832,6 +834,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     }
     console.log(`${COMMITTED.join(' and ')} up to date`);
   } else {
+    // Refresh the English outputs first, then derive every locale from that
+    // same release and docs build. No translation service runs on Vercel.
     write(files);
     console.log(`wrote ${files.size} files to apps/website`);
     console.log(writeDesignSystem(site));
@@ -839,7 +843,19 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     console.log(await writeContributors(site));
     // The page again, now with the avatars that refresh just cached.
     const avatars = avatarsFrom(JSON.parse(readFileSync(join(site, 'contributors.json'), 'utf8')));
-    writeFileSync(join(site, 'whatsnew.html'), whatsNewPage(loadWhatsNew(), avatars));
+    files.set('whatsnew.html', whatsNewPage(loadWhatsNew(), avatars));
+    const generated = new Map([...files, ...buildDesignSystem()]);
+    for (const [path, html] of generated) {
+      if (path.endsWith('.html')) writeFileSync(join(site, path), decorateEnglish(html));
+    }
+    rmSync(join(site, 'l'), { recursive: true, force: true });
+    const localized = localize(pageSources(generated), { messages: runtimeMessages() });
+    for (const [path, html] of localized) {
+      const file = join(site, path);
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, html);
+    }
+    console.log(`wrote ${localized.size} localized pages and search indexes`);
     console.log(`whatsnew.html: ${avatars.size} cached avatars available`);
   }
 }

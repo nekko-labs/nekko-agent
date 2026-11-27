@@ -45,7 +45,8 @@
     const count = fragment.childNodes.length;
     wall.append(fragment);
     wall.hidden = false;
-    status.textContent = `${count} ${count === 1 ? 'contributor' : 'contributors'}`;
+    const t = window.NekkoSiteLanguage?.t ?? ((message, values) => message.replace('{count}', values.count));
+    status.textContent = count === 1 ? t('{count} contributor', { count }) : t('{count} contributors', { count });
   } catch {
     // The thank-you, contribution guide and GitHub list work without this script.
   }

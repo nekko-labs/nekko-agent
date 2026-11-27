@@ -253,6 +253,8 @@
     if (first) first.focus();
   }
 
+  var t = window.NekkoSiteLanguage?.t || function (text, values) { return text.replace('{signal}', values?.signal || ''); };
+
   function render(open) {
     if (!root) return;
     var choice = effectiveChoice();
@@ -266,32 +268,32 @@
     close.hidden = choice === 'undecided' || choice === 'signal';
 
     if (choice === 'signal') {
-      title.textContent = 'Your privacy signal is on';
-      copy.textContent = privacySignal() + ' tells us to keep analytics off. No PostHog script is loaded and no analytics event is sent.';
-      note.textContent = 'We never sell or share personal information for advertising.';
-      actions.appendChild(button('Got it', closePanel));
-      manageButton.textContent = 'Privacy choices · analytics off';
+      title.textContent = t('Your privacy signal is on');
+      copy.textContent = t('{signal} tells us to keep analytics off. No PostHog script is loaded and no analytics event is sent.', { signal: privacySignal() });
+      note.textContent = t('We never sell or share personal information for advertising.');
+      actions.appendChild(button(t('Got it'), closePanel));
+      manageButton.textContent = t('Privacy choices · analytics off');
     } else if (choice === 'accepted') {
-      title.textContent = 'Analytics is on';
-      copy.textContent = 'PostHog measures visits, button clicks and Core Web Vitals with a random session identity.';
-      note.textContent = 'Session recording is disabled. You can withdraw now.';
-      actions.appendChild(button('Turn analytics off', function () { setChoice('rejected'); }));
-      actions.appendChild(button('Keep analytics on', closePanel));
-      manageButton.textContent = 'Privacy choices · analytics on';
+      title.textContent = t('Analytics is on');
+      copy.textContent = t('PostHog measures visits, button clicks and Core Web Vitals with a random session identity.');
+      note.textContent = t('Session recording is disabled. You can withdraw now.');
+      actions.appendChild(button(t('Turn analytics off'), function () { setChoice('rejected'); }));
+      actions.appendChild(button(t('Keep analytics on'), closePanel));
+      manageButton.textContent = t('Privacy choices · analytics on');
     } else if (choice === 'rejected') {
-      title.textContent = 'Analytics is off';
-      copy.textContent = 'No PostHog script is loaded and no analytics event is sent. The site works the same either way.';
-      note.textContent = 'We remember this choice on this browser. You can change it now.';
-      actions.appendChild(button('Keep analytics off', closePanel));
-      actions.appendChild(button('Allow analytics', function () { setChoice('accepted'); }));
-      manageButton.textContent = 'Privacy choices · analytics off';
+      title.textContent = t('Analytics is off');
+      copy.textContent = t('No PostHog script is loaded and no analytics event is sent. The site works the same either way.');
+      note.textContent = t('We remember this choice on this browser. You can change it now.');
+      actions.appendChild(button(t('Keep analytics off'), closePanel));
+      actions.appendChild(button(t('Allow analytics'), function () { setChoice('accepted'); }));
+      manageButton.textContent = t('Privacy choices · analytics off');
     } else {
-      title.textContent = 'Help us improve Nekko Agent?';
-      copy.textContent = 'We never sell or share this data for advertising.';
+      title.textContent = t('Help us improve Nekko Agent?');
+      copy.textContent = t('We never sell or share this data for advertising.');
       note.textContent = '';
-      actions.appendChild(button('Reject analytics', function () { setChoice('rejected'); }));
-      actions.appendChild(button('Allow analytics', function () { setChoice('accepted'); }));
-      manageButton.textContent = 'Privacy choices';
+      actions.appendChild(button(t('Reject analytics'), function () { setChoice('rejected'); }));
+      actions.appendChild(button(t('Allow analytics'), function () { setChoice('accepted'); }));
+      manageButton.textContent = t('Privacy choices');
     }
 
     panel.hidden = !open && choice !== 'undecided' && choice !== 'signal';
@@ -313,6 +315,13 @@
       '</section>' +
       '<button class="privacy-manage" type="button" aria-haspopup="true" hidden></button>';
     document.body.appendChild(root);
+    var policy = root.querySelector('.privacy-policy-link');
+    policy.textContent = t('Privacy details');
+    policy.href = window.NekkoSiteLanguage?.path('/privacy#website-analytics') || '/privacy#website-analytics';
+    root.querySelector('.privacy-kicker').textContent = t('Your choice');
+    var close = root.querySelector('[data-privacy-close]');
+    close.textContent = t('Close');
+    close.setAttribute('aria-label', t('Close privacy choices'));
     panel = root.querySelector('.privacy-panel');
     manageButton = root.querySelector('.privacy-manage');
     panel.querySelector('[data-privacy-close]').addEventListener('click', closePanel);

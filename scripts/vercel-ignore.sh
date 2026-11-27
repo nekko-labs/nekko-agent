@@ -21,6 +21,8 @@ git diff --quiet "$base" HEAD -- \
   ASSETS.md \
   CONTRIBUTING.md \
   scripts/build-docs.mjs \
+  scripts/site-languages \
+  api/site-country.mjs \
   scripts/build-contributors.mjs \
   scripts/build-design-system.mjs \
   scripts/design-system \

@@ -11,6 +11,7 @@
 (function () {
   'use strict';
 
+  var t = window.NekkoSiteLanguage?.t || function (text) { return text; };
   var API = 'https://nekko-agent-api.fly.dev';
   var CATALOG_URL = '/plan-catalog.json';
 
@@ -54,25 +55,25 @@
           priceDisplay = sep >= 0 ? proPrice.slice(0, sep) : proPrice;
           priceSmall = sep >= 0 ? 'a ' + proPrice.slice(sep + 3) : '';
         } else {
-          priceDisplay = 'Coming soon';
+          priceDisplay = t('Coming soon');
           priceSmall = '';
         }
       } else {
-        priceDisplay = 'Talk to us';
+        priceDisplay = t('Talk to us');
         priceSmall = '';
       }
-      var ctaText = p.id === 'free' ? 'Download' : p.id === 'pro' ? 'Get Pro in the app' : 'Email us';
-      var ctaHref = p.id === 'free' ? '/#download' : p.id === 'pro' ? null : 'mailto:hello@nekkoagent.com';
+      var ctaText = p.id === 'free' ? t('Download') : p.id === 'pro' ? t('Get Pro in the app') : t('Email us');
+      var ctaHref = p.id === 'free' ? (window.NekkoSiteLanguage?.path('/#download') || '/#download') : p.id === 'pro' ? null : 'mailto:hello@nekkoagent.com';
       var cta = ctaHref
         ? '<a href="' + esc(ctaHref) + '" class="pr-cta">' + esc(ctaText) + '</a>'
         : '<button class="pr-cta"' + (proPrice ? '' : ' disabled') + '>' + esc(ctaText) + '</button>';
       var points = (p.points || []).map(function (x) {
-        return '<li>' + CHECK + '<span>' + esc(x) + '</span></li>';
+        return '<li>' + CHECK + '<span>' + esc(t(x)) + '</span></li>';
       }).join('');
       return '<article class="pr-tier' + (isHl ? ' pr-tier-hl' : '') + '">' +
         '<h2>' + esc(p.name) + '</h2>' +
         '<div class="pr-price"' + (p.id === 'pro' ? ' data-pro-price' : '') + '>' + esc(priceDisplay) + (priceSmall ? ' <small>' + esc(priceSmall) + '</small>' : '') + '</div>' +
-        '<div class="pr-tagline">' + esc(p.tagline) + '</div>' +
+        '<div class="pr-tagline">' + esc(t(p.tagline)) + '</div>' +
         '<ul class="pr-points">' + points + '</ul>' +
         cta +
         '</article>';
@@ -87,13 +88,13 @@
       var cls = hlClass || '';
       if (v === true) return '<span class="' + cls + '">' + CHECK + '</span>';
       if (v === false) return '<span class="' + (cls ? cls + ' ' : '') + 'pr-no">–</span>';
-      return '<span class="' + (cls ? cls + ' ' : '') + 'pr-val">' + esc(String(v)) + '</span>';
+      return '<span class="' + (cls ? cls + ' ' : '') + 'pr-val">' + esc(t(String(v))) + '</span>';
     }
     var rows = catalog.groups.map(function (g) {
-      var groupRow = '<div class="pr-table-group"><span>' + esc(g.name) + '</span><span></span><span class="pr-col-hl"></span><span></span></div>';
+      var groupRow = '<div class="pr-table-group"><span>' + esc(t(g.name)) + '</span><span></span><span class="pr-col-hl"></span><span></span></div>';
       var dataRows = (g.rows || []).map(function (r) {
         return '<div class="pr-table-row">' +
-          '<span>' + esc(r.feature) + (r.soon ? '<span class="pr-soon">Soon</span>' : '') + '</span>' +
+          '<span>' + esc(t(r.feature)) + (r.soon ? '<span class="pr-soon">' + esc(t('Soon')) + '</span>' : '') + '</span>' +
           cell(r.free) +
           cell(r.pro, 'pr-col-hl') +
           cell(r.team) +
@@ -113,7 +114,7 @@
       var open = fold.classList.toggle('open');
       btn.classList.toggle('open', open);
       btn.setAttribute('aria-expanded', String(open));
-      btn.querySelector('span').textContent = open ? 'Hide the full comparison' : 'Show the full comparison';
+      btn.querySelector('span').textContent = open ? t('Hide the full comparison') : t('Show the full comparison');
     });
   }
 

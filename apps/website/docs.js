@@ -3,6 +3,7 @@
 // without this script; it only adds conveniences.
 (() => {
   const body = document.body;
+  const t = window.NekkoSiteLanguage?.t ?? ((text, vars) => text.replace('{query}', vars?.query ?? ''));
 
   // ---- mobile drawer ----
   const menu = document.querySelector('.menu');
@@ -10,7 +11,7 @@
   const setNav = (open) => {
     body.classList.toggle('nav-open', open);
     menu?.setAttribute('aria-expanded', String(open));
-    menu?.setAttribute('aria-label', open ? 'Close the docs menu' : 'Open the docs menu');
+    menu?.setAttribute('aria-label', open ? t('Close the docs menu') : t('Open the docs menu'));
   };
   menu?.addEventListener('click', () => setNav(!body.classList.contains('nav-open')));
   sidebar?.addEventListener('click', (e) => {
@@ -18,6 +19,9 @@
   });
   document.addEventListener('click', (e) => {
     if (body.classList.contains('nav-open') && !e.target.closest('.sidebar, .menu')) setNav(false);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && body.classList.contains('nav-open')) { setNav(false); menu?.focus(); }
   });
   // Keep the current page in view in a long sidebar.
   sidebar?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: 'center' });
@@ -28,13 +32,13 @@
       const text = button.parentElement.querySelector('code')?.innerText ?? '';
       try {
         await navigator.clipboard.writeText(text.replace(/\n$/, ''));
-        button.textContent = 'Copied';
+        button.textContent = t('Copied');
         button.classList.add('done');
       } catch {
-        button.textContent = 'Press Ctrl+C';
+        button.textContent = t('Press Ctrl+C');
       }
       setTimeout(() => {
-        button.textContent = 'Copy';
+        button.textContent = t('Copy');
         button.classList.remove('done');
       }, 1600);
     });
@@ -77,7 +81,7 @@
   let index = null;
   let selected = 0;
   const load = () =>
-    (index ??= fetch('/docs/search.json')
+    (index ??= fetch((document.documentElement.lang === 'en' ? '' : `/l/${document.documentElement.lang}`) + '/docs/search.json')
       .then((r) => r.json())
       .catch(() => []));
 
@@ -128,7 +132,7 @@
               `</a></li>`,
           )
           .join('')
-      : `<li class="empty">No results for “${esc(input.value.trim())}”.</li>`;
+      : `<li class="empty">${esc(t("No results for “{query}”.", { query: input.value.trim() }))}</li>`;
   };
 
   const select = (n) => {
