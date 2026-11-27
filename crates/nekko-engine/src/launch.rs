@@ -199,9 +199,11 @@ pub fn build_args(
     if explicit && supports("--fit") {
         push(&mut args, "--fit", "off".into());
     }
-    if truthy(p, "parallelSlots") && nekko_js::to_number(p.get("parallelSlots")) > 1.0 {
-        let slots = nekko_js::to_number(p.get("parallelSlots"));
-        push(&mut args, "--parallel", text(p.get("parallelSlots")));
+    // llama-server's automatic default can admit four sequences. Match the
+    // planner and UI even when a single session isn't saved explicitly.
+    let slots = p.get("parallelSlots").and_then(Value::as_f64).unwrap_or(1.0).clamp(1.0, 64.0).floor();
+    push(&mut args, "--parallel", nekko_js::number_to_string(slots));
+    if slots > 1.0 {
         // One shared pool any session can grow into, each capped at its share.
         if supports("--kv-unified") {
             args.push("--kv-unified".into());

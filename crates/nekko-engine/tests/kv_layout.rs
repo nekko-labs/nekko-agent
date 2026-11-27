@@ -2,9 +2,8 @@
 //! `llama-server` (b11429, f16 cache, 2026-10-22/23) allocated for the same
 //! geometry:
 //!
-//! - Gemma 4 12B at `--ctx-size 32768`, as the engine starts a one-slot load
-//!   (no `--parallel`: four sequences, one unified cache): 512 MiB on 8 global
-//!   layers and 1440 MiB on 40 sliding-window layers (4608 cells). With
+//! - Gemma 4 12B at `--ctx-size 32768`, 512 MiB on 8 global layers and an estimated 480 MiB on
+//!   40 sliding-window layers for explicit `--parallel 1`. With
 //!   `--parallel 2`: 512 MiB (16384 cells per slot) and 960 MiB (1536 per slot).
 //! - Qwen3.5 4B at 32768: 1024 MiB on its 8 attention layers, none on the 24
 //!   recurrent ones. Qwen3.6 35B A3B: 640 MiB on 10 of 40.
@@ -122,10 +121,10 @@ fn gemma_4_counts_its_sliding_layers_at_their_window() {
     assert_eq!(l, KvLayout { full_per_token: 8.0 * 1024.0, sliding_per_token: 40.0 * 4096.0, sliding_window: 1024.0 });
     // The uniform geometry is still reported, for anything that reads it.
     assert_eq!((meta.layers, meta.head_dim), (Some(48.0), Some(512.0)));
-    assert_eq!(kv(l, 32768.0, 1.0), (512.0 + 1440.0) * MIB, "four unified sequences, a window each");
+    assert_eq!(kv(l, 32768.0, 1.0), (512.0 + 480.0) * MIB, "one sequence, one window");
     assert_eq!(kv(l, 32768.0, 2.0), (512.0 + 960.0) * MIB, "slots share the context, each keeps its window");
     // Below the windows the sliding layers hold the whole context.
-    assert_eq!(kv(l, 4096.0, 1.0), (8.0 * 1024.0 + 40.0 * 4096.0) * 4096.0 * 2.0);
+    assert_eq!(kv(l, 1024.0, 1.0), (8.0 * 1024.0 + 40.0 * 4096.0) * 1024.0 * 2.0);
 }
 
 #[test]
@@ -269,7 +268,7 @@ fn real_files_match_llama_cpp() {
     let dir = std::env::var("NEKKO_KV_CHECK_DIR").expect("NEKKO_KV_CHECK_DIR");
     let layout = |f: &str| read_metadata(&format!("{dir}/{f}")).and_then(|m| m.kv_layout).expect(f);
     let gemma = layout("gemma-4-12b-it-Q4_K_M.gguf");
-    assert_eq!(kv(gemma, 32768.0, 1.0), 1952.0 * MIB);
+    assert_eq!(kv(gemma, 32768.0, 1.0), 992.0 * MIB);
     assert_eq!(kv(gemma, 32768.0, 2.0), 1472.0 * MIB);
     assert_eq!(kv(layout("Qwen3.5-4B-Q4_K_M.gguf"), 32768.0, 1.0), 1024.0 * MIB);
     assert_eq!(kv(layout("Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"), 32768.0, 1.0), 640.0 * MIB);
@@ -301,7 +300,7 @@ fn the_fit_verdict_follows_the_layout() {
     assert_eq!(before.kv, 48.0 * 1024.0 * MIB);
     assert_eq!(before.verdict, "wont-load");
     let after = compute_fit(&ModelFacts { kv_layout: meta.kv_layout, ..uniform }, &req, &gpu, &opts);
-    assert_eq!(after.kv, 1952.0 * MIB);
+    assert_eq!(after.kv, 992.0 * MIB);
     assert_eq!(after.verdict, "fits");
     assert_eq!(after.gpu_layers, Some(48.0));
 }

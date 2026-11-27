@@ -153,12 +153,12 @@
         {
           "field": "Context",
           "value": "64K per session",
-          "sentence": "The most that fits beside the model. Lower it to free memory."
+          "sentence": "Recommended for this setup. Lower it to free memory."
         },
         {
           "field": "Sessions at once",
           "value": "1",
-          "sentence": "One at a time keeps the most memory for context on this machine."
+          "sentence": "One at a time leaves more memory for context. More simultaneous requests can slow replies."
         },
         {
           "field": "Memory precision",
@@ -243,7 +243,7 @@
         {
           "field": "Sessions at once",
           "value": "1",
-          "sentence": "One at a time keeps the most memory for context on this machine."
+          "sentence": "One at a time leaves more memory for context. More simultaneous requests can slow replies."
         },
         {
           "field": "Memory precision",
@@ -426,12 +426,12 @@
         {
           "field": "Context",
           "value": "64K per session",
-          "sentence": "The most that fits beside the model. Lower it to free memory."
+          "sentence": "Recommended for this setup. Lower it to free memory."
         },
         {
           "field": "Sessions at once",
           "value": "2",
-          "sentence": "Room for agents and chats to answer at the same time, each with its full context."
+          "sentence": "Estimated to fit with the context shown for each session. Simultaneous requests can still slow replies."
         },
         {
           "field": "Memory precision",
@@ -506,7 +506,7 @@
         {
           "field": "Sessions at once",
           "value": "1",
-          "sentence": "One at a time keeps the most memory for context on this machine."
+          "sentence": "One at a time leaves more memory for context. More simultaneous requests can slow replies."
         },
         {
           "field": "Memory precision",
@@ -707,12 +707,12 @@
         {
           "field": "Context",
           "value": "32K per session",
-          "sentence": "The most that fits beside the model. Lower it to free memory."
+          "sentence": "Recommended for this setup. Lower it to free memory."
         },
         {
           "field": "Sessions at once",
           "value": "1",
-          "sentence": "One at a time keeps the most memory for context on this machine."
+          "sentence": "One at a time leaves more memory for context. More simultaneous requests can slow replies."
         },
         {
           "field": "Memory precision",
@@ -792,7 +792,7 @@
         {
           "field": "Sessions at once",
           "value": "1",
-          "sentence": "One at a time keeps the most memory for context on this machine."
+          "sentence": "One at a time leaves more memory for context. More simultaneous requests can slow replies."
         },
         {
           "field": "Memory precision",
