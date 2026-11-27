@@ -350,6 +350,16 @@ export function CommandCenterView() {
   // reading order; Ctrl+1…9 (or Alt+1…9) pick one by its number.
   const [addOpen, setAddOpen] = useState(false);
   const [archivedId, setArchivedId] = useState<string | null>(null);
+  const openWallChat = (id: string) => {
+    if (sessions.find((session) => session.id === id)?.archivedAt) setArchivedId(id);
+    else {
+      setArchivedId(null);
+      // Focus shows the chosen chat. Every other layout keeps its windows
+      // and marks the chat's window active, adding one when it has none.
+      // One guarded wall update, so reselecting the active chat changes nothing.
+      void addFromToolbar('chat', id);
+    }
+  };
   // The reader shows an archived chat only while it stays archived: restoring
   // or deleting it (from its bar or the agent list's menu) closes the reader.
   useEffect(() => {
@@ -511,7 +521,7 @@ export function CommandCenterView() {
           setAddOpen(false);
         }} />
       <div className="wall-workspace" data-dock-side={wall.dock.side}>
-        <MonitorsDock state={wall} setState={setWall} tasks={tasks} running={running} now={now} sessions={sessions} providers={providers} usage={usage} onOpenChat={openChat} onOpenModels={() => setView('models')} />
+        <MonitorsDock state={wall} setState={setWall} tasks={tasks} running={running} now={now} sessions={sessions} providers={providers} usage={usage} onOpenChat={openWallChat} onOpenModels={() => setView('models')} />
         <div ref={agentWorkspaceRef} className="wall-agent-workspace" data-tabs="left">
       {!panel.show && <div className="agent-panel-collapsed">
         <AgentPanelControls show={false}
@@ -521,16 +531,7 @@ export function CommandCenterView() {
         const id = kind === 'terminal' ? await newTerminal(projectId, shell) : await newChat({ kind: 'chat', chatType: kind === 'image' || kind === 'video' ? kind : 'multimodal' }, projectId);
         await addFromToolbar(kind === 'terminal' ? 'terminal' : 'chat', id, true);
         setArchivedId(null);
-      }} selectedId={archivedId ?? selected} onOpenChat={(id) => {
-        if (sessions.find((session) => session.id === id)?.archivedAt) setArchivedId(id);
-        else {
-          setArchivedId(null);
-          // Focus shows the chosen chat. Every other layout keeps its windows
-          // and marks the chat's window active, adding one when it has none.
-          // One guarded wall update, so reselecting the active chat changes nothing.
-          void addFromToolbar('chat', id);
-        }
-      }} onOpenTerminal={(id) => { setArchivedId(null); void addFromToolbar('terminal', id); }}
+      }} selectedId={archivedId ?? selected} onOpenChat={openWallChat} onOpenTerminal={(id) => { setArchivedId(null); void addFromToolbar('terminal', id); }}
         onOpenFile={(path) => {
           setArchivedId(null);
           void addFromToolbar('file', path).catch(reportAddFailure);

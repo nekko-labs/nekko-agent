@@ -749,6 +749,13 @@ async fn admit(
     }
     facts.insert("spawn".into(), json!(!sandbox));
     let mut account = pick(&provider, &["auth", "kind", "tokenKey"]);
+    // Claude Code authenticates inside its own process. Record that billing
+    // route now so reconfiguring the login can't rewrite the turn's cost later.
+    if kind == "claude-code"
+        && let Some(auth) = ctx.claude_policy.auth_for(&provider)
+    {
+        account["auth"] = json!(auth.as_str());
+    }
     account["incognito"] = json!(incognito);
     facts.insert("account".into(), account);
 
