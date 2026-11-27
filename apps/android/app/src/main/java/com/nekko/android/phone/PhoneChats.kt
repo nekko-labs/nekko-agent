@@ -76,7 +76,8 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
         val usage = secrets.get(usageSlot)?.let { runCatching { com.nekko.protocol.PhoneUsageLedger.from(Json.parseToJsonElement(it)) }.getOrNull() }
             ?: com.nekko.protocol.PhoneUsageLedger()
         val tone = com.nekko.protocol.PhoneTone.parse(secrets.get(toneSlot))
-        synchronized(gate) { mutable.value = State(ready = true, providers = providers, chats = chats, usage = usage, tone = tone) }
+        // The beta setting was decided before the load (PhoneCloudBeta.atLaunch): keep it.
+        synchronized(gate) { mutable.value = State(ready = true, providers = providers, chats = chats, usage = usage, tone = tone, available = mutable.value.available) }
     }
 
     /** The tone for the next reply of every chat on this phone; saved messages are never rewritten. */
