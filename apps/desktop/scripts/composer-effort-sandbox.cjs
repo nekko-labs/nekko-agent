@@ -14,7 +14,9 @@ app.whenReady().then(async () => {
   const run = s => win.webContents.executeJavaScript(s, true);
   const shot = async name => { const f = path.join(out, name + '.png'); fs.writeFileSync(f, (await win.capturePage(undefined, { stayHidden: true })).toPNG()); report.captures.push(f); };
   win.on('focus', () => report.errors.push('Window took focus'));
-  win.webContents.on('console-message', e => { if (e.level === 'error') report.errors.push(e.message.slice(0, 300)); });
+  // Chromium reports a ResizeObserver that settles over two frames as an error
+  // when the window is resized; it is not a page error, so it is not counted.
+  win.webContents.on('console-message', e => { if (e.level === 'error' && !/^ResizeObserver loop/.test(e.message)) report.errors.push(e.message.slice(0, 300)); });
   try {
     await win.loadFile(path.join(out, 'index.html'));
     for (let i = 0; i < 60 && !(await run('!!window.composerFixture && !!document.querySelector("[data-model-chip-name]")')); i++) await sleep(200);
@@ -36,7 +38,7 @@ app.whenReady().then(async () => {
         await sleep(100);
         frames.push((await win.capturePage(undefined, { stayHidden: true })).resize({ width: 700 }).toPNG());
       }
-      const modules = process.env.NEKKO_TEST_MODULES;
+      const modules = process.env.NEKKO_TEST_MODULES || path.join(__dirname, '../../../node_modules');
       const { PNG } = require(path.join(modules, 'pngjs'));
       const { GifWriter } = require(path.join(modules, 'omggif'));
       const images = frames.map(f => PNG.sync.read(f));
@@ -58,8 +60,18 @@ app.whenReady().then(async () => {
       }
       fs.writeFileSync(path.join(out, 'independent-scroll.gif'), data.subarray(0, gif.end()));
     }
+    // Effort lives in the model picker now (its section under the lists); older
+    // revisions had a slider of its own in the bar, kept below for "before" runs.
+    const section = await run('!!document.querySelector("[data-effort-section] input[type=range]")');
+    if (section) {
+      await run('document.querySelector("[data-effort-section] input[type=range]").focus()');
+      win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'End' }); win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'End' });
+      await sleep(250);
+      report.assertions.savedEffort = await run('composerFixture.record.effort');
+      await shot('effort-selected');
+    }
     await run('document.querySelector("button[aria-haspopup=listbox]").click()');
-    const effort = await run('!!document.querySelector(".effort-slider button:not(:disabled)")');
+    const effort = !section && await run('!!document.querySelector(".effort-slider button:not(:disabled)")');
     if (effort) {
       await run('document.querySelector(".effort-slider button").click()'); await sleep(200); await shot('effort');
       const slider = await run('!!document.querySelector("[data-effort-popover] input[type=range]")');
@@ -75,10 +87,26 @@ app.whenReady().then(async () => {
     await run("localStorage.setItem('nekko.chatMode','expert')"); await win.reload(); await sleep(1500); await run("document.querySelector('[contenteditable=plaintext-only]').focus()"); await win.webContents.insertText("Make this better and fix everything"); await sleep(500);
     if (!before) {
       assert.equal(await run('document.querySelectorAll("[data-prompt-suggestions]").length'), 1, 'one suggestions control in Detailed');
-      assert.equal(await run('!!document.querySelector(".composer-bar [data-composer-suggestions] [data-prompt-suggestions]")'), true, 'suggestions sit in the action bar');
+      assert.equal(await run('!!document.querySelector("[data-composer-mode-row] [data-composer-suggestions] [data-prompt-suggestions]")'), true, 'suggestions sit in the Mode row');
     }
     await shot('expert');
     win.setContentSize(420, 800); await sleep(250); await shot('narrow');
+    // Every control on the composer's rows keeps its parts inside its own box,
+    // and no two controls overlap (#1966, #3555).
+    report.assertions.narrow = await run(`(() => {
+      const rows = Array.from(document.querySelectorAll('[data-composer-mode-row], [data-composer-primary-row], .composer-bar'));
+      const shown = (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).display !== 'none'; };
+      const controls = rows.flatMap((row) => Array.from(row.querySelectorAll('button')).filter((b) => shown(b) && !b.parentElement.closest('button')));
+      const name = (e) => (e.getAttribute('aria-label') || e.textContent || '').trim().slice(0, 40);
+      const spill = controls.flatMap((b) => { const box = b.getBoundingClientRect(); return Array.from(b.querySelectorAll('*')).filter((c) => shown(c) && !c.closest('.sr-only')).filter((c) => { const r = c.getBoundingClientRect(); return r.right > box.right + 1 || r.left < box.left - 1; }).map((c) => name(b) + ' > ' + (c.textContent.trim() || c.tagName)); });
+      const overlaps = [];
+      for (let i = 0; i < controls.length; i++) for (let j = i + 1; j < controls.length; j++) { const a = controls[i].getBoundingClientRect(), b = controls[j].getBoundingClientRect(); if (Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1) overlaps.push([name(controls[i]), name(controls[j])]); }
+      return { controls: controls.length, spill, overlaps };
+    })()`);
+    if (!before) {
+      assert.deepEqual(report.assertions.narrow.spill, [], 'nothing spills out of its control at 420px');
+      assert.deepEqual(report.assertions.narrow.overlaps, [], 'no two controls overlap at 420px');
+    }
     await run('document.querySelector("button[aria-haspopup=listbox]").click()'); await sleep(250); await shot('narrow-models');
     report.assertions.viewportOverflow = await run('document.documentElement.scrollWidth > innerWidth');
     assert.equal(report.assertions.viewportOverflow, false);

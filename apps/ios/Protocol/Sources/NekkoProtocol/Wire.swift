@@ -363,13 +363,15 @@ public struct ChatMessage: Equatable, Sendable {
     public var turnStats: TurnStats? = nil
     /// An image chat's reply: how its picture (or clip) was made.
     public var generated: GeneratedPicture? = nil
+    /// The computer’s admitted strategy, present only on a persisted user message.
+    public var turnStrategy: TurnStrategy? = nil
 
     public static func == (a: ChatMessage, b: ChatMessage) -> Bool {
         a.id == b.id && a.role == b.role && a.content == b.content && a.reasoning == b.reasoning
             && a.createdAt == b.createdAt && a.imageCount == b.imageCount && a.skill?.name == b.skill?.name
             && a.skill?.input == b.skill?.input && a.toolCalls == b.toolCalls && a.toolResult == b.toolResult
             && a.interrupted == b.interrupted && a.images == b.images && a.turnStats == b.turnStats
-            && a.generated == b.generated
+            && a.generated == b.generated && a.turnStrategy == b.turnStrategy
     }
 
     public static func from(_ v: JSONValue?) -> ChatMessage? {
@@ -384,7 +386,8 @@ public struct ChatMessage: Equatable, Sendable {
             toolCalls: v["toolCalls"]?.array?.compactMap(ToolCall.from) ?? [],
             toolResult: ToolResult.from(v["toolResult"]), interrupted: v.flag("interrupted"),
             turnStats: role == "assistant" ? TurnStats.from(v["turnStats"]) : nil,
-            generated: role == "assistant" ? GeneratedPicture.from(v["generated"]) : nil)
+            generated: role == "assistant" ? GeneratedPicture.from(v["generated"]) : nil,
+            turnStrategy: role == "user" ? TurnStrategy.from(v["turnStrategy"]) : nil)
     }
 }
 

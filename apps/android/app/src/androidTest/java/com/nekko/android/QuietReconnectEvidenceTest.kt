@@ -46,7 +46,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -60,7 +59,9 @@ class QuietReconnectEvidenceTest {
 
     /** Record only the existing dots on a settled real New Chat surface, never HOME or transitions. */
     @Test fun steadyReconnectMotion() {
-        assertTrue("Motion evidence requires system animations", ValueAnimator.areAnimatorsEnabled())
+        // Motion evidence needs system animations: test emulators usually run with them off, so a
+        // plain suite run skips it; apps/android/scripts/mode-evidence.sh turns them on to record it.
+        org.junit.Assume.assumeTrue("Motion evidence requires system animations", ValueAnimator.areAnimatorsEnabled())
         computer.online = false
         val repo = repo()
         // Disable auto-advance before composition: its InfiniteAnimationPolicy otherwise

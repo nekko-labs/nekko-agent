@@ -38,6 +38,17 @@ import type { OAuthProvider, OAuthSessionInfo, OAuthStatus } from './oauth.js';
 import type { SubscriptionLimits } from './limits.js';
 import type { AppInfo, UpdateInfo } from './update.js';
 
+/**
+ * The arguments a window's `getSession(id, opts)` sends: the id alone (every
+ * picture a data URL), or with `{ pictures: 'refs' }` when asked, so the chat
+ * comes back with `nekko-blob:` references (decision 0072). A chat on another
+ * computer (`@computer:id`) always sends the id alone: that computer does not
+ * keep its pictures here.
+ */
+export function sessionGetArgs(id: string, opts?: { pictures?: 'refs' | 'inline' }): [string] | [string, { pictures: 'refs' }] {
+  return opts?.pictures === 'refs' && !id.startsWith('@') ? [id, { pictures: 'refs' }] : [id];
+}
+
 /** Invoke (request/response) channels. */
 export const IpcChannels = {
   settingsGet: 'settings:get',
@@ -153,8 +164,12 @@ export const IpcChannels = {
   sessionWatches: 'session:watches',
   sessionCancelWatch: 'session:cancelWatch',
   sessionsSummaries: 'sessions:summaries',
+  /** The chat finder's index: chats' searchable text only, kept per file version by the daemon. */
+  sessionsFinderText: 'sessions:finderText',
   sessionCreate: 'session:create',
   sessionGet: 'session:get',
+  /** One picture a chat names as `nekko-blob:<name>`, as a data URL (`session:blob`). */
+  sessionBlob: 'session:blob',
   sessionDelete: 'session:delete',
   sessionSetWorkspace: 'session:setWorkspace',
   sessionSetSupportingWorkspaces: 'session:setSupportingWorkspaces',
@@ -252,6 +267,12 @@ export const IpcChannels = {
   sandboxApplyDiff: 'sandbox:applyDiff',
   chatWorktreesList: 'chatWorktrees:list',
   chatWorktreesRemove: 'chatWorktrees:remove',
+  storageUsage: 'storage:usage',
+  storageDisk: 'storage:disk',
+  storageIdleWorktrees: 'storage:idleWorktrees',
+  storageRemoveWorktrees: 'storage:removeWorktrees',
+  storageRunnerImages: 'storage:runnerImages',
+  storageRemoveRunnerImage: 'storage:removeRunnerImage',
 
   fileRead: 'file:read',
   fileWrite: 'file:write',
@@ -438,6 +459,11 @@ export const IpcChannels = {
   computersCreateSession: 'computers:createSession',
   computersStats: 'computers:stats',
   computersConnectFleet: 'computers:connectFleet',
+  computersNearby: 'computers:nearby',
+  computersLobbyOpen: 'computers:lobbyOpen',
+  computersLobbyAnswer: 'computers:lobbyAnswer',
+  computersLobbyClose: 'computers:lobbyClose',
+  computersLobbyJoin: 'computers:lobbyJoin',
   remoteDevices: 'remote:devices',
   remoteRevoke: 'remote:revoke',
   remoteRename: 'remote:rename',
@@ -595,6 +621,7 @@ export const IpcEvents = {
   limitsUpdated: 'limits:updated',
   /** A connected computer's state changed, or the list did. */
   computersUpdated: 'computers:updated',
+  computersLobby: 'computers:lobby',
   /** The look a paired phone mirrors changed: the theme fields of the settings, never anything else. */
   appearanceUpdated: 'appearance:updated',
   downloadsUpdated: 'downloads:updated',
@@ -961,7 +988,21 @@ export interface NekkoApi {
   sandboxDiff(sessionId: string): Promise<import('./chat.js').SandboxDiff>;
   applySandboxDiff(sessionId: string, identity: string, diffId: string, paths: string[]): Promise<never>;
   createSession(workspaceId?: string): Promise<Session>;
-  getSession(id: string): Promise<Session | null>;
+  /**
+   * A chat. Its pictures are data URLs, unless `pictures: 'refs'` leaves each
+   * one the `nekko-blob:<name>` reference the chat file holds (a long agent
+   * chat is megabytes of screenshots otherwise); resolve one with `sessionPicture`.
+   * A chat on another computer (`@computer:id`) is always inline.
+   */
+  getSession(id: string, opts?: { pictures?: 'refs' | 'inline' }): Promise<Session | null>;
+  /** The data URL of a picture a `pictures: 'refs'` chat names, or null when this computer does not have it. */
+  sessionPicture(reference: string): Promise<string | null>;
+  /**
+   * The searchable text of up to 200 chats at once, by id (a missing chat is
+   * `null`): what the chat finder and the command palette index, without
+   * pictures, reasoning or tool output.
+   */
+  finderChatText(ids: string[]): Promise<Record<string, import('./session-summary.js').FinderChatText | null>>;
   deleteSession(id: string): Promise<void>;
   setSessionWorkspace(sessionId: string, workspaceId?: string): Promise<Session | null>;
   setSessionSupportingWorkspaces(sessionId: string, workspaceIds: string[]): Promise<Session | null>;
@@ -1075,7 +1116,7 @@ export interface NekkoApi {
   specPath(sessionId: string): Promise<string | null>;
   setSessionOptions(
     id: string,
-    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'memory' | 'guidance' | 'toolApproach' | 'orchestrate' | 'offline' | 'cloudOnly' | 'incognito' | 'syncOff' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'chatType' | 'imageParams' | 'archivedAt' | 'privacy' | 'turnFailure' | 'allowedMcpTools' | 'knownRecipients'>>,
+    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'chatGroup' | 'order' | 'mode' | 'disabledTools' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'memory' | 'guidance' | 'toolApproach' | 'orchestrate' | 'offline' | 'cloudOnly' | 'incognito' | 'syncOff' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'chatType' | 'imageParams' | 'archivedAt' | 'privacy' | 'turnFailure' | 'allowedMcpTools' | 'knownRecipients'>>,
     /** `chatOnly` leaves the new-chat defaults alone, for a change the app made rather than the user. */
     opts?: { chatOnly?: boolean },
   ): Promise<Session | null>;
@@ -1158,6 +1199,20 @@ export interface NekkoApi {
    * has uncommitted changes; the branch is deleted only when fully merged.
    */
   removeChatWorktree(root: string): Promise<{ branchDeleted: boolean }>;
+  /** The last storage measurement at once; starts a new one when it is over 10 minutes old or `refresh`. */
+  getStorageUsage(refresh?: boolean): Promise<import('./storage.js').StorageUsage>;
+  /** Total and free bytes of the data folder's volume; no folder walk. */
+  getDiskSpace(): Promise<import('./storage.js').DiskSpace | null>;
+  /** What "Remove idle worktrees" would remove (clean, quiet 3 days, fully pushed or merged), and what it keeps. */
+  previewIdleWorktrees(): Promise<import('./storage.js').IdlePreview>;
+  /** Remove these worktrees, each checked again first; branches are always kept. */
+  removeWorktrees(roots: string[]): Promise<import('./storage.js').RemoveWorktreesResult>;
+  /** The CI runner image folders and which are in use. */
+  listRunnerImages(): Promise<import('./storage.js').RunnerImage[]>;
+  /** Remove one leftover runner image (refused for any in use). */
+  removeRunnerImage(name: string): Promise<{ freed: number }>;
+  /** Desktop only: clear the app's browser caches (not sign-ins, local storage or chats). Absent in the Local Web UI. */
+  clearAppCaches?(): Promise<void>;
 
   /** Read a file as text (for the in-app viewer/editor). */
   readFile(path: string): Promise<FileContent>;
@@ -1450,6 +1505,16 @@ export interface NekkoApi {
   /** Its providers and folders; null when it has never answered. */
   computerCatalog(id: string): Promise<import('./computers.js').ComputerCatalog | null>;
   onComputersUpdated(cb: () => void): () => void;
+  /** Computers on this network with a pairing lobby open (their link is being made). */
+  nearbyComputers(): Promise<import('./computers.js').NearbyComputer[]>;
+  /** While a link is open, let a computer on this network ask for it; it is sent only after Pair. */
+  openComputerLobby(link: import('./computers.js').ComputerPairingLink): Promise<{ lobby: string }>;
+  /** Pair or Don't pair, for the computer the lobby is asking about. */
+  answerComputerLobby(pair: boolean): Promise<void>;
+  closeComputerLobby(): Promise<void>;
+  /** Join a nearby computer's lobby: the code to compare. Pairing follows when its owner taps Pair. */
+  joinComputerLobby(found: import('./computers.js').NearbyComputer): Promise<{ code: string }>;
+  onComputerLobby(cb: (e: import('./computers.js').ComputerLobbyEvent) => void): () => void;
   listRemoteDevices(): Promise<import('./remote.js').RemoteDevice[]>;
   revokeRemoteDevice(deviceId: string): Promise<import('./remote.js').RemoteDevice[]>;
   renameRemoteDevice(deviceId: string, name: string): Promise<import('./remote.js').RemoteDevice[]>;

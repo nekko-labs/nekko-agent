@@ -15,7 +15,7 @@ import { UpdateProvider } from '../components/UpdateBanner.js';
 
 describe('Settings Customize section', () => {
   it('replaces the separate presentation groups with team support before General and phone pairing', () => {
-    expect(SETTINGS_GROUPS.map(group => group.id)).toEqual(['profile', 'support', 'cloud', 'general', 'customize', 'agents', 'tools', 'safety', 'connections', 'phone', 'system']);
+    expect(SETTINGS_GROUPS.map(group => group.id)).toEqual(['profile', 'support', 'cloud', 'general', 'customize', 'agents', 'tools', 'storage', 'safety', 'connections', 'phone', 'system']);
     // The id stays customize so links into it keep working; the rail says Appearance.
     expect(SETTINGS_GROUPS.find(group => group.id === 'customize')?.label).toBe('Appearance');
   });

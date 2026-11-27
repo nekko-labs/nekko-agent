@@ -73,7 +73,8 @@ pub fn model_modality(
         ) {
             return "audio";
         }
-        if test(regex!(r"draft|eagle|medusa|lookahead|speculative"), arch) {
+        // A DFlash drafter's GGUF says `dflash`, with no "draft" in it.
+        if test(regex!(r"draft|dflash|eagle|medusa|lookahead|speculative"), arch) {
             return "draft";
         }
         if test(embedding_archs(), arch) {
@@ -602,6 +603,7 @@ pub struct MlxInfo {
     pub max_context: Option<Value>,
     pub kv_bytes_per_token: Option<u64>,
     pub vision: bool,
+    pub dflash2: bool,
     pub size: f64,
 }
 
@@ -640,8 +642,9 @@ fn mlx_kv_bytes_per_token(config: &Value) -> Option<u64> {
 }
 
 /// Whether a directory is an MLX model, and what it is (`readMlxModel`): a
-/// `config.json` beside `.safetensors` weights, plus MLX's quantization block
-/// or `mlx` in the folder's or its publisher's name.
+/// `config.json` beside `.safetensors` weights, plus MLX's quantization block,
+/// `mlx` in the folder/publisher name, or the DFlash2 draft architecture that
+/// mlx-vlm can load directly.
 pub fn read_mlx_model(dir: &str) -> Option<MlxInfo> {
     let entries: Vec<String> = std::fs::read_dir(dir)
         .ok()?
@@ -665,7 +668,8 @@ pub fn read_mlx_model(dir: &str) -> Option<MlxInfo> {
     });
     let near: Vec<&str> = dir.split(['\\', '/']).filter(|s| !s.is_empty()).collect();
     let near = near[near.len().saturating_sub(2)..].join("/");
-    if !mlx_quant && !test(regex!("mlx"), &near) {
+    let dflash2 = is_dflash2_config(&config);
+    if !dflash2 && !mlx_quant && !test(regex!("mlx"), &near) {
         return None;
     }
     let size = weights.iter().map(|w| size_of(&path::join(&[dir, w]))).sum();
@@ -687,8 +691,65 @@ pub fn read_mlx_model(dir: &str) -> Option<MlxInfo> {
         max_context: max.filter(Value::is_number),
         kv_bytes_per_token: mlx_kv_bytes_per_token(&config),
         vision: nekko_js::truthy(field(&config, "vision_config").as_ref()),
+        dflash2,
         size,
     })
+}
+
+fn is_dflash2_config(config: &Value) -> bool {
+    config.get("model_type").and_then(Value::as_str) == Some("dflash2")
+        || config
+            .get("architectures")
+            .and_then(Value::as_array)
+            .is_some_and(|a| a.iter().any(|v| v == "DFlash2DraftModel"))
+}
+
+/// Only the published stock Qwen3.8-27B pair is supported. The target shares
+/// its architecture with other Qwen releases, so require a stock checkpoint
+/// directory/repo name as well as the geometry specified by the head.
+pub(crate) fn validate_mlx_dflash2_pair(target: &str, draft: &str) -> bool {
+    let target_path = std::path::Path::new(target);
+    let stock = |name: &str| {
+        matches!(
+            name,
+            "Qwen3.8-27B" | "Qwen3.8-27B-4bit" | "Qwen3.8-27B-8bit" | "Qwen3.8-27B-MLX-8bit" | "Qwen3.8-27B-bf16"
+        )
+    };
+    let named_stock = target_path.file_name().and_then(|n| n.to_str()).is_some_and(|name| {
+        // Managed downloads use `<owner>_<repo>` instead of `<owner>/<repo>`.
+        stock(name.strip_prefix("mlx-community_").unwrap_or(name))
+    }) || target_path
+        .parent()
+        .filter(|p| p.ends_with("snapshots"))
+        .and_then(|p| p.parent())
+        .and_then(|p| p.file_name())
+        .and_then(|n| n.to_str())
+        .and_then(|n| n.strip_prefix("models--mlx-community--"))
+        .is_some_and(stock);
+    let (Some(target), Some(draft)) =
+        (read_json(&path::join(&[target, "config.json"])), read_json(&path::join(&[draft, "config.json"])))
+    else {
+        return false;
+    };
+    let text = &target["text_config"];
+    let head = &draft["dflash_config"];
+    named_stock
+        && target["model_type"] == "qwen3_5"
+        && target["vision_config"].is_object()
+        && text["hidden_size"] == 5120
+        && text["num_hidden_layers"] == 64
+        && text["vocab_size"] == 248320
+        && is_dflash2_config(&draft)
+        && draft["hidden_size"] == text["hidden_size"]
+        && draft["num_target_layers"] == text["num_hidden_layers"]
+        && draft["vocab_size"] == text["vocab_size"]
+        && head["target_layer_ids"] == json!([5, 19, 33, 47, 61])
+        && head["mask_token_id"] == 248070
+        && head["block_size"] == 8
+        && head["conv_kernel_size"] == 2
+        && head["conv_group_size"] == 16
+        && head["selector_rank"] == 256
+        && head["selector_top_k"] == 16
 }
 
 /// MLX model folders under one root; a folder that is a model is not descended into.
@@ -781,6 +842,24 @@ pub fn list(cfg: &LibraryConfig) -> Result<Vec<Value>, String> {
         }
     }
     let roots = cfg.roots();
+    let primary = &roots[0];
+    // File imports adopt the file in place. They have a primary index row
+    // but are not found by walking the managed models folder.
+    let mut imports: Vec<_> = by_file
+        .iter()
+        .filter(|(file, stored)| {
+            stored.get("folderId") == Some(&primary.id)
+                && ends_gguf(file)
+                && !later_shard(file)
+                && !is_projector(file)
+                && {
+                    let rel = path::relative(&primary.path, file);
+                    std::path::Path::new(&rel).is_absolute() || rel.split(SEP).next() == Some("..")
+                }
+        })
+        .map(|(file, _)| (file.clone(), None))
+        .collect();
+    imports.sort();
     let mut out: Vec<Map<String, Value>> = Vec::new();
     let mut seen_ids: HashSet<String> = HashSet::new();
     let mut seen_paths: HashSet<String> = HashSet::new();
@@ -814,11 +893,14 @@ pub fn list(cfg: &LibraryConfig) -> Result<Vec<Value>, String> {
     }
 
     for root in &roots {
-        let files: Vec<(String, Option<String>)> = if root.is_ollama() {
+        let mut files: Vec<(String, Option<String>)> = if root.is_ollama() {
             list_ollama(&root.path).into_iter().map(|m| (m.path, Some(m.name))).collect()
         } else {
             scan_folder(root).into_iter().filter(|p| !later_shard(p) && !is_projector(p)).map(|p| (p, None)).collect()
         };
+        if root.managed {
+            files.append(&mut imports);
+        }
         for (p, name) in files {
             if seen_paths.contains(&lower(&p)) {
                 continue;
@@ -889,8 +971,15 @@ pub fn list(cfg: &LibraryConfig) -> Result<Vec<Value>, String> {
             row.insert("managed".into(), json!(root.managed));
             row.insert("folderId".into(), root.id.clone());
             assign(&mut row, "folderProvider", root.provider.clone());
-            row.insert("modality".into(), json!(if info.vision { "vision" } else { "chat" }));
-            row.insert("hasProjector".into(), json!(info.vision));
+            let modality = if info.dflash2 {
+                "draft"
+            } else if info.vision {
+                "vision"
+            } else {
+                "chat"
+            };
+            row.insert("modality".into(), json!(modality));
+            row.insert("hasProjector".into(), json!(info.vision && !info.dflash2));
             row.insert("mlxRunnable".into(), json!(cfg.mlx_runnable));
             // Live metadata: existing index rows get this without a rescan/migration.
             put(&mut row, "mlxKvBytesPerToken", info.kv_bytes_per_token.map(|bytes| json!(bytes)));
@@ -950,7 +1039,9 @@ fn reply(ok: bool, message: String) -> Value {
 
 /// Adopt a GGUF that lives somewhere else, without copying it (`importFile`).
 pub fn import_file(cfg: &LibraryConfig, p: &str) -> Result<Value, String> {
-    let size = std::fs::metadata(p).map_or(0.0, |m| m.len() as f64);
+    let p = path::resolve(&[p]);
+    let p = p.as_str();
+    let size = size_of(p);
     if size == 0.0 {
         return Ok(reply(false, "That file does not exist.".into()));
     }
@@ -962,8 +1053,19 @@ pub fn import_file(cfg: &LibraryConfig, p: &str) -> Result<Value, String> {
     };
     let mut index = Index::read(cfg);
     let primary = cfg.roots().remove(0);
-    let stored = describe_with(&primary, p, None, Some(&meta), cfg.now);
-    let id = stored.get("id").map(nekko_js::display).unwrap_or_default();
+    let mut stored = describe_with(&primary, p, None, Some(&meta), cfg.now);
+    let mut taken = HashSet::new();
+    for (id, row) in index.models().iter() {
+        if row.get("file").and_then(Value::as_str) == Some(p) && row.get("folderId") == Some(&primary.id) {
+            stored.insert("id".into(), json!(id));
+            if let Some(preset) = row.get("preset") {
+                stored.insert("preset".into(), preset.clone());
+            }
+        } else {
+            taken.insert(id.clone());
+        }
+    }
+    let id = claim(&mut stored, &mut taken);
     index.models().insert(id, Value::Object(stored.clone()));
     index.write(cfg)?;
     let mut model = stored.clone();

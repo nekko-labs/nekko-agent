@@ -8,6 +8,36 @@ export function pick(runners, label, fallback) {
   return JSON.stringify(idle ? ['self-hosted', label] : fallback);
 }
 
+/**
+ * Asks Nekko Cloud (decision 0064), proving the repository with the job's GitHub OIDC token
+ * (`permissions: id-token: write`). The runs-on JSON, null for "none free, go hosted", or
+ * undefined when Cloud could not answer, so the caller falls back to GitHub's runner list.
+ */
+export async function askCloud(env, fetchFn, label) {
+  if (!/^https:\/\/[A-Za-z0-9.-]+(:\d+)?$/.test(env.PICK_CLOUD ?? '') || !env.ACTIONS_ID_TOKEN_REQUEST_URL || !env.ACTIONS_ID_TOKEN_REQUEST_TOKEN) return undefined;
+  try {
+    const id = await fetchFn(`${env.ACTIONS_ID_TOKEN_REQUEST_URL}&audience=nekko-cloud`, {
+      headers: { Authorization: `bearer ${env.ACTIONS_ID_TOKEN_REQUEST_TOKEN}` },
+      signal: AbortSignal.timeout(10000),
+    });
+    const token = id.ok ? (await id.json())?.value : null;
+    if (typeof token !== 'string') return undefined;
+    const res = await fetchFn(`${env.PICK_CLOUD}/v1/runners/pick`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label, guest: env.PICK_GUEST === 'linux' ? 'linux' : 'macos' }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return undefined;
+    const runsOn = (await res.json())?.runsOn;
+    if (runsOn === null) return null;
+    const good = Array.isArray(runsOn) && runsOn.length === 2 && runsOn[0] === 'self-hosted' && typeof runsOn[1] === 'string' && runsOn[1].startsWith(label);
+    return good ? JSON.stringify(runsOn) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function main(env = process.env, fetchFn = globalThis.fetch) {
   const label = env.PICK_LABEL || 'nekko-cloud-mac';
   const fallback = env.PICK_FALLBACK || 'macos-latest';
@@ -16,6 +46,11 @@ export async function main(env = process.env, fetchFn = globalThis.fetch) {
     return value;
   };
   const hosted = JSON.stringify(fallback);
+  if (/^[A-Za-z0-9._-]{1,64}$/.test(label)) {
+    const cloud = await askCloud(env, fetchFn, label);
+    if (cloud === null) return done(hosted, 'Nekko Cloud: no free Mac');
+    if (cloud) return done(cloud, 'Nekko Cloud: a free Mac');
+  }
   const repo = env.PICK_REPO ?? '';
   if (!env.PICK_TOKEN) return done(hosted, 'no token');
   // With PICK_ORG the runner is an org runner, which the repo's runner list does not show.

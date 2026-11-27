@@ -54,6 +54,8 @@ describe('agent status from events', () => {
 
 describe('agent window indicators', () => {
   it('shows a done check without watches and idle only for a watched sidebar chat', () => {
+    // The Done activity group says it already and leaves the check out, so look at the chats by project.
+    localStorage.setItem('nekko.agentPanelView', JSON.stringify({ groupBy: 'project' }));
     const html = renderSidebar({ sessions: [agentSummary('done', { activeWatchCount: 0 }), agentSummary('watched', { activeWatchCount: 1 })] });
     expect(html).toContain('aria-label="Done"');
     expect(html).toContain('aria-label="Idle, watching"');

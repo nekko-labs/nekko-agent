@@ -779,6 +779,10 @@ async fn admit(
     {
         spec_settings["modelSystemInstructions"] = json!(text);
     }
+    // Carry only the routing decision, never the gateway URL or bearer token in the prompt.
+    if !sandbox && crate::hypergate::enabled(&settings) {
+        spec_settings["hypergateEnabled"] = json!(true);
+    }
     spec_settings["providers"] = Value::Array(providers);
     let mut spec = json!({
         "turnId": turn_id,

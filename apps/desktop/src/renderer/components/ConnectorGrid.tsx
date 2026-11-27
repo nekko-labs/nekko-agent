@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { NekkoLabsTag } from './NekkoLabsTag.js';
 import type { ConnectorConfig, ConnectorKind, ConnectorMeta, ConnectorResource, DetectedConnectors, RepoExclusions } from '@nekko-agent/shared';
 import { CONNECTOR_CATALOG, CONNECTOR_GROUPS } from '@nekko-agent/shared';
 import { ConnectorIcon } from '../connectorIcons.js';
@@ -387,7 +388,10 @@ export function ConnectorRow({
           <ConnectorIcon kind={kind} size={20} />
         </span>
         <span className="flex min-w-0 flex-1 flex-col" style={{ gap: 'var(--q-tight)' }}>
-          <span className="truncate text-sm font-medium">{meta.label}</span>
+          <span className="flex min-w-0 items-baseline gap-2">
+            <span className="truncate text-sm font-medium">{meta.label}</span>
+            {meta.nekkoLabs && <NekkoLabsTag />}
+          </span>
           <span className="truncate text-xs text-ink-faint" title={typeof detail === 'string' ? detail : undefined}>
             {detail}
           </span>

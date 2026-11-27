@@ -60,6 +60,17 @@ app.whenReady().then(async () => {
     await run("layoutFixture.store.setState({settings:{...layoutFixture.store.getState().settings,theme:'dark'}});layoutFixture.store.getState().applyTheme()");
     await sleep(250);
     if (!process.env.NEKKO_TEST_SOURCE) {
+      const choose = async mode => { await run(`(() => { const e=document.querySelector('.plan-config select'); e.value='${mode}'; e.dispatchEvent(new Event('change',{bubbles:true})); })()`); await sleep(200); };
+      await check('balanced default with two remaining and history closed', "document.querySelectorAll('.plan-sheet-scroll > ol > li').length===2 && !document.querySelector('.plan-completed').open");
+      await choose('one'); await check('one row', "document.querySelectorAll('.plan-sheet-scroll > ol > li').length===1");
+      await run("document.querySelector('.plan-sheet-toggle').click()");
+      await check('temporary expansion keeps preference', "document.querySelectorAll('.plan-sheet-scroll > ol > li').length===2 && layoutFixture.store.getState().settings.planDisplay==='one'");
+      await choose('full'); await check('full saved',"layoutFixture.store.getState().settings.planDisplay==='full'");
+      await choose('hidden'); await check('hidden removes sheet',"!document.querySelector('[data-plan-sheet]')");
+      await run("layoutFixture.store.getState().setView('settings')"); await sleep(800);
+      await run("(() => { const e=document.querySelector('#plan-display'); e.value='balanced'; e.dispatchEvent(new Event('change',{bubbles:true})); })()");
+      await run("layoutFixture.showComposer('composer')"); await sleep(500);
+      await check('Settings restores hidden plan',"document.querySelector('.plan-config select').value==='balanced'");
       await check('notes and report detail are absent from rows', "!document.querySelector('.plan-sheet-more > p') && !document.querySelector('[data-plan-sheet]').innerText.includes('Base and head gradient captures')");
       await check('status and safe evidence remain on their step', "!!document.querySelector('[data-plan-step-id=step_1] [aria-label=\"Verified on macOS, open evidence\"]') && !!document.querySelector('[data-plan-step-id=step_3] [data-plan-check=active]')");
       await check('chips share the title line', "[...document.querySelectorAll('.plan-row-inline')].every(e => {const row=e.closest('.plan-row-line').getBoundingClientRect(); return Math.abs(row.top-e.getBoundingClientRect().top)<3;})");
@@ -70,6 +81,8 @@ app.whenReady().then(async () => {
     report.narrowRows = await run("[...document.querySelectorAll('[data-plan-step-id]')].map(e=>({id:e.dataset.planStepId,text:e.innerText,items:e.querySelectorAll('[data-plan-item]').length}))");
     await shot('compact-plan-narrow');
     if (!process.env.NEKKO_TEST_SOURCE) {
+      await run("document.querySelector('.plan-sheet-toggle').click(); document.querySelector('.plan-completed summary').click()"); await sleep(200);
+      await check('history reveals finished rows', "document.querySelectorAll('details[open] li').length === 2");
       await check('narrow rows show accurate overflow counts', "[...document.querySelectorAll('.plan-row-content')].filter(e=>e.querySelectorAll('[data-plan-item]').length).every(e=>{const n=e.querySelectorAll('[data-plan-item][data-overflowed]').length;return n>0 && e.querySelector('[data-plan-overflow]')?.textContent==='+'+n;})");
       await check('no horizontal overflow', "document.documentElement.scrollWidth <= innerWidth && [...document.querySelectorAll('.plan-row-line')].every(e=>e.scrollWidth <= e.clientWidth+1)");
       await run("document.querySelector('[data-plan-step-id=step_1] [data-plan-overflow]').click()");

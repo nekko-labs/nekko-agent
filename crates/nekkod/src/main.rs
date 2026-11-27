@@ -68,6 +68,7 @@ mod model_server;
 mod model_tunnel;
 mod native;
 mod oauth;
+mod pair_lobby;
 // Prompt integration for Orchestrate is separate from its read-only projection.
 #[allow(dead_code)]
 mod orchestrate_state;
@@ -103,6 +104,8 @@ mod skill_sources;
 mod small_services;
 mod spawn;
 mod speeds;
+mod storage;
+mod storage_runners;
 mod subagent_model;
 mod subagents;
 mod svg_safe;
@@ -305,6 +308,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         hub.clone(),
         cfg.github_api_url.clone(),
     );
+    #[cfg(unix)]
+    runner::picker_presence_loop(runners.clone(), cloud.clone());
     // What this computer tells the organizations it is shared with: its name, the
     // local models it can serve (the model library, never a cloud provider's models)
     // and its CI runners' coarse state.
@@ -536,6 +541,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     }
     connections::follow(ctx.clone());
     telemetry::start(ctx.clone());
+    // A setup email that didn't reach Nekko Cloud is sent again later.
+    feedback::start_retry(ctx.clone());
     // Claude Agent chats' idle Claude Code children are ended after 15 minutes.
     ctx.turns.harness.start_reaper();
     // Claude Agent's approval bridge: the app's own CLI, else `nekko-agent` on PATH.

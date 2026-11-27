@@ -12,12 +12,20 @@ export const CREATE_OPTIONS = [
   ['video', 'Video', <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="3" y="5" width="18" height="14" rx="4" /><path d="m10 9 5 3-5 3Z" /></svg>, null],
   ['terminal', 'Terminal', <TerminalIcon className="h-4 w-4" />, SHORTCUTS.newTerminal],
 ] as const;
-export function CreateMenuRows({ onCreate }: { onCreate: (kind: CreateKind) => void }) {
+export function CreateMenuRows({ onCreate, children }: { onCreate: (kind: CreateKind) => void; /** More rows after the kinds (the Agents panel adds New group). */ children?: React.ReactNode }) {
   return <>{CREATE_OPTIONS.map(([kind, label, icon, shortcut]) => <button key={kind} type="button" className="create-row flex w-full items-center gap-2 rounded-md px-2 py-1 text-left" aria-label={label} data-create-kind={kind} title={shortcut ? `${label} (${shortcut.label})` : label} onClick={() => onCreate(kind)}>
     <span className="create-tile">{icon}</span>
     <span className="min-w-0 flex-1 text-sm font-medium leading-snug">{label}</span>
     {shortcut && <kbd className="kbd shrink-0">{shortcut.label}</kbd>}
-  </button>)}</>;
+  </button>)}{children}</>;
+}
+
+/** A row of the create menu that is not a kind of window: the same look as the kinds. */
+export function CreateRow({ label, icon, onClick, ...rest }: { label: string; icon: React.ReactNode; onClick: () => void } & Record<`data-${string}`, string | undefined>) {
+  return <button type="button" className="create-row flex w-full items-center gap-2 rounded-md px-2 py-1 text-left" aria-label={label} onClick={onClick} {...rest}>
+    <span className="create-tile">{icon}</span>
+    <span className="min-w-0 flex-1 text-sm font-medium leading-snug">{label}</span>
+  </button>;
 }
 
 /** Hover menu with a grace period to cross the portal gap, also operable by keyboard. */

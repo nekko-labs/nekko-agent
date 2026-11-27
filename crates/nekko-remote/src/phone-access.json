@@ -128,6 +128,7 @@
   "session:setOptions",
   "session:setSupportingWorkspaces",
   "session:watches",
+  "sessions:finderText",
   "sessions:summaries",
   "settings:get",
   "settings:update",
@@ -176,6 +177,8 @@
    "providers:remove",
    "providers:save",
    "settings:reset",
+   "storage:removeRunnerImage",
+   "storage:removeWorktrees",
    "task:create",
    "task:delete",
    "task:update",
@@ -234,6 +237,7 @@
   "session:get",
   "session:photo",
   "session:watches",
+  "sessions:finderText",
   "sessions:summaries",
   "settings:get",
   "skills:runnable",
@@ -500,6 +504,7 @@
   "autoModel",
   "autoProviderSwitch",
   "autoQuality",
+  "chatGroup",
   "chatType",
   "cloudOnly",
   "disabledConnectors",
@@ -1116,6 +1121,13 @@
   ]
  },
  "maxFrameBytes": 9437184,
+ "finderView": {
+  "chats": 20,
+  "messages": 300,
+  "textChars": 8000,
+  "files": 20,
+  "bytes": 6291456
+ },
  "upload": {
   "chunkBytes": 3145728,
   "maxBytes": 50000000,

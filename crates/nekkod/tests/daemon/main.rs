@@ -27,6 +27,7 @@ mod runner;
 mod sandbox;
 mod sessions;
 mod settings;
+mod storage;
 mod tools;
 mod turns;
 mod wire;
