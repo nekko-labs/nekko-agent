@@ -31,7 +31,11 @@ app.whenReady().then(async () => {
     await run("integration.show('idle')"); await sleep(400);
     await capture('automations-idle-390');
     if (!baseline) {
-      await check('an idle runner names its last job and PR', "!!document.querySelector('[data-runner-last-job]') && document.querySelector('[data-runner-last-job]').textContent.includes('Desktop · Unit tests') && document.querySelector('[data-runner-last-job]').textContent.includes('PR #2823')");
+      await check('no pending jobs; completed history is not repeated', "document.body.innerText.includes('No pending jobs') && !document.body.innerText.includes('Last job') && !document.body.innerText.includes('Waiting')");
+      await check('settings visible before switch without hover', "(b=>b.offsetWidth>10 && getComputedStyle(b).opacity==='1' && b.nextElementSibling?.getAttribute('role')==='switch')(document.querySelector('[aria-label^=\"Runner settings for\"]'))");
+      await run("document.querySelector('[data-runner-state]').dispatchEvent(new PointerEvent('pointerover', { bubbles: true }))"); await sleep(550);
+      await check('hovered sleep glyph explains waiting', "document.querySelector('[role=tooltip]')?.textContent.includes('Waiting') && document.querySelector('[role=tooltip]')?.textContent.length>10");
+      await capture('automations-waiting-tip-390');
       await check('the dock leaves the switch round and borderless', "(s=>s.borderTopWidth==='0px'&&parseFloat(s.borderTopLeftRadius)>=10)(getComputedStyle(document.querySelector('.monitors-dock .quiet-switch')))");
     }
     await run('integration.show()'); await sleep(300);

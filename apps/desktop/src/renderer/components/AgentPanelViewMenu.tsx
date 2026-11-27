@@ -4,7 +4,11 @@ import { useShown } from '../simpleMode.js';
 import { syncedHomes } from '../syncedComputers.js';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { CheckIcon, ChevronIcon } from '../icons.js';
+import { BranchIcon, CheckIcon, ChevronIcon, RobotIcon } from '../icons.js';
+import { StatusIcon } from './WorkspaceCard.js';
+import { PrStatusIcon } from './SessionPrChip.js';
+import { ProviderMark } from './providers/ProviderMark.js';
+import { fillTone } from './contextTone.js';
 import {
   DEFAULT_AGENT_PANEL_VIEW, GROUP_BY_LABELS, SORT_BY_LABELS, isDefaultView, withSort,
   type AgentGroupBy, type AgentPanelView, type AgentSortBy,
@@ -235,29 +239,56 @@ function Choice({ checked, toggle = false, disabled = false, title, onClick, chi
   );
 }
 
+type CardDetailKey = 'showModel' | 'showContext' | 'showPullRequests' | 'showGit' | 'showSubagents' | 'showWindows' | 'showUpdated';
+
 export const CARD_DETAIL_OPTIONS = [
-  ['showModel', 'Model', 'Nekko · Local model'],
-  ['showContext', 'Context window', '24k / 128k context'],
-  ['showPullRequests', 'Pull requests', 'PR #42 · Open'],
+  ['showModel', 'Model', 'Opus 5.5'],
+  ['showContext', 'Context window', '24k/128k'],
+  ['showPullRequests', 'Pull requests', '#42'],
   ['showGit', 'Git branch', 'feature/new-design'],
   ['showSubagents', 'Sub-agent count', '2 sub-agents'],
   ['showWindows', 'Window count', '3 windows'],
-  ['showUpdated', 'Last reply time', '2 minutes ago'],
-] as const;
+  ['showUpdated', 'Last reply time', '2 mins ago'],
+] as const satisfies readonly (readonly [CardDetailKey, string, string])[];
 
-/** A synthetic example, never a user's chat or repository. Hidden details remain discoverable. */
+/**
+ * A synthetic agent card, laid out like a real one in the panel (`WorkspaceCard`):
+ * title and reply time, then the model and context line, the branch, and the
+ * sub-agent line with the PR chip at its end. Each detail sits in its own dotted
+ * box that toggles it. A hidden detail keeps its box, named, so it can come back.
+ * Never a user's chat or repository.
+ */
 export function AgentCardPreview({ view, onChange }: { view: AgentPanelView; onChange: (next: AgentPanelView) => void }) {
-  return <div className="agent-card-preview">
-    <span className="agent-card-preview__status">Working · Sample card</span>
-    <strong>Polish the app layout</strong>
-    {CARD_DETAIL_OPTIONS.map(([key, label, sample]) => {
-      const metadata = key !== 'showUpdated' && key !== 'showPullRequests';
-      const checked = view[key] && (!metadata || view.showMetadata);
-      return <button type="button" key={key} role="menuitemcheckbox" aria-label={label} aria-checked={checked}
-        className="agent-card-preview__detail" data-detail={key}
-        onClick={() => onChange({ ...view, [key]: !checked, ...(!checked && metadata ? { showMetadata: true } : {}) })}>
-        <span>{checked ? sample : label}</span><span aria-hidden="true">{checked ? '✓' : '+'}</span>
-      </button>;
-    })}
+  const detail = (key: CardDetailKey, shown: React.ReactNode, opts: { tone?: string; grow?: boolean; end?: boolean } = {}) => {
+    const [, label] = CARD_DETAIL_OPTIONS.find(([k]) => k === key)!;
+    const metadata = key !== 'showUpdated' && key !== 'showPullRequests';
+    const checked = view[key] && (!metadata || view.showMetadata);
+    return <button type="button" role="menuitemcheckbox" aria-label={label} aria-checked={checked}
+      title={checked ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
+      className={`agent-card-preview__detail${opts.grow ? ' agent-card-preview__detail--grow' : ''}${opts.end ? ' agent-card-preview__detail--end' : ''}`} data-detail={key}
+      style={checked && opts.tone ? { color: opts.tone } : undefined}
+      onClick={() => onChange({ ...view, [key]: !checked, ...(!checked && metadata ? { showMetadata: true } : {}) })}>
+      {checked ? shown : <><span aria-hidden="true">+</span><span className="truncate">{label}</span></>}
+    </button>;
+  };
+  const sample = (key: CardDetailKey) => CARD_DETAIL_OPTIONS.find(([k]) => k === key)![2];
+  return <div className="agent-card-preview" aria-label="Sample card">
+    <div className="agent-card-preview__line agent-card-preview__heading">
+      <StatusIcon status="idle" />
+      <span className="agent-card-preview__title">Polish the app layout</span>
+      {detail('showUpdated', <time className="tabular-nums">{sample('showUpdated')}</time>)}
+    </div>
+    <div className="agent-card-preview__line">
+      {detail('showModel', <><ProviderMark kind="anthropic" inline /><span className="truncate">{sample('showModel')}</span></>, { tone: 'var(--accent-2)', grow: true })}
+      {detail('showContext', <span className="tabular-nums">{sample('showContext')}</span>, { tone: fillTone(19) })}
+    </div>
+    <div className="agent-card-preview__line">
+      {detail('showGit', <><BranchIcon className="h-2.5 w-2.5 shrink-0" /><span className="truncate">{sample('showGit')}</span></>, { tone: 'var(--accent)', grow: true })}
+    </div>
+    <div className="agent-card-preview__line">
+      {detail('showSubagents', <><RobotIcon className="h-2.5 w-2.5 shrink-0" /><span>{sample('showSubagents')}</span></>, { tone: 'var(--accent-2)' })}
+      {detail('showWindows', <span>{sample('showWindows')}</span>)}
+      {detail('showPullRequests', <span className="agent-card-preview__pr"><PrStatusIcon status="open" className="h-3 w-3" />{sample('showPullRequests')}</span>, { tone: 'var(--success)', end: true })}
+    </div>
   </div>;
 }

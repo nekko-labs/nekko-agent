@@ -23,7 +23,7 @@ const initial: RunnerView = {
   today: { jobs: 4, seconds: 900 }, repos: [], forkApprovalOpen: false, suggestedSize: null,
   host: { ramMb: 32768, cores: 10, recommendedMemoryMb: 16384, runnerMemoryMb: 16384, cpusPerVm: 4, onBattery: false, batteryPct: 100, networkId: 'trusted', networkTrusted: true },
 };
-// Waiting with nothing running or queued: the card names its last job (its action and PR).
+// Waiting with completed history but nothing running or queued.
 const idle: RunnerView = { ...initial, state: 'waiting', reasons: ['userActive'], slots: [], queue: [],
   recent: [{ ...initial.recent[0], pr: { number: 2823, url: 'https://github.com/example/app/pull/2823' } }] };
 let views = [initial];

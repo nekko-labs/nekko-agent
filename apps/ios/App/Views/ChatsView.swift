@@ -64,6 +64,11 @@ struct ChatsView: View {
         }
         // The rows' PR states: looked up as chats name PRs or move on, and every few minutes.
         .task(id: rowPrsKey) { await store.loadRowPrs(listSummaries) }
+        // What the chats said, from each chat's computer, only while someone searches (#3448).
+        .task(id: finderKey) {
+            guard !query.isEmpty else { return }
+            await store.loadFinderTexts(listSummaries)
+        }
         .navigationTitle("Chats")
         .toolbar {
             RootMascot(working: listActivity.values.contains(.running), pull: pull)
@@ -428,8 +433,20 @@ struct ChatsView: View {
         dropTarget = nil
     }
 
-    /// Every word of the search, in the title, first prompt or last reply; archived chats too.
-    private var filtered: [SessionSummary] { ChatSearch.matches(listSummaries, query) }
+    /// Every word of the search, in the title, first prompt or last reply, archived chats too, and
+    /// in what the chats said once their computer sends it (#3448).
+    private var hits: [ChatHit] { FinderSearch.hits(listSummaries, query, texts: store.finderTexts) }
+    private var filtered: [SessionSummary] { hits.map(\.chat) }
+    /// The line that matched, for a chat found beyond its title.
+    private var snippets: [String: String] {
+        guard !query.isEmpty else { return [:] }
+        return Dictionary(hits.compactMap { h in h.snippet.map { (h.chat.id, $0) } }, uniquingKeysWith: { a, _ in a })
+    }
+
+    /// Changes when the search starts or stops, or a listed chat moves on.
+    private var finderKey: String {
+        query.isEmpty ? "" : listSummaries.map { "\($0.id):\($0.updatedAt)" }.joined(separator: ",")
+    }
 
     // MARK: The computers in view (2026-11-04)
 
@@ -578,12 +595,21 @@ struct ChatsView: View {
     /// computer active (`ChatView`), over the link the phone already holds to it.
     private func chatRow(_ s: SessionSummary, hasSubagents: Bool) -> some View {
         let on = owner(s)
+        let snippet = snippets[s.id]
         return NavigationLink(value: Route.chat(s.id)) {
-            ChatRow(summary: s, activity: listActivity[s.id], waiting: on == store.activeId ? store.outbox.count(for: s.id) : 0,
-                    place: showsComputer ? place(of: s) : nil, showPlaceIcon: view.showComputerIcons,
-                    prs: view.showPullRequests ? store.rowPrs[s.id] ?? [] : [], providerKind: providerKind(of: s),
-                    showModel: view.showModel, showContext: view.showContext, showUpdated: view.showUpdated,
-                    hasSubagents: hasSubagents)
+            VStack(alignment: .leading, spacing: 4) {
+                ChatRow(summary: s, activity: listActivity[s.id], waiting: on == store.activeId ? store.outbox.count(for: s.id) : 0,
+                        place: showsComputer ? place(of: s) : nil, showPlaceIcon: view.showComputerIcons,
+                        prs: view.showPullRequests ? store.rowPrs[s.id] ?? [] : [], providerKind: providerKind(of: s),
+                        showModel: view.showModel, showContext: view.showContext, showUpdated: view.showUpdated,
+                        hasSubagents: hasSubagents)
+                // Where the words were found, when the title alone doesn't say (#3448).
+                if let snippet {
+                    Text(snippet).font(.footnote).foregroundStyle(palette.inkSoft).lineLimit(2)
+                        .padding(.leading, 28)
+                        .accessibilityIdentifier("chats.row.snippet")
+                }
+            }
         }
         // Straight on the ground like the rest of the list, with the attention bar on a chat that needs you.
         // A chat with sub-agents meets their rows, so its tree line runs on into them.

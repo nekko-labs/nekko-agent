@@ -33,6 +33,20 @@ struct PhoneParityFixture: View {
         }
     }
 }
+/// The chat list's search inside messages (#3448) over seeded chats and what they said;
+/// `-uiTestChatSearchOlder`: a computer without `sessions:finderText`, summaries only.
+struct ChatSearchFixture: View {
+    @Environment(Prefs.self) private var prefs
+    @Environment(ComputersStore.self) private var store
+    @State private var path: [Route] = []
+    var body: some View {
+        NavigationStack { ChatsView(path: $path) }
+            .task {
+                prefs.chatListView = .standard
+                store.seedFinderFixture(older: ProcessInfo.processInfo.arguments.contains("-uiTestChatSearchOlder"))
+            }
+    }
+}
 struct PhoneComposerFixture: View {
     @Environment(PhoneChats.self) private var phone
     var body: some View {

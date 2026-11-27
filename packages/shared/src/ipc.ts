@@ -270,6 +270,7 @@ export const IpcChannels = {
   storageUsage: 'storage:usage',
   storageDisk: 'storage:disk',
   storageIdleWorktrees: 'storage:idleWorktrees',
+  storageMergedReminder: 'storage:mergedReminder',
   storageRemoveWorktrees: 'storage:removeWorktrees',
   storageRunnerImages: 'storage:runnerImages',
   storageRemoveRunnerImage: 'storage:removeRunnerImage',
@@ -396,6 +397,7 @@ export const IpcChannels = {
   runnerList: 'runner:list',
   runnerConnect: 'runner:connect',
   runnerUpdate: 'runner:update',
+  runnerApproveNetwork: 'runner:approveNetwork',
   runnerRemove: 'runner:remove',
   runnerSetEnabled: 'runner:setEnabled',
   /** The end of a recent job's log, from GitHub or GitLab. */
@@ -1205,6 +1207,7 @@ export interface NekkoApi {
   getStorageUsage(refresh?: boolean): Promise<import('./storage.js').StorageUsage>;
   /** Total and free bytes of the data folder's volume; no folder walk. */
   getDiskSpace(): Promise<import('./storage.js').DiskSpace | null>;
+  hasOldMergedWorktrees(): Promise<boolean>;
   /** What "Remove idle worktrees" would remove (clean, quiet 3 days, fully pushed or merged), and what it keeps. */
   previewIdleWorktrees(): Promise<import('./storage.js').IdlePreview>;
   /** Remove these worktrees, each checked again first; branches are always kept. */
@@ -1409,6 +1412,7 @@ export interface NekkoApi {
   /** Resolves with the settings the daemon kept, which may be clamped. */
   /** A patch: only the keys to change. */
   updateRunner(id: string, settings: Partial<RunnerSettings>): Promise<RunnerView>;
+  approveRunnerNetwork(id: string, settings: Partial<RunnerSettings>, networkId: string): Promise<RunnerView>;
   removeRunner(id: string): Promise<null>;
   setRunnerEnabled(id: string, enabled: boolean): Promise<RunnerView>;
   /** The end of a recent job's log; rejects with a sentence when it cannot be read. */

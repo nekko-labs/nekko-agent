@@ -14,6 +14,8 @@ public enum Channels {
     public static let providersSetEnabled = "providers:setEnabled"
     public static let modelsList = "models:list"
     public static let sessionsSummaries = "sessions:summaries"
+    /// What chats said, for the chat list's search (#3448, `PHONE_FINDER_VIEW`): a few chats at a time.
+    public static let sessionsFinderText = "sessions:finderText"
     public static let sessionCreate = "session:create"
     public static let sessionGet = "session:get"
     /// One photo a user attached, sharp enough for the full-screen viewer: `(chatId, messageId, index)` → a data URL or null.
@@ -144,10 +146,10 @@ public enum Channels {
 
     public static let all = [
         chatGenerateImage, engineModels,
-        settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet, sessionPhoto, attachmentUpload,
+        settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionsFinderText, sessionCreate, sessionGet, sessionPhoto, attachmentUpload,
         sessionSetOptions, sessionSetSupportingWorkspaces, sessionDelete, voiceStatus, voiceTranscribe, chatSend, chatAbort, chatQueue,
         chatInterruptQueued, chatPending, chatAnswer, toolApprove, workspaceList, workspaceAddByPath, workspaceRemove, appInfo, activityState, skillsRunnable, toolsList, changesList, auditRead,
-        chatEditQueued, sessionFork, tasksList, taskRunNow, workflowsList, workflowRun, prSessionList,
+        chatEditQueued, sessionFork, tasksList, taskRunNow, workflowsList, workflowRun, prSessionList, fleetRunners,
         usageSummary, limitsGet, sessionWatches, sessionCancelWatch, machineSummary, monitorSummary, securityChallenge, appQuit, deviceSignOut, remoteStop,
         providersSealKey, providersSaveSealed, providersSetEnabled,
         serviceStatus, serviceUpdateState, serviceRestart, serviceUpdateCheck, serviceUpdateDownload, serviceUpdateInstall,
@@ -158,6 +160,8 @@ public enum Channels {
         MonitorChannels.systemStats, MonitorChannels.gpuStats, MonitorChannels.engineStatus, MonitorChannels.contextPreview,
         MonitorChannels.modelUnload,
         artifactRead, previewFetch,
+        // The fleet's CI runners through the computer (#3517) and chats' text for search (#3563).
+        fleetRunners, "sessions:finderText",
         // Allowed for clients that aren't this app: a connected computer's plan changes and model settings.
         "chat:steer", chatInterruptQueued, "engine:settings", "engine:saveModelPreset", "engine:unloadAll", "model:load",
         // IO-33 FA-3, FA-6 (Terminal.swift).

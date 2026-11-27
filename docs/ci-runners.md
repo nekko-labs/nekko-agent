@@ -8,12 +8,12 @@ while you are away and the Mac is plugged in.
 
 The **Automations** panel on the Agent board shows your connected CI runners even
 when no chat automations are scheduled, in a short form: each runner's name, state,
-switch, then only what is happening now, as one flat list: a running job (with its step
+settings gear and switch, then only what is happening now, as one flat list: a running job (with its step
 and progress bar), a queued job, a VM starting or being deleted. A VM ready for a job is a
 count beside the state ("Running · 1 idle"), not a row. A queued job always shows **Start now**
 and **Skip**, since it is a decision waiting on you. A running job's actions (Cancel/Re-run,
-**Live log**) and the settings gear appear when you hover or Tab to the row, and take no width
-until then, so names are not cut short. **Completed · N jobs** opens the jobs that ended; each
+**Live log**) appear when you hover or Tab to the row, and take no width
+until then. The gear is always visible, just left of the switch. A waiting runner shows the asleep icon: hover it or Tab to it to read all the reasons. **No pending jobs** means nothing is queued or running; it doesn’t erase completed history. **Completed · N jobs** opens the jobs that ended; each
 one opens to its steps, job log and VM log. A runner error ends with **Open settings**. Cancel and restart still ask for
 confirmation because they affect the workflow run on GitHub. Hover the runner's name for its
 scope, label, mode and keep-awake setting.
@@ -419,9 +419,11 @@ kept: if you save a value outside its range, the saved value is the nearest allo
   With **On power** off, Balanced still takes jobs on battery only above 80% charge, Runner first
   above 50%, and Do not disturb never. A charge the Mac can't read counts as too low.
 - **Trusted networks**: up to 32, recognised by the router's hardware address and listed as
-  `gw:...` ids. The address comes from macOS's own network state (`scutil`), then `arp`, which
-  sees nothing without Local Network permission. **Trust this network** adds the one this Mac is on, shown with a
-  **This network** badge.
+  `gw:...` ids. Open the gear, find **Trusted networks**, check **Current network**, then choose
+  **Trust this network** and **Save**. The runner checks the physical router again before saving,
+  even when a VPN carries the default route. If the router changes or can’t be identified, it
+  isn’t approved. Reconnect to Wi-Fi or Ethernet and wait for detection. Approving a router
+  doesn’t override the VPN or hotspot rules.
 - **Safety**: **Re-run jobs lost to sleep**.
 - **Max job time**: 30 min, 1 h, 2 h or 6 h (the runner accepts 10 minutes to 24 hours).
 

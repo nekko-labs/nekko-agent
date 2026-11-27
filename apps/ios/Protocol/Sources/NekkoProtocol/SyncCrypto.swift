@@ -182,6 +182,20 @@ public enum SyncCrypto {
         return deflated ? try Deflate.inflate(body, limit: maxPlaintext) : body
     }
 
+    /// Seal with associated data of a caller's own, in the record envelope (the fleet HELLO proof, decision 0102).
+    public static func sealWithAAD(keyring: Keyring, aad: String, plaintext: Data, salt: Data? = nil) throws -> String {
+        try sealBlob(keyring: keyring, aad: aad, body: plaintext, salt: salt, version: blobVersion)
+    }
+
+    /// Open what `sealWithAAD` sealed; throws unless the associated data is the same.
+    public static func openWithAAD(keyring: Keyring, aad: String, blob: String) throws -> Data {
+        let raw = try fromBase64url(blob)
+        guard raw.count >= 1 + saltBytes + tagBytes, raw.first == blobVersion else { throw Failure.malformed }
+        let salt = raw.subdata(in: 1..<(1 + saltBytes))
+        let (key, nonce) = keyAndNonce(ikm: keyring.enc, salt: salt, info: Data("\(version) record".utf8))
+        return try unframe(open(raw.suffix(from: 1 + saltBytes), key: key, nonce: nonce, aad: Data(aad.utf8)))
+    }
+
     // MARK: Padding
 
     /// The Padmé size for a length (leaks O(log log n) bits, at most ~12% overhead).

@@ -71,11 +71,21 @@ describe('wall dock presentation', () => {
     expect(html).not.toContain('Stale quota · awaiting refresh');
     quota.byToken = {};
   });
-  it.each([[17, 83, 'var(--success)'], [83, 17, 'var(--danger)'], [0, 100, 'var(--success)'], [100, 0, 'var(--danger)']])('shows ChatGPT %i used as %i left with usage-based warnings', (used, left, tone) => {
+  it.each([
+    [0, 100, 'var(--success)'],
+    [17, 83, 'var(--success)'],
+    [40, 60, 'var(--success)'],
+    [60, 40, 'var(--success)'],
+    [60.25, 39.75, 'var(--warning)'],
+    [79, 21, 'var(--warning)'],
+    [80, 20, 'var(--danger)'],
+    [83, 17, 'var(--danger)'],
+    [100, 0, 'var(--danger)'],
+  ])('shows ChatGPT quota used %s as %s left with usage-based warnings', (used, left, tone) => {
     quota.byToken = { synthetic: { windows: [{ label: '7-day', usedPercent: used, resetAt: 0 }], updatedAt: 0, staleAfterMs: 60000 } };
     const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: true, budget: false, hardware: false, localModels: false } } };
     const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[{ id: 'chatgpt', baseUrl: '', kind: 'openai', auth: 'subscription', tokenKey: 'synthetic', enabled: true, label: 'ChatGPT' }]} usage={null} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
-    expect(html).toContain(`${left}% left`);
+    expect(html).toContain(`${Math.round(left)}% left`);
     expect(html).toContain(`aria-valuenow="${left}"`);
     expect(html).toContain(`width:${left}%;background:${tone}`);
     quota.byToken = {};
@@ -301,7 +311,7 @@ describe('Local models monitor', () => {
     expect(two).toContain('data-local-models-unload-all');
   });
   it('draws Settings and Load as Gentleface icons named by their tooltip', () => {
-    storeState.value = { settings: { favoriteModels: ['nekko-engine::gemma'] } };
+    storeState.value = { settings: {}, sessions: [{ providerId: 'nekko-engine', modelId: 'gemma', updatedAt: 20 }] };
     try {
       const html = renderToStaticMarkup(<LocalModels initial={{ status: status(), models }} />);
       const row = html.slice(html.indexOf('data-local-model-shortcut="gemma"'));
@@ -311,27 +321,28 @@ describe('Local models monitor', () => {
       expect(row).not.toContain('>Settings</button>');
     } finally { storeState.value = { settings: {} }; }
   });
-  it('lists starred then recent models that are not loaded, each with Settings and Load', () => {
-    const more = [...models, { id: 'phi', name: 'Phi 4', path: '/m/phi.gguf', sizeBytes: 2 * GB }] as any;
+  it('lists recent models that are not loaded by name alone, with Settings and Load, and no Starred group', () => {
+    const more = [...models, { id: 'phi', name: 'Phi 4', path: '/m/phi.gguf', sizeBytes: 2 * GB, quantization: 'Q4_K_M' }] as any;
     storeState.value = {
-      settings: { favoriteModels: ['nekko-engine::gemma', 'nekko-engine::qwen', 'openai::gpt-5'] },
-      sessions: [{ providerId: 'nekko-engine', modelId: 'phi', updatedAt: 10 }, { providerId: 'nekko-engine', modelId: 'gemma', updatedAt: 20 }],
+      settings: { favoriteModels: ['nekko-engine::gemma', 'nekko-engine::qwen'] },
+      sessions: [{ providerId: 'nekko-engine', modelId: 'phi', updatedAt: 10 }, { providerId: 'nekko-engine', modelId: 'qwen', updatedAt: 20 }],
     };
     try {
       const html = renderToStaticMarkup(<LocalModels initial={{ status: status({ resident: [{ id: 'qwen' }] }), models: more }} />);
-      const starred = html.slice(html.indexOf('data-local-models-group="starred"'), html.indexOf('data-local-models-group="recent"'));
-      expect(starred).toContain('data-local-model-load="gemma"');
-      expect(starred).toContain('data-local-model-settings="gemma"');
-      expect(starred).toContain('aria-label="Unstar Gemma 3 27B"');
+      expect(html).not.toContain('data-local-models-group="starred"');
+      expect(html).not.toContain('data-local-model-star');
+      // Starred but never used: not offered.
+      expect(html).not.toContain('data-local-model-load="gemma"');
       // Loaded already: it has its own row with Unload, not a Load shortcut.
       expect(html).not.toContain('data-local-model-load="qwen"');
-      expect(html).toContain('aria-label="Unstar Qwen3 8B"');
       const recent = html.slice(html.indexOf('data-local-models-group="recent"'));
       expect(recent).toContain('data-local-model-load="phi"');
-      expect(recent).toContain('aria-label="Star Phi 4"');
-      expect(recent).not.toContain('data-local-model-load="gemma"');
+      expect(recent).toContain('data-local-model-settings="phi"');
+      // Just the name: no size or quantization line under it.
+      expect(recent).not.toContain('Q4_K_M');
+      expect(recent).not.toContain('monitors-dock__note');
       // Offered while the server is stopped too: Load starts it.
-      expect(renderToStaticMarkup(<LocalModels initial={{ status: status({ running: false }), models: more }} />)).toContain('data-local-model-load="gemma"');
+      expect(renderToStaticMarkup(<LocalModels initial={{ status: status({ running: false }), models: more }} />)).toContain('data-local-model-load="phi"');
     } finally { storeState.value = { settings: {} }; }
   });
 });

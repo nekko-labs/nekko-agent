@@ -18,6 +18,9 @@ public enum DenyReason: String, Sendable, Equatable {
     case unknownDevice = "unknown-device", revoked, badCode = "bad-code", invalid, kicked, badKey = "bad-key"
     /// The computer lets this device in only through another kind of route (Tailscale or Nekko Cloud Relay, #3243).
     case route
+    /// Refusals of an account device (decisions 0102 and 0128): `fleet-off` is the owner turning account devices off,
+    /// `fleet-device` and `fleet-epoch` clear after a sync catch-up, the others do not.
+    case fleetOff = "fleet-off", fleetDevice = "fleet-device", fleetEpoch = "fleet-epoch", fleetAccount = "fleet-account", fleetLocked = "fleet-locked"
     /// What a computer tells an app from before protocol 6, under the room key,
     /// which this app no longer reads.
     case updateRequired = "update-required"
@@ -147,6 +150,10 @@ public struct RelayConfig: Sendable {
     /// The device key every HELLO is signed with (protocol 5). Without one the
     /// HELLO goes unsigned and the computer asks this phone to pair again.
     public var helloSigner: HelloSigner?
+    /// For a computer of this phone's Nekko Cloud account with no pairing (decision 0128): makes the HELLO's `fleet`
+    /// object for one handshake, or nil when the account is locked (then no HELLO is sent). `deviceId` is then
+    /// `FleetLink.linkDeviceId(...)` and the HELLO never carries `pair`.
+    public var accountHello: (@Sendable (FleetLink.Binding) -> JSONValue?)?
 
     public init(relayUrl: String, room: String, key: String, hostKey: String, keyBytes: Data, deviceId: String, deviceName: String,
                 pairCode: String? = nil, platform: String = "ios") {
@@ -720,7 +727,15 @@ public final class RelayClient: @unchecked Sendable {
             o["helloKey"] = .string(proof.key)
             o["sig"] = .string(proof.sig)
         }
-        if let code = locked({ pairCode }) { o["pair"] = .string(code) }
+        if let make = config.accountHello {
+            // The proof binds this exchange and the HELLO key; without a key, or while locked, say nothing.
+            guard case .string(let helloKey)? = o["helloKey"] else { return }
+            let binding = FleetLink.Binding(room: config.room, challenge: nonce, hostEph: hostEph, clientEph: clientEph, helloKey: helloKey)
+            guard let fleet = make(binding) else { return }
+            o["fleet"] = fleet
+        } else if let code = locked({ pairCode }) {
+            o["pair"] = .string(code)
+        }
         guard let c = locked({ conn }), let sealed = try? E2E.seal(key: key, value: .object(o)) else { return }
         c.send(JSONValue.object(["eph": .string(clientEph), "enc": .string(sealed)]).serialized())
     }

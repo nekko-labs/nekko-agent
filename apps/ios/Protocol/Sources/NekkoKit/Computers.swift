@@ -122,6 +122,11 @@ public struct Computer: Codable, Equatable, Sendable, Identifiable {
         routeChoice = try c.decodeIfPresent(RouteChoice.self, forKey: .routeChoice) ?? .auto
     }
 
+    /// A computer of this phone's Nekko Cloud account with no pairing (decision 0128): never saved with the pairings,
+    /// and there is no pairing to revoke. Signing out of Nekko Cloud removes it.
+    /// The id of a computer shown from the account's `reach` records, followed by that computer's account device id.
+    public static let accountPrefix = "account:"
+    public var fromAccount: Bool { id.hasPrefix(Computer.accountPrefix) }
     /// Every address the pairing link carried, best first, whatever the choice.
     public var allRoutes: [String] { RouteSupervisor.order([relayUrl] + alts) }
     /// The addresses this phone may use, best first (the order the client tries them).
@@ -192,7 +197,7 @@ public final class ComputersStore {
     // MARK: State (read by views)
 
     public private(set) var ready = false
-    public private(set) var computers: [Computer] = []
+    public internal(set) var computers: [Computer] = []
     public private(set) var activeId: String?
     public private(set) var conn: RelayState = .idle
     public private(set) var connDetail: String?
@@ -218,6 +223,12 @@ public final class ComputersStore {
     public private(set) var rowPrs: [String: [PullRequest]] = [:]
     /// When each chat's row PRs were asked for, and the links it named then.
     @ObservationIgnored private var rowPrsAsked: [String: (urls: [String], at: Int64)] = [:]
+    /// What chats said, by chat id, for the chat list's search inside messages (#3448).
+    public private(set) var finderTexts: [String: FinderChat] = [:]
+    /// The summary's `updatedAt` each held text was read at.
+    @ObservationIgnored private var finderReadAt: [String: Int64] = [:]
+    /// Computers that refused `sessions:finderText` (an older Nekko Agent): their chats are searched by summaries only.
+    @ObservationIgnored private var finderUnsupported: Set<String> = []
     public private(set) var models: [String: [ModelInfo]] = [:]
     public private(set) var modelErrors: [String: String] = [:]
     public private(set) var hostVersion: String?
@@ -311,10 +322,10 @@ public final class ComputersStore {
 
     // MARK: Wiring
 
-    private let store: SecureStore
+    let store: SecureStore
     let makeConnection: @MainActor (RelayConfig) -> RemoteConnection
     private let deviceName: () -> String
-    private let deriveKey: @Sendable (String, String) async -> Data
+    let deriveKey: @Sendable (String, String) async -> Data
     private let newId: () -> String
     let now: () -> Int64
     let summariesDebounce: TimeInterval
@@ -330,6 +341,19 @@ public final class ComputersStore {
     @ObservationIgnored public var stepUpPrompt: StepUpPrompt?
     @ObservationIgnored private var flushingSignOuts = false
     @ObservationIgnored private var changeCalls: (client: ObjectIdentifier, calls: ChangeCalls)?
+
+    /// This phone's Nekko Cloud identity, for dialing the account's computers with no pairing (the app sets it).
+    @ObservationIgnored public var accountLink: (@MainActor () -> CloudSync.AccountLink?)?
+    /// Syncs Nekko Cloud once, so a computer that was behind the account record can be tried again (the app sets it).
+    @ObservationIgnored public var accountCatchUp: (@MainActor () async -> Void)?
+    /// The `reach` records last applied, and the derived key of each one's room, which is slow to make.
+    @ObservationIgnored var reachRecords: [CloudSync.ReachRecord] = []
+    @ObservationIgnored var reachKeys: [String: String] = [:]
+    /// The synthetic pairing material of the account's computers, kept in memory only.
+    @ObservationIgnored var accountSecrets: [String: ComputerSecret] = [:]
+    /// Tries made again after a stale refusal (`fleet-device`, `fleet-epoch`), per computer.
+    @ObservationIgnored var accountRetries: [String: Int] = [:]
+    @ObservationIgnored var reachGeneration = 0
 
     var client: RemoteConnection?
     private var graceTask: Task<Void, Never>?
@@ -560,7 +584,7 @@ public final class ComputersStore {
     /// connection (`flushSignOuts`). Returns whether the computer heard it now.
     @discardableResult
     public func signOut(_ id: String) async -> Bool {
-        guard let computer = computers.first(where: { $0.id == id }), let secret = secret(id) else { return false }
+        guard let computer = computers.first(where: { $0.id == id }), !computer.fromAccount, let secret = secret(id) else { return false }
         var heard = false
         if id == activeId, conn == .online, let c = client {
             do {
@@ -685,6 +709,7 @@ public final class ComputersStore {
     /// else the one used last, else the first.
     public func load(preferredId: String? = nil) {
         computers = decodeIndex()
+        rebuildAccountComputers(connecting: false)
         let ids = computers.map(\.id)
         let last = store.get(Self.activeKey)
         activeId = [preferredId, last].compactMap { $0 }.first { ids.contains($0) } ?? ids.first
@@ -700,9 +725,9 @@ public final class ComputersStore {
     public func pair(_ link: PairingLink) async throws -> String {
         guard let hostKey = link.hostKey else { throw PairingRefusal.noHostKey }
         // Re-scanning a computer we already know keeps its id and name.
-        let sameRoute = computers.last { c in c.relayUrl == link.relayUrl && secret(c.id)?.room == link.room }
+        let sameRoute = computers.last { c in !c.fromAccount && c.relayUrl == link.relayUrl && secret(c.id)?.room == link.room }
         if let pinned = sameRoute.flatMap({ secret($0.id)?.pinned }), pinned != hostKey { throw PairingRefusal.differentComputer }
-        let existing = computers.last { secret($0.id)?.pinned == hostKey } ?? sameRoute
+        let existing = computers.last { !$0.fromAccount && secret($0.id)?.pinned == hostKey } ?? sameRoute
         if let pinned = existing.flatMap({ secret($0.id)?.pinned }), pinned != hostKey { throw PairingRefusal.differentComputer }
         let keyHex = E2E.toHex(await deriveKey(link.key, link.room))
         let id = existing?.id ?? newId()
@@ -718,6 +743,8 @@ public final class ComputersStore {
             saveIndex()
         }
         dropLink(id) // A fleet link still holds the old credentials and routes.
+        // The account's own entry for this computer gives way to the pairing.
+        rebuildAccountComputers(connecting: false)
         connect(id)
         return id
     }
@@ -907,12 +934,24 @@ public final class ComputersStore {
     }
 
     /// The relay settings for one paired computer, the active one's or a fleet link's.
-    func relayConfig(_ computer: Computer, _ secret: ComputerSecret, hostKey: String, keyBytes: Data) -> RelayConfig {
+    func relayConfig(_ original: Computer, _ secret: ComputerSecret, hostKey: String, keyBytes: Data) -> RelayConfig {
+        let computer = withReach(original)
         let routes = computer.routes
         var config = RelayConfig(relayUrl: computer.primaryUrl, room: secret.room, key: secret.key, hostKey: hostKey, keyBytes: keyBytes,
                                  deviceId: deviceId(), deviceName: deviceName(), pairCode: secret.pair, platform: platform)
         config.alternates = routes.filter { $0 != computer.primaryUrl }
         config.helloSigner = helloSigner
+        if computer.fromAccount {
+            // No pairing: this phone is known by its account device id and proves it holds the account keys (decision 0128).
+            // Signed out or locked here: say nothing, and the handshake runs out.
+            config.pairCode = nil
+            if let link = accountLink?() {
+                config.deviceId = FleetLink.linkDeviceId(link.deviceId)
+                config.accountHello = link.hello
+            } else {
+                config.accountHello = { _ in nil }
+            }
+        }
         config.requestTimeout = 120
         config.app = app
         return config
@@ -935,6 +974,7 @@ public final class ComputersStore {
         switch signal {
         case .status(let s):
             if s.state != .online { invalidateAttention(computerId) }
+            noteAccountStatus(computerId, s)
             conn = s.state
             connDetail = s.detail
             if let r = s.route { route = r }
@@ -1098,8 +1138,9 @@ public final class ComputersStore {
     /// computer answers, each timed. Never the live connection: the hello is
     /// a separate socket, closed once the relay and computer have answered.
     public func runChecks() async {
-        guard !checking, let computer = active, let secret = secret(computer.id), let hostKey = secret.pinned,
+        guard !checking, let current = active, let secret = secret(current.id), let hostKey = secret.pinned,
               let keyBytes = E2E.fromHex(secret.keyHex) else { return }
+        let computer = withReach(current)
         checking = true
         defer { checking = false }
         let routes = computer.routes
@@ -1107,6 +1148,10 @@ public final class ComputersStore {
         var base = RelayConfig(relayUrl: routes.first ?? computer.relayUrl, room: secret.room, key: secret.key, hostKey: hostKey, keyBytes: keyBytes,
                                deviceId: deviceId(), deviceName: deviceName(), pairCode: nil, platform: platform)
         base.helloSigner = helloSigner
+        if computer.fromAccount, let link = accountLink?() {
+            base.deviceId = FleetLink.linkDeviceId(link.deviceId)
+            base.accountHello = link.hello
+        }
         // A constant for the concurrently run probes (Swift 6 mode: a captured var is an error).
         let probe = base
         let make = makeConnection
@@ -1164,9 +1209,11 @@ public final class ComputersStore {
     /// Conservative single-authority enrollment: alternate endpoints cannot be
     /// assumed to share one relay process. Never send a per-relay subtotal.
     public var pushBadgeRooms: [String]? {
-        let routes = computers.flatMap(\.allRoutes)
-        let rooms = computers.compactMap { secret($0.id)?.room }
-        guard rooms.count == computers.count else { return nil }
+        // Only pairings: the account's computers have not enrolled this phone for pushes.
+        let paired = computers.filter { !$0.fromAccount }
+        let routes = paired.flatMap(\.allRoutes)
+        let rooms = paired.compactMap { secret($0.id)?.room }
+        guard rooms.count == paired.count else { return nil }
         return PushBadgeManifest.rooms(routes: routes, rooms: rooms, needsYou: pushKinds?.contains(.needsYou) ?? true)
     }
 
@@ -1412,6 +1459,46 @@ public final class ComputersStore {
         }
     }
 
+    /// The computer a chat's text is read from, as a key: the active one for nil.
+    private func finderKey(_ computer: String?) -> String { computer ?? activeId ?? "" }
+
+    /// The listed chats whose text is not held, or older than the chat, on computers that have
+    /// `sessions:finderText`. Chats kept on this phone have no computer to ask. Newest first.
+    public func finderDue(_ chats: [SessionSummary]) -> [SessionSummary] {
+        chats.filter { s in
+            !PhoneProviders.isPhoneChat(s.id) && finderReadAt[s.id] != s.updatedAt
+                && !finderUnsupported.contains(finderKey(computerId(ofChat: s.id)))
+        }.sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    /// Read what the due chats said from the computer each runs on, `FinderSearch.batch` at a
+    /// time, while someone searches the chat list (#3448). A computer that refuses the channel is
+    /// not asked again; any other failure ends this walk, and the chats are asked again next time.
+    public func loadFinderTexts(_ chats: [SessionSummary]) async {
+        let byComputer = Dictionary(grouping: finderDue(chats)) { computerId(ofChat: $0.id) }
+        for (computer, due) in byComputer {
+            var left = due
+            while !left.isEmpty, !Task.isCancelled {
+                let batch = Array(left.prefix(FinderSearch.batch))
+                let reply: JSONValue
+                do {
+                    reply = try await caller(computer).call(Channels.sessionsFinderText, [.array(batch.map { .string($0.id) })])
+                } catch let e as RelayError where e.fromComputer && PhoneRefusal(e.message)?.code == "channel-denied" {
+                    finderUnsupported.insert(finderKey(computer))
+                    break
+                } catch {
+                    break
+                }
+                let read = FinderChat.parse(reply).filter { id, _ in batch.contains { $0.id == id } }
+                // A reply that answered nothing would ask the same chats forever.
+                if read.isEmpty { break }
+                for s in batch where read[s.id] != nil { finderReadAt[s.id] = s.updatedAt }
+                finderTexts.merge(read) { _, new in new }
+                left.removeAll { read[$0.id] != nil }
+            }
+        }
+    }
+
     // MARK: Changing chats on the computer
 
     // Each takes the chat's computer (`on`): nil is the active one, another is reached through its fleet link.
@@ -1651,7 +1738,8 @@ public final class ComputersStore {
     }
 
     func secret(_ id: String) -> ComputerSecret? {
-        store.get(Self.secretKey(id)).flatMap { try? JSONDecoder().decode(ComputerSecret.self, from: Data($0.utf8)) }
+        if id.hasPrefix(Computer.accountPrefix) { return accountSecrets[id] }
+        return store.get(Self.secretKey(id)).flatMap { try? JSONDecoder().decode(ComputerSecret.self, from: Data($0.utf8)) }
     }
 
     private func saveSecret(_ id: String, _ s: ComputerSecret) {
@@ -1664,7 +1752,7 @@ public final class ComputersStore {
     }
 
     private func saveIndex() {
-        let data = (try? JSONEncoder().encode(computers)).map { String(decoding: $0, as: UTF8.self) }
+        let data = (try? JSONEncoder().encode(computers.filter { !$0.fromAccount })).map { String(decoding: $0, as: UTF8.self) }
         store.set(Self.indexKey, data)
     }
 }
@@ -1721,6 +1809,34 @@ extension ComputersStore {
         ])
         activity = ["input": .needsYou]
         if step < 2 { activity["moving"] = .running }
+    }
+
+    /// In-memory evidence for the search inside messages (#3448): two chats and, unless
+    /// `older` (a computer without `sessions:finderText`), what they said. Nothing is read.
+    public func seedFinderFixture(older: Bool) {
+        seedParityFixture()
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        let chats = SessionSummary.visible([
+            ["id": "cache", "title": "Speed up the CI cache", "updatedAt": .int(now), "exchangeCount": 2,
+             "firstUserText": "Why does the build cache miss on every run?", "lastReplyText": "Done: the cache hits again."],
+            ["id": "week", "title": "Plan the week", "updatedAt": .int(now - 86_400_000), "exchangeCount": 1,
+             "firstUserText": "Three goals for Monday", "lastReplyText": "Here is the plan."]
+        ])
+        summaries = chats
+        activity = [:]
+        for s in chats { finderReadAt[s.id] = s.updatedAt }
+        if older {
+            finderUnsupported.insert(activeId ?? "")
+            return
+        }
+        finderTexts = [
+            "cache": FinderChat(messages: [
+                FinderMessage(role: "user", text: "Why does the build cache miss on every run?"),
+                FinderMessage(role: "assistant", text: "The key includes the runner image date, so each nightly image misses it. Key it on the lockfile alone and restore with a prefix fallback.", files: [".github/workflows/ci.yml"]),
+                FinderMessage(role: "assistant", text: "Done: the cache hits again.")
+            ]),
+            "week": FinderChat(messages: [FinderMessage(role: "user", text: "Three goals for Monday")])
+        ]
     }
 }
 #endif
