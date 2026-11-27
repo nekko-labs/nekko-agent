@@ -93,8 +93,10 @@ test('the docs page offers every file and the zip, and links the policy', () => 
   const page = read('docs/hub/brand.md');
   const links = [ZIP_NAME, EXTRA_FILES[0].name];
   for (const f of brandFiles()) links.push(f.name, f.name.replace(/\.svg$/, '.png'));
-  for (const name of links) assert.ok(page.includes(`https://nekkoagent.com/brand/${name}`), `brand.md links ${name}`);
-  assert.ok(page.includes('https://nekkoagent.com/docs/trademarks'));
+  // Markdown link targets, compared whole (not as substrings of the page).
+  const targets = new Set([...page.matchAll(/\]\(([^)\s]+)\)/g)].map((m) => m[1]));
+  for (const name of links) assert.ok(targets.has(`https://nekkoagent.com/brand/${name}`), `brand.md links ${name}`);
+  assert.ok(targets.has('https://nekkoagent.com/docs/trademarks'), 'brand.md links the trademark policy');
   const nav = JSON.parse(read('docs/hub/nav.json'));
   const sources = nav.sections.flatMap((s) => s.pages.map((p) => p.source));
   assert.ok(sources.includes('docs/hub/brand.md') && sources.includes('TRADEMARKS.md'));
