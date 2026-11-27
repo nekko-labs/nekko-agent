@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { windowChrome } from '../../chrome.js';
 import { composerSpellingWord } from './composerSpelling.js';
@@ -21,6 +21,7 @@ export function ComposerEditingTools({ editor, disabled, value, apply, onPaste, 
   onPaste?: (e: React.ClipboardEvent<MarkdownEditorElement>) => void;
   composing: React.RefObject<boolean>;
 }) {
+  const spellingHeadingId = useId();
   const [menu, setMenu] = useState<{
     x: number; y: number;
     spelling?: { start: number; end: number; draft: string; suggestions: string[] };
@@ -152,8 +153,8 @@ export function ComposerEditingTools({ editor, disabled, value, apply, onPaste, 
   </div>;
   return <>
     {menu && !disabled && <ContextMenu x={menu.x} y={menu.y} onClose={() => { setMenu(null); restore(); }}>
-      {menu.spelling && <div role="group" aria-label="Spelling" className="mb-2">
-        <div aria-hidden="true" className="px-3 pt-1 text-xs font-medium text-ink-soft">Spelling</div>
+      {menu.spelling && <div role="group" aria-labelledby={spellingHeadingId} className="mb-2">
+        <div id={spellingHeadingId} className="px-3 pt-1 text-xs font-medium text-ink-soft">Spelling</div>
         {menu.spelling.suggestions.map(suggestion =>
           <ContextAction key={suggestion} onClick={() => correct(suggestion)}>{suggestion}</ContextAction>)}
       </div>}
