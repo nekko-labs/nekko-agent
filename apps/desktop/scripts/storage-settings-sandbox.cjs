@@ -47,15 +47,16 @@ app.whenReady().then(async () => {
   const button = text => `[...document.querySelectorAll('button')].find(b => b.textContent.trim() === ${JSON.stringify(text)})`;
   const top = sel => `document.querySelector(${JSON.stringify(sel)}).scrollIntoView({ block: 'start' })`;
   try {
-    await win.loadFile(path.join(out, 'index.html'));
+    // Pass synthetic inventory as document data, never interpolate it into executable source.
+    await win.loadFile(path.join(out, 'index.html'), { query: { inventory: JSON.stringify(fixture) } });
     for (let i = 0; i < 100 && !(await run('!!window.layoutFixture')); i++) await sleep(100);
     // The low-disk notice reads the disk as the App mounts: seed it, then load again.
-    await run(`localStorage.setItem('fixture.disk', ${JSON.stringify(JSON.stringify(fixture.usage.disk))})`);
+    await run(`localStorage.setItem('fixture.disk', JSON.stringify(JSON.parse(new URLSearchParams(location.search).get('inventory')).usage.disk))`);
     await run(`localStorage.setItem('fixture.merged', 'true'); localStorage.removeItem('nekko.storageAudit.snoozedUntil')`);
     await win.reload();
     for (let i = 0; i < 100 && !(await run('!!window.layoutFixture')); i++) await sleep(100);
     await run(`(() => {
-      const f = layoutFixture, d = ${JSON.stringify(fixture)};
+      const f = layoutFixture, d = JSON.parse(new URLSearchParams(location.search).get('inventory'));
       f.bridge.setSessionOptions = async (id, options) => Object.assign(f.records.find(s => s.id === id), options);
       f.bridge.getRemoteStatus = async () => ({ enabled: false });
       f.bridge.getStorageUsage = async () => d.usage;
@@ -122,7 +123,7 @@ app.whenReady().then(async () => {
     await run(`localStorage.removeItem('nekko.storageAudit.snoozedUntil')`);
     await win.reload();
     for (let i = 0; i < 100 && !(await run(`!!document.querySelector('[data-merged-reminder]') && !!window.layoutFixture`)); i++) await sleep(100);
-    await run(`(() => { const f = layoutFixture, d = ${JSON.stringify(fixture)}; f.bridge.getStorageUsage = async () => d.usage; f.bridge.listRunnerImages = async () => d.images; f.bridge.setSessionOptions = async (id, opts) => Object.assign(f.records.find(s => s.id === id), opts); document.querySelector('[data-merged-reminder] button').click(); })()`); await sleep(800);
+    await run(`(() => { const f = layoutFixture, d = JSON.parse(new URLSearchParams(location.search).get('inventory')); f.bridge.getStorageUsage = async () => d.usage; f.bridge.listRunnerImages = async () => d.images; f.bridge.setSessionOptions = async (id, opts) => Object.assign(f.records.find(s => s.id === id), opts); document.querySelector('[data-merged-reminder] button').click(); })()`); await sleep(800);
     await check('reminder starts audit with merge context and does not remove anything', `layoutFixture.lastSend?.noTools === true && layoutFixture.lastSend.text.includes('at least 15 merged') && !window.removed && !window.removedImage && !window.cachesCleared`);
     report.bounds = win.getBounds(); report.visible = win.isVisible();
     if (report.visible) throw Error('fixture became visible');
