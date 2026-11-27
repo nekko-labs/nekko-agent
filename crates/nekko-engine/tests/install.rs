@@ -221,8 +221,8 @@ impl MlxIo for Script {
         Box::pin(async move { result })
     }
 
-    fn which(&self, _: String) -> BoxFuture<Option<String>> {
-        let w = self.case.get("which").and_then(Value::as_str).map(str::to_string);
+    fn which(&self, name: String) -> BoxFuture<Option<String>> {
+        let w = self.case.get("which").and_then(|w| w.as_str().or_else(|| w.get(&name)?.as_str())).map(str::to_string);
         Box::pin(async move { w })
     }
 }
@@ -420,4 +420,30 @@ async fn installs_mlx_as_the_host_does() {
         assert_eq!(json!(files(&root)), case["left"], "files of {name}");
         std::fs::remove_dir_all(&root).ok();
     }
+}
+
+#[tokio::test]
+async fn discovers_only_external_mlx_vlm_for_dflash2_on_apple_silicon() {
+    let root = scratch("mlx-dflash2-runtime");
+    let rt = |platform: &str, arch: &str, paths: Value| {
+        let io = Arc::new(Script {
+            root: root.clone(),
+            case: json!({ "which": paths }),
+            requests: Mutex::default(),
+            runs: Mutex::default(),
+            execs: Mutex::default(),
+        });
+        let downloads = Downloads::new(io.clone(), Arc::new(|| 0.0), |_| {});
+        MlxRuntime::new(root.clone(), platform.into(), arch.into(), io, downloads)
+    };
+    let lm_only = rt("darwin", "arm64", json!({ "mlx_lm.server": "/external/mlx_lm.server" }));
+    assert_eq!(lm_only.bin_path().await.as_deref(), Some("/external/mlx_lm.server"));
+    assert_eq!(lm_only.dflash2_bin_path().await, None);
+    let vlm = json!({ "mlx_vlm.server": "/external/mlx_vlm.server" });
+    assert_eq!(
+        rt("darwin", "arm64", vlm.clone()).dflash2_bin_path().await.as_deref(),
+        Some("/external/mlx_vlm.server")
+    );
+    assert_eq!(rt("darwin", "x64", vlm).dflash2_bin_path().await, None);
+    std::fs::remove_dir_all(root).unwrap();
 }

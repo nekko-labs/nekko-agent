@@ -478,19 +478,20 @@ export function ChatControls({
         <button
           ref={modeButton}
           data-chat-mode-button
-          className="ctl-menu max-w-full whitespace-nowrap"
+          className="ctl-menu max-w-full overflow-hidden whitespace-nowrap"
           onClick={() => setModeOpen((o) => !o)}
           aria-haspopup="dialog"
           aria-expanded={modeOpen}
           title={`${label.name}: ${label.summary}. ${MODE_DESC[mode]}`}
         >
-          <span className="ctl-menu-label">Mode</span>
+          {/* Only the mode's name gives way on a narrow row: the word, icons and caret stay inside the box. */}
+          <span className="ctl-menu-label shrink-0">Mode</span>
           <label.icon className="h-3 w-3 shrink-0 text-ink-faint" />
           <span className="min-w-0 truncate text-ink">{label.name}</span>
           {/* The chosen options as the Mode panel's icons; the words ride in the title and for screen readers. */}
           {label.parts.map((p) => { const Icon = summaryPartIcon(p); return Icon && <span key={p.key} className="grid shrink-0 place-items-center" title={p.label} data-mode-part={p.key}><Icon className="h-3.5 w-3.5" /></span>; })}
           {label.summary && <span className="sr-only">{` · ${label.summary}`}</span>}
-          <span className="ctl-caret">▾</span>
+          <span className="ctl-caret shrink-0">▾</span>
         </button>
         {modeOpen && createPortal(
           <ModePanel session={session} isCloudModel={isCloudModel} modelId={modelId} providerId={providerId} onChange={onChange} style={modePosition} panelRef={modeMenu}
