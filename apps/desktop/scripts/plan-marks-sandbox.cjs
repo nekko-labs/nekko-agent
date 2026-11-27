@@ -88,8 +88,15 @@ app.whenReady().then(async () => {
     await check('the running sub-agent wears the rocket in front', `!!document.querySelector('[data-agent-panel] [data-subagent-row="k4"] > .status-rocket')`);
     report.cards = await run(`[...document.querySelectorAll('[data-subagent-card]')].map(c => [c.dataset.subagentCard, c.dataset.status, c.textContent.trim()])`);
     await check('every sub-agent is a card at the bottom of the plan', `(() => { const row = document.querySelector('[data-plan-sheet] [data-plan-subagents]'); const steps = document.querySelector('[data-plan-sheet] .plan-sheet-steps'); return !!row && !!steps && row.getBoundingClientRect().top >= steps.getBoundingClientRect().bottom - 1 && row.querySelectorAll('[data-subagent-card]').length === 4; })()`);
-    await check('the working sub-agent leads, with its rocket and live activity', `(() => { const c = document.querySelector('[data-plan-subagents] [data-subagent-card]'); return c?.dataset.subagentCard === 'k4' && c.dataset.status === 'working' && !!c.querySelector('.status-rocket') && /Working · Running bash/.test(c.textContent); })()`);
-    await check('each card title stays on one line', `[...document.querySelectorAll('[data-subagent-card] .plan-sheet-agent-line')].every(l => l.getBoundingClientRect().height <= 20)`);
+    await check('the working sub-agent leads, with its rocket and live activity', `(() => { const c = document.querySelector('[data-plan-subagents] [data-subagent-card]'); return c?.dataset.subagentCard === 'k4' && c.dataset.status === 'working' && !!c.querySelector('.status-rocket') && /Running bash/.test(c.title) && !/Working|Running bash/.test(c.textContent); })()`);
+    await check('titles and short models share a slim line', `[...document.querySelectorAll('[data-subagent-card]')].every(c => { const t = c.querySelector('.plan-sheet-agent-title')?.getBoundingClientRect(); const m = c.querySelector('.plan-sheet-agent-model')?.getBoundingClientRect(); return m && t && m.top === t.top && m.left >= t.right && c.clientHeight <= 28 && c.textContent.endsWith('gpt-fixture'); })`);
+    // Constrain the composer sheet as it would be in a narrow wall pane.
+    await run(`document.querySelector('[data-plan-sheet]').style.maxWidth = '360px'`);
+    await sleep(300);
+    const narrow = await run(`(() => { const r = document.querySelector('[data-plan-sheet]').getBoundingClientRect(); return { x: Math.floor(r.x), y: Math.floor(r.y), width: Math.ceil(r.width), height: Math.ceil(r.height) }; })()`);
+    await shot('plan-narrow', narrow);
+    await check('narrow strip scrolls instead of wrapping', `(() => { const r = document.querySelector('[data-plan-subagents]'); const cards = [...r.querySelectorAll('button')]; return r.clientWidth <= 360 && r.scrollWidth > r.clientWidth && cards.every(c => c.offsetTop === cards[0].offsetTop); })()`);
+    await run(`document.querySelector('[data-plan-sheet]').style.removeProperty('max-width')`);
     await run(`document.querySelector('[data-subagent-card="k3"]').click()`);
     await sleep(2500);
     await check('a card opens its sub-agent', `!!document.querySelector('[data-subagent-banner]')`);

@@ -105,6 +105,14 @@ impl MlxRuntime {
         self.io.which(SERVER.into()).await
     }
 
+    /// The opt-in DFlash2 server is external only. Never substitute mlx-lm.
+    pub async fn dflash2_bin_path(&self) -> Option<String> {
+        if !self.supported() {
+            return None;
+        }
+        self.io.which("mlx_vlm.server".into()).await
+    }
+
     pub async fn detect(&self) -> Value {
         if !self.supported() {
             return json!({ "available": [], "reason": "MLX runs on Apple Silicon Macs only." });

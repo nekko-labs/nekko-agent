@@ -313,6 +313,13 @@ async fn route(s: Shared, req: Request) -> Response {
             return error(StatusCode::from_u16(status).unwrap_or(StatusCode::BAD_GATEWAY), message);
         }
     };
+    let body = match &child.upstream_model {
+        Some(model) => match local_model_body(&body, model) {
+            Ok(body) => body,
+            Err(message) => return error(StatusCode::BAD_REQUEST, message),
+        },
+        None => body,
+    };
     let guard = child.begin();
     let meter = s.meter.clone().filter(|_| matches!(*endpoint, "chat/completions" | "completions"));
     let res = proxy(&s, child.port, format!("/v1{bare}"), &parts.method, &parts.headers, body, guard).await;
@@ -503,6 +510,18 @@ fn timings(tail: &[u8]) -> Option<DecodeSample> {
         concurrent: 0,
     };
     (sample.predicted_n > 0.0 && sample.predicted_ms > 0.0).then_some(sample)
+}
+
+/// Pin requests to the validated checkpoint; do not let the upstream
+/// resolve the public model ID or replace the stock target with an adapter.
+fn local_model_body(body: &[u8], model: &str) -> Result<Bytes, &'static str> {
+    let mut body: Value = serde_json::from_slice(body).map_err(|_| "Expected a JSON object.")?;
+    let body = body.as_object_mut().ok_or("Expected a JSON object.")?;
+    if body.get("adapter_path").is_some_and(|v| !v.is_null()) {
+        return Err("Adapters are not supported with the stock MLX DFlash2 pair.");
+    }
+    body.insert("model".into(), Value::String(model.into()));
+    Ok(serde_json::to_vec(body).expect("JSON values serialize").into())
 }
 
 fn pick_model(body: &[u8]) -> Option<String> {

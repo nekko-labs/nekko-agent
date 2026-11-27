@@ -38,11 +38,13 @@ app.whenReady().then(async () => {
       await scene('expert');
       await shot(`detailed-${width}`);
       if (!baseline) {
-        await check('Detailed approvals and Mode have separate rows ' + width, `!!document.querySelector('[data-composer-details] [data-asks-first]') && !!document.querySelector('[data-composer-mode-row] [data-chat-mode-button]') && document.querySelector('[data-composer-mode-row]').getBoundingClientRect().top >= document.querySelector('[data-asks-first]').getBoundingClientRect().bottom`);
+        // Since #3164 approvals are one of Mode's options: no chip of their own beside Mode.
+        await check('Detailed: approvals are a Mode option, not a chip beside it ' + width, `!document.querySelector('[data-asks-first]') && !!document.querySelector('[data-composer-mode-row] [data-chat-mode-button]')`);
         await check('No horizontal page overflow ' + width, 'document.documentElement.scrollWidth <= innerWidth');
-        await click('[data-asks-first]'); await shot(`detailed-menu-${width}`); await click('[data-asks-first]');
       }
-      await click('[data-chat-mode-button]'); await shot(`mode-panel-${width}`); await click('[data-chat-mode-button]');
+      await click('[data-chat-mode-button]'); await shot(`mode-panel-${width}`);
+      if (!baseline) await check('The Mode panel offers the three approvals ' + width, `[...document.querySelectorAll('[data-mode-panel] [role="radiogroup"][aria-label="Approvals"] [data-chat-mode]')].map(b=>b.dataset.chatMode).join()==='ask,guardrails,yolo'`);
+      await click('[data-chat-mode-button]');
     }
     win.setContentSize(1100, 720);
     await scene('simple'); if (!baseline) await check('Simple has one icon-only approvals control', `document.querySelectorAll('[data-asks-first]').length===1 && document.querySelector('[data-asks-first]').classList.contains('composer-permissions')`); await click('[data-asks-first]'); await shot('simple-menu');
@@ -51,12 +53,12 @@ app.whenReady().then(async () => {
       await check('A bottom row of Incognito, Privacy Shield and Internet access switches', `[...document.querySelectorAll('[data-asks-toggles] [data-asks-toggle]')].map(b=>b.dataset.asksToggle).join()==='incognito,shield,internet'`);
       // The fixture's model is local, so Internet access can be switched off (a cloud model locks it on: see AsksFirstMenu.test.tsx).
       await click('[data-asks-toggle="internet"]');
-      await check('Internet access switches off for a local model', `document.querySelector('[data-asks-toggle="internet"]').getAttribute('aria-pressed')==='false'`);
+      await check('Internet access switches off for a local model', `document.querySelector('[data-asks-toggle="internet"]').getAttribute('aria-checked')==='false'`);
       await click('[data-asks-toggle="incognito"]'); await click('[data-asks-toggle="shield"]');
-      await check('Switching keeps the menu open: Incognito and Shield lit, Internet off', `!!document.querySelector('[data-asks-menu]') && document.querySelector('[data-asks-toggle="incognito"]').getAttribute('aria-pressed')==='true' && document.querySelector('[data-asks-toggle="shield"]').getAttribute('aria-pressed')==='true'`);
+      await check('Switching keeps the menu open: Incognito and Shield lit, Internet off', `!!document.querySelector('[data-asks-menu]') && document.querySelector('[data-asks-toggle="incognito"]').getAttribute('aria-checked')==='true' && document.querySelector('[data-asks-toggle="shield"]').getAttribute('aria-checked')==='true'`);
       await shot('simple-menu-toggles-on');
       await click('[data-asks-toggle="incognito"]'); await click('[data-asks-toggle="shield"]'); await click('[data-asks-toggle="internet"]');
-      await check('Switching them again restores all three', `document.querySelector('[data-asks-toggle="incognito"]').getAttribute('aria-pressed')==='false' && document.querySelector('[data-asks-toggle="shield"]').getAttribute('aria-pressed')==='false' && document.querySelector('[data-asks-toggle="internet"]').getAttribute('aria-pressed')==='true'`);
+      await check('Switching them again restores all three', `document.querySelector('[data-asks-toggle="incognito"]').getAttribute('aria-checked')==='false' && document.querySelector('[data-asks-toggle="shield"]').getAttribute('aria-checked')==='false' && document.querySelector('[data-asks-toggle="internet"]').getAttribute('aria-checked')==='true'`);
     }
     await click('[data-asks-menu] > button:nth-of-type(3)'); await wait('#yolo-warning-title'); await shot('warning');
     await check('No restrictions waits for confirmation', `document.querySelector('[data-asks-first]').dataset.asksFirst==='guardrails'`);
@@ -76,11 +78,12 @@ app.whenReady().then(async () => {
       await click('[data-asks-first]');
     }
     await scene('expert', { wall: true }); await shot('wall');
-    if (!baseline) await check('Wall approvals stay beside model with Mode below', `!!document.querySelector('[data-composer-foot] [data-asks-first]') && !!document.querySelector('[data-composer-mode-row] [data-chat-mode-button]') && !document.querySelector('[data-composer-foot] [data-chat-mode-button]')`);
+    if (!baseline) await check('Wall: Mode sits below the model, with no approvals chip beside it', `!document.querySelector('[data-asks-first]') && !!document.querySelector('[data-composer-foot]') && !!document.querySelector('[data-composer-mode-row] [data-chat-mode-button]') && !document.querySelector('[data-composer-foot] [data-chat-mode-button]')`);
     await scene('expert', { clean: true }); await shot('new-chat');
-    if (!baseline) await check('New Detailed chat includes approvals and lower Mode row', `!!document.querySelector('[data-clean-start-model] [data-asks-first]') && !!document.querySelector('[data-composer-mode-row] [data-chat-mode-button]')`);
+    if (!baseline) await check('New Detailed chat: the model row, then Mode below carrying approvals', `!!document.querySelector('[data-clean-start-model]') && !document.querySelector('[data-asks-first]') && !!document.querySelector('[data-composer-mode-row] [data-chat-mode-button]')`);
     await scene('expert'); await click('.composer-details-toggle'); await shot('collapsed');
-    if (!baseline) await check('Collapsed details do not leave Mode or approvals behind', `!document.querySelector('[data-asks-first]') && !document.querySelector('[data-chat-mode-button]')`);
+    // Mode lives on the box's bottom row (#2348), outside the details, so it stays when they collapse.
+    if (!baseline) await check('Collapsed details keep Mode on the bottom row and bring back no approvals chip', `!document.querySelector('[data-composer-details].is-open') && !document.querySelector('[data-asks-first]') && !!document.querySelector('[data-composer-mode-row] [data-chat-mode-button]')`);
     await run(`location.hash='#settings'; location.reload()`); await sleep(300); await wait('[data-simple-mode-settings]');
     await run(`document.querySelector('[data-simple-area="Chat · message box"]').scrollIntoView({block:'start'})`); await shot('preview');
     if (win.isVisible() || win.isFocused()) throw Error('Fixture was visible or focused');

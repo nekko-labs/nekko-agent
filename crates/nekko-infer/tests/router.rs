@@ -28,10 +28,21 @@ fn fake_model_server() {
         use axum::body::Body;
         use axum::routing::{get, post};
         let started = Instant::now();
+        let vlm = std::env::var("NEKKO_INFER_FAKE_VLM").ok();
+        let expects_local_model = vlm.is_some();
+        if vlm.as_deref() == Some("draft") {
+            tokio::spawn(async {
+                tokio::time::sleep(Duration::from_millis(800)).await;
+                eprintln!("Drafter ready; speculative decoding enabled.");
+            });
+        }
         let app = axum::Router::new()
             .route(
                 "/health",
                 get(move || async move {
+                    if expects_local_model {
+                        return axum::Json(json!({ "status": "healthy", "model_ready": started.elapsed() >= Duration::from_millis(400) }));
+                    }
                     if started.elapsed() < Duration::from_millis(600) {
                         axum::Json(json!({ "status": "loading model" }))
                     } else {
@@ -39,6 +50,7 @@ fn fake_model_server() {
                     }
                 }),
             )
+            .route("/v1/completions", post(|axum::Json(body): axum::Json<Value>| async move { axum::Json(body) }))
             .route(
                 "/v1/chat/completions",
                 post(|body: axum::Json<Value>| async move {
@@ -91,6 +103,8 @@ fn spec(model: &str) -> SpawnSpec {
         kind: Kind::Chat,
         health_path: "/health".into(),
         health_expect: Some("\"ok\"".into()),
+        health_ready_log: None,
+        upstream_model: None,
         budget_secs: Some(30),
     }
 }
@@ -136,6 +150,40 @@ async fn waits_for_ready_and_reports_the_process() {
     assert_eq!(list[0].model_id, "m1");
     assert!(sup.kill("m1"));
     assert!(sup.list().is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn mlx_dflash2_needs_http_readiness_and_a_loaded_draft_and_pins_requests() {
+    let sup = Arc::new(Supervisor::new());
+    let mut spec = spec("vlm");
+    spec.health_expect = Some("\"model_ready\":true".into());
+    spec.health_ready_log = Some("Drafter ready; speculative decoding enabled.".into());
+    spec.upstream_model = Some("/local models/Qwen3.8-27B-4bit".into());
+    spec.budget_secs = Some(2);
+    spec.env.insert("NEKKO_INFER_FAKE_VLM".into(), "fallback".into());
+    let SpawnOutcome::Failed { message, .. } = sup.spawn(spec.clone()).await else {
+        panic!("target-only was reported ready")
+    };
+    assert!(message.contains("did not confirm"), "{message}");
+    assert!(sup.is_empty());
+
+    spec.env.insert("NEKKO_INFER_FAKE_VLM".into(), "draft".into());
+    let started = Instant::now();
+    assert!(matches!(sup.spawn(spec).await, SpawnOutcome::Ready { .. }));
+    assert!(started.elapsed() >= Duration::from_millis(800));
+    let loader = Arc::new(Loader { sup: sup.clone(), loads: AtomicUsize::new(0) });
+    let router = EngineRouter::new(sup.clone(), loader.clone());
+    router.serve(ServeConfig { port: 0, host: "127.0.0.1".into(), api_key: None, cors_origins: vec![] }).await.unwrap();
+    let url = format!("http://127.0.0.1:{}/v1/completions", router.serving().unwrap().port);
+    let http = reqwest::Client::new();
+    for body in [json!({ "model": "vlm", "prompt": "hi" }), json!({ "prompt": "hi" })] {
+        let echoed: Value =
+            http.post(&url).json(&body).send().await.unwrap().error_for_status().unwrap().json().await.unwrap();
+        assert_eq!(echoed, json!({ "model": "/local models/Qwen3.8-27B-4bit", "prompt": "hi" }));
+    }
+    let adapter = http.post(&url).json(&json!({ "model": "vlm", "adapter_path": "adapter" })).send().await.unwrap();
+    assert_eq!(adapter.status(), 400);
+    assert_eq!(loader.loads.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test(flavor = "multi_thread")]

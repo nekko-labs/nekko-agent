@@ -25,6 +25,7 @@ class TurnFootersRowsTest {
         when (it) {
             is TranscriptRow.Footer -> "footer:" + it.details.id
             is TranscriptRow.Steps -> "steps"
+            is TranscriptRow.Strategy -> "strategy:" + it.promptKey
             is TranscriptRow.Run -> "run"
         }
     }
