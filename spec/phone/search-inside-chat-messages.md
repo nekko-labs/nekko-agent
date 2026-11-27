@@ -5,7 +5,7 @@ area: phone
 
 # Phones: search inside chat messages (#3448)
 
-`[engine side implemented 2026-11-27: the phone channel, its argument check and its reply view, unit-tested in packages/shared and nekko-remote; Android implemented the same day; the iPhone planned]`
+`[engine side implemented 2026-11-27: the phone channel, its argument check and its reply view, unit-tested in packages/shared and nekko-remote; Android and the iPhone implemented the same day]`
 
 ## User intent
 
@@ -35,7 +35,7 @@ Chats are answered in the asked order while the reply stays under 6 MB of JSON, 
 
 - Engine side: implemented 2026-11-27, unit-tested (`phone-access.test.ts`; `phone_finder.rs` tests).
 - Android: implemented 2026-11-27 (`FinderText.kt` in the protocol module, `FinderTexts.kt`, the chat list's search). JVM-tested, and checked on an API 37 emulator against a fake computer, including one that refuses the channel. Not yet on a physical phone.
-- iPhone: planned, with the same screens and wording (see [ios-and-android-stay-in-step.md](ios-and-android-stay-in-step.md)).
+- iPhone: implemented 2026-11-27 (`FinderText.swift` in NekkoProtocol, `ComputersStore.loadFinderTexts`, `ChatsView`). Unit-tested, and checked with `ChatSearchMessagesTests` on the iOS 27.2 simulator over a seeded fixture, including a computer without the channel. Not yet on a physical iPhone. Same behaviour and wording as Android.
 
 ## On the phone
 
