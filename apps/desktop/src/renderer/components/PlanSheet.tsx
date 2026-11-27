@@ -8,7 +8,7 @@ import { sheetPlan } from '../claudeAgentPlan.js';
 import { useShown } from '../simpleMode.js';
 import { useStore } from '../store.js';
 import { stableSelector } from '../selectStable.js';
-import { CheckIcon, CloseIcon, RocketIcon, TagIcon, WarningIcon } from '../icons.js';
+import { CheckIcon, CloseIcon, RocketIcon, SlidersIcon, TagIcon, WarningIcon } from '../icons.js';
 import { GfIcon } from '../gentleface-icons.js';
 import type { ChatArtifact } from '../chatArtifacts.js';
 import { canonicalPrUrl, progressAge, safeProgressLink } from './WorkProgress.js';
@@ -344,16 +344,16 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
   };
   return <div className="plan-sheet-dock"><div className="plan-sheet" data-plan-sheet data-folded={!full || undefined} aria-label="Agent plan">
     <div className="plan-sheet-head">
-      <button type="button" className="plan-sheet-toggle" onClick={() => setOverride({ mode, full: !full })} aria-expanded={full} title={full ? 'Fold the plan' : 'Show the whole plan'}>
-        <span className="font-semibold text-ink-soft">Plan</span>
-        <span className="tabular-nums">{progress.done + progress.skipped} of {progress.total} done</span><span className="flex-1" />
-        <PlanCaret direction={full ? 'up' : 'down'} label={full ? 'Fold the plan' : 'Show the whole plan'} />
-      </button>
-      <label className="plan-config" title="Configure plan display"><GfIcon name="settings" className="h-3.5 w-3.5" />
+      <span className="flex-1 font-semibold text-ink-soft">Plan</span>
+      <label className="plan-config" title="Configure plan display"><SlidersIcon className="h-3 w-3" />
         <select aria-label="Configure plan display" value={mode} onChange={e => { setOverride(undefined); void saveSettings({ planDisplay: e.target.value as PlanDisplay }); }}>
           {PLAN_DISPLAYS.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
         </select>
       </label>
+      <button type="button" className="plan-sheet-toggle" onClick={() => setOverride({ mode, full: !full })} aria-expanded={full} title={full ? 'Fold the plan' : 'Show the whole plan'}>
+        <span className="tabular-nums">{progress.done + progress.skipped} of {progress.total} done</span>
+        <PlanCaret direction={full ? 'up' : 'down'} label={full ? 'Fold the plan' : 'Show the whole plan'} />
+      </button>
     </div>
     <div className="plan-sheet-scroll">
       <ol className="plan-sheet-steps">{visible.map(renderRow)}</ol>

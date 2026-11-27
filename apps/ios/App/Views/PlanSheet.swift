@@ -65,7 +65,7 @@ struct PlanSheet: View {
                         }
                     } else { whole(plan, links: links, paused: paused) }
                 }
-                .padding(.horizontal, Self.shoulder + 12).padding(.top, 8).padding(.bottom, Self.tuck + 8)
+                .padding(.horizontal, Self.shoulder + 12).padding(.top, 8).padding(.bottom, Self.tuck + 2)
                 .background {
                     let shape = PlanSheetShape(shoulder: Self.shoulder, tuck: Self.tuck)
                     ZStack { shape.fill(palette.surface2); shape.fill(palette.accent.opacity(0.1)) }
@@ -104,8 +104,6 @@ struct PlanSheet: View {
                         .foregroundStyle(current.status == .done ? palette.inkSoft : palette.ink)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     PassLabel(step: current)
-                    Text("\(position) of \(plan.count)").font(.caption2.monospacedDigit()).foregroundStyle(palette.inkFaint)
-                    Image(systemName: "chevron.up").font(.caption2.weight(.semibold)).foregroundStyle(palette.inkFaint)
                 }
                 .frame(minHeight: 28).contentShape(Rectangle())
             }
@@ -114,6 +112,7 @@ struct PlanSheet: View {
             .accessibilityHint("Shows the whole plan")
             .accessibilityIdentifier("chat.planFolded")
             configure
+            progressToggle("\(position) of \(plan.count)", expanded: false)
             }
             let kids = chat.children
             if !kids.isEmpty || !shownPrs.isEmpty || !projects.isEmpty {
@@ -135,9 +134,7 @@ struct PlanSheet: View {
             Button { toggle(!open) } label: {
                 HStack(spacing: 8) {
                     Text("Plan").fontWeight(.semibold).foregroundStyle(palette.inkSoft)
-                    Text("\(AgentPlan.finished(plan)) of \(plan.count) done").monospacedDigit()
                     Spacer(minLength: 0)
-                    Image(systemName: "chevron.down").fontWeight(.semibold)
                 }
                 .font(.caption2).foregroundStyle(palette.inkFaint)
                 .frame(minHeight: 28).contentShape(Rectangle())
@@ -147,6 +144,7 @@ struct PlanSheet: View {
             .accessibilityHint("Folds the plan")
             .accessibilityIdentifier("chat.planOpen")
             configure
+            progressToggle("\(AgentPlan.finished(plan)) of \(plan.count) done", expanded: true)
             }
             ScrollView {
                 let opened = AgentPlan.openByDefault(plan, links: links)
@@ -160,21 +158,36 @@ struct PlanSheet: View {
         }
     }
 
+    private func progressToggle(_ label: LocalizedStringKey, expanded: Bool) -> some View {
+        Button { toggle(!open) } label: {
+            HStack(spacing: 6) {
+                Text(label).font(.caption2.monospacedDigit())
+                Image(systemName: expanded ? "chevron.down" : "chevron.up").font(.caption2.weight(.semibold))
+            }.foregroundStyle(palette.inkFaint).frame(minHeight: 28).contentShape(Rectangle())
+        }.buttonStyle(.plain)
+        .accessibilityHint(expanded ? "Folds the plan" : "Shows the whole plan")
+    }
+
     private var configure: some View {
         Menu {
             Picker("Plan display", selection: Binding(get: { prefs.planDisplay }, set: { openOverride = nil; prefs.planDisplay = $0 })) {
                 ForEach(PlanDisplay.allCases) { mode in Text(mode.label).tag(mode) }
             }
-        } label: { Image(systemName: "gearshape").frame(minWidth: 32, minHeight: 32) }
+        } label: { Image(systemName: "slider.vertical.3").font(.caption2.weight(.semibold)).foregroundStyle(palette.inkFaint).frame(width: 28, height: 28).contentShape(Rectangle()) }
         .accessibilityLabel("Configure plan display")
     }
 
     @ViewBuilder private func history(_ plan: [PlanStep], links: [String: PlanStepLinks], paused: Bool) -> some View {
         let completed = plan.filter(\.squeezed)
         if !completed.isEmpty {
-            DisclosureGroup("Completed (\(completed.count))", isExpanded: $completedOpen) {
+            Button { completedOpen.toggle() } label: {
+                Text("Completed (\(completed.count))").font(.caption).foregroundStyle(palette.inkSoft)
+                    .frame(maxWidth: .infinity, minHeight: 24, alignment: .leading).contentShape(Rectangle())
+            }.buttonStyle(.plain).accessibilityIdentifier("chat.planCompleted")
+                .accessibilityValue(completedOpen ? "Expanded" : "Collapsed")
+            if completedOpen {
                 ForEach(completed) { step in row(step, links: links[step.id], paused: paused, opened: AgentPlan.openByDefault(plan, links: links)) }
-            }.font(.caption).accessibilityIdentifier("chat.planCompleted")
+            }
         }
     }
 
@@ -452,15 +465,13 @@ struct PlanSheetShape: Shape {
         let edge = rect.maxY - tuck
         let left = rect.minX + shoulder, right = rect.maxX - shoulder
         p.move(to: CGPoint(x: rect.minX, y: edge))
-        p.addQuadCurve(to: CGPoint(x: left, y: edge - shoulder), control: CGPoint(x: left, y: edge))
+        p.addArc(tangent1End: CGPoint(x: left, y: edge), tangent2End: CGPoint(x: left, y: edge - shoulder), radius: shoulder)
         p.addLine(to: CGPoint(x: left, y: rect.minY + radius))
         p.addQuadCurve(to: CGPoint(x: left + radius, y: rect.minY), control: CGPoint(x: left, y: rect.minY))
         p.addLine(to: CGPoint(x: right - radius, y: rect.minY))
         p.addQuadCurve(to: CGPoint(x: right, y: rect.minY + radius), control: CGPoint(x: right, y: rect.minY))
         p.addLine(to: CGPoint(x: right, y: edge - shoulder))
-        p.addQuadCurve(to: CGPoint(x: rect.maxX, y: edge), control: CGPoint(x: right, y: edge))
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        p.addArc(tangent1End: CGPoint(x: right, y: edge), tangent2End: CGPoint(x: rect.maxX, y: edge), radius: shoulder)
         p.closeSubpath()
         return p
     }
