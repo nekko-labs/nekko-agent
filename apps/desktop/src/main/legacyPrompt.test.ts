@@ -4,7 +4,7 @@ import { describeOffer, offerLegacyCleanup, type LegacyChoice } from './legacyPr
 
 const env = { target: '/home/u/.nekko-agent' } as LegacyEnv;
 const item: LegacyItem = { id: 'data:/home/u/.agent-nekko', kind: 'data', path: '/home/u/.agent-nekko', label: '.agent-nekko', dataRoots: ['/home/u/.agent-nekko'] };
-const report: ConsolidateReport = { backupDir: '/b', roots: [{ source: item.path, sessions: 3, usageRecords: 10, files: [], moved: [], conflicts: [] }] };
+const report: ConsolidateReport = { backupDir: '/b', roots: [{ source: item.path, sessions: 3, usageRecords: 10, runners: 0, files: [], moved: [], conflicts: [] }] };
 
 function run(choice: LegacyChoice, over: Partial<Parameters<typeof offerLegacyCleanup>[0]> = {}) {
   const tell = vi.fn(); const merge = vi.fn(() => report); const clean = vi.fn(() => ({ removed: [item.path], kept: [], failed: [] }));
@@ -34,6 +34,12 @@ describe('offerLegacyCleanup', () => {
     expect(first.clean).not.toHaveBeenCalled();
     expect(first.ask).toHaveBeenCalledTimes(1);
     expect(second.ask).toHaveBeenCalledTimes(1);
+  });
+
+  it('names merged CI runners, and only when there were some', () => {
+    const one = run('merge-keep', { merge: vi.fn(() => ({ ...report, roots: [{ ...report.roots[0], runners: 1 }] })) });
+    expect(one.tell.mock.calls[0][1]).toContain('Merged 3 chats, 1 CI runner and 10 usage records.');
+    expect(run('merge-keep').tell.mock.calls[0][1]).toContain('Merged 3 chats and 10 usage records.');
   });
 
   it('merge and clean up merges first, then deletes, and reports both', () => {

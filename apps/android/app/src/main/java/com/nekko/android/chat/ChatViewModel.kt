@@ -287,6 +287,12 @@ class ChatViewModel(
         val prs: List<PullRequest>,
     )
 
+    private val fallbackDisplay = MutableStateFlow(com.nekko.android.data.PlanDisplay.BALANCED)
+    val planDisplay = phonePrefs?.flow(com.nekko.android.data.PlanDisplay.KEY) ?: fallbackDisplay
+    fun setPlanDisplay(mode: com.nekko.android.data.PlanDisplay) {
+        if (phonePrefs != null) phonePrefs.set(com.nekko.android.data.PlanDisplay.KEY, mode) else fallbackDisplay.value = mode
+    }
+
     private val chatPrs = MutableStateFlow<List<PullRequest>>(emptyList())
 
     val plan: StateFlow<PlanUi?> = combine(

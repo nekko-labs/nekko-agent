@@ -252,6 +252,12 @@ export const IpcChannels = {
   sandboxApplyDiff: 'sandbox:applyDiff',
   chatWorktreesList: 'chatWorktrees:list',
   chatWorktreesRemove: 'chatWorktrees:remove',
+  storageUsage: 'storage:usage',
+  storageDisk: 'storage:disk',
+  storageIdleWorktrees: 'storage:idleWorktrees',
+  storageRemoveWorktrees: 'storage:removeWorktrees',
+  storageRunnerImages: 'storage:runnerImages',
+  storageRemoveRunnerImage: 'storage:removeRunnerImage',
 
   fileRead: 'file:read',
   fileWrite: 'file:write',
@@ -1161,6 +1167,18 @@ export interface NekkoApi {
    * has uncommitted changes; the branch is deleted only when fully merged.
    */
   removeChatWorktree(root: string): Promise<{ branchDeleted: boolean }>;
+  /** The last storage measurement at once; starts a new one when it is over 10 minutes old or `refresh`. */
+  getStorageUsage(refresh?: boolean): Promise<import('./storage.js').StorageUsage>;
+  /** Total and free bytes of the data folder's volume; no folder walk. */
+  getDiskSpace(): Promise<import('./storage.js').DiskSpace | null>;
+  /** What "Remove idle worktrees" would remove (clean, quiet 3 days, fully pushed or merged), and what it keeps. */
+  previewIdleWorktrees(): Promise<import('./storage.js').IdlePreview>;
+  /** Remove these worktrees, each checked again first; branches are always kept. */
+  removeWorktrees(roots: string[]): Promise<import('./storage.js').RemoveWorktreesResult>;
+  /** The CI runner image folders and which are in use. */
+  listRunnerImages(): Promise<import('./storage.js').RunnerImage[]>;
+  /** Remove one leftover runner image (refused for any in use). */
+  removeRunnerImage(name: string): Promise<{ freed: number }>;
 
   /** Read a file as text (for the in-app viewer/editor). */
   readFile(path: string): Promise<FileContent>;

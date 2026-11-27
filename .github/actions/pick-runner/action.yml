@@ -2,7 +2,7 @@ name: Pick a runner
 description: Outputs runs-on as JSON, the owner's idle Mac runner or a GitHub-hosted fallback. Never fails.
 inputs:
   cloud:
-    description: Nekko Cloud's address (https://...). Asked first, with the job's OIDC token, so the job needs `permissions: id-token: write`; empty skips it.
+    description: "Nekko Cloud's address (https://...). Asked first, with the job's OIDC token, so the job needs `permissions: id-token: write`; empty skips it."
     default: ''
   guest:
     description: macos or linux, for the Nekko Cloud picker.

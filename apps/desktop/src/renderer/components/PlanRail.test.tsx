@@ -31,19 +31,15 @@ describe('plan sheet, folded and open (#1317)', () => {
     { id: 'c', createdAt: 1, updatedAt: 1, title: 'Auth tests pass', status: 'pending', kind: 'verify' },
     { id: 'd', createdAt: 1, updatedAt: 1, title: 'Open the PR', status: 'pending', kind: 'ship' },
   ] } as unknown as Session;
-  it('opens by default to every step; folded, it collapses to the step being worked: title, pass and its place, with no Change plan', () => {
-    const open = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} />);
-    expect(open).toContain('1 of 4 done');
-    expect(open).toContain('Find every inline check');
-    const folded = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} initiallyOpen={false} />);
-    expect(folded).toContain('data-folded');
-    expect(folded).toContain('aria-expanded="false"');
-    expect(folded).not.toContain('data-plan-kind');
-    expect(folded).toContain('Move checks into one middleware');
-    expect(folded).toContain('Pass 2');
-    expect(folded).toContain('2 of 4');
-    expect(folded).not.toContain('Find every inline check');
-    expect(folded).not.toContain('Change plan');
+  it('starts balanced with three unfinished rows and a closed Completed group', () => {
+    const html = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} />);
+    const live = html.slice(0, html.indexOf('<details'));
+    expect(live).toContain('data-folded');
+    expect(live).toContain('1 of 4 done');
+    expect(live).toContain('Configure plan display');
+    expect(live).toContain('Pass 2');
+    expect(live.match(/data-plan-step-id="[^"]+"/g)).toEqual(['data-plan-step-id="b"', 'data-plan-step-id="c"', 'data-plan-step-id="d"']);
+    expect(html).toContain('<details class="plan-completed"><summary>Completed (1)</summary>');
   });
   it('shows the sub-agents as live cards when folded, and puts each under its step when open', () => {
     store.sessions = [
@@ -64,7 +60,7 @@ describe('plan sheet, folded and open (#1317)', () => {
       expect(open).not.toContain('data-plan-kind');
       expect(open).not.toContain('data-plan-substep');
       // No plan update in the transcript yet: sub-agents land on the first step.
-      const first = open.slice(open.indexOf('data-plan-step-id="a"'), open.indexOf('data-plan-step-id="b"'));
+      const first = open.slice(open.indexOf('data-plan-step-id="a"'), open.indexOf('</details>'));
       expect(first.match(/data-plan-chip="subagent"/g)).toHaveLength(2);
       expect(first).toContain('Update routes');
       expect(open).not.toContain('Not mine');

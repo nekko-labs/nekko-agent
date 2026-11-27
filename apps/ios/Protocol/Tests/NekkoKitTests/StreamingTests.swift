@@ -10,6 +10,10 @@ struct StreamingTests {
     let chat = ChatModel(sessionId: "s", store: ComputersStore(store: MemoryStore(), makeConnection: { FakeConnection(config: $0) },
                                                                deviceName: { "iPhone" }))
 
+    /// These check what one streamed token does to the model, so each is applied as it arrives
+    /// (`StreamThrottleTests` covers the once-per-frame default).
+    init() { chat.deltaInterval = 0 }
+
     @Test("A streamed token patches only the last block")
     func tokenPatchesTheLastBlock() throws {
         chat.onEvent(.text(sessionId: "s", delta: "Hel"))

@@ -39,6 +39,22 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## iPhone chat re-reads stop re-reading the runnable skills (#3388, 2026-11-26)
+Area: renderer
+Result: improvement (reads per re-read)
+Conditions: `swift test` on an Apple M1 Max, macOS 27.2.1, with a counting fake connection (`ReloadFanOutTests.testSkillsAreReadOnceNotOnEveryReload`): open a chat, then four re-reads (three turn ends and one explicit reload). Counts are `skills:runnable` calls, not time.
+## iPhone folds streamed text into the chat once per display frame (#3387, 2026-11-26)
+Area: renderer
+Result: improvement (model work per frame); not profiled in the running app
+Conditions: Apple M1 Max, macOS 27.2.1, Xcode 27.2, `swift test` (debug build on a macOS host, not an iPhone or the simulator), other builds running on the same machine so timings drift between runs. `XCTClockMetric`, 5 iterations. A chat of 300 saved messages and 2,000 streamed deltas of one word each delivered to `ChatModel.onEvent` inside one frame, then `flushDeltas()`. Tests: `StreamThrottleTests.testMeasureFoldingEveryDelta` (`deltaInterval` 0, the old per-delta behaviour) and `testMeasureFoldingOncePerFrame`.
+
+| Metric | Before (every delta applied) | After (once per frame) |
+|---|---|---|
+| Model work for 2,000 deltas, run 1 | 1.441107-2.223989 s (values 1.690859, 2.223989, 1.689969, 1.441107, 1.747766 s) | 0.004773-0.126576 s (values 0.016698, 0.004773, 0.008505, 0.062790, 0.126576 s) |
+| Model work for 2,000 deltas, run 2 | 0.321535-0.453430 s (values 0.321535, 0.355654, 0.388210, 0.421123, 0.453430 s) | 0.003622-0.018056 s (values 0.003622, 0.004890, 0.007245, 0.018056, 0.017119 s) |
+| Changes published to the view for a burst of 200 deltas | 200 (one `blocksRevision` bump each) | 1 (`testABurstWithinAFrameIsOneApplication`) |
+
+Why: each delta rewrote `turn` (an array compare, the context gauge, the last-block patch) and told SwiftUI the chat changed. Deltas now collect for one display frame and fold in as one write. The two runs differ by 4 to 5 times for the same code because the machine's load changed; compare within a run. The spread of the once-per-frame figure (a single write) is large relative to its size. Not measured: SwiftUI body evaluations per second or frame time on a device, and the added latency (at most one frame, about 16.7 ms at 60 Hz) of a token's first appearance. Source: #3387.
 ## Stock Qwen3.8-27B with a real MLX DFlash2 head (#3541, 2026-11-27)
 Area: local inference
 Result: working text streaming and draft acceptance; slower decode and no greedy text match in this sample.
@@ -209,6 +225,7 @@ Conditions: JVM unit test `ChatControllerTest` on an Apple M1 Max with a countin
 |---|---|---|
 | `skills:runnable` calls for one open plus four re-reads | 5 | 1 |
 
+Why: `ChatModel.reload` read the skills list with every re-read; it now reads it on the first read and on a reconnect. This is the part of the chat-open fan-out that needed no engine change. The paged open (`session:page`, tail first) is not implemented: phones cannot call it (#3439), so the 300-message read is unchanged and unmeasured. Source: #3388.
 Why: `ChatController.reload` read the skills list with every re-read (each turn end, answered card, setting change, reconnect); it now reads it on the first read, on a reconnect and after a failed read. This is the part of the chat-open fan-out that needs no engine change (the iPhone did the same, #3388). The paged open (`session:page`, tail first) is not implemented: phones cannot call it (#3439), so the 300-message read is unchanged and unmeasured. Source: #3415.
 ## Android: saved chats are encoded and written off the main thread (#3413, 2026-11-26)
 Area: renderer (Android app, main thread)

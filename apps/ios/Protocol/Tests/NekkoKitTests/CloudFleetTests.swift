@@ -54,6 +54,25 @@ final class CloudFleetTests: XCTestCase {
         XCTAssertTrue(http.calls.isEmpty)
     }
 
+    func testAccountSwitchOpensTheFleetAndIsRememberedAcrossLaunches() async throws {
+        let http = HTTP()
+        let secrets = Secrets()
+        let cloud = client(http, secrets)
+        http.features = .object(["cloud-machines": .bool(true)])
+        try await cloud.refresh()
+        XCTAssertTrue(cloud.fleetEnabled)
+        XCTAssertTrue(relaunch(secrets).fleetEnabled, "a relaunch shows the machines screens before the next refresh")
+        http.features = .object(["cloud-machines": .bool(false)])
+        try await cloud.refresh()
+        XCTAssertFalse(cloud.fleetEnabled)
+        XCTAssertFalse(relaunch(secrets).fleetEnabled)
+    }
+
+    private func relaunch(_ secrets: Secrets) -> CloudSync {
+        CloudSync(api: URL(string: "https://api.test")!, http: HTTP(), secrets: secrets, files: nil,
+                  deviceLabel: "iPhone", retry: .instant, key: { SyncCrypto.SoftwareKey() })
+    }
+
     func testEnabledSignedOutDoesNotFetch() async {
         let http = HTTP()
         let cloud = client(http, Secrets(), signedIn: false)
