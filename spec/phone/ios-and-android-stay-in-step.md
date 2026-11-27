@@ -141,6 +141,7 @@ Nothing is recorded as a true OS exclusive yet.
 | Feature | iPhone | Android | Follow-up |
 | --- | --- | --- | --- |
 | Streamed text is folded in once per display frame (#3387) | Implemented, unit-tested in NekkoKit | Not implemented: one state update per token | https://github.com/nekko-labs/nekko-agent/issues/3432 |
+| Mermaid web view released when idle, disk cache pruned to 30 days and 64 MB (#3389) | Implemented, unit-tested in NekkoKit | Not implemented: the web view lives for the process and the disk cache grows | https://github.com/nekko-labs/nekko-agent/issues/3436 |
 
 ## Performance pass (Android, 2026-11-26)
 
