@@ -5158,10 +5158,16 @@ html[data-library-transition="list"]::view-transition-new(library-list) { animat
   }
 }
 
+/* The bottom row measures itself, so a narrow composer (a narrow window or a
+   small board zone) folds its labels before anything runs out of its box. */
+[data-composer-mode-row] { container-type: inline-size; }
 @container (max-width: 520px) {
   /* On the bottom row the folder gives way to Mode: icon only. */
   [data-composer-mode-row] > .composer-folders { min-width: 44px; }
   [data-composer-mode-row] > .composer-folders .folder-summary-label { display: none; }
+  /* Mode keeps its icon, its value and the chosen options; the word goes to the tooltip. */
+  [data-composer-mode-row] [data-chat-mode-button] .ctl-menu-label { display: none; }
+  [data-composer-mode-row] [data-chat-mode-button] { gap: 4px; }
 }
 
 /* ---------- First-run setup: the about-you steps (components/onboarding) ---------- */
