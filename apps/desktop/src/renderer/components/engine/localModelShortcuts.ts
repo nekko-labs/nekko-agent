@@ -1,16 +1,14 @@
 import type { LocalModel } from '@nekko-agent/shared';
 
 /**
- * The few local models someone reaches for: the ones they starred and the
- * ones they used last, offered beside what is loaded so loading one again is
- * a click rather than a trip to Model Server.
+ * The few local models someone used last, offered beside what is loaded so
+ * loading one again is a click rather than a trip to Model Server.
  */
 
 /** The built-in Model Server's provider id (`PROVIDER_ID` in EngineSection). */
 export const ENGINE_PROVIDER_ID = 'nekko-engine';
 
-/** How many starred and recent models the Local models monitor offers. */
-export const STARRED_SHOWN = 4;
+/** How many recent models the Local models monitor offers. */
 export const RECENT_SHOWN = 3;
 
 const RECENT_KEY = 'nekko.localModels.recent';
@@ -42,35 +40,26 @@ export function noteLocalModelsUsed(uses: RecentUse[], storage: Pick<Storage, 'g
 }
 
 /**
- * The starred and recent models to offer, from the library on disk.
- *
- * Starred are the `nekko-engine::<id>` keys in `favoriteModels`, in the order
- * they were starred. Recent merges what this app saw loaded with the chats
- * that ran on a local model, newest first. Neither repeats a loaded model
- * (it already has its own row), and recent never repeats a starred one.
+ * The recent models to offer, from the library on disk: what this app saw
+ * loaded merged with the chats that ran on a local model, newest first,
+ * never repeating a loaded model (it already has its own row).
  */
-export function localModelShortcuts({ models, resident, favorites, seen, chats }: {
+export function localModelShortcuts({ models, resident, seen, chats }: {
   models: LocalModel[];
   resident: string[];
-  favorites: readonly string[] | undefined;
   seen: RecentUse[];
   chats: Array<{ providerId?: string; modelId?: string; updatedAt: number }>;
-}): { starred: LocalModel[]; recent: LocalModel[] } {
+}): LocalModel[] {
   const byId = new Map(models.map((m) => [m.id, m]));
   const loaded = new Set(resident);
-  const prefix = `${ENGINE_PROVIDER_ID}::`;
-  const starredIds = (favorites ?? []).filter((k) => k.startsWith(prefix)).map((k) => k.slice(prefix.length));
-  const starred = starredIds.map((id) => byId.get(id)).filter((m): m is LocalModel => !!m && !loaded.has(m.id)).slice(0, STARRED_SHOWN);
-  const starredSet = new Set(starredIds);
   const latest = new Map<string, number>();
   const uses = [...seen, ...chats.filter((c) => c.providerId === ENGINE_PROVIDER_ID && c.modelId).map((c) => ({ id: c.modelId!, at: c.updatedAt }))];
   for (const r of uses) latest.set(r.id, Math.max(latest.get(r.id) ?? 0, r.at));
-  const recent = [...latest]
+  return [...latest]
     .sort((a, b) => b[1] - a[1])
     .map(([id]) => byId.get(id))
-    .filter((m): m is LocalModel => !!m && !loaded.has(m.id) && !starredSet.has(m.id))
+    .filter((m): m is LocalModel => !!m && !loaded.has(m.id))
     .slice(0, RECENT_SHOWN);
-  return { starred, recent };
 }
 
 /**

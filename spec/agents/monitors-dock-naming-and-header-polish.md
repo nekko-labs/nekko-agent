@@ -46,6 +46,15 @@ User intent (Philip): "In the local models, change the settings and load to be i
 
 Not verified: packaged app and a real engine.
 
+## Local models monitor: Recent only, by name (2026-11-28)
+
+User intent (Philip): "In the local models monitor, remove the starred models section. In the recent ones, simplify and just show the name, remove the second detail line." This replaces the Starred half of *Starred and Recent* above.
+
+- **No Starred group** `[implemented; unit-tested]`. The monitor no longer lists starred models, and its rows (loaded and recent) have no star toggle. Stars themselves are unchanged and still drive the model picker's Starred section.
+- **Recent rows are the name alone** `[implemented; unit-tested]`. Each Recent row shows the model's name with its **Settings** and **Load** icons; the line of kind, parameter size, quantization and file size under it is gone. Recent still holds up to 3 models, newest first, never a loaded one; a starred model now shows in Recent like any other.
+
+Not verified: packaged app and a real engine.
+
 ## Task systems, Agent Monitor Tasks and focus-mode clean start (2026-10-16)
 
 - **Implemented: source priority.** The system prompt (`crates/nekko-context/src/prompt.rs`) tells the agent to use workspace folders first, then connected connectors, and only then CLI tools, unless the task is to run something.
