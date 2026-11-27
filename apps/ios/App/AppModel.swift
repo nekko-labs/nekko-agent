@@ -95,6 +95,8 @@ final class AppModel {
     private let shareInbox = ShareInbox(defaults: UserDefaults(suiteName: StatusSnapshot.appGroup) ?? .standard)
 
     init() {
+        // Streamed text is folded into the chat once per display frame (#3387).
+        ChatModel.defaultDeltaInterval = 1 / Double(max(30, min(120, UIScreen.main.maximumFramesPerSecond)))
         let keychain = KeychainStore()
         #if DEBUG
         // UI tests start from a fresh install; the Keychain outlives uninstalling the app.

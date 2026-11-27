@@ -246,6 +246,9 @@ struct SettingsView: View {
             } header: { SectionHeader("Computers") }
             Section {
                 ThemePicker(selection: $prefs.theme)
+                Picker("Plan display", selection: $prefs.planDisplay) {
+                    ForEach(PlanDisplay.allCases) { mode in Text(mode.label).tag(mode) }
+                }.accessibilityIdentifier("settings.planDisplay")
                 NavigationLink(value: Route.customize) { Label("Customize", systemImage: "slider.horizontal.3").labelStyle(.quietRow) }
                     .accessibilityIdentifier("settings.customize")
                 NavigationLink(value: Route.simpleMode) {

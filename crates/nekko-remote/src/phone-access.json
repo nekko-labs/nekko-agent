@@ -175,6 +175,8 @@
    "providers:remove",
    "providers:save",
    "settings:reset",
+   "storage:removeRunnerImage",
+   "storage:removeWorktrees",
    "task:create",
    "task:delete",
    "task:update",

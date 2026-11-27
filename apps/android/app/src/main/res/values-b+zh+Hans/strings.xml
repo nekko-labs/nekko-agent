@@ -12,4 +12,11 @@
     <string name="chats_showupdated">更新时间</string>
     <string name="chats_showcontext">上下文窗口</string>
     <string name="chats_showpullrequests">拉取请求</string>
+    <string name="plan_display">计划显示</string>
+    <string name="plan_display_configure">设置计划显示方式</string>
+    <string name="plan_display_full">显示完整计划</string>
+    <string name="plan_display_balanced">均衡 · 3 行（默认）</string>
+    <string name="plan_display_one">显示 1 行</string>
+    <string name="plan_display_hidden">完全隐藏</string>
+    <string name="plan_completed_group">已完成（%1$d）</string>
 </resources>

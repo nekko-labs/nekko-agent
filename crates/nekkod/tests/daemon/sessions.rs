@@ -2,6 +2,59 @@
 
 use crate::common::*;
 
+/// A chat's pictures beside it (decision 0072): `session:get` restores them as ever, the window's
+/// `{ pictures: 'refs' }` keeps the references, and `session:blob` serves one by its exact name.
+#[tokio::test(flavor = "multi_thread")]
+async fn session_get_keeps_picture_references_for_a_client_that_asks_and_blob_serves_them() {
+    let data = std::env::temp_dir().join(format!("nekkod-pictures-{}", std::process::id()));
+    let blobs = data.join("sessions").join("blobs");
+    std::fs::create_dir_all(&blobs).unwrap();
+    let name = format!("{}.png", "ab".repeat(32));
+    let bytes = vec![7u8; 6000];
+    std::fs::write(blobs.join(&name), &bytes).unwrap();
+    // Not a picture of the chats': next to them, but never served.
+    std::fs::write(data.join("sessions").join("secret.png"), b"no").unwrap();
+    let reference = format!("nekko-blob:{name}");
+    let chat = json!({ "id": "s_pic", "title": "Pic", "updatedAt": 5, "messages": [
+        { "id": "t", "role": "tool", "content": "", "createdAt": 1, "toolResult": { "toolCallId": "c", "output": "ok", "images": [reference] } },
+        { "id": "u", "role": "user", "content": "look", "createdAt": 2, "images": [reference, "data:image/png;base64,AAAA"] },
+    ] });
+    std::fs::write(data.join("sessions").join("s_pic.json"), serde_json::to_vec(&chat).unwrap()).unwrap();
+    let d = start_with(&data);
+
+    let inline =
+        format!("data:image/png;base64,{}", base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes));
+    let (_, full) = post(d.port, "session:get", json!(["s_pic"]), Some(TOKEN)).await;
+    assert_eq!(full["messages"][1]["images"], json!([inline, "data:image/png;base64,AAAA"]), "default stays inline");
+    assert_eq!(full["messages"][0]["toolResult"]["images"], json!([inline]));
+    let (_, refs) = post(d.port, "session:get", json!(["s_pic", { "pictures": "refs" }]), Some(TOKEN)).await;
+    assert_eq!(refs, chat, "the references stay as the file holds them");
+    assert!(refs.to_string().len() < 1000, "{}", refs.to_string().len());
+    let (_, other) = post(d.port, "session:get", json!(["s_pic", { "pictures": "nope" }]), Some(TOKEN)).await;
+    assert_eq!(other, full, "an option it does not know is the default");
+
+    let (_, got) = post(d.port, "session:blob", json!([reference]), Some(TOKEN)).await;
+    assert_eq!(got, json!(inline));
+    let (_, bare) = post(d.port, "session:blob", json!([name]), Some(TOKEN)).await;
+    assert_eq!(bare, json!(inline));
+    for bad in [
+        format!("nekko-blob:../{name}"),
+        format!("../blobs/{name}"),
+        "../secret.png".to_string(),
+        format!("{}.png", "cd".repeat(32)),
+        format!("{name}.png"),
+        format!("{}.exe", "ab".repeat(32)),
+        "nekko-blob:".to_string(),
+        String::new(),
+    ] {
+        let (_, none) = post(d.port, "session:blob", json!([bad]), Some(TOKEN)).await;
+        assert_eq!(none, Value::Null, "{bad}");
+    }
+    let (status, _) = post(d.port, "session:blob", json!([reference]), None).await;
+    assert_eq!(status, 401, "a picture is never served without the token");
+    let _ = std::fs::remove_dir_all(&data);
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn serves_session_reads_from_disk_when_it_knows_the_data_dir() {
     let data = std::env::temp_dir().join(format!("nekkod-sessions-{}", std::process::id()));
@@ -744,4 +797,37 @@ async fn scoped_files_and_logs_for_remote_callers() {
     assert_eq!(found["matches"], json!([{ "line": 2, "text": "Authorization: Bearer [redacted]" }]));
     drop(d);
     let _ = std::fs::remove_dir_all(data);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn serves_the_chat_finders_text_without_pictures_or_tool_output() {
+    let data = std::env::temp_dir().join(format!("nekkod-finder-text-{}", std::process::id()));
+    let sessions = data.join("sessions");
+    std::fs::create_dir_all(&sessions).unwrap();
+    let chat = json!({ "id": "s_find", "title": "Find", "updatedAt": 5, "messages": [
+        { "id": "u", "role": "user", "content": "where is the cat", "images": ["data:image/png;base64,iVBORw0KGgo="], "createdAt": 1 },
+        { "id": "a", "role": "assistant", "content": "on the mat", "reasoning": "thinking hard", "createdAt": 2,
+          "toolCalls": [{ "id": "t", "name": "write_file", "input": { "path": "/x/cat.md", "content": "BODY" } }] },
+        { "id": "r", "role": "tool", "content": "", "toolResult": { "output": "TOOL OUTPUT" }, "createdAt": 3 },
+    ] });
+    std::fs::write(sessions.join("s_find.json"), serde_json::to_vec(&chat).unwrap()).unwrap();
+    let d = start_with(&data);
+
+    let (status, got) =
+        post(d.port, "sessions:finderText", json!([["s_find", "s_missing", "../escape"]]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    assert_eq!(got["s_missing"], Value::Null);
+    assert_eq!(got["../escape"], Value::Null);
+    let view = &got["s_find"];
+    assert_eq!(view["title"], "Find");
+    assert_eq!(view["messages"][0]["content"], "where is the cat");
+    assert_eq!(view["messages"][1]["toolCalls"], json!([{ "name": "write_file", "input": { "path": "/x/cat.md" } }]));
+    assert_eq!(view["messages"].as_array().unwrap().len(), 2);
+    let text = view.to_string();
+    for gone in ["data:image", "thinking hard", "BODY", "TOOL OUTPUT"] {
+        assert!(!text.contains(gone), "{gone}");
+    }
+    let (_, none) = post(d.port, "sessions:finderText", json!([]), Some(TOKEN)).await;
+    assert_eq!(none, json!({}));
+    let _ = std::fs::remove_dir_all(&data);
 }

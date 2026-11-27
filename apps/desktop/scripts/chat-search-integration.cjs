@@ -9,6 +9,13 @@ const modules = process.env.NEKKO_TEST_MODULES || path.join(repo, 'node_modules'
 // NEKKO_FIXTURE builds another fixture (and NEKKO_SANDBOX runs another script) on the same harness.
 const fixture = process.env.NEKKO_FIXTURE || 'chat-search-fixture.tsx';
 const out = path.join(repo, '.shots', path.basename(fixture, '-fixture.tsx'));
+// Files outside the renderer that it imports (the What's new list), taken only
+// when that revision has them, so older revisions still build.
+function baseExtras(rev) {
+  return ['docs/hub/whats-new.json'].filter((p) => {
+    try { cp.execFileSync('git', ['cat-file', '-e', `${rev}:${p}`], { cwd: repo, stdio: 'ignore', windowsHide: true }); return true; } catch { return false; }
+  });
+}
 async function main() {
   fs.mkdirSync(out, { recursive: true });
   let entry = path.join(__dirname, fixture);
@@ -16,7 +23,7 @@ async function main() {
   if (process.env.NEKKO_TEST_REVISION) {
     const source = path.join(out, 'base-source'); fs.rmSync(source, { recursive: true, force: true }); fs.mkdirSync(source, { recursive: true });
     const zip = path.join(out, 'base.zip');
-    cp.execFileSync('git', ['archive', '--format=zip', `--output=${zip}`, process.env.NEKKO_TEST_REVISION, 'apps/desktop/src', 'packages/shared/src'], { cwd: repo, windowsHide: true });
+    cp.execFileSync('git', ['archive', '--format=zip', `--output=${zip}`, process.env.NEKKO_TEST_REVISION, 'apps/desktop/src', 'packages/shared/src', ...baseExtras(process.env.NEKKO_TEST_REVISION)], { cwd: repo, windowsHide: true });
     // bsdtar (bundled with Windows 10+, macOS and most Linux) reads zip archives.
     cp.execFileSync('tar', ['-xf', zip, '-C', source], { windowsHide: true });
     entry = path.join(out, 'base-fixture.tsx');

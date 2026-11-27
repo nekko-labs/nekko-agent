@@ -17,8 +17,11 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.nekko.android.chat.ChatViewModel
 import com.nekko.android.data.ComputersRepository
+import com.nekko.android.data.PhonePrefs
+import com.nekko.android.data.PrefStore
 import com.nekko.android.data.Remote
 import com.nekko.android.data.SecureStore
+import com.nekko.android.monitors.EXPERT_MODE
 import com.nekko.android.ui.screens.ChatScreen
 import com.nekko.android.ui.screens.ChatsScreen
 import com.nekko.android.ui.theme.NekkoTheme
@@ -62,7 +65,14 @@ class ChatActionsTest {
 
     @Test fun chatMenu() {
         val repo = repo()
-        val vm = ChatViewModel("s1", repo, null, null)
+        // Chat mode is a Detailed control (#2461): Simple leaves it out of the menu.
+        val prefs = PhonePrefs(object : PrefStore {
+            val map = HashMap<String, String>()
+            override fun getString(name: String) = map[name]
+            override fun putString(name: String, value: String?) { if (value == null) map.remove(name) else map[name] = value }
+        })
+        prefs.set(EXPERT_MODE, true)
+        val vm = ChatViewModel("s1", repo, null, prefs)
         compose.setContent { NekkoTheme(dark = false) { ChatScreen(vm, onBack = {}) } }
         compose.waitUntil(10_000) { computer.calls.contains(Channels.SESSION_GET) }
         settle()

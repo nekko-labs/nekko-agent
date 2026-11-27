@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Translated from values/strings_strategy.xml (scripts/translations.py fill). -->
+<resources>
+    <string name="strategy_heading">Estratégia</string>
+    <string name="strategy_code">Modo de código</string>
+    <string name="strategy_list">Lista de ferramentas</string>
+    <string name="strategy_none">Sem ferramentas</string>
+    <string name="strategy_claude_code">Claude Code</string>
+    <string name="strategy_direct">Direto</string>
+    <string name="strategy_coordinator">Orquestração</string>
+    <string name="strategy_worker">Agente executor</string>
+    <string name="strategy_external">O Claude Code gerencia as próprias ferramentas.</string>
+</resources>
