@@ -18,6 +18,10 @@ Status: implemented candidate; 55 focused renderer/image tests, desktop typechec
 
 **Boundaries and acceptance.** Pairing uses explicit matching label text, never guessed filenames or images from other replies, sessions, tool output or PR pages. Code samples, incomplete pairs and identical before/after sources do not create a comparison. A new surface without a before image keeps its normal after-image presentation; the agent must not invent a baseline. This is on by default for assistant topic-rendered replies, not user messages or document views, and adds no preference or persistent state. Existing image cards retain originating-session file actions, Sandbox host-read restrictions, and remote trust/click-to-load behavior; there is no new network fetch path. A visible panel explicitly says display is not inspection or approval. Native mobile renderer support is unchanged. Missing or unreadable images retain the existing image-card fallback and actions.
 
+### Open a screenshot on tap (#3544)
+
+Implemented in desktop and Local Web UI chat: tapping or keyboard-activating a loaded local image opens that image in the existing full-window photo viewer, including the inline comparison and the mirrored Next step panel. The image fits uncropped without reserving gallery-arrow space for a single photo. Escape or Close dismisses the viewer; **Open source** still opens the file in its originating chat. The viewer uses the already-loaded image without another file read or network request. Unavailable images, Sandbox restrictions, and non-chat previews are unchanged. Native mobile is unchanged.
+
 ## Rendering cards, `file://` links and live previews (issue #1095)
 
 Status: implemented on desktop and unit/renderer-tested; captured in the hidden isolated Electron fixture (light and dark) but not yet reviewed in the running app; native mobile and the Local Web UI chat are unchanged.

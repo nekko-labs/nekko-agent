@@ -1,9 +1,11 @@
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { emptyLiveActivity, reduceLiveActivity } from '@nekko-agent/shared';
+import { emptyLiveActivity, reduceLiveActivity, type SessionSummary } from '@nekko-agent/shared';
 import { quietMinutes, toolQuietSince, watchQuietMinutes } from './toolProgress.js';
 import { ToolProgressChip } from './ToolProgressChip.js';
+import { applyEvent, __resetLiveRuns } from '../../liveRuns.js';
+import { SubagentParentContext } from './SubagentCue.js';
 import { ActivityGroup } from './ActivityGroup.js';
 import { RowKeyContext, RowMemoryContext } from './rowState.js';
 
@@ -27,6 +29,39 @@ describe('tool inactivity', () => {
     }
     expect(toolQuietSince(running, 'missing-or-capped')).toBeUndefined();
     expect(toolQuietSince(undefined, call.id)).toBeUndefined();
+  });
+
+  it('times the displayed delegation, with one quiet badge that clears on child progress', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(420_000);
+    vi.stubGlobal('requestAnimationFrame', () => 1);
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+    try {
+      const spawn = { id: 'delegate', name: 'spawn_agent', input: { title: 'Review' } };
+      const child = { id: 'child', spawnCallId: spawn.id, title: 'Review' } as SessionSummary;
+      const parent = reduceLiveActivity(activity(), { type: 'tool_call', sessionId: 's', call: spawn }, 0)!;
+      const render = (endedAt?: number) => renderToStaticMarkup(<SubagentParentContext.Provider value={[child]}>
+        <ActivityGroup streaming toolActivity={parent} items={[{ kind: 'tool', call }, { kind: 'tool', call: spawn, startedAt: 0, endedAt }]} />
+      </SubagentParentContext.Provider>);
+      const event = { type: 'reasoning' as const, sessionId: child.id, delta: 'Working' };
+      applyEvent(event, 0);
+      applyEvent({ ...event, sessionId: 'unrelated' }, Date.now());
+      const quiet = render();
+      expect(quiet.match(/no progress for 7 min/g)).toHaveLength(1);
+      expect(quiet.indexOf('7m 0s')).toBeGreaterThan(-1);
+      expect(quiet.indexOf('7m 0s')).toBeLessThan(quiet.indexOf('Subagent working'));
+      applyEvent(event, Date.now()); // Same headline, fresh activity.
+      expect(render()).not.toContain('no progress');
+      expect(render()).toContain('Running for 7m 0s');
+      vi.setSystemTime(480_000);
+      expect(render()).toContain('no progress for 1 min');
+      applyEvent({ type: 'done', sessionId: child.id, messageId: 'done' }, Date.now());
+      expect(render()).not.toContain('no progress');
+      expect(render(450_000)).toContain('Took 7m 30s');
+    } finally {
+      __resetLiveRuns();
+      vi.unstubAllGlobals();
+    }
   });
 
   it('uses whole elapsed minutes, never negative or invalid durations', () => {

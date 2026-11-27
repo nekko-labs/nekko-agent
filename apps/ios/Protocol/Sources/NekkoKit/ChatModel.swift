@@ -31,14 +31,14 @@ public final class ChatModel {
         // Parsed once per read, not on every streamed token.
         didSet {
             savedBlocks = session.map { Transcript.fromMessages($0.messages) } ?? []
-            updateTurnDetails()
+            updateTurnMetadata()
             // What the computer lists has arrived: it leaves the outbox.
             if let ids = session?.clientMessageIds, !ids.isEmpty { store.outbox.confirm(sessionId, ids) }
         }
     }
     private var savedBlocks: [Block] = [] { didSet { merge() } }
     /// Saved block id → the live id the view already shows it under (see `Transcript.carriedIds`).
-    private var shownIds: [String: String] = [:] { didSet { merge(); updateTurnDetails() } }
+    private var shownIds: [String: String] = [:] { didSet { merge(); updateTurnMetadata() } }
     /// Only the current outgoing prompt, until the computer returns its thumbnails.
     private var outgoingPhotos: (id: String, images: [String])?
     public private(set) var turn = LiveTurn() {
@@ -67,9 +67,15 @@ public final class ChatModel {
     /// Rebuilt only on saved reads/id changes, never on streamed tokens.
     public private(set) var turnDetails: [String: TurnDetails] = [:]
 
-    private func updateTurnDetails() {
-        let next = TurnDetails.footers(session?.messages ?? [], shownIds: shownIds)
+    /// Strategy sections, keyed by the displayed ids of their persisted prompts.
+    public private(set) var turnStrategies: [String: TurnStrategy] = [:]
+
+    private func updateTurnMetadata() {
+        let messages = session?.messages ?? []
+        let next = TurnDetails.footers(messages, shownIds: shownIds)
         if next != turnDetails { turnDetails = next }
+        let strategies = TurnStrategy.sections(messages, shownIds: shownIds)
+        if strategies != turnStrategies { turnStrategies = strategies }
     }
     /// Bumped whenever `blocks` changes anywhere but its last block, so a view
     /// can keep what it derived from the earlier blocks across streamed tokens.

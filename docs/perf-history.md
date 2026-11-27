@@ -43,6 +43,90 @@ numbers and conditions here even when raw traces are linked elsewhere.
 Area: renderer
 Result: improvement (reads per re-read)
 Conditions: `swift test` on an Apple M1 Max, macOS 27.2.1, with a counting fake connection (`ReloadFanOutTests.testSkillsAreReadOnceNotOnEveryReload`): open a chat, then four re-reads (three turn ends and one explicit reload). Counts are `skills:runnable` calls, not time.
+## Stock Qwen3.8-27B with a real MLX DFlash2 head (#3541, 2026-11-27)
+Area: local inference
+Result: working text streaming and draft acceptance; slower decode and no greedy text match in this sample.
+Conditions: Apple M1 Max, 64 GiB unified memory, macOS 27.2.1, Metal, `mlx-vlm` 0.8.1 / MLX 0.32.5. Public [mlx-community stock 4-bit target at `b935172`](https://huggingface.co/mlx-community/Qwen3.8-27B-4bit/tree/b935172e4bb5dcd0543774a34748fb92422e3027) (Apache-2.0, stock 4-bit affine, group size 64) and [incoai full BF16 head at `015e795`](https://huggingface.co/incoai/Qwen3.8-27B-DFlash2/tree/015e795645c74b1a0eeef3b570031fb62e769bc5). Same `mlx_vlm.server` in both arms, without a head and then with `--draft-model <head> --draft-kind dflash`. One isolated, offline loopback server at a time through Nekko's production router and supervisor; no desktop or full daemon. One 24-token warmup per arm, then three sequential `/v1/chat/completions` SSE requests of 128 completion tokens each (temperature 0, seed 42, thinking off, usage requested, zero cached prompt tokens). Decode uses upstream `timings.predicted_per_second`; aggregate divides 384 completion tokens by summed `predicted_ms`. Single sequential sample, not a variance or thermal study.
+
+| Prompt | Baseline decode tok/s | DFlash2 decode tok/s | Draft tokens accepted / proposed | Draft rounds | Greedy text, first differing UTF-8 byte (zero-based) |
+|---|---:|---:|---:|---:|---|
+| Python interval merge | 11.643 | 2.602 | 96 / 122 | 31 | Different, 133 |
+| Botanist's journal | 13.208 | 4.525 | 65 / 131 | 62 | Different, 493 |
+| Meal-planning tips | 14.059 | 11.628 | 66 / 121 | 61 | Different, 579 |
+| Aggregate (excludes warmup) | 12.890 | 4.340 | 227 / 374 (60.7%) | 154 | 0 of 3 exact text matches |
+
+The router streamed all eight replies to `finish_reason: length`, final usage/timings, and `[DONE]`. Baseline had no draft counters; the head emitted the readiness marker and the final usage chunks reported `draft_kind: dflash`. Public-ID and no-model requests resolved to the same local target; an adapter request was rejected with HTTP 400. Paired watchdog checks: target ready in 4.508 s vs. 8.966 s with the head, system-wide free percentage never below 52% vs. 46%, macOS pressure stayed normal and swap stayed at the pre-existing 628.25 MiB. Both child processes and all four ports were gone after teardown.
+
+The head was active, but its accepted guesses did not translate into faster decode (0.337× baseline). The measurement does not locate the cause of the slowdown or greedy divergence; neither is evidence of a router failure. Keep MLX DFlash2 opt-in and do not claim lossless decoding or a speedup on this pair. Not measured: emitted token-ID parity, stochastic sampling, long contexts, image requests, other hosts, or full desktop/daemon flow. The [public LM Studio 8-bit run](#unmeasured) stopped before target readiness, and no installed weights were tested. Source: [#3541](https://github.com/nekko-labs/nekko-agent/issues/3541); exact counters, raw SSE, health logs, and cleanup receipts are under `.scratch/mlx-3541/evidence/run-4bit-20261127T030138Z/` in the benchmark worktree.
+
+### Follow-up: 4-bit/group64 MLX DFlash2 head (#3541, 2026-11-27)
+Area: local inference
+Result: smaller draft weights; no aggregate decode gain over the full head and no exact greedy text match to either target-only run.
+Conditions: same M1 Max, Metal, `mlx-vlm` 0.8.1 / MLX 0.32.5, public 4-bit target, Rust router/supervisor binary, and byte-identical request bodies as above. One offline loopback server at a time: fresh target-only control, then the converted head; one 24-token warmup and three 128-token completions per arm. The archived full-head run was not repeated. Rates below exclude the warmup; each arm is one sequential sample.
+
+[Upstream `mlx-vlm` 0.8.1](https://pypi.org/project/mlx-vlm/0.8.1/) recommends 4-bit/group64 for DFlash2. Using only the local incoai full head, the unmodified `mlx_vlm.convert --hf-path <full-head> --mlx-path <separate-parent>/Qwen3.8-27B-DFlash2 --quantize --q-bits 4 --q-group-size 64` exited 0. The export retained the `DFlash2DraftModel` architecture and DFlash2 settings. The safetensors header confirmed 49 packed weights and matching affine group scales and biases. Draft weight bytes fell from 3,848,817,896 to 1,082,881,523 (71.9% smaller). The original and exported heads have the same basename under separate parents. The runtime selected the exported path via `--draft-model <export> --draft-kind dflash` and logged that the drafter was ready.
+
+| Prompt | Saved target-only tok/s | Saved full head tok/s | Fresh target-only tok/s | 4-bit head tok/s | 4-bit accepted / proposed (rounds) | First differing UTF-8 byte vs. either target-only run (zero-based) |
+|---|---:|---:|---:|---:|---:|---:|
+| Python interval merge | 11.643 | 2.602 | 16.305 | 2.299 | 95 / 126 (32) | 133 |
+| Botanist's journal | 13.208 | 4.525 | 17.305 | 4.877 | 71 / 135 (56) | 493 |
+| Meal-planning tips | 14.059 | 11.628 | 17.280 | 17.629 | 67 / 119 (60) | 579 |
+| Aggregate | 12.890 | 4.340 | 16.950 | 4.306 | 233 / 380 (148; 61.3%) | 0 of 3 exact text matches |
+
+The two target-only runs matched byte-for-byte on all three prompts; the two draft runs also matched one another on all three, despite different acceptance counts (full head: 227 / 374, 60.7%). The converted head was 0.334× the saved target-only rate and 0.254× the fresh target-only rate. The numbered list got faster but the aggregate stayed near the full head's rate. The baselines' speed spread and single sequential runs do not establish a small head-to-head speed difference or explain the text divergence. Leave the MLX draft unset for baseline speed and output on this setup; for an opt-in MLX trial, the smaller head saves weight storage, not aggregate decode time in this sample. Parity here is exact emitted text, not token IDs.
+
+All eight new SSE streams finished at the token limit with final usage and `[DONE]`. The completed runs stayed at normal macOS pressure and 628.25 MiB swap, with at least 43.07 GiB disk free during sampling; both supervisors and children stopped and all four loopback ports closed. An initial target-only attempt stopped on the disk watchdog; only the hash-verified remnants of the prior incomplete public 8-bit scratch download were removed before retrying with the original 24 GiB floor. No 8-bit model was run in the follow-up. Source: [#3541](https://github.com/nekko-labs/nekko-agent/issues/3541); conversion receipt and packed-tensor check in `.scratch/mlx-3541/evidence/convert-head-4bit-g64-20261127T030925Z/`, and requests, raw SSE, `comparison.json`, launch logs and cleanup receipts in `.scratch/mlx-3541/evidence/run-head-4bit-g64-20261127T031329Z/` in the benchmark worktree.
+
+## Stock Qwen3.8-27B with a real GGUF DFlash2 head (#3541, 2026-11-27)
+Area: local inference
+Result: improvement in this local decode sample; exact greedy token and text matches
+Conditions: Apple M1 Max (64 GB), macOS 27.2.1, Metal `llama-server` b12503 (`4577932fa`), stock `Qwen3.8-27B-Q4_K_M.gguf` plus `Qwen3.8-27B-DFlash2-Q4_K_M.gguf`. One isolated loopback server at a time, 4096 context, one slot, full GPU layer offload requested, f16 KV, prompt caching off, one discarded 16-token warmup per launch. Three short prompts (Python interval merge, botanist's journal, numbered meal-planning tips), 160 output tokens each, native `/completion` with Qwen thinking disabled, greedy (`temperature: 0`, seed 42). Decode tok/s is from server `timings.predicted_per_second`; aggregate is total output tokens divided by total decode time. These are single sequential runs, not a variance or thermal study.
+
+| Metric | No speculation | #3496 args: `--spec-default` + `draft-dflash` | Explicit `draft-dflash2` without `--spec-default` |
+|---|---:|---:|---:|
+| Python code decode | 12.31 tok/s | 44.21 tok/s | 42.29 tok/s |
+| Journal decode | 12.28 tok/s | 17.86 tok/s | 16.88 tok/s |
+| Numbered tips decode | 11.65 tok/s | 14.70 tok/s | 13.93 tok/s |
+| Aggregate decode | 12.15 tok/s | 20.58 tok/s | 19.52 tok/s |
+| Accepted / proposed drafts, same prompt order | not reported | 133/175, 99/397, 87/487 | 133/175, 99/397, 87/487 |
+| Greedy token IDs equal to target-only | reference | 480/480 | 480/480 |
+
+Each draft arm used `--spec-draft-model <head.gguf> --spec-draft-ngl all --spec-type <mode> --spec-draft-n-max 7`. With `--spec-default`, explicit `draft-dflash2` also worked (44.73 / 16.37 / 13.11 tok/s, 18.90 aggregate); `draft-dflash` without it worked too (34.52 / 13.32 / 10.99 tok/s, 15.48 aggregate). All four draft arms initialized `draft-dflash2` in the server log and returned the same 319/1059 acceptance count and identical token IDs and text. `--spec-default` alone reported no draft counters and returned the same tokens (9.84 / 9.96 / 9.34 tok/s, 9.77 aggregate). The order and spread do not establish a speed difference between equivalent flags.
+
+**q8_0 KV cross-check (the app's default cache type):** with explicit `--cache-type-k q8_0 --cache-type-v q8_0` in both arms, target-only decoded at 9.45 tok/s aggregate and #3496 at 17.73 tok/s. The draft accepted 323/1035 proposals (133/175, 99/397, 91/463). Code and journal matched all 320 tokens; the numbered list first differed at output token 111, comparing q8_0 with and without the draft. Do not assume exact greedy parity with quantized KV. Use explicit f16 KV to reproduce the parity check above; the backend does not change the cache setting.
+
+Why: the real head's GGUF v3 header says `general.architecture=dflash`, not `dflash2`; its eight-token block and `dflash.conv_kernel_size=2`, `dflash.selector_rank=256`, `dflash.selector_top_k=16` are DFlash2 metadata. The target says `qwen35`, with 64 blocks and width 5120; both headers report Q4_K_M and a 248,320-token vocabulary. b12503 initialized the DFlash2 implementation even when asked for `draft-dflash`, so the backend reuses the verified [#3496 launcher](https://github.com/nekko-labs/nekko-agent/commit/05c84f0ca9eca7a5081a7d9cfdcf89c6917676a6) without adding a second mode. All servers were stopped and their ports checked closed. Not measured in the b12503 GGUF run: long contexts, stochastic sampling, or the desktop/daemon end-to-end path. The newer pin is tested separately below; the MLX result is above. Source: [#3541](https://github.com/nekko-labs/nekko-agent/issues/3541); local raw headers, argv, requests, responses, server logs and cleanup receipts are under `.scratch/qwen38/evidence/` in the benchmark worktree.
+
+### Follow-up: pinned b12556 GGUF on Metal (#3541, 2026-11-27)
+Area: local inference
+Result: active DFlash2 and faster aggregate decode in both cache modes; exact greedy parity with f16, not with q8_0.
+Conditions: Apple M1 Max, 64 GiB unified memory, macOS 27.2.1. Official [b12556 macOS arm64 release](https://github.com/ggml-org/llama.cpp/releases/tag/b12556) (`50518b64c`), archive SHA-256 verified against GitHub. Same local Q4_K_M target and head as above, no downloads of weights. One isolated offline loopback `llama-server` at a time, Metal, 4096 context, one slot, full GPU offload requested, prompt caching off. Explicit f16 or q8_0 K and V on the target in each pair. Target-only used no speculation; both draft arms used the #3496 flags `--spec-default --spec-draft-model <head.gguf> --spec-draft-ngl all --spec-type draft-dflash --spec-draft-n-max 7`. Both logs showed initialization of `draft-dflash2`.
+
+The saved harness sent byte-identical request bodies to the b12503 run: one discarded 16-token warmup and three native `/completion` requests per arm (160 output tokens each, thinking off, temperature 0, seed 42, token IDs returned). All reached their token limit with zero prompt-cache hits. Per-prompt rates are server decode timings; aggregate is 480 tokens divided by summed decode time, excluding warmup and prompt processing. Each arm is a single sequential sample.
+
+| Prompt | f16 target-only tok/s | f16 + draft tok/s | f16 accepted / proposed | q8_0 target-only tok/s | q8_0 + draft tok/s | q8_0 accepted / proposed |
+|---|---:|---:|---:|---:|---:|---:|
+| Python interval merge | 12.23 | 41.63 | 133 / 175 | 11.59 | 41.80 | 133 / 175 |
+| Botanist's journal | 12.24 | 17.30 | 99 / 397 | 11.36 | 17.05 | 99 / 397 |
+| Numbered meal-planning tips | 11.62 | 13.84 | 87 / 487 | 11.32 | 14.64 | 91 / 463 |
+| Aggregate | 12.10 | 19.59 | 319 / 1059 | 11.49 | 20.01 | 323 / 1035 |
+
+Target-only reported no draft counters. With f16, all 480 emitted token IDs and all three texts exactly matched the f16 target-only run. With q8_0, code and journal matched all 320 tokens and both texts; the list first differed at output token 111 (one-based) and UTF-8 byte offset 500 (zero-based) against the q8_0 target-only run. The measured gain varied by prompt; neither cache setting is a general speed or parity guarantee.
+
+The watchdog sampled normal macOS pressure throughout, with at least 45% system-wide reported free memory, unchanged 628.25 MiB swap, and at least 42.29 GiB disk free. All four owned server PIDs were reaped and their loopback ports checked closed. No managed install, full desktop/daemon flow, long contexts, stochastic sampling, or other hardware was tested. Source: [#3541](https://github.com/nekko-labs/nekko-agent/issues/3541); argv, raw requests and responses, server logs, watchdog samples, cleanup receipts, and `comparison.json` are under `.scratch/qwen38/evidence/b12556-20261127T031928Z/` in the benchmark worktree.
+
+## Selective chat orchestration (#3527, 2026-11-27)
+Area: local inference / engine daemon
+Result: mixed (workload probe, not a before/after build benchmark)
+Conditions: Apple M1 Max, 64 GB, macOS 27.2.1; isolated loopback llama.cpp/Metal; Qwen 3.6 35B-A3B Q4_K_M leader, Gemma 4 E4B Q4_K_M worker. Temperature 0, 768 output tokens per model call. One sequential run per arm on the pre-change daemon, one four-file synthetic read-only audit, nine expected fields. The direct and coordinator-only arms used the same read-it-yourself instruction; the worker arm instructed a split and auto-approved only the narrow fixture assignment. Markdown fences were accepted; prose outside the JSON failed the check.
+
+| Arm | Wall time | Model requests | Result |
+| --- | ---: | ---: | --- |
+| Direct | 45.870 s | 2 | Incorrect: north ledger counts only |
+| Coordinator only | 45.560 s | 2 | Correct values and output shape |
+| Coordinator + Gemma | 99.494 s | 5 | Approved worker returned; correct values, extra prose |
+
+Why: a worker added inference round trips and a handoff on this small task. The experiment does not establish a general speed or quality effect, a hosted-provider comparison, or performance after the new intent gate. Source: isolated scripted evidence from the issue's development run.
 ## iPhone prompt photo thumbnails decode once, off the main thread (#3383, 2026-11-26)
 Area: renderer
 Result: improvement (main-thread cost per photo per row evaluation); not profiled in the running app
@@ -1801,6 +1885,8 @@ first token excluded). The model was never slow; we were reporting half its
 speed. Source: [#152](https://github.com/nekko-labs/nekko-agent/pull/152).
 
 ## Unmeasured
+
+- **Stock Qwen3.8-27B MLX DFlash2 preload stopped (#3541, 2026-11-27).** Apple M1 Max, 64 GiB unified memory, macOS 27.2.1; isolated `mlx-vlm` 0.8.1 / MLX 0.32.5 on Metal. Verified the public Apache-2.0 [LM Studio 8-bit target at `241ebb5`](https://huggingface.co/lmstudio-community/Qwen3.8-27B-MLX-8bit/tree/241ebb5f1d60b122fd653da658836a55feb9e2b0) and [official full BF16 head at `015e795`](https://huggingface.co/incoai/Qwen3.8-27B-DFlash2/tree/015e795645c74b1a0eeef3b570031fb62e769bc5) against their manifests (31.1 GiB combined). The installed LM Studio copy was not read. The target-only `mlx_vlm.server` bound to loopback, but at 11.07 s `/health` still reported `model_ready: false` while evaluating the remaining parameters. The watchdog stopped the load as macOS memory pressure went from normal to warning (`1` to `2`), with the system-wide free percentage down from 86% to 39%. Swap was zero at the warning and 628.25 MiB at cleanup; the process exited and its port closed. **Baseline decode: not measured. DFlash2 decode: not attempted.** There is no streamed text, acceptance count, or throughput comparison. The LM Studio basename is supported when the configs match, but no successful 8-bit run was observed. The separate [4-bit run](#stock-qwen38-27b-with-a-real-mlx-dflash2-head-3541-2026-11-27) measured streaming and nonzero acceptance, with slower decode and different greedy text.
 
 - Nekko Cloud client retries (2026-11-26, #3363): traffic-shape change, nothing measured. By the code: a busy answer used to get 2 more attempts at 0.5 s and 2 s from every client (3 sends within 2.5 s); it now gets at most 2 more at 5 s and 10 s or the server's longer `Retry-After` (cap 60 s) plus 0-50% jitter, so 3 sends spread over at least 15 s; a 504 on `/v1/sync/push` and `/v1/sync/pull` is sent once instead of 3 times. Not measured: how often the live API answers busy, or its load while stalled. Unit tests check the schedule with injected sleeps only.
 - Relay reconnect jitter (2026-11-26, #3385, iPhone): the backoff of 1, 2, 4 ... 30 s now gets 0 to 50% random extra, so clients that lose a relay together spread their redials. Tested for bounds and spread (200 draws at attempt 3 all fall in 8 s to under 12 s and more than 100 distinct values), but the effect on a relay restart is not measured. Counting dials per second at the relay after restarting it with many connected clients, before and after, would settle it.

@@ -82,6 +82,7 @@ fun ChatMessage.savedJson(): JsonObject = buildJsonObject {
     if (interrupted) put("interrupted", true)
     // The narrow projection only: counts and identifiers, never the provider's raw payload.
     turnStats?.let { put("turnStats", it.json()) }
+    if (role == "user") turnStrategy?.let { put("turnStrategy", it.json()) }
 }
 
 /**
@@ -222,9 +223,14 @@ class SavedTranscripts(
     private fun signature(s: Session): String {
         val last = s.messages.lastOrNull()
         var chars = 0L
-        for (m in s.messages) chars += m.content.length + (m.reasoning?.length ?: 0) + (m.toolResult?.output?.length ?: 0)
+        var strategies = 0
+        for (m in s.messages) {
+            chars += m.content.length + (m.reasoning?.length ?: 0) + (m.toolResult?.output?.length ?: 0)
+            // The computer can backfill a prompt’s strategy without appending a message.
+            if (m.role == "user") m.turnStrategy?.let { strategies = 31 * (31 * strategies + m.id.hashCode()) + it.hashCode() }
+        }
         return listOf(s.messages.size, last?.id, last?.content?.hashCode(), last?.toolResult?.output?.hashCode(), s.updatedAt, s.omittedMessages, chars,
-            s.title, s.providerId, s.modelId, s.workspaceId, s.mode, s.effort, s.chatType, s.imageParams).joinToString("|")
+            s.title, s.providerId, s.modelId, s.workspaceId, s.mode, s.effort, s.chatType, s.imageParams, strategies).joinToString("|")
     }
 
     private fun current(f: OfflineFiles, id: String) = files === f && computerId == id

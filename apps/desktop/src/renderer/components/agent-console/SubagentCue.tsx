@@ -2,8 +2,10 @@ import { createContext, useContext } from 'react';
 import { BranchIcon, RobotIcon } from '../../icons.js';
 import { useStore } from '../../store.js';
 import type { SessionSummary, ToolCall, ToolResult } from '@nekko-agent/shared';
-import { getLiveRun, useLiveRunsVersion } from '../../liveRuns.js';
+import { getLiveRun, useLiveRun, useLiveRunsVersion } from '../../liveRuns.js';
 import { activitySentence, compactSentence, delegationActivity, delegationChild } from '../../subagentActivity.js';
+
+import { ToolProgressChip } from './ToolProgressChip.js';
 
 export const SubagentParentContext = createContext<SessionSummary[]>([]);
 /**
@@ -26,6 +28,14 @@ export function useSubagentSummary(call: ToolCall, result?: ToolResult): string 
 export function SubagentHeadline({ call, result }: { call: ToolCall; result?: ToolResult }) {
   const summary = useSubagentSummary(call, result);
   return <span className="min-w-0 truncate" title={summary}>{summary}</span>;
+}
+/** The parent can be silent while the child streams. Listen to that exact
+ * run, including repeated events that leave its headline unchanged. */
+export function SubagentProgressChip({ call, since }: { call: ToolCall; since: number }) {
+  const child = delegationChild(call, useContext(SubagentParentContext));
+  const run = useLiveRun(child?.id ?? '', !child);
+  if (child && delegationActivity(call, child, undefined, !!run).status !== 'working') return null;
+  return <ToolProgressChip since={Math.max(since, run?.activity.updatedAt ?? since)} />;
 }
 /** A sibling of the details toggle, never an interactive element inside it. */
 export function SubagentOpenButton({ call }: { call: ToolCall }) {

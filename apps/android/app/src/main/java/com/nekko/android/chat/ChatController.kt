@@ -128,6 +128,7 @@ data class ChatUi(
     val workspaceId: String? = null,
     /** Each finished reply's measurements, by the id of the block they follow (#2112, the iPhone's #1911). */
     val footers: Map<String, com.nekko.protocol.TurnDetails> = emptyMap(),
+    val strategies: Map<String, com.nekko.protocol.TurnStrategy> = emptyMap(),
     /** Changes whenever [blocks] changed anywhere but its last block (see [ChatProjector]). */
     val layout: Int = 0,
 )
@@ -782,6 +783,7 @@ class ChatController(
                 blocks = shown,
                 layout = projector.layout,
                 footers = projector.footers,
+                strategies = projector.strategies,
                 running = turn.running || (image && state.session.running),
                 approval = turn.approval,
                 question = turn.question,
