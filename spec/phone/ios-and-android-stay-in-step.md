@@ -65,6 +65,12 @@ Both implementations use scoped counts and initial English `status`, `send to NA
 
 Both: JVM or Linux unit tests only; neither app's screens have been looked at on a device or emulator yet.
 
+## Chat groups and tags (#3334)
+
+| Feature | iPhone | Android | Gap / follow-up |
+| --- | --- | --- | --- |
+| Groups with colours and tags on chats ([spec](../agents/chat-groups.md), desktop since #3335): the list clusters chats by group and shows tags; the title reads group / #tags / title | Not built. `chatGroup` and `tags` already sync and are on the phone allowlist; the groups' names and colours are per-computer localStorage prefs the phone cannot read | Same | [#3478](https://github.com/nekko-labs/nekko-agent/issues/3478) (iPhone), [#3479](https://github.com/nekko-labs/nekko-agent/issues/3479) (Android) |
+
 ## Pending response messages (#2476, #2497)
 
 Both phones keep in-chat answers and one-time Allow/Deny as pending response messages: the iPhone since #2499 (2026-11-13), Android since [#2497](https://github.com/nekko-labs/nekko-agent/issues/2497) (2026-11-16, JVM-tested and emulator-verified, not on a physical phone).
@@ -136,10 +142,18 @@ Nothing is recorded as a true OS exclusive yet.
 | --- | --- | --- | --- |
 | Relay reconnect backoff has 0 to 50% random jitter (#3385) | Implemented, unit-tested in NekkoProtocol | Not implemented: fixed 1, 2, 4 ... 30 s | https://github.com/nekko-labs/nekko-agent/issues/3392 |
 
+## Performance pass (iPhone first, 2026-11-26)
+
+| Feature | iPhone | Android | Follow-up |
+| --- | --- | --- | --- |
+| Streamed text is folded in once per display frame (#3387) | Implemented, unit-tested in NekkoKit | Not implemented: one state update per token | https://github.com/nekko-labs/nekko-agent/issues/3432 |
+| Mermaid web view released when idle, disk cache pruned to 30 days and 64 MB (#3389) | Implemented, unit-tested in NekkoKit | Not implemented: the web view lives for the process and the disk cache grows | https://github.com/nekko-labs/nekko-agent/issues/3436 |
+
 ## Performance pass (Android, 2026-11-26)
 
 | Feature | iPhone | Android | Follow-up |
 | --- | --- | --- | --- |
 | Chat re-reads skip the skills read | Implemented (#3388) | Implemented (#3415) | None |
 | Paged chat open (`session:page`, tail first, older on scroll) | Waits for the engine | Waits for the engine | Engine: [#3439](https://github.com/nekko-labs/nekko-agent/issues/3439); client: iPhone [#3388](https://github.com/nekko-labs/nekko-agent/issues/3388), Android [#3415](https://github.com/nekko-labs/nekko-agent/issues/3415). Both use the contract in #3439. |
+| Search inside chat messages (`sessions:finderText`, a snippet of the matching line) | Planned | Planned | [#3448](https://github.com/nekko-labs/nekko-agent/issues/3448): the engine side ships first; both apps follow in the same stack. See [search-inside-chat-messages.md](search-inside-chat-messages.md). |
 

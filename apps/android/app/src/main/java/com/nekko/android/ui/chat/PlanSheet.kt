@@ -21,7 +21,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.GenericShape
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -36,6 +39,10 @@ import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material.icons.outlined.LocalOffer
 import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.WbSunny
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.IconButton
+import com.nekko.android.data.PlanDisplay
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -82,87 +89,127 @@ import com.nekko.protocol.SessionSummary
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun PlanSheet(plan: ChatViewModel.PlanUi, showPrs: Boolean, onOpenChat: (String) -> Unit) {
+fun PlanSheet(plan: ChatViewModel.PlanUi, mode: PlanDisplay, onMode: (PlanDisplay) -> Unit, showPrs: Boolean, onOpenChat: (String) -> Unit) {
     val p = Nekko.palette
-    var open by remember { mutableStateOf(false) }
+    if (mode == PlanDisplay.HIDDEN) return
+    var open by remember(mode) { mutableStateOf(mode == PlanDisplay.FULL) }
+    var completedOpen by remember { mutableStateOf(false) }
+    var menu by remember { mutableStateOf(false) }
     val tapped = remember { mutableStateMapOf<String, Boolean>() }
     val steps = plan.plan
     val sheetLabel = stringResource(R.string.plan_sheet)
+    val shoulder = with(LocalDensity.current) { 12.dp.toPx() }
+    val outline = remember(shoulder) { GenericShape { size, _ ->
+        val r = shoulder
+        val w = size.width
+        val h = size.height
+        moveTo(0f, h)
+        arcTo(Rect(-r, h - 2*r, r, h), 90f, -90f, false)
+        lineTo(r, r)
+        arcTo(Rect(r, 0f, 3*r, 2*r), 180f, 90f, false)
+        lineTo(w - 2*r, 0f)
+        arcTo(Rect(w - 3*r, 0f, w - r, 2*r), 270f, 90f, false)
+        lineTo(w - r, h - r)
+        arcTo(Rect(w - r, h - 2*r, w + r, h), 180f, -90f, false)
+        close()
+    } }
     Column(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
+            .padding(horizontal = 4.dp)
+            .clip(outline)
             .background(p.surface2)
             .background(p.accent.copy(alpha = 0.08f))
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .padding(start = 24.dp, end = 24.dp, top = 6.dp, bottom = 2.dp)
             .semantics { contentDescription = sheetLabel }
             .testTag("chat.planSheet"),
     ) {
-        if (!open) Folded(plan, showPrs, onOpenChat) { open = true }
+        val compact = !open && !plan.current.squeezed
+        val configure: @Composable () -> Unit = {
+            Box {
+                IconButton(onClick = { menu = true }, modifier = Modifier.size(32.dp)) {
+                    Icon(painterResource(R.drawable.ic_plan_sliders), stringResource(R.string.plan_display_configure), tint = p.inkFaint, modifier = Modifier.size(18.dp))
+                }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    PlanDisplay.entries.forEach { option -> DropdownMenuItem(text = { Text(stringResource(option.label)) }, onClick = { menu = false; open = option == PlanDisplay.FULL; onMode(option) }) }
+                }
+            }
+        }
+        if (compact) Folded(plan, showPrs, onOpenChat, configure) { open = true }
         else {
             val done = AgentPlan.finished(steps)
             val openLabel = stringResource(R.string.plan_open_label, done, steps.size)
             Row(
-                Modifier.fillMaxWidth().heightIn(min = 40.dp).clickable(role = Role.Button) { open = false }
+                Modifier.fillMaxWidth().heightIn(min = 40.dp).clickable(role = Role.Button) { open = !open }
                     .semantics(mergeDescendants = true) { contentDescription = openLabel }.testTag("chat.planOpen"),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(stringResource(R.string.plan_title), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = p.inkSoft)
-                Text(stringResource(R.string.plan_done_of, done, steps.size), style = MaterialTheme.typography.labelMedium, color = p.inkFaint, modifier = Modifier.weight(1f))
+                Text(stringResource(R.string.plan_title), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = p.inkSoft, modifier = Modifier.weight(1f))
+                configure()
+                Text(stringResource(R.string.plan_done_of, done, steps.size), style = MaterialTheme.typography.labelMedium, color = p.inkFaint)
                 Icon(Icons.Filled.KeyboardArrowDown, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(18.dp))
             }
-            val opened = AgentPlan.openByDefault(steps, plan.links)
-            Column(Modifier.heightIn(max = 280.dp).verticalScroll(rememberScrollState())) {
-                steps.forEach { step ->
-                    val own = plan.links[step.id]
-                    val kids = own?.subagents.orEmpty().mapNotNull { id -> plan.children.firstOrNull { it.id == id } }
-                    val prs = if (showPrs) own?.prs.orEmpty() else emptyList()
-                    val chips = prs.isNotEmpty() || own?.projects?.isNotEmpty() == true || kids.isNotEmpty()
-                    val more = step.detail != null || chips
-                    val shown = !step.squeezed || (tapped[step.id] ?: (step.id == opened))
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .then(if (step.squeezed && more) Modifier.clickable { tapped[step.id] = !shown } else Modifier)
-                            .padding(vertical = 4.dp)
-                            .testTag("chat.planStep.${step.id}"),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        StepMark(step, plan.paused)
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                // The loop kind sits in a fixed column, as on the desktop.
-                                Box(Modifier.width(52.dp)) { step.kind?.let { KindLabel(it, step.status == PlanStep.Status.ACTIVE) } }
-                                Text(
-                                    step.title, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                    color = if (step.squeezed) p.inkSoft else p.ink,
-                                    textDecoration = if (step.status == PlanStep.Status.SKIPPED) TextDecoration.LineThrough else null,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                PassLabel(step)
-                            }
-                            AnimatedVisibility(more && shown, enter = fadeIn(tween(120)), exit = fadeOut(tween(120))) {
-                                Column(Modifier.padding(start = 60.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                    step.detail?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = p.inkFaint, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                                    if (chips) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                        own?.projects.orEmpty().forEach { ProjectChip(it) }
-                                        kids.forEach { SubagentChip(it, onOpenChat) }
-                                        prs.forEach { PrChip(it, plan.prs) }
-                                    }
+        }
+        val opened = AgentPlan.openByDefault(steps, plan.links)
+        Column(Modifier.heightIn(max = 280.dp).verticalScroll(rememberScrollState())) {
+            val unfinished = steps.filterNot { it.squeezed }
+            val visible = if (compact) unfinished.filter { it.id != plan.current.id }.sortedBy { it.status != PlanStep.Status.ACTIVE }.take(if (mode == PlanDisplay.ONE) 0 else 2) else unfinished
+            val completed = steps.filter { it.squeezed }
+            @Composable fun StepRow(step: PlanStep) {
+                val own = plan.links[step.id]
+                val kids = own?.subagents.orEmpty().mapNotNull { id -> plan.children.firstOrNull { it.id == id } }
+                val prs = if (showPrs) own?.prs.orEmpty() else emptyList()
+                val chips = prs.isNotEmpty() || own?.projects?.isNotEmpty() == true || kids.isNotEmpty()
+                val more = step.detail != null || chips
+                val shown = !step.squeezed || (tapped[step.id] ?: (step.id == opened))
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .then(if (step.squeezed && more) Modifier.clickable { tapped[step.id] = !shown } else Modifier)
+                        .padding(vertical = 4.dp)
+                        .testTag("chat.planStep.${step.id}"),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    StepMark(step, plan.paused)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            // The loop kind sits in a fixed column, as on the desktop.
+                            Box(Modifier.width(52.dp)) { step.kind?.let { KindLabel(it, step.status == PlanStep.Status.ACTIVE) } }
+                            Text(
+                                step.title, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                color = if (step.squeezed) p.inkSoft else p.ink,
+                                textDecoration = if (step.status == PlanStep.Status.SKIPPED) TextDecoration.LineThrough else null,
+                                modifier = Modifier.weight(1f),
+                            )
+                            PassLabel(step)
+                        }
+                        AnimatedVisibility(more && shown && (!compact || step.squeezed), enter = fadeIn(tween(120)), exit = fadeOut(tween(120))) {
+                            Column(Modifier.padding(start = 60.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                step.detail?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = p.inkFaint, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                if (chips) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    own?.projects.orEmpty().forEach { ProjectChip(it) }
+                                    kids.forEach { SubagentChip(it, onOpenChat) }
+                                    prs.forEach { PrChip(it, plan.prs) }
                                 }
                             }
                         }
                     }
                 }
             }
+            visible.forEach { step -> androidx.compose.runtime.key(step.id) { StepRow(step) } }
+            if (completed.isNotEmpty()) {
+                Text(stringResource(R.string.plan_completed_group, completed.size), style = MaterialTheme.typography.labelSmall,
+                    color = p.inkSoft, modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { completedOpen = !completedOpen }
+                        .testTag("chat.planCompleted").padding(vertical = 4.dp))
+                if (completedOpen) completed.forEach { step -> androidx.compose.runtime.key(step.id) { StepRow(step) } }
+            }
         }
     }
 }
 
 @Composable
-private fun Folded(plan: ChatViewModel.PlanUi, showPrs: Boolean, onOpenChat: (String) -> Unit, onOpen: () -> Unit) {
+private fun Folded(plan: ChatViewModel.PlanUi, showPrs: Boolean, onOpenChat: (String) -> Unit, configure: @Composable () -> Unit, onOpen: () -> Unit) {
     val p = Nekko.palette
     val steps = plan.plan
     val current = plan.current
@@ -191,6 +238,7 @@ private fun Folded(plan: ChatViewModel.PlanUi, showPrs: Boolean, onOpenChat: (St
                 color = if (current.status == PlanStep.Status.DONE) p.inkSoft else p.ink, modifier = Modifier.weight(1f),
             )
             PassLabel(current)
+            configure()
             Text(stringResource(R.string.plan_position, position, steps.size), style = MaterialTheme.typography.labelSmall, color = p.inkFaint)
             Icon(Icons.Filled.KeyboardArrowUp, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(18.dp))
         }

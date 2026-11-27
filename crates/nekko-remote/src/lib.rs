@@ -21,6 +21,7 @@ pub mod phone;
 pub mod phone_artifacts;
 pub mod phone_changes;
 pub mod phone_files;
+pub mod phone_finder;
 pub mod phone_git;
 pub mod phone_image;
 pub mod phone_providers;

@@ -10,3 +10,5 @@ coverage
 docs/screenshots
 .DS_Store
 target
+**/target
+.worktrees

@@ -9,9 +9,9 @@
 use crate::capacity::{FitRequest, Hardware, PlanOptions, compute_fit};
 use crate::launch::{
     Companions, build_args, diffusion_args, explain_load_error, is_missing_dll_exit, missing_dll_message, mlx_args,
-    resolve_companions, unsupported_load_reason,
+    mlx_dflash2_args, resolve_companions, unsupported_load_reason,
 };
-use crate::library::{default_context_tokens, model_facts_for};
+use crate::library::{default_context_tokens, model_facts_for, validate_mlx_dflash2_pair};
 use crate::load_check::{EngineInUse, Level, load_check};
 use crate::{BoxFuture, num};
 use nekko_tools::path::native as path;
@@ -780,10 +780,35 @@ impl ModelServer {
         };
         let image = model.get("modality").and_then(Value::as_str) == Some("image");
         let mlx = model.get("format").and_then(Value::as_str) == Some("mlx");
+        let is_dflash2 = |m: &Value| m["format"] == "mlx" && m["modality"] == "draft";
+        if is_dflash2(&model) {
+            let message = unsupported_load_reason(&model).expect("draft models are not standalone");
+            self.set_error(id, &message);
+            return reply(false, message);
+        }
+        // Inspect the explicitly selected draft before choosing a runtime or
+        // evicting other models. Ordinary drafts retain their old fallback.
+        let draft_id = params.get("draftModelId").filter(|d| nekko_js::truthy(Some(d))).map(nekko_js::display);
+        let draft = match &draft_id {
+            Some(d) => self.env.find_model(d.clone()).await,
+            None => None,
+        };
+        let dflash2 =
+            draft.as_ref().filter(|d| is_dflash2(d)).filter(|_| params.get("speculative") != Some(&Value::Bool(false)));
+        let target_path = text(model.get("path"));
+        if let Some(draft) = dflash2
+            && (image || !mlx || !validate_mlx_dflash2_pair(&target_path, &text(draft.get("path"))))
+        {
+            let message = "The selected MLX DFlash2 draft requires a matching stock Qwen3.8-27B MLX target.";
+            self.set_error(id, message);
+            return reply(false, message);
+        }
         let engine = self
             .env
             .engine(if image {
                 "diffusion"
+            } else if dflash2.is_some() {
+                "mlx-dflash2"
             } else if mlx {
                 "mlx"
             } else {
@@ -793,6 +818,9 @@ impl ModelServer {
         let Some(Engine { bin, in_use }) = engine else {
             let message = if image {
                 "Install stable-diffusion.cpp from Model Server to run this image-generation model.".to_string()
+            } else if dflash2.is_some() {
+                "MLX DFlash2 requires an Apple Silicon Mac with mlx_vlm.server (mlx-vlm 0.8.1) on the daemon's PATH."
+                    .to_string()
             } else if mlx {
                 if nekko_js::truthy(model.get("mlxRunnable")) {
                     "Install MLX from Model Server to run this model.".to_string()
@@ -910,10 +938,8 @@ impl ModelServer {
 
         // A draft model must be the same kind of file as its target.
         let mut draft_path = None;
-        if let Some(draft_id) = params.get("draftModelId").filter(|d| nekko_js::truthy(Some(d))) {
-            let draft_id = nekko_js::display(draft_id);
-            let draft = self.env.find_model(draft_id.clone()).await;
-            match draft {
+        if let Some(draft_id) = draft_id {
+            match &draft {
                 Some(d) if (d.get("format").and_then(Value::as_str) == Some("mlx")) == mlx => {
                     draft_path = Some(text(d.get("path")));
                 }
@@ -943,11 +969,14 @@ impl ModelServer {
                 self.env.companions_dir(id).as_deref(),
                 self.env.image_companions_dir().as_deref(),
             )
+        } else if let Some(draft) = dflash2 {
+            Ok(mlx_dflash2_args(&target_path, DAEMON_PORT, &text(draft.get("path"))))
         } else if mlx {
             Ok(mlx_args(&model, DAEMON_PORT, &params, draft_path.as_deref()))
         } else {
             let flags = self.env.flags(bin.clone()).await;
             companions.draft_model = draft_path.clone();
+            companions.draft_arch = draft.as_ref().and_then(|d| d["architecture"].as_str()).map(str::to_string);
             let mut p = params.as_object().cloned().unwrap_or_default();
             match &context {
                 Some(c) if !c.is_null() => {
@@ -997,7 +1026,14 @@ impl ModelServer {
             "healthPath": if image { "/v1/models" } else { "/health" },
         });
         let mut spec = spec.as_object().cloned().unwrap_or_default();
-        if !image {
+        if dflash2.is_some() {
+            // mlx-vlm reports HTTP 200 during background preload and will
+            // report model_ready even if it fell back to target-only decoding.
+            spec.insert("healthExpect".into(), json!("\"model_ready\":true"));
+            spec.insert("healthReadyLog".into(), json!("Drafter ready; speculative decoding enabled."));
+            spec.insert("upstreamModel".into(), json!(target_path));
+            spec.insert("env".into(), json!({ "HF_HUB_OFFLINE": "1" }));
+        } else if !image {
             spec.insert("healthExpect".into(), json!("\"ok\""));
         }
         spec.insert("budgetSecs".into(), json!(LOAD_BUDGET_SECS));

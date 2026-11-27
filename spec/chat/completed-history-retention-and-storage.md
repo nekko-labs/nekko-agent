@@ -18,7 +18,7 @@ Archiving a chat tidies the agent list, not its saved history. Archived rows and
 
 ## Settings controls (implemented)
 
-Settings → General → Chat history shows storage usage, warns at 1 GB (1,000,000,000 bytes), offers the five cleanup ranges with an explicit irreversible-deletion confirmation, and links to the existing Nekko Cloud sync section. Sync is not automatic local offloading and must not be presented as freeing local bytes.
+Settings → Storage → Chat history (under General until 2026-11-26, which now links there; see [Storage](../desktop/storage-settings.md)) shows storage usage, warns at 1 GB (1,000,000,000 bytes), offers the five cleanup ranges with an explicit irreversible-deletion confirmation, and links to the existing Nekko Cloud sync section. Sync is not automatic local offloading and must not be presented as freeing local bytes.
 
 ## Verification and boundaries
 

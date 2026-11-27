@@ -169,6 +169,20 @@ fn orchestrate_is_a_boolean_for_one_chat_and_survives_stale_turn_saves() {
 }
 
 #[test]
+fn set_options_keeps_a_chat_group_and_null_clears_it() {
+    let data = std::env::temp_dir().join(format!("nekko-chat-group-{}", std::process::id()));
+    let store = SessionStore::new(&data);
+    let s = store.create(Some("w1")).unwrap();
+    let id = s["id"].as_str().unwrap();
+    let saved = store.set_options(id, &serde_json::json!({ "chatGroup": "Frontend fixes" })).unwrap().unwrap();
+    assert_eq!(saved["chatGroup"], "Frontend fixes");
+    assert_eq!(store.get(id).unwrap()["chatGroup"], "Frontend fixes");
+    let cleared = store.set_options(id, &serde_json::json!({ "chatGroup": null })).unwrap().unwrap();
+    assert!(cleared["chatGroup"].is_null());
+    std::fs::remove_dir_all(&data).ok();
+}
+
+#[test]
 fn creates_and_deletes_chats_the_way_the_ts_host_does() {
     let data = std::env::temp_dir().join(format!("nekko-create-{}", std::process::id()));
     let store = SessionStore::new(&data);

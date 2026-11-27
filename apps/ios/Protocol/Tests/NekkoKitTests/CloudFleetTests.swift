@@ -19,7 +19,7 @@ final class CloudFleetTests: XCTestCase {
             secrets.set("cloud.state", String(decoding: try! JSONEncoder().encode(state), as: UTF8.self))
         }
         return CloudSync(api: URL(string: "https://api.test")!, http: http, secrets: secrets, files: nil,
-                         deviceLabel: "iPhone", retryWaits: [.milliseconds(1), .milliseconds(1)], key: { SyncCrypto.SoftwareKey() })
+                         deviceLabel: "iPhone", retry: .instant, key: { SyncCrypto.SoftwareKey() })
     }
 
     func testGateRequiresEnabledSignedInAndConnected() {
@@ -52,6 +52,25 @@ final class CloudFleetTests: XCTestCase {
             XCTFail("disabled fleet cannot provision")
         } catch {}
         XCTAssertTrue(http.calls.isEmpty)
+    }
+
+    func testAccountSwitchOpensTheFleetAndIsRememberedAcrossLaunches() async throws {
+        let http = HTTP()
+        let secrets = Secrets()
+        let cloud = client(http, secrets)
+        http.features = .object(["cloud-machines": .bool(true)])
+        try await cloud.refresh()
+        XCTAssertTrue(cloud.fleetEnabled)
+        XCTAssertTrue(relaunch(secrets).fleetEnabled, "a relaunch shows the machines screens before the next refresh")
+        http.features = .object(["cloud-machines": .bool(false)])
+        try await cloud.refresh()
+        XCTAssertFalse(cloud.fleetEnabled)
+        XCTAssertFalse(relaunch(secrets).fleetEnabled)
+    }
+
+    private func relaunch(_ secrets: Secrets) -> CloudSync {
+        CloudSync(api: URL(string: "https://api.test")!, http: HTTP(), secrets: secrets, files: nil,
+                  deviceLabel: "iPhone", retry: .instant, key: { SyncCrypto.SoftwareKey() })
     }
 
     func testEnabledSignedOutDoesNotFetch() async {
@@ -91,7 +110,7 @@ final class CloudFleetTests: XCTestCase {
         cloud.link(cloud.machines[0], computer: "paired")
         XCTAssertEqual(cloud.fleetExcludedComputerIds(pairedComputerIds: ["paired"]), ["paired"])
         http.fleetStatus = 503
-        do { try await cloud.loadMachines(); XCTFail("fetch should fail") } catch {}
+        do { try await cloud.loadMachines(force: true); XCTFail("fetch should fail") } catch {}
         XCTAssertFalse(cloud.fleetConnected)
         XCTAssertTrue(cloud.machines.isEmpty)
         XCTAssertTrue(cloud.machineLinks.isEmpty)
@@ -357,5 +376,42 @@ final class CloudFleetTests: XCTestCase {
         try await fetch.value
         XCTAssertFalse(cloud.fleetConnected)
         XCTAssertTrue(cloud.machines.isEmpty)
+    }
+
+    final class Clock: @unchecked Sendable {
+        private let lock = NSLock()
+        private var t = Date(timeIntervalSince1970: 1_800_000_000)
+        var date: Date { lock.lock(); defer { lock.unlock() }; return t }
+        func advance(_ s: TimeInterval) { lock.lock(); t += s; lock.unlock() }
+    }
+
+    func testMachinesLoadedAMomentAgoAreNotFetchedAgain() async throws {
+        let http = HTTP()
+        http.machines = [machine]
+        let secrets = Secrets()
+        secrets.set("cloud.token", "nk_test")
+        let state = CloudSync.State(account: .init(id: "account-1", email: "test@example.test", plan: "pro", canSync: true), keysAccount: "account-1")
+        secrets.set("cloud.state", String(decoding: try! JSONEncoder().encode(state), as: UTF8.self))
+        let clock = Clock()
+        let cloud = CloudSync(api: URL(string: "https://api.test")!, http: http, secrets: secrets, files: nil, deviceLabel: "iPhone",
+                              retry: .instant, key: { SyncCrypto.SoftwareKey() })
+        cloud.now = { clock.date }
+        cloud.fleetEnabled = true
+        try await cloud.loadMachines()
+        XCTAssertEqual(http.calls.map { $0.1 }, ["/v1/auth/me", "/v1/machines"])
+        clock.advance(2)
+        try await cloud.loadMachines()
+        XCTAssertEqual(http.calls.count, 2, "two screens share one fetch")
+        XCTAssertEqual(cloud.machines.count, 1)
+        try await cloud.loadMachines(force: true)
+        XCTAssertEqual(http.calls.count, 4, "force asks again")
+        clock.advance(6)
+        try await cloud.loadMachines()
+        XCTAssertEqual(http.calls.count, 6, "stale after 5 s")
+        // Turning the fleet off and on drops what was loaded.
+        cloud.fleetEnabled = false
+        cloud.fleetEnabled = true
+        try await cloud.loadMachines()
+        XCTAssertEqual(http.calls.count, 8)
     }
 }

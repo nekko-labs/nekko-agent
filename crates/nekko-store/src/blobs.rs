@@ -84,7 +84,7 @@ pub(crate) fn store_inline(dir: &Path, url: &str) -> Option<String> {
 }
 
 /// The data URL a reference stands for, or `None` when it is not one or its file is gone.
-fn load(dir: &Path, reference: &str) -> Option<String> {
+pub(crate) fn load(dir: &Path, reference: &str) -> Option<String> {
     let name = reference.strip_prefix(REF)?;
     if !valid_name(name) {
         return None;

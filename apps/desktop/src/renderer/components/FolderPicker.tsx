@@ -253,7 +253,7 @@ export function FolderPicker({ sessionId, session, disabled, onChange, selectedS
         title={selectedSummary && selected.length ? `${selected.map((f) => f.path).join('\n')}${disabled ? '\nThe environment can change once the reply finishes' : ''}` : disabled ? 'The environment can change once the reply finishes' : primary?.path ?? 'Choose the folders and repositories this agent works in'}
       >
         <FolderIcon className="h-3.5 w-3.5 shrink-0" />
-        <span className="truncate">{selectedSummary ? names || 'No folder' : primary?.name ?? 'No folder'}</span>
+        <span className="folder-summary-label truncate">{selectedSummary ? names || 'No folder' : primary?.name ?? 'No folder'}</span>
         <span className="ctl-caret">▾</span>
       </button>
       {open && createPortal(

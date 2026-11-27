@@ -21,7 +21,7 @@
 .monitors-dock[data-dock-side='bottom'] {
   flex: 0 0 auto;
   width: 100%;
-  max-height: 360px;
+  max-height: var(--dock-height, 360px);
 }
 .monitors-dock[data-dock-side='top'] { order: -1; }
 .monitors-dock[data-dock-side='bottom'] { order: 1; }
@@ -161,6 +161,11 @@
 @media (hover: hover) {
   .monitors-dock__resize:hover > .monitors-dock__grip { opacity: 1; }
 }
+/* Docked above or below the wall, the handle lies along the dock's inner edge,
+   in the gap to the wall, and drags the height. */
+.monitors-dock:is([data-dock-side='top'], [data-dock-side='bottom']) .monitors-dock__resize { top: auto; bottom: -9px; left: 0; right: 0; width: auto; height: 10px; cursor: row-resize; }
+.monitors-dock[data-dock-side='bottom'] .monitors-dock__resize { top: -9px; bottom: auto; }
+.monitors-dock:is([data-dock-side='top'], [data-dock-side='bottom']) .monitors-dock__grip { top: 50%; bottom: auto; left: 0; right: 0; width: auto; height: 3px; transform: translateY(-50%); }
 @media (prefers-reduced-motion: reduce) { .monitors-dock__grip { transition: none; } }
 @media (max-width: 767px) { .monitors-dock__resize { display: none; } }
 @media (prefers-reduced-motion: reduce) { .monitors-dock__minimized button { animation: none; } }
@@ -304,6 +309,8 @@
 @media (prefers-reduced-motion: reduce) { .monitors-dock { transition: none; transform: none; } }
 
 .monitors-dock:is([data-dock-side='top'], [data-dock-side='bottom']) { height: auto; }
+/* Open above or below the wall, let the height grip show past the dock's edge. */
+.monitors-dock:is([data-dock-side='top'], [data-dock-side='bottom'])[data-panel-open='true'] { clip-path: inset(-10px); }
 .monitors-dock:is([data-dock-side='top'], [data-dock-side='bottom'])[data-panel-open='false'] { height: 0; }
 @starting-style { .monitors-dock:is([data-dock-side='top'], [data-dock-side='bottom'])[data-panel-open='true'] { height: 0; } }
 

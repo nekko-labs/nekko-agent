@@ -4,6 +4,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LocalImageCard } from './LocalImageCard.js';
 import { MarkdownSandbox, MarkdownSession, Markdown } from './Markdown.js';
 import { ChatArtifacts } from './ChatArtifacts.js';
+import { ChatImages } from '../remoteImages.js';
+
+const viewer = { open: vi.fn(), trusted: () => false, menu: vi.fn() };
 
 const hooks = vi.hoisted(() => ({ effects: [] as Array<() => void | (() => void)>, set: vi.fn(), state: null as unknown, open: vi.fn(), library: vi.fn() }));
 vi.mock('react', async importOriginal => {
@@ -46,17 +49,29 @@ describe('local image cards', () => {
     expect(out).toContain('max-h-[640px]');
     expect(out).not.toContain('<svg');
     expect(out).not.toContain('<iframe');
+    expect(out).not.toContain('in photo viewer');
+  });
+  it('makes only loaded previews in a chat activatable, separate from Open source', () => {
+    const card = <ChatImages.Provider value={viewer}><LocalImageCard src="/a.png" title="Before: Example" /></ChatImages.Provider>;
+    expect(renderToStaticMarkup(card)).not.toContain('in photo viewer');
+    hooks.state = { target: '/a.png', data: 'data:image/png;base64,AAAA', error: '' };
+    const loaded = renderToStaticMarkup(card);
+    expect(loaded).toMatch(/<button[^>]*aria-label="Open Before: Example in photo viewer"><img[^>]*alt="Before: Example"[^>]*\/><\/button>/);
+    expect(loaded).toContain('Open source');
+    hooks.state = { target: '/a.png', data: '', error: 'Could not read image' };
+    expect(renderToStaticMarkup(card)).not.toContain('in photo viewer');
   });
   it('never reads host files in Sandbox, including artifact cards', async () => {
     const readFile = vi.fn();
     vi.stubGlobal('window', { nekko: { readFile } });
     hooks.state = { target: '/a.svg', data: 'data:image/svg+xml;charset=utf-8,%3Csvg%2F%3E', error: '' };
-    const out = renderToStaticMarkup(<MarkdownSandbox.Provider value><Markdown text="![Image](/a.svg)" /><ChatArtifacts artifacts={[{ path: '/b.png', title: 'Photo', filename: 'b.png' }]} sessionId="s" /></MarkdownSandbox.Provider>);
+    const out = renderToStaticMarkup(<ChatImages.Provider value={viewer}><MarkdownSandbox.Provider value><Markdown text="![Image](/a.svg)" /><ChatArtifacts artifacts={[{ path: '/b.png', title: 'Photo', filename: 'b.png' }]} sessionId="s" /></MarkdownSandbox.Provider></ChatImages.Provider>);
     await runEffects();
     expect(readFile).not.toHaveBeenCalled();
     expect(out).not.toContain('<img');
     expect(out).toContain('disabled');
     expect(out).toContain('unavailable in Sandbox');
+    expect(out).not.toContain('in photo viewer');
   });
   it('never reads remote images as files, never mounts a remote src, and leaves network paths alone', async () => {
     const readFile = vi.fn();

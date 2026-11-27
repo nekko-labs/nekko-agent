@@ -26,6 +26,7 @@
 //! Merging is per chat, newest `updatedAt` wins; a chat a turn is running in
 //! is never overwritten (its local copy is newer by the time it saves).
 
+mod coalesce;
 mod fleet_link;
 mod http;
 pub mod library;
@@ -56,7 +57,10 @@ use zeroize::Zeroize;
 
 pub use fleet_link::{ConnectInfo, FleetAdmitted, FleetTarget, HelloBinding};
 pub use http::client;
-pub use org_records::LocalModel;
+pub use org_records::{LocalModel, RunnerSummary};
+/// How many wanted pictures are fetched at once.
+const PICTURE_FETCHES: usize = 3;
+
 pub use orgs::{HEARTBEAT, HostInfo, ModelFuture};
 
 pub const CHANNELS: &[&str] = &[
@@ -96,6 +100,7 @@ pub const CHANNELS: &[&str] = &[
     "fleet:setSharing",
     "fleet:list",
     "fleet:status",
+    "fleet:runners",
 ];
 
 /// Pushed whenever the status changes (the animation follows `sync.phase` and `sync.progress`).
@@ -186,6 +191,8 @@ pub struct Cloud {
     share: tokio::sync::Mutex<()>,
     /// The Nekko Cloud Relay account channel: presence and sync nudges (decision 0116).
     relay: relay_channel::Channel,
+    /// When `refresh` last finished; held while `cloud:refresh` runs so concurrent callers share it.
+    refreshed: tokio::sync::Mutex<coalesce::Refreshed>,
     /// Relay tickets kept until they are due for renewal (`renewAfterSeconds`).
     tickets: pace::Tickets,
     /// A pass started by a Relay nudge is waiting out its jitter; more nudges join it.
@@ -231,6 +238,7 @@ impl Cloud {
             host: Mutex::new(None),
             share: tokio::sync::Mutex::new(()),
             relay: relay_channel::Channel::default(),
+            refreshed: tokio::sync::Mutex::new(coalesce::Refreshed::default()),
             tickets: pace::Tickets::default(),
             nudge_pending: pace::Pending::default(),
             lease_seconds: std::sync::atomic::AtomicU64::new(0),
@@ -293,7 +301,7 @@ impl Cloud {
         match channel {
             "cloud:status" => Ok(self.status()),
             "cloud:refresh" => {
-                self.refresh().await?;
+                self.refresh_coalesced().await?;
                 Ok(self.status())
             }
             "cloud:sendCode" => self.send_code(&arg(args, 0)).await,
@@ -440,6 +448,22 @@ impl Cloud {
                 (404, _) => "Nekko Cloud Relay isn't available for this account yet.".into(),
                 (401, _) => "Sign in to Nekko Cloud again to use Nekko Cloud Relay.".into(),
                 _ => format!("Couldn't get a Nekko Cloud Relay ticket: {}", err.message),
+            }),
+        }
+    }
+
+    /// Tells Nekko Cloud which CI runners its picker may send jobs to (decision 0064), or
+    /// takes this computer out with `None`. Errors are what the owner reads.
+    pub async fn runner_presence(&self, body: Option<Value>) -> Result<(), String> {
+        let token = self.token().map_err(|_| "Sign in to Nekko Cloud to use the Nekko Cloud picker.".to_string())?;
+        let method = if body.is_some() { reqwest::Method::PUT } else { reqwest::Method::DELETE };
+        match self.api.send(&token, method, "/v1/runners/presence", body).await {
+            Ok(_) => Ok(()),
+            Err(err) => Err(match (err.status, err.code.as_str()) {
+                (402, _) => "The Nekko Cloud picker is part of Nekko Cloud Pro.".into(),
+                (404, _) => "The Nekko Cloud picker isn't available for this account yet.".into(),
+                (401, _) => "Sign in to Nekko Cloud again to use the Nekko Cloud picker.".into(),
+                _ => format!("Nekko Cloud didn't take this Mac's runners: {}", err.message),
             }),
         }
     }
@@ -674,6 +698,20 @@ impl Cloud {
                 "usage": live.remote.as_ref().and_then(|r| r.get("usage")).cloned(),
             },
         })
+    }
+
+    /// `cloud:refresh` from a window: the account and sync state are read again unless a refresh
+    /// finished in the last few seconds (Settings > Sync on every mount, sign-in and Plan on every
+    /// window focus all ask), and callers that arrive together share one.
+    async fn refresh_coalesced(&self) -> Result<(), String> {
+        let token = self.token()?;
+        let mut last = self.refreshed.lock().await;
+        if last.is_fresh(&token, Instant::now(), coalesce::REFRESH_WITHIN) {
+            return Ok(());
+        }
+        self.refresh().await?;
+        last.mark(&token, Instant::now());
+        Ok(())
     }
 
     /// Fetch the account and the sync state from Nekko Cloud.
@@ -1137,7 +1175,13 @@ impl Cloud {
         let record = AccountRecord {
             epoch: 1,
             recovery_public: b64_encode(&recovery_public),
-            devices: vec![TrustedDevice { id: device_id, public_key: b64_encode(&me), label }],
+            devices: vec![TrustedDevice {
+                id: device_id,
+                public_key: b64_encode(&me),
+                label,
+                caps: vec![records::CAP_DEFLATE.into()],
+            }],
+            compressed: false,
         };
         // Held before it is pushed, so a failed push leaves a record to push again.
         let oid = Self::account_oid(&keyring, 1)?;
@@ -1214,7 +1258,12 @@ impl Cloud {
             s.last_error = None;
         })?;
         let label = lock(&self.state).device_label.clone();
-        let me = TrustedDevice { id: device_id, public_key: b64_encode(&me), label };
+        let me = TrustedDevice {
+            id: device_id,
+            public_key: b64_encode(&me),
+            label,
+            caps: vec![records::CAP_DEFLATE.into()],
+        };
         self.update_account(&token, |r| r.add(me.clone())).await?;
         self.sync_once().await?;
         Ok(self.changed())
@@ -1336,7 +1385,8 @@ impl Cloud {
         if !code.verifies(&account_id, &public, &tag) {
             return Err(format!("That code doesn't match {label}. Check the code on that device and type it again."));
         }
-        let joining = TrustedDevice { id: device_id.into(), public_key: b64_encode(&public), label };
+        // Its caps are its own to say: it lists them itself once it syncs (`compression_step`).
+        let joining = TrustedDevice { id: device_id.into(), public_key: b64_encode(&public), label, caps: Vec::new() };
         self.update_account(&token, |r| r.add(joining.clone())).await?;
         let key_id = self.key_id();
         let keyring = self.keyring(key_id).ok_or("This device has no sync keys.")?;
@@ -1538,6 +1588,12 @@ impl Cloud {
         if remote_key > self.key_id() && !self.adopt(token, remote_key).await? {
             return Ok(()); // the new epoch's record isn't written yet
         }
+        self.edit(|s| {
+            if !s.z_ready {
+                s.z_ready = true;
+                s.z_catchup = s.cursor > 0;
+            }
+        })?;
         for _ in 0..3 {
             if !self.pull(token).await? {
                 // A newer epoch appeared mid-pull.
@@ -1546,6 +1602,9 @@ impl Cloud {
                     return Ok(());
                 }
                 continue;
+            }
+            if !pull_only && self.compression_step(token).await? {
+                self.pull(token).await?;
             }
             // Pictures chats here are still waiting for; one that fails waits for the next pass.
             let _ = self.fetch_wanted_pictures(token).await;
@@ -1559,6 +1618,46 @@ impl Cloud {
         // Org keys written under an older account epoch are written again for the other devices.
         let _ = self.reseal_org_keys(token).await;
         Ok(())
+    }
+
+    /// After a pull has read the account record (decision 0124): pull again from the start once if
+    /// this computer predates deflated records and the account has used them (true then), and list
+    /// that this computer opens them. Listing it is a one-time write that never fails a pass.
+    async fn compression_step(&self, token: &str) -> Result<bool, String> {
+        let key_id = self.key_id();
+        let Some(record) = self.account_record().filter(|r| r.epoch == key_id) else { return Ok(false) };
+        let mut again = false;
+        if lock(&self.state).z_catchup {
+            // The saved copy may come from a build that dropped the mark: ask for the newest.
+            let mut used = record.compressed;
+            if !used
+                && let (Ok(account_id), Some(keyring)) = (self.account_id(), self.keyring(key_id))
+                && let Ok(Some((fresh, _, _))) = self.fetch_account(token, &keyring, &account_id, key_id).await
+            {
+                used = fresh.compressed;
+            }
+            self.edit(|s| {
+                s.z_catchup = false;
+                if used {
+                    s.cursor = 0;
+                    s.rewinds += 1;
+                }
+            })?;
+            again = used;
+        }
+        let me = lock(&self.state).device_id.clone().unwrap_or_default();
+        if record.devices.iter().any(|d| d.id == me && !d.can(records::CAP_DEFLATE)) {
+            let _ = self
+                .update_account(token, |r| {
+                    if let Some(d) = r.devices.iter_mut().find(|d| d.id == me)
+                        && !d.can(records::CAP_DEFLATE)
+                    {
+                        d.caps.push(records::CAP_DEFLATE.into());
+                    }
+                })
+                .await;
+        }
+        Ok(again)
     }
 
     /// Pull and apply everything new. False when it stopped at a record under
@@ -1816,7 +1915,7 @@ impl Cloud {
         })
     }
 
-    /// Fetch, one by one, the pictures chats here refer to that are not beside them yet (a chat
+    /// Fetch, a few at a time, the pictures chats here refer to that are not beside them yet (a chat
     /// that arrived before its picture, or a picture removed here since). One Nekko Cloud has no
     /// record of, or only a tombstone for, is no longer looked for.
     async fn fetch_wanted_pictures(&self, token: &str) -> Result<(), String> {
@@ -1826,26 +1925,25 @@ impl Cloud {
         }
         let account_id = self.account_id()?;
         let Some(keyring) = self.keyring(self.key_id()) else { return Ok(()) };
-        for local in wanted {
-            let name = local.rsplit('\n').next().unwrap_or("");
-            if self.sessions.has_blob(name) {
+        coalesce::for_each_bounded(wanted, PICTURE_FETCHES, |local| {
+            let (account_id, keyring) = (&account_id, &keyring);
+            async move {
+                let name = local.rsplit('\n').next().unwrap_or("");
+                if !self.sessions.has_blob(name) {
+                    let oid = object_id(keyring, records::PICTURE, &local).map_err(|err| err.to_string())?;
+                    match self.api.get(token, &format!("/v1/sync/objects/{}/{oid}", records::PICTURE)).await {
+                        Ok(o) => self.apply(account_id, &o)?,
+                        Err(err) if err.status == 404 => {}
+                        Err(err) => return Err(e(err)),
+                    }
+                }
+                // Arrived, or nothing more will: either way it is not looked for again.
                 self.edit(|s| {
                     s.pictures_wanted.remove(&local);
-                })?;
-                continue;
+                })
             }
-            let oid = object_id(&keyring, records::PICTURE, &local).map_err(|err| err.to_string())?;
-            match self.api.get(token, &format!("/v1/sync/objects/{}/{oid}", records::PICTURE)).await {
-                Ok(o) => self.apply(&account_id, &o)?,
-                Err(err) if err.status == 404 => {}
-                Err(err) => return Err(e(err)),
-            }
-            // Arrived, or nothing more will: either way it is not looked for again.
-            self.edit(|s| {
-                s.pictures_wanted.remove(&local);
-            })?;
-        }
-        Ok(())
+        })
+        .await
     }
 
     /// Another computer's Library file: a read-only copy under `<data>/cloud/library/<folder key>/`,
@@ -2474,6 +2572,8 @@ fn picture_work(
     (sends.into_iter().map(|l| split(l)).collect(), removes)
 }
 
+#[cfg(test)]
+mod compression_tests;
 #[cfg(test)]
 mod idle_tests;
 

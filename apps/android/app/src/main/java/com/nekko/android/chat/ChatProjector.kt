@@ -5,6 +5,7 @@ import com.nekko.protocol.QuestionReplies
 import com.nekko.protocol.Session
 import com.nekko.protocol.Transcript
 import com.nekko.protocol.TurnDetails
+import com.nekko.protocol.TurnStrategy
 
 /**
  * The blocks and footers [ChatController.project] shows, kept between calls so a streamed token
@@ -28,6 +29,9 @@ class ChatProjector {
     var footers: Map<String, TurnDetails> = emptyMap()
         private set
 
+    var strategies: Map<String, TurnStrategy> = emptyMap()
+        private set
+
     private var lastLive: List<Block>? = null
     private var lastMerged: List<Block> = emptyList()
 
@@ -49,6 +53,7 @@ class ChatProjector {
             val lastUser = saved.indexOfLast { it is Block.User }
             savedReplies = saved.drop(lastUser + 1).filterIsInstance<Block.Assistant>().mapTo(HashSet()) { it.text.trim() }
             footers = session?.let { TurnDetails.footers(it.messages) } ?: emptyMap()
+            strategies = session?.let { TurnStrategy.sections(it.messages) } ?: emptyMap()
             lastLive = null
             parses++
         }

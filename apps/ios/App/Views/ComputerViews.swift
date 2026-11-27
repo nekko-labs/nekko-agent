@@ -25,6 +25,8 @@ struct ComputerDetailView: View {
     @State private var iconError: String?
     @State private var modelsExpanded = false
     @State private var modelScope = ModelScope.all
+    @State private var fleetRunners: [FleetRunnerComputer] = []
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
@@ -37,6 +39,10 @@ struct ComputerDetailView: View {
         .appBackground()
         .navigationTitle("Computer")
         .navigationBarTitleDisplayMode(.inline)
+        .task(id: "\(computerId):\(store.activeId ?? ""):\(store.conn):\(scenePhase)") {
+            guard scenePhase == .active else { return }
+            await FleetRunnersSection.poll(store, computerId) { fleetRunners = $0 }
+        }
         .task(id: computerId) {
             // Its details come over the active connection: take its link over (no wait, no Connect).
             if store.activeId != computerId, store.computers.contains(where: { $0.id == computerId }) { store.connect(computerId) }
@@ -167,6 +173,7 @@ struct ComputerDetailView: View {
                 }
             } header: { SectionTitle("Connection") }
             ConnectThroughSection(computer: c)
+            FleetRunnersSection(computerId: c.id, computers: fleetRunners)
             ComputerServiceSection(computerId: c.id)
             // Settings → This computer (SK-8): Security, sign out, stop remote access, quit.
             ThisComputerSection(computerId: c.id)

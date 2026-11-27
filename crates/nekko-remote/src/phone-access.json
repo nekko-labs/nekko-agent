@@ -82,6 +82,7 @@
   "files:read",
   "files:search",
   "files:write",
+  "fleet:runners",
   "git:branches",
   "git:commit",
   "git:commitMessage",
@@ -127,6 +128,7 @@
   "session:setOptions",
   "session:setSupportingWorkspaces",
   "session:watches",
+  "sessions:finderText",
   "sessions:summaries",
   "settings:get",
   "settings:update",
@@ -175,6 +177,8 @@
    "providers:remove",
    "providers:save",
    "settings:reset",
+   "storage:removeRunnerImage",
+   "storage:removeWorktrees",
    "task:create",
    "task:delete",
    "task:update",
@@ -222,6 +226,7 @@
   "changes:list",
   "chat:pending",
   "engine:models",
+  "fleet:runners",
   "limits:get",
   "machine:summary",
   "models:list",
@@ -232,6 +237,7 @@
   "session:get",
   "session:photo",
   "session:watches",
+  "sessions:finderText",
   "sessions:summaries",
   "settings:get",
   "skills:runnable",
@@ -472,6 +478,20 @@
   "description",
   "name"
  ],
+ "fleetComputerView": [
+  "deviceId",
+  "name",
+  "online",
+  "os",
+  "seenAt",
+  "you"
+ ],
+ "fleetRunnerView": [
+  "busy",
+  "label",
+  "slots",
+  "state"
+ ],
  "queueKeys": [
   "clientMessageId",
   "images",
@@ -484,6 +504,7 @@
   "autoModel",
   "autoProviderSwitch",
   "autoQuality",
+  "chatGroup",
   "chatType",
   "cloudOnly",
   "disabledConnectors",
@@ -1100,6 +1121,13 @@
   ]
  },
  "maxFrameBytes": 9437184,
+ "finderView": {
+  "chats": 20,
+  "messages": 300,
+  "textChars": 8000,
+  "files": 20,
+  "bytes": 6291456
+ },
  "upload": {
   "chunkBytes": 3145728,
   "maxBytes": 50000000,

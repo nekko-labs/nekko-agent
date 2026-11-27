@@ -49,6 +49,15 @@ private final class TurnDetailsFixtureConnection: RemoteConnection, @unchecked S
         if channel == Channels.auditRead { return Self.auditTrail }
         guard channel == Channels.sessionGet else { return .null }
         let flags = ProcessInfo.processInfo.arguments
+        if flags.contains("-planFixture") {
+            return ["id": "turn-details-fixture", "title": "CSV import", "updatedAt": 1793800000000,
+                    "messages": [["id": "prompt", "role": "user", "content": "Check the CSV import and publish the totals."]],
+                    "agentPlan": [["id": "read", "title": "Read the importer", "status": "done"],
+                                  ["id": "check", "title": "Check the totals", "status": "active"],
+                                  ["id": "compare", "title": "Compare currencies", "status": "pending"],
+                                  ["id": "review", "title": "Review the report", "status": "pending"],
+                                  ["id": "ship", "title": "Publish totals", "status": "pending"]]]
+        }
         var stats: [String: JSONValue] = [
             "providerId": "used-provider", "modelId": "used-model", "effort": "high",
             "inputTokens": 1000, "cacheReadTokens": 200, "cacheWriteTokens": 100,

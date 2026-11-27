@@ -157,13 +157,14 @@ export function registerSync(app: FastifyInstance, db: Db): void {
   app.get("/v1/sync/state", async (req, reply) => {
     const caller = await guard(req, reply, false);
     if (!caller) return;
-    const [devices, usage, keyId] = await Promise.all([
+    const [devices, usage, keyId, parts] = await Promise.all([
       db.query<{ id: string; label: string; public_key: Buffer; join_tag: Buffer | null; created_at: Date; revoked_at: Date | null }>(
         "select id, label, public_key, join_tag, created_at, revoked_at from sync_devices where user_id = $1 order by created_at",
         [caller.userId],
       ),
       db.query<{ bytes: string }>("select bytes from sync_usage where user_id = $1", [caller.userId]),
       currentKeyId(db, caller.userId),
+      storageParts(db, caller.userId),
     ]);
     return {
       account: caller.userId,
@@ -179,7 +180,7 @@ export function registerSync(app: FastifyInstance, db: Db): void {
         createdAt: d.created_at,
         revokedAt: d.revoked_at,
       })),
-      usage: { bytes: Number(usage.rows[0]?.bytes ?? 0), limit: SYNC_QUOTA[caller.plan] },
+      usage: { bytes: Number(usage.rows[0]?.bytes ?? 0), limit: SYNC_QUOTA[caller.plan], parts },
     };
   });
 
@@ -682,6 +683,19 @@ async function writeOne(tx: Db, userId: string, o: PushObject, have: { revision:
   await upsertOne(tx, userId, o);
   results[at] = { objectId: o.objectId, status: "ok", revision: o.revision };
   return o.blob.length - (kept ? 0 : have?.size ?? 0);
+}
+
+/** What the account's storage holds by kind, for Settings → Storage: every collection but Library is a chat's. */
+async function storageParts(db: Db, userId: string): Promise<{ chats: number; library: number; revisions: number; shares: number }> {
+  const { rows } = await db.query<{ chats: string; library: string; revisions: string }>(
+    `select coalesce(sum(octet_length(blob)) filter (where collection <> $2), 0) as chats,
+            coalesce(sum(octet_length(blob)) filter (where collection = $2), 0) as library,
+            coalesce((select sum(octet_length(blob)) from sync_object_history where user_id = $1), 0) as revisions
+       from sync_objects where user_id = $1`,
+    [userId, LIBRARY_COLLECTION],
+  );
+  const r = rows[0];
+  return { chats: Number(r?.chats ?? 0), library: Number(r?.library ?? 0), revisions: Number(r?.revisions ?? 0), shares: await shareBytes(db, userId) };
 }
 
 /** Bytes the account's shared files and their kept versions hold; they count toward the same storage. */

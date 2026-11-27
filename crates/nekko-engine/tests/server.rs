@@ -56,7 +56,12 @@ fn join(parts: &[&str]) -> String {
 
 fn companions_of(v: Option<&Value>) -> Companions {
     let s = |k: &str| v.and_then(|v| v.get(k)).and_then(Value::as_str).map(str::to_string);
-    Companions { mmproj: s("mmproj"), chat_template_file: s("chatTemplateFile"), draft_model: s("draftModel") }
+    Companions {
+        mmproj: s("mmproj"),
+        chat_template_file: s("chatTemplateFile"),
+        draft_model: s("draftModel"),
+        draft_arch: None,
+    }
 }
 
 #[test]
@@ -251,6 +256,7 @@ impl Env for Fake {
         let file = match runtime {
             "diffusion" => "sd-server.exe",
             "mlx" => "mlx_lm.server",
+            "mlx-dflash2" => "mlx_vlm.server",
             _ => "llama-server.exe",
         };
         let on = self.case.get("bins").and_then(|b| b.get(runtime)) == Some(&Value::Bool(true));
@@ -654,6 +660,10 @@ async fn unloading_all_shuts_down_every_model_even_one_kept_resident() {
 
 /// A scripted engine of this kind (`{ source, version }`, as `detect` reports it) and these models.
 fn engine_rig(name: &str, engine: Value, models: Value) -> (Arc<Fake>, Arc<ModelServer>) {
+    engine_rig_with_flags(name, engine, models, &[])
+}
+
+fn engine_rig_with_flags(name: &str, engine: Value, models: Value, flags: &[&str]) -> (Arc<Fake>, Arc<ModelServer>) {
     let g = golden();
     let root = scratch(name);
     write_files(&root, &g["files"]);
@@ -666,7 +676,7 @@ fn engine_rig(name: &str, engine: Value, models: Value) -> (Arc<Fake>, Arc<Model
             json!({ "port": 11500, "bind": "local", "autoStart": false, "jitLoad": true, "idleTtlSeconds": 900, "maxLoaded": 2 }),
         ),
         models: denorm(&root, &models).as_array().unwrap().clone(),
-        flags: Arc::new(HashSet::new()),
+        flags: Arc::new(flags.iter().map(|f| (*f).to_string()).collect()),
         serving: Mutex::new(true),
         children: Mutex::default(),
         calls: Mutex::default(),
@@ -679,6 +689,61 @@ fn engine_rig(name: &str, engine: Value, models: Value) -> (Arc<Fake>, Arc<Model
 
 fn spawned(fake: &Fake) -> usize {
     fake.calls.lock().unwrap().iter().filter(|c| c.get("spawn").is_some()).count()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gguf_dflash_head_uses_the_verified_llama_args_only_when_selected() {
+    let models = json!([
+        { "id": "target", "path": "<root>/target.gguf", "architecture": "qwen35" },
+        { "id": "head", "path": "<root>/renamed.gguf", "architecture": "dflash" },
+        { "id": "small", "path": "<root>/small.gguf", "architecture": "qwen35" },
+    ]);
+    let flags = ["--spec-default", "--spec-draft-model", "--spec-draft-ngl", "--spec-type", "--spec-draft-n-max"];
+    let (fake, server) =
+        engine_rig_with_flags("gguf-dflash", json!({ "source": "managed", "version": "b12503" }), models, &flags);
+    let standalone = server.load("head", json!({})).await;
+    assert_eq!(standalone["ok"], false, "{standalone}");
+    assert!(standalone["message"].as_str().unwrap().contains("not on its own"), "{standalone}");
+    assert_eq!(spawned(&fake), 0);
+
+    for (params, expected) in [
+        (json!({}), vec!["--spec-default"]),
+        (
+            json!({ "draftModelId": "head" }),
+            vec![
+                "--spec-default",
+                "--spec-draft-model",
+                "<root>/renamed.gguf",
+                "--spec-draft-ngl",
+                "all",
+                "--spec-type",
+                "draft-dflash",
+                "--spec-draft-n-max",
+                "7",
+            ],
+        ),
+        (
+            json!({ "draftModelId": "small" }),
+            vec![
+                "--spec-default",
+                "--spec-draft-model",
+                "<root>/small.gguf",
+                "--spec-draft-ngl",
+                "all",
+                "--spec-type",
+                "draft-simple",
+            ],
+        ),
+        (json!({ "draftModelId": "head", "speculative": false }), vec![]),
+    ] {
+        let loaded = server.load("target", params.clone()).await;
+        assert_eq!(loaded["ok"], true, "{loaded}");
+        let calls = fake.calls.lock().unwrap();
+        let spawn = calls.iter().rev().find_map(|c| c.get("spawn")).unwrap();
+        let args: Vec<_> = spawn["args"].as_array().unwrap().iter().map(|arg| arg.as_str().unwrap()).collect();
+        let first = args.iter().position(|a| a.starts_with("--spec-")).unwrap_or(args.len());
+        assert_eq!(&args[first..], expected, "{params}");
+    }
 }
 
 /// PrismML's 1-bit build (tensor type 143, hadamard header) and a build of known types with the hadamard header.
@@ -805,4 +870,108 @@ async fn a_failure_the_cache_does_not_cause_is_not_retried() {
     let r = server.load("m", json!({ "kvCacheDtype": "f16" })).await;
     assert_eq!(r["ok"], false, "{r}");
     assert_eq!(spawn_args(&fake).len(), 2, "one more spawn, no retry");
+}
+
+fn mlx_dflash2_rig(name: &str, external: bool, target_dir: &str) -> (Arc<Fake>, Arc<ModelServer>) {
+    let (mut fake, server) = engine_rig(
+        name,
+        json!({ "source": "external" }),
+        json!([
+            { "id": "target", "name": "Target", "path": format!("<root>/{target_dir}"), "format": "mlx", "mlxRunnable": true, "modality": "vision" },
+            { "id": "head", "name": "Head", "path": "<root>/head", "format": "mlx", "mlxRunnable": true, "modality": "draft" },
+            { "id": "ordinary", "name": "Ordinary", "path": "<root>/ordinary", "format": "mlx", "mlxRunnable": true },
+        ]),
+    );
+    drop(server);
+    Arc::get_mut(&mut fake).unwrap().case["bins"] = json!({ "mlx": true, "mlx-dflash2": external });
+    write_files(
+        &fake.root,
+        &json!({
+            format!("{target_dir}/config.json"): json!({
+                "model_type": "qwen3_5", "vision_config": {}, "text_config": {
+                    "hidden_size": 5120, "num_hidden_layers": 64, "vocab_size": 248320
+                }
+            }).to_string(),
+            "head/config.json": json!({
+                "model_type": "qwen3", "architectures": ["DFlash2DraftModel"],
+                "hidden_size": 5120, "num_target_layers": 64, "vocab_size": 248320,
+                "dflash_config": { "block_size": 8, "conv_group_size": 16, "conv_kernel_size": 2,
+                    "mask_token_id": 248070, "selector_rank": 256, "selector_top_k": 16,
+                    "target_layer_ids": [5, 19, 33, 47, 61] }
+            }).to_string(),
+        }),
+    );
+    let server = ModelServer::new(fake.clone(), fake.clone(), false);
+    (fake, server)
+}
+
+#[tokio::test]
+async fn mlx_dflash2_requires_explicit_selection_and_uses_the_vlm_contract() {
+    let (fake, server) = mlx_dflash2_rig("dflash2-pair", true, "mlx-community_Qwen3.8-27B-4bit");
+    for params in [
+        json!({}),
+        json!({"draftModelId":"head","speculative":false}),
+        json!({"draftModelId":"ordinary"}),
+        json!({"draftModelId":"head"}),
+    ] {
+        let result = server.load("target", params).await;
+        assert_eq!(result["ok"], true, "{result}");
+    }
+    let calls = fake.calls.lock().unwrap();
+    let specs: Vec<_> = calls.iter().filter_map(|c| c.get("spawn")).collect();
+    assert_eq!(specs.len(), 4);
+    for spec in &specs[..3] {
+        assert_eq!(spec["bin"], "<root>/engine/mlx_lm.server");
+        assert_eq!(spec["healthExpect"], "\"ok\"");
+        assert!(spec.get("upstreamModel").is_none());
+    }
+    assert_eq!(specs[0]["args"], specs[1]["args"]);
+    assert_eq!(
+        &specs[2]["args"].as_array().unwrap()[6..],
+        &[json!("--draft-model"), json!("<root>/ordinary"), json!("--num-draft-tokens"), json!("3")]
+    );
+    assert_eq!(specs[3]["bin"], "<root>/engine/mlx_vlm.server");
+    assert_eq!(
+        specs[3]["args"],
+        json!([
+            "--model",
+            "<root>/mlx-community_Qwen3.8-27B-4bit",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "{port}",
+            "--draft-model",
+            "<root>/head",
+            "--draft-kind",
+            "dflash"
+        ])
+    );
+    assert_eq!(specs[3]["upstreamModel"], "<root>/mlx-community_Qwen3.8-27B-4bit");
+    assert_eq!(specs[3]["healthPath"], "/health");
+    assert_eq!(specs[3]["healthExpect"], "\"model_ready\":true");
+    assert_eq!(specs[3]["healthReadyLog"], "Drafter ready; speculative decoding enabled.");
+}
+
+#[tokio::test]
+async fn mlx_dflash2_fails_closed_without_a_runtime_or_matching_config() {
+    for (name, runtime, target_dir, reason) in [
+        ("dflash2-no-runtime", false, "Qwen3.8-27B-MLX-8bit", "mlx_vlm.server"),
+        ("dflash2-wrong-target", true, "Qwen3.5-27B-4bit", "matching stock Qwen3.8-27B"),
+        ("dflash2-wrong-shape", true, "Qwen3.8-27B-4bit", "matching stock Qwen3.8-27B"),
+    ] {
+        let (fake, server) = mlx_dflash2_rig(name, runtime, target_dir);
+        if name == "dflash2-wrong-shape" {
+            let path = join(&[&fake.root, "head", "config.json"]);
+            let mut config: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+            config["num_target_layers"] = json!(32);
+            std::fs::write(path, config.to_string()).unwrap();
+        }
+        let result = server.load("target", json!({ "draftModelId": "head" })).await;
+        assert_eq!(result["ok"], false, "{result}");
+        assert!(result["message"].as_str().unwrap().contains(reason), "{result}");
+        let standalone = server.load("head", json!({})).await;
+        assert_eq!(standalone["ok"], false, "{standalone}");
+        assert!(standalone["message"].as_str().unwrap().contains("not on its own"), "{standalone}");
+        assert_eq!(spawned(&fake), 0);
+    }
 }

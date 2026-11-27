@@ -74,7 +74,8 @@ export interface CloudStatus {
      */
     joinCode: string | null;
     devices: SyncDevice[];
-    usage: { bytes: number; limit: number } | null;
+    /** `parts`: what the storage holds by kind (Settings → Storage); absent from older services. Shares count toward the limit on top of `bytes`. */
+    usage: { bytes: number; limit: number; parts?: { chats: number; library: number; revisions: number; shares: number } } | null;
   };
 }
 
@@ -218,6 +219,21 @@ export interface OrgDetail extends OrgSummary {
 
 export type FleetOs = 'windows' | 'macos' | 'linux';
 
+/** A CI runner on a shared Mac (decision 0064): no repos, jobs or reasons. */
+export interface FleetRunner {
+  label: string;
+  state: 'off' | 'waiting' | 'ready' | 'running' | 'draining' | 'cleaning' | 'error';
+  /** VMs running or draining a job. */
+  busy: number;
+  /** VMs it may run now, macOS and Linux together. */
+  slots: number;
+}
+
+/** `fleet:runners`: per organization, the computers that run CI runners. */
+export interface FleetRunners {
+  orgs: { orgId?: string; orgName: string; computers: Pick<FleetComputerView, 'deviceId' | 'name' | 'os' | 'online' | 'seenAt' | 'you' | 'runners'>[] }[];
+}
+
 /** A local model a shared computer can serve. No URLs, ports or paths. */
 export interface FleetModel {
   id: string;
@@ -233,6 +249,8 @@ export interface FleetComputerView {
   arch: string;
   appVersion: string;
   models: FleetModel[];
+  /** Its CI runners. Absent from an older engine. */
+  runners?: FleetRunner[];
   online: boolean;
   /** When the computer last checked in (epoch milliseconds, or an RFC 3339 string). */
   seenAt: number | string | null;

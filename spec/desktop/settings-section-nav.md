@@ -7,17 +7,18 @@ area: desktop
 
 User intent: find the QR code that links a phone without hunting through one long Settings page, and see Settings split into clear sections.
 
-- Settings has a section list on the left: **Profile**, **Help out the Nekko Team**, **Nekko Cloud**; then, under the label **Nekko Agent**, **General**, **Appearance**, **Agents**, **Tools**; then, under **Privacy and devices**, **Safety**, **Connections**, **Phone and computers**, **System**. Clicking one shows that group as its own page, from its top, and marks it in the rail ([one page per area](#one-page-per-area-under-a-labelled-rail-3102)). In a narrow window the list becomes a wrapping row above the page.
+- Settings has a section list on the left: **Profile**, **Help out the Nekko Team**, **Nekko Cloud**; then, under the label **Nekko Agent**, **General**, **Appearance**, **Agents**, **Tools**, **Storage**; then, under **Privacy and devices**, **Safety**, **Connections**, **Phone and computers**, **System**. Clicking one shows that group as its own page, from its top, and marks it in the rail ([one page per area](#one-page-per-area-under-a-labelled-rail-3102)). In a narrow window the list becomes a wrapping row above the page.
 - Each page is one group under its name at page-title size (see [Quiet Settings](#quiet-settings-and-where-each-setting-lives-2563) for the order inside each):
   - Profile: About you (what Nekko calls you, the update email, what you mostly do, and the About you note sent with each chat).
   - Help out the Nekko Team: Help improve Nekko Agent (usage reports), Support by starring the project on GitHub.
   - Nekko Cloud: Account (sign in, plan, sign out). Once signed in: Sync, Fleet management (the organization, Share this computer, its computers and members), then the Danger zone (Delete everything synced, Delete account).
-  - General: Notifications, Chats, Desktop behavior, Language and help, Dictation, Chat history.
+  - General: Notifications, Chats, Desktop behavior, Language and help, Dictation, and a pointer to Chat history, which moved to Storage.
   - Appearance: Theme, Fonts and text ([Style](style-fonts-and-text-size.md)), Animations, Agents wall, View settings, Simple mode visibility, Fun.
   - Agents: Agent loop, Customization (system prompt and server prompt wrapper), System prompt size, Spec-driven development, Agent orchestration, Delegation routes, Hooks, Automations, Claude plan features.
   - Safety: Chat modes, Sandbox, Guardrails, Security.
   - Connections: every connection with its log, then All connections off at the bottom in danger red ([Connections](../platform/connections-switch-and-activity-log.md)).
   - Tools: Git management, Project management, Pull requests, Terminal, MCP servers.
+  - Storage: where Nekko's disk goes on this computer and in Nekko Cloud, with safe cleanup and Chat history ([Storage](storage-settings.md)).
   - Phone and computers: Remote access, then Connected computers and pairing (only Remote access, titled Phone pairing, in Simple until a computer is connected).
   - System: Nekko Agent service, Updates, Developer, Experimental, Backup & restore, Data & privacy.
 - In Remote access, **Paired devices** and **+ Pair a device** come first once remote access is on, and the pairing QR opens directly under the button, above the device list. Relay details, the local relay, network visibility, phone changes and phone access follow. Before remote access is on, the card offers two ways to connect, Tailscale or Nekko Cloud (see [remote control](../phone/driving-your-home-model-from-your-phone-remote-control.md)).

@@ -138,8 +138,9 @@ export function Modal({
       : align === 'stretch' ? 'flex flex-col'
         : 'flex items-center justify-center';
 
+  // no-drag: an overlay over the title bar's drag strip otherwise loses its clicks there; z-index doesn't count.
   return createPortal(
-    <div className={`fixed inset-0 ${position} ${overlayClassName}`} style={{ background: scrim, zIndex }} onClick={onScrim}>
+    <div className={`fixed inset-0 [-webkit-app-region:no-drag] ${position} ${overlayClassName}`} style={{ background: scrim, zIndex }} onClick={onScrim}>
       <div
         ref={dialogRef}
         role="dialog"

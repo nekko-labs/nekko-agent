@@ -48,18 +48,11 @@
    },
    {
     "name": "edit_file",
-    "description": "Replace exact text in one file. Use old_string/new_string for one replacement, or edits for 1-100 ordered literal replacements validated together before writing. Never mix the two forms. Every search must be non-empty and unique at its step. A batch is limited to 8 MiB of input, replacements and result; validation failure writes nothing. This is not multi-file rollback or protection from concurrent writers.",
+    "description": "Replace exact text in one file. Pass path and edits: use one array entry for a single replacement or up to 100 for a batch. Put old_string and new_string inside each entry, never at the top level. Each search must be non-empty and unique at its step. Replacements are literal; all validate before writing. Input, replacements and result are each limited to 8 MiB. This is not multi-file rollback or protection from concurrent writers.",
     "parameters": {
      "type": "object",
      "properties": {
       "path": {
-       "type": "string"
-      },
-      "old_string": {
-       "type": "string",
-       "description": "Exact text to replace (must be unique)."
-      },
-      "new_string": {
        "type": "string"
       },
       "edits": {
@@ -81,13 +74,16 @@
         "required": [
          "old_string",
          "new_string"
-        ]
+        ],
+        "additionalProperties": false
        }
       }
      },
      "required": [
-      "path"
-     ]
+      "path",
+      "edits"
+     ],
+     "additionalProperties": false
     }
    },
    {

@@ -24,7 +24,8 @@
 
 use crate::http::HttpError;
 use crate::org_records::{
-    Descriptor, HostFacts, LocalModel, ORG_KEY, OrgKeyRecord, org_key_local_id, this_os, valid_org_id, valid_uuid,
+    Descriptor, HostFacts, LocalModel, ORG_KEY, OrgKeyRecord, RunnerSummary, org_key_local_id, this_os, valid_org_id,
+    valid_uuid,
 };
 use crate::records::AccountRecord;
 use crate::state::{OrgKey, Share, State};
@@ -79,6 +80,8 @@ pub struct HostInfo {
     /// How this account's other devices reach its relay agent, while remote
     /// access is on (decision 0102). Sealed under the account keyring.
     pub connect: Option<Arc<dyn Fn() -> Option<crate::ConnectInfo> + Send + Sync>>,
+    /// This computer's CI runners, coarse (decision 0064); none off a Mac.
+    pub runners: Option<Arc<dyn Fn() -> Vec<RunnerSummary> + Send + Sync>>,
 }
 
 /// How sharing with one org is going, for `fleet:status`.
@@ -264,6 +267,7 @@ impl Cloud {
             }
             "fleet:list" => self.fleet_list(&org_id_arg(args, 0)?).await,
             "fleet:status" => Ok(self.fleet_status()),
+            "fleet:runners" => self.fleet_runners().await,
             _ => Err(format!("unknown channel {channel}")),
         }
     }
@@ -727,9 +731,16 @@ impl Cloud {
         let account_id = self.account_id()?;
         let key = self.device_key().ok_or(LOCKED)?;
         let host = lock(&self.host).clone();
-        let (name, models, app_version) = match host {
-            Some(h) => ((h.name)(), (h.models)().await, h.app_version.clone()),
-            None => (lock(&self.state).device_label.clone(), Vec::new(), env!("CARGO_PKG_VERSION").to_string()),
+        let (name, models, app_version, runners) = match host {
+            Some(h) => (
+                (h.name)(),
+                (h.models)().await,
+                h.app_version.clone(),
+                h.runners.as_ref().map(|r| r()).unwrap_or_default(),
+            ),
+            None => {
+                (lock(&self.state).device_label.clone(), Vec::new(), env!("CARGO_PKG_VERSION").to_string(), Vec::new())
+            }
         };
         Ok(HostFacts {
             device_id,
@@ -741,6 +752,7 @@ impl Cloud {
             models,
             host_key: b64_encode(&key.public()),
             connect: self.connect_facts(),
+            runners,
         })
     }
 
@@ -959,6 +971,35 @@ impl Cloud {
         }
     }
 
+    /// Each organization's computers that run CI runners (decision 0064), for phones and
+    /// notifications: the name, OS, whether it is online, and its runners. An org this
+    /// device can't read is left out rather than failing the rest.
+    async fn fleet_runners(&self) -> Result<Value, String> {
+        let token = self.token()?;
+        let res = self.api.get(&token, "/v1/orgs").await.map_err(org_error)?;
+        let mut out = Vec::new();
+        for o in res["orgs"].as_array().into_iter().flatten() {
+            let Some(id) = o["id"].as_str().filter(|id| valid_org_id(id)) else { continue };
+            let Ok(list) = self.fleet_list(id).await else { continue };
+            let computers: Vec<Value> = list["computers"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter(|c| c["runners"].as_array().is_some_and(|r| !r.is_empty()))
+                .map(|c| {
+                    json!({
+                        "deviceId": c["deviceId"], "name": c["name"], "os": c["os"], "online": c["online"],
+                        "seenAt": c["seenAt"], "you": c["you"], "runners": c["runners"],
+                    })
+                })
+                .collect();
+            if !computers.is_empty() {
+                out.push(json!({ "orgId": id, "orgName": o["name"], "computers": computers }));
+            }
+        }
+        Ok(json!({ "orgs": out }))
+    }
+
     fn fleet_status(&self) -> Value {
         let sharing_set = lock(&self.state).sharing.clone();
         let live = lock(&self.live);
@@ -1055,6 +1096,7 @@ impl Cloud {
                     }
                     o
                 }).collect::<Vec<_>>(),
+                "runners": d.runners.iter().map(|r| json!({ "label": r.label, "state": r.state, "busy": r.busy, "slots": r.slots })).collect::<Vec<_>>(),
                 "online": row["online"].as_bool().unwrap_or(false),
                 "seenAt": row["seenAt"],
                 "you": row["you"].as_bool().unwrap_or(false),
@@ -1114,6 +1156,7 @@ mod tests {
             }],
             host_key: HOST.into(),
             connect: None,
+            runners: Vec::new(),
         }
     }
 
@@ -1128,7 +1171,13 @@ mod tests {
         AccountRecord {
             epoch: 1,
             recovery_public: "rp".into(),
-            devices: vec![TrustedDevice { id: DEV.into(), public_key: host.into(), label: "Desk".into() }],
+            devices: vec![TrustedDevice {
+                id: DEV.into(),
+                public_key: host.into(),
+                label: "Desk".into(),
+                caps: vec![],
+            }],
+            compressed: false,
         }
     }
 
@@ -1222,6 +1271,7 @@ mod tests {
             code: code.into(),
             message: code.into(),
             body: Box::new(Value::Null),
+            retry_after: None,
         };
         assert_eq!(org_error(err(402, "plan-required")), NEEDS_PLAN);
         assert_eq!(org_error(err(403, "needs-synced-device")), LOCKED);

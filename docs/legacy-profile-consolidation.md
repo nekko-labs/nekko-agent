@@ -20,10 +20,14 @@ two old installs, four updater caches and ~4,600 `kotrain-*` temp folders.
 | Close / reopen the app | `packages/profile/src/app-control.ts` | Finds the app from `cli-link.json`'s pid, climbs to the window process, closes the tree (`taskkill /T`, forced after a grace period). Never climbs into a shell or dev launcher. |
 | Terminal command | `apps/cli/src/migrate.ts`, wired in `apps/cli/src/run.ts` | `nekko-agent migrate [--dry-run] [--yes] [--keep-old] [--no-restart]`. Runs before `getClient`, which would refuse to open an unmerged root. |
 | Launch prompt | `apps/desktop/src/main/legacyPrompt.ts`, called from `main/index.ts` | Native dialog before the engine starts. "Not now" is deliberately not remembered. |
-| Spec | `SPEC.md`, "Consolidating earlier installs" | Status labelled implemented / unverified. |
+| Spec | [`spec/platform/merging-earlier-installs.md`](../spec/platform/merging-earlier-installs.md) | Status labelled implemented / unverified. |
 
 Design rules, all covered by tests: additive only; target wins on conflict; usage logs unioned by line; delete
-only what `unmerged()` proves is already in the target; a failed or refused merge deletes nothing; a backup of
+only what `unmerged()` proves is already in the target: a clashing file counts only when its bytes match (models
+and engine by size), and a folder that is neither a known data folder (`LEGACY_PROFILE_ENTRIES` in `user-data.ts`)
+nor a listed cache or Chromium folder keeps the old copy
+([#3482](https://github.com/nekko-labs/nekko-agent/issues/3482): `runners/` was once deleted unmerged); CI runner
+records merge by id; a failed or refused merge deletes nothing; a backup of
 changed files is written before the first change; refuse while another Nekko process serves from an involved folder.
 
 ## Verified
