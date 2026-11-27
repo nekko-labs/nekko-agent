@@ -17,7 +17,8 @@ use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-pub const CHANNELS: &[&str] = &["chatWorktrees:list", "chatWorktrees:remove"];
+pub const CHANNELS: &[&str] =
+    &["chatWorktrees:list", "chatWorktrees:remove", "storage:idleWorktrees", "storage:removeWorktrees"];
 
 const WORD_A: [&str; 20] = [
     "brisk", "calm", "bold", "quiet", "swift", "keen", "bright", "gentle", "nimble", "steady", "lucky", "merry",
@@ -799,7 +800,11 @@ fn worktree_counts(c: &Candidate) -> (usize, f64) {
 }
 
 /// `f` over every item, on up to `threads` threads, results in input order.
-fn parallel_map<T: Sync, R: Send + Default + Clone>(items: &[T], threads: usize, f: impl Fn(&T) -> R + Sync) -> Vec<R> {
+pub(crate) fn parallel_map<T: Sync, R: Send + Default + Clone>(
+    items: &[T],
+    threads: usize,
+    f: impl Fn(&T) -> R + Sync,
+) -> Vec<R> {
     use std::sync::atomic::{AtomicUsize, Ordering};
     let threads = threads.clamp(1, items.len().max(1));
     if threads == 1 {
@@ -831,6 +836,11 @@ fn parallel_map<T: Sync, R: Send + Default + Clone>(items: &[T], threads: usize,
 /// them apart: only those are ever removed automatically.
 pub fn list(settings: &Value, lookup: &dyn Fn(&str) -> Option<Owner>) -> Vec<Value> {
     list_with(settings, lookup, &|_| true, LIST_THREADS)
+}
+
+/// Every listed worktree's root, without reading any worktree's status.
+pub fn roots(settings: &Value) -> Vec<String> {
+    candidates(settings, &|_| None).into_iter().map(|c| c.root).collect()
 }
 
 fn list_with(
@@ -947,6 +957,171 @@ fn candidates(settings: &Value, lookup: &dyn Fn(&str) -> Option<Owner>) -> Vec<C
 /// `list.split(/\r?\n\r?\n/)`.
 fn split_blocks(s: &str) -> Vec<String> {
     s.replace("\r\n", "\n").split("\n\n").map(str::to_string).collect()
+}
+
+/// Why a worktree is kept by "Remove idle worktrees" (decision 0122).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Kept {
+    Recent,
+    Dirty,
+    Unpushed,
+    Running,
+    Locked,
+    Open,
+    Ignored,
+}
+
+impl Kept {
+    pub fn key(self) -> &'static str {
+        match self {
+            Kept::Recent => "recent",
+            Kept::Dirty => "dirty",
+            Kept::Unpushed => "unpushed",
+            Kept::Running => "running",
+            Kept::Locked => "locked",
+            Kept::Open => "open",
+            Kept::Ignored => "ignored",
+        }
+    }
+}
+
+/// Ignored paths a build, package manager or OS recreates; anything else ignored keeps a worktree.
+fn regenerable(path: &str) -> bool {
+    const ALSO: &[&str] = &[
+        "out",
+        ".turbo",
+        ".vite",
+        ".cache",
+        ".parcel-cache",
+        "coverage",
+        ".gradle",
+        "Pods",
+        "__pycache__",
+        ".pytest_cache",
+        ".DS_Store",
+    ];
+    path.trim_matches('"').split('/').any(|part| crate::storage::BUILD_DIRS.contains(&part) || ALSO.contains(&part))
+}
+
+/// Quiet this long before a worktree counts as idle.
+const IDLE_AFTER: Duration = Duration::from_secs(72 * 60 * 60);
+
+/// Whether a listed worktree is idle: `Ok("pushed" | "merged")`, or why it is kept.
+/// `merged_head` is the head commit of its branch's merged PR, when one was found.
+fn check(
+    c: &Candidate,
+    now: std::time::SystemTime,
+    cwds: &[std::path::PathBuf],
+    merged_head: Option<&str>,
+) -> Result<&'static str, Kept> {
+    if c.locked.is_some() {
+        return Err(Kept::Locked);
+    }
+    if c.chat.as_ref().is_some_and(|o| o.running) {
+        return Err(Kept::Running);
+    }
+    let real = std::fs::canonicalize(&c.root).unwrap_or_else(|_| c.root.clone().into());
+    if cwds.iter().any(|d| d.starts_with(&real)) {
+        return Err(Kept::Open);
+    }
+    // Untracked and ignored files both: `git worktree remove` deletes ignored files without asking,
+    // so only build output a tool recreates may be ignored. Flags override any status config.
+    let status = git_no_locks(
+        &c.root,
+        &["status", "--porcelain", "--ignored", "--untracked-files=normal", "--ignore-submodules=none"],
+    )
+    .map_err(|_| Kept::Dirty)?;
+    let mut ignored = false;
+    for line in status.lines().filter(|l| !l.is_empty()) {
+        match line.strip_prefix("!! ") {
+            Some(path) if regenerable(path) => {}
+            Some(_) => ignored = true,
+            None => return Err(Kept::Dirty),
+        }
+    }
+    if ignored {
+        return Err(Kept::Ignored);
+    }
+    let gitdir = git_no_locks(&c.root, &["rev-parse", "--absolute-git-dir"]).map_err(|_| Kept::Dirty)?;
+    let gitdir = gitdir.trim();
+    let last = ["HEAD", "index", "logs/HEAD"]
+        .iter()
+        .map(|f| Path::new(gitdir).join(f))
+        .chain([Path::new(&c.root).to_path_buf()])
+        .filter_map(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok())
+        .max();
+    if last.is_none_or(|t| now.duration_since(t).unwrap_or_default() < IDLE_AFTER) {
+        return Err(Kept::Recent);
+    }
+    match git_no_locks(&c.root, &["rev-list", "-n1", "HEAD", "--not", "--remotes"]) {
+        Ok(out) if out.trim().is_empty() => return Ok("pushed"),
+        Ok(_) => {}
+        Err(_) => return Err(Kept::Unpushed),
+    }
+    let head = git_no_locks(&c.root, &["rev-parse", "HEAD"]).unwrap_or_default();
+    match merged_head {
+        Some(m) if c.branch.is_some() && !m.is_empty() && head.trim().eq_ignore_ascii_case(m) => Ok("merged"),
+        _ => Err(Kept::Unpushed),
+    }
+}
+
+/// Every listed worktree with whether it is idle (merged PRs not yet looked up).
+pub fn idle_states(
+    settings: &Value,
+    lookup: &dyn Fn(&str) -> Option<Owner>,
+    now: std::time::SystemTime,
+    cwds: &[std::path::PathBuf],
+) -> Vec<(Value, Result<&'static str, Kept>)> {
+    let cs = candidates(settings, lookup);
+    let states = parallel_map(&cs, LIST_THREADS, |c| Some(check(c, now, cwds, None)));
+    cs.iter()
+        .zip(states)
+        .map(|(c, st)| {
+            let head = git_no_locks(&c.root, &["rev-parse", "HEAD"]).unwrap_or_default();
+            let entry = json!({ "root": c.root, "sourceRoot": c.source_root, "projectName": c.project_name, "branch": c.branch, "head": head.trim() });
+            (entry, st.unwrap_or(Err(Kept::Dirty)))
+        })
+        .collect()
+}
+
+/// Remove one worktree only if it is still idle, keeping its branch.
+pub fn remove_idle(
+    settings: &Value,
+    root: &str,
+    lookup: &dyn Fn(&str) -> Option<Owner>,
+    now: std::time::SystemTime,
+    cwds: &[std::path::PathBuf],
+    merged_head: Option<&str>,
+) -> Result<(), String> {
+    let target = norm(root);
+    let c = candidates(settings, lookup)
+        .into_iter()
+        .find(|c| norm(&c.root) == target)
+        .ok_or("That folder is not a worktree of a configured project.")?;
+    if let Err(kept) = check(&c, now, cwds, merged_head) {
+        return Err(match kept {
+            Kept::Recent => "It was used in the last 3 days.",
+            Kept::Dirty => "It has uncommitted changes.",
+            Kept::Unpushed => "It has commits that are on no remote.",
+            Kept::Running => "Its chat is running.",
+            Kept::Locked => "It is locked.",
+            Kept::Open => "A program is working in it.",
+            Kept::Ignored => "It has ignored files that aren't build output.",
+        }
+        .into());
+    }
+    if let Err(e) = git(&c.source_root, &["worktree", "remove", &c.root]) {
+        // As in `remove_with`: Windows may keep an empty folder a terminal has open.
+        git_ok(&c.source_root, &["worktree", "prune"]);
+        let listing = git(&c.source_root, &["worktree", "list", "--porcelain"]).map_err(|e| e.message)?;
+        if listing
+            .lines()
+            .any(|l| l.trim_end_matches('\r').strip_prefix("worktree ").is_some_and(|p| norm(p) == target))
+        {
+            return Err(format!("Git could not remove the worktree: {}", nekko_js::trim(&e.stderr_or_message())));
+        }
+    }
+    Ok(())
 }
 
 /// `removeChatWorktree`: Git refuses a dirty worktree and the branch goes
@@ -1092,7 +1267,103 @@ pub async fn sweep_merged(ctx: &crate::routes::Ctx) -> Vec<(String, String)> {
     removed
 }
 
+/// Each entry with `bytes` from the last storage walk, when it measured that root.
+fn with_sizes(entries: Vec<Value>, sizes: &std::collections::HashMap<String, u64>) -> Vec<Value> {
+    entries
+        .into_iter()
+        .map(|mut w| {
+            if let Some(b) = sizes.get(s(&w, "root")) {
+                w["bytes"] = json!(b);
+            }
+            w
+        })
+        .collect()
+}
+
+/// The head of `branch`'s PR when it merged, for a worktree whose commits are on no remote.
+async fn merged_head(ctx: &crate::routes::Ctx, root: &str, branch: &str) -> Option<String> {
+    let (state, head) = ctx.workspace.prs().branch_pr_head(root, branch).await?;
+    (state == "merged").then_some(head)
+}
+
+/// `storage:idleWorktrees`: what "Remove idle worktrees" would remove, and how many it keeps and why.
+async fn idle_preview(ctx: &crate::routes::Ctx) -> Result<Value, String> {
+    let settings = crate::settings::current(ctx).await;
+    let (store, running) = (ctx.sessions.clone(), crate::routes::running_chats(ctx));
+    let states = tokio::task::spawn_blocking(move || {
+        let sessions = store.list_meta();
+        let lookup = |r: &str| owner_in(&sessions, &running, r);
+        idle_states(&settings, &lookup, std::time::SystemTime::now(), &nekko_machine::probe::process_cwds())
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    let merged = futures_util::future::join_all(states.iter().map(|(w, st)| async move {
+        match (st, w["branch"].as_str()) {
+            (Err(Kept::Unpushed), Some(b)) => {
+                merged_head(ctx, s(w, "root"), b).await.is_some_and(|h| h.eq_ignore_ascii_case(s(w, "head")))
+            }
+            _ => false,
+        }
+    }))
+    .await;
+    let sizes = crate::storage::worktree_bytes();
+    let (mut idle, mut kept) = (Vec::new(), Map::new());
+    for ((mut w, st), merged) in states.into_iter().zip(merged) {
+        let reason = if merged { Ok("merged") } else { st };
+        match reason {
+            Ok(reason) => {
+                w["reason"] = json!(reason);
+                w["bytes"] = sizes.get(s(&w, "root")).map_or(Value::Null, |b| json!(b));
+                idle.push(w);
+            }
+            Err(k) => {
+                let n = kept.get(k.key()).and_then(Value::as_u64).unwrap_or(0);
+                kept.insert(k.key().into(), json!(n + 1));
+            }
+        }
+    }
+    Ok(json!({ "idle": idle, "kept": kept }))
+}
+
+/// `storage:removeWorktrees`: each one checked again right before it goes; one failing never stops the rest.
+async fn remove_many(ctx: &crate::routes::Ctx, roots: Vec<String>) -> Result<Value, String> {
+    let sizes = crate::storage::worktree_bytes();
+    let (mut removed, mut failed, mut freed) = (Vec::new(), Vec::new(), 0u64);
+    for root in roots {
+        let branch = git_no_locks(&root, &["rev-parse", "--abbrev-ref", "HEAD"]).unwrap_or_default();
+        let branch = branch.trim();
+        let merged = if branch.is_empty() || branch == "HEAD" { None } else { merged_head(ctx, &root, branch).await };
+        let settings = crate::settings::current(ctx).await;
+        let (store, running, r) = (ctx.sessions.clone(), crate::routes::running_chats(ctx), root.clone());
+        let done = tokio::task::spawn_blocking(move || {
+            let sessions = store.list_meta();
+            let lookup = |x: &str| owner_in(&sessions, &running, x);
+            let cwds = nekko_machine::probe::process_cwds();
+            remove_idle(&settings, &r, &lookup, std::time::SystemTime::now(), &cwds, merged.as_deref())
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+        match done {
+            Ok(()) => {
+                freed += sizes.get(&root).copied().unwrap_or(0);
+                removed.push(root);
+            }
+            Err(error) => failed.push(json!({ "root": root, "error": error })),
+        }
+    }
+    Ok(json!({ "removed": removed, "freed": freed, "failed": failed }))
+}
+
 pub async fn route(ctx: &crate::routes::Ctx, channel: &str, args: &[Value]) -> Result<Value, String> {
+    match channel {
+        "storage:idleWorktrees" => return idle_preview(ctx).await,
+        "storage:removeWorktrees" => {
+            let roots = args.first().and_then(Value::as_array).ok_or("Expected a list of worktree folders.")?;
+            let roots = roots.iter().filter_map(Value::as_str).map(str::to_string).collect();
+            return remove_many(ctx, roots).await;
+        }
+        _ => {}
+    }
     let settings = crate::settings::current(ctx).await;
     let store = ctx.sessions.clone();
     let running = crate::routes::running_chats(ctx);
@@ -1104,7 +1375,9 @@ pub async fn route(ctx: &crate::routes::Ctx, channel: &str, args: &[Value]) -> R
         let sessions = store.list_meta();
         let lookup = |r: &str| owner_in(&sessions, &running, r);
         match channel.as_str() {
-            "chatWorktrees:list" => Ok(Value::Array(list(&settings, &lookup))),
+            "chatWorktrees:list" => {
+                Ok(Value::Array(with_sizes(list(&settings, &lookup), &crate::storage::worktree_bytes())))
+            }
             _ => remove(&settings, &root, &lookup),
         }
     })
@@ -1118,6 +1391,172 @@ mod tests {
 
     /// A timed-out command returns on time even when something it started
     /// still holds its output, and that something is ended too.
+    #[cfg(unix)]
+    fn linked(r: &Repo, name: &str, args: &[&str]) -> String {
+        let path = format!("{}/.worktrees/{name}", r.root);
+        let mut a = vec!["worktree", "add", "-q"];
+        a.extend_from_slice(args);
+        a.push(&path);
+        r.git(&a);
+        p_resolve(&[&path])
+    }
+
+    /// Sets the worktree's Git metadata and folder 73 hours into the past.
+    #[cfg(unix)]
+    fn age(root: &str) {
+        let then = std::time::SystemTime::now() - Duration::from_secs(73 * 60 * 60);
+        let gitdir = git(root, &["rev-parse", "--absolute-git-dir"]).unwrap();
+        let gitdir = gitdir.trim();
+        for p in [format!("{gitdir}/HEAD"), format!("{gitdir}/index"), format!("{gitdir}/logs/HEAD"), root.to_string()]
+        {
+            if let Ok(f) = std::fs::File::open(&p) {
+                f.set_modified(then).unwrap();
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    fn candidate(r: &Repo, root: &str) -> Candidate {
+        candidates(&r.settings(), &|_| None).into_iter().find(|c| norm(&c.root) == norm(root)).expect("listed")
+    }
+
+    #[cfg(unix)]
+    fn now() -> std::time::SystemTime {
+        std::time::SystemTime::now()
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn idle_needs_three_quiet_days() {
+        let r = Repo::new("idle-quiet");
+        let wt = linked(&r, "a", &["-b", "a"]);
+        r.git(&["update-ref", "refs/remotes/origin/a", "a"]);
+        assert_eq!(check(&candidate(&r, &wt), now(), &[], None), Err(Kept::Recent));
+        age(&wt);
+        assert_eq!(check(&candidate(&r, &wt), now(), &[], None), Ok("pushed"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_untracked_file_keeps_it() {
+        let r = Repo::new("idle-untracked");
+        let wt = linked(&r, "a", &["-b", "a"]);
+        r.git(&["update-ref", "refs/remotes/origin/a", "a"]);
+        std::fs::write(Path::new(&wt).join("notes.txt"), "draft").unwrap();
+        age(&wt);
+        assert_eq!(check(&candidate(&r, &wt), now(), &[], None), Err(Kept::Dirty));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ignored_files_that_are_not_build_output_keep_it() {
+        let r = Repo::new("idle-ignored");
+        std::fs::write(Path::new(&r.root).join(".git/info/exclude"), "node_modules/\n.shots/\n").unwrap();
+        let wt = linked(&r, "a", &["-b", "a"]);
+        r.git(&["update-ref", "refs/remotes/origin/a", "a"]);
+        std::fs::create_dir_all(Path::new(&wt).join("node_modules/x")).unwrap();
+        std::fs::write(Path::new(&wt).join("node_modules/x/i.js"), "x").unwrap();
+        age(&wt);
+        assert_eq!(check(&candidate(&r, &wt), now(), &[], None), Ok("pushed"), "build output alone is fine");
+        std::fs::create_dir_all(Path::new(&wt).join(".shots")).unwrap();
+        std::fs::write(Path::new(&wt).join(".shots/after.png"), "evidence").unwrap();
+        age(&wt);
+        assert_eq!(check(&candidate(&r, &wt), now(), &[], None), Err(Kept::Ignored));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn untracked_files_count_even_when_git_is_told_to_hide_them() {
+        let r = Repo::new("idle-hidden-untracked");
+        r.git(&["config", "status.showUntrackedFiles", "no"]);
+        let wt = linked(&r, "a", &["-b", "a"]);
+        r.git(&["update-ref", "refs/remotes/origin/a", "a"]);
+        std::fs::write(Path::new(&wt).join("draft.txt"), "x").unwrap();
+        age(&wt);
+        assert_eq!(check(&candidate(&r, &wt), now(), &[], None), Err(Kept::Dirty));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_commit_on_no_remote_keeps_it_unless_its_pr_merged_at_that_head() {
+        let r = Repo::new("idle-unpushed");
+        let wt = linked(&r, "a", &["-b", "a"]);
+        std::fs::write(Path::new(&wt).join("new.txt"), "x").unwrap();
+        git(&wt, &["add", "."]).unwrap();
+        git(&wt, &["commit", "-q", "-m", "work"]).unwrap();
+        age(&wt);
+        let c = candidate(&r, &wt);
+        assert_eq!(check(&c, now(), &[], None), Err(Kept::Unpushed));
+        let head = git(&wt, &["rev-parse", "HEAD"]).unwrap();
+        assert_eq!(check(&c, now(), &[], Some(head.trim())), Ok("merged"));
+        assert_eq!(check(&c, now(), &[], Some("0000000")), Err(Kept::Unpushed));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_detached_head_is_idle_only_when_its_commits_are_on_a_remote() {
+        let r = Repo::new("idle-detached");
+        let wt = linked(&r, "d", &["--detach"]);
+        age(&wt);
+        assert_eq!(check(&candidate(&r, &wt), now(), &[], None), Err(Kept::Unpushed));
+        r.git(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
+        assert_eq!(check(&candidate(&r, &wt), now(), &[], None), Ok("pushed"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_program_working_inside_keeps_it() {
+        let r = Repo::new("idle-open");
+        let wt = linked(&r, "a", &["-b", "a"]);
+        r.git(&["update-ref", "refs/remotes/origin/a", "a"]);
+        age(&wt);
+        let inside = std::fs::canonicalize(&wt).unwrap().join("src");
+        assert_eq!(check(&candidate(&r, &wt), now(), &[inside], None), Err(Kept::Open));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_locked_worktree_is_kept() {
+        let r = Repo::new("idle-locked");
+        let wt = linked(&r, "a", &["-b", "a"]);
+        r.git(&["update-ref", "refs/remotes/origin/a", "a"]);
+        r.git(&["worktree", "lock", &wt]);
+        age(&wt);
+        assert_eq!(check(&candidate(&r, &wt), now(), &[], None), Err(Kept::Locked));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn removing_an_idle_worktree_keeps_its_branch() {
+        let r = Repo::new("idle-remove");
+        let wt = linked(&r, "a", &["-b", "a"]);
+        r.git(&["update-ref", "refs/remotes/origin/a", "a"]);
+        age(&wt);
+        remove_idle(&r.settings(), &wt, &|_| None, now(), &[], None).unwrap();
+        assert!(!Path::new(&wt).exists());
+        assert_eq!(r.git(&["branch", "--list", "a"]).trim(), "a");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn removal_checks_again_and_refuses_what_changed() {
+        let r = Repo::new("idle-recheck");
+        let wt = linked(&r, "a", &["-b", "a"]);
+        r.git(&["update-ref", "refs/remotes/origin/a", "a"]);
+        age(&wt);
+        std::fs::write(Path::new(&wt).join("file.txt"), "edited\n").unwrap();
+        assert!(remove_idle(&r.settings(), &wt, &|_| None, now(), &[], None).is_err());
+        assert!(Path::new(&wt).exists());
+    }
+
+    #[test]
+    fn listed_worktrees_carry_their_measured_size() {
+        let sizes = std::collections::HashMap::from([("/r/a".to_string(), 42u64)]);
+        let out = with_sizes(vec![json!({ "root": "/r/a" }), json!({ "root": "/r/b" })], &sizes);
+        assert_eq!(out[0]["bytes"], 42);
+        assert!(out[1].get("bytes").is_none(), "unmeasured has no size");
+    }
+
     #[cfg(unix)]
     #[test]
     fn a_timeout_returns_and_ends_the_whole_group() {

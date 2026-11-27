@@ -125,6 +125,8 @@ export interface ChatWorktreeInfo {
   dirtyCount: number;
   /** Commits on the branch that the main checkout's HEAD does not contain. */
   unmergedCount: number;
+  /** Bytes on disk from the last Settings → Storage measurement, when it measured this one. */
+  bytes?: number;
 }
 
 /**
