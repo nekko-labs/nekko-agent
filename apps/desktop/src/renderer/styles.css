@@ -2918,6 +2918,12 @@ select:not([multiple]):not([size]) {
 .vt-row > :last-child {
   margin-bottom: 0;
 }
+/* A live turn (the column's footer) and multi-part rows: working-steps lines sit close to the text
+   around them, like finished rows (ACTIVITY_GAP in transcript.ts). The history list above keeps its own gap. */
+:is(.vt-row, .transcript-column) > [data-activity-group]:not(:last-child),
+:is(.vt-row, .transcript-column) > :not(.vt-list):has(+ [data-activity-group]) {
+  margin-bottom: 6px;
+}
 /* Swipe-left times (useSwipeToRevealTimes): a pseudo-element, so the margin
    rules above still see the row's real first and last parts. */
 [data-vt-stamp] {

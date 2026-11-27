@@ -106,7 +106,7 @@ const ToolActivityGroup = memo(function ToolActivityGroup({ items, streaming = f
   // The tip lists each group with its count, then lone calls by their purpose.
   const hoverText = [summary, ...rows.flatMap((r) => (r.kind === 'group' ? [`• ${rowHeadline(r, false)} (${r.calls.length})`] : r.step.item.kind === 'tool' ? [`• ${rowHeadline(r, false)}`] : []))].join('\n');
   return (
-    <div className={`${streaming ? 'fade-in ' : ''}mt-1 font-mono text-xs`}>
+    <div className={`${streaming ? 'fade-in ' : ''}font-mono text-xs`} data-activity-group>
       <div className="flex min-w-0 items-center gap-1">
         <HoverTip label={ordinary ? hoverText : agents.length ? subagentSummary(agents[agents.length - 1].call) : watchCallHeadline(lastWatch.call, lastWatch.result)} multiline>
         <button
