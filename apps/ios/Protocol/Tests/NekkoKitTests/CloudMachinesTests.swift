@@ -18,6 +18,7 @@ final class CloudMachinesTests: XCTestCase {
         var calls: [(String, String, JSONValue)] = []
         var accountId = "account-1"
         var fleetStatus = 200
+        var features: JSONValue = .object([:])
         var malformedFleet = false
         let lock = NSLock()
         func send(_ method: String, _ url: URL, headers: [String: String], body: Data?) async throws -> (Int, Data) {
@@ -32,7 +33,9 @@ final class CloudMachinesTests: XCTestCase {
             let answer: (Int, JSONValue)
             switch (method, url.path) {
             case ("GET", "/v1/auth/me"):
-                answer = (200, .object(["account": .object(["id": .string(accountId), "canSync": .bool(true)])]))
+                answer = (200, .object(["account": .object(["id": .string(accountId), "canSync": .bool(true), "features": features])]))
+            case ("GET", "/v1/sync/state"):
+                answer = (200, .object(["devices": .array([])]))
             case ("GET", "/v1/machines"):
                 answer = (fleetStatus, malformedFleet ? .null : .object(["machines": .array(machines), "relayUrl": .string("wss://relay.test"), "hoursIncluded": .int(40)]))
             case ("POST", "/v1/machines"):

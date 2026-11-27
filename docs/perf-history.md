@@ -43,6 +43,18 @@ numbers and conditions here even when raw traces are linked elsewhere.
 Area: renderer
 Result: improvement (reads per re-read)
 Conditions: `swift test` on an Apple M1 Max, macOS 27.2.1, with a counting fake connection (`ReloadFanOutTests.testSkillsAreReadOnceNotOnEveryReload`): open a chat, then four re-reads (three turn ends and one explicit reload). Counts are `skills:runnable` calls, not time.
+## iPhone folds streamed text into the chat once per display frame (#3387, 2026-11-26)
+Area: renderer
+Result: improvement (model work per frame); not profiled in the running app
+Conditions: Apple M1 Max, macOS 27.2.1, Xcode 27.2, `swift test` (debug build on a macOS host, not an iPhone or the simulator), other builds running on the same machine so timings drift between runs. `XCTClockMetric`, 5 iterations. A chat of 300 saved messages and 2,000 streamed deltas of one word each delivered to `ChatModel.onEvent` inside one frame, then `flushDeltas()`. Tests: `StreamThrottleTests.testMeasureFoldingEveryDelta` (`deltaInterval` 0, the old per-delta behaviour) and `testMeasureFoldingOncePerFrame`.
+
+| Metric | Before (every delta applied) | After (once per frame) |
+|---|---|---|
+| Model work for 2,000 deltas, run 1 | 1.441107-2.223989 s (values 1.690859, 2.223989, 1.689969, 1.441107, 1.747766 s) | 0.004773-0.126576 s (values 0.016698, 0.004773, 0.008505, 0.062790, 0.126576 s) |
+| Model work for 2,000 deltas, run 2 | 0.321535-0.453430 s (values 0.321535, 0.355654, 0.388210, 0.421123, 0.453430 s) | 0.003622-0.018056 s (values 0.003622, 0.004890, 0.007245, 0.018056, 0.017119 s) |
+| Changes published to the view for a burst of 200 deltas | 200 (one `blocksRevision` bump each) | 1 (`testABurstWithinAFrameIsOneApplication`) |
+
+Why: each delta rewrote `turn` (an array compare, the context gauge, the last-block patch) and told SwiftUI the chat changed. Deltas now collect for one display frame and fold in as one write. The two runs differ by 4 to 5 times for the same code because the machine's load changed; compare within a run. The spread of the once-per-frame figure (a single write) is large relative to its size. Not measured: SwiftUI body evaluations per second or frame time on a device, and the added latency (at most one frame, about 16.7 ms at 60 Hz) of a token's first appearance. Source: #3387.
 ## Stock Qwen3.8-27B with a real MLX DFlash2 head (#3541, 2026-11-27)
 Area: local inference
 Result: working text streaming and draft acceptance; slower decode and no greedy text match in this sample.
@@ -1886,6 +1898,7 @@ speed. Source: [#152](https://github.com/nekko-labs/nekko-agent/pull/152).
 
 ## Unmeasured
 
+- Nekko Cloud duplicate calls (2026-11-26, #3365): traffic-shape change. Counted against test stubs, not production: five `cloud:refresh` calls in a row made 2 stub calls (`/v1/auth/me`, `/v1/sync/state`) instead of 10, and six concurrent ones made 2 instead of 12; three overlapping iPhone `sync()` calls made 1 pull instead of 3, and a second sync 2 s after the first skipped `/v1/auth/me` and `/v1/sync/state` (the pull still ran). Wanted pictures are fetched 3 at a time (peak in-flight 3 in the unit test, with fake 15 ms fetches); the real wall-time effect is unmeasured. Not measured: how often real clients make these repeat calls.
 - **Stock Qwen3.8-27B MLX DFlash2 preload stopped (#3541, 2026-11-27).** Apple M1 Max, 64 GiB unified memory, macOS 27.2.1; isolated `mlx-vlm` 0.8.1 / MLX 0.32.5 on Metal. Verified the public Apache-2.0 [LM Studio 8-bit target at `241ebb5`](https://huggingface.co/lmstudio-community/Qwen3.8-27B-MLX-8bit/tree/241ebb5f1d60b122fd653da658836a55feb9e2b0) and [official full BF16 head at `015e795`](https://huggingface.co/incoai/Qwen3.8-27B-DFlash2/tree/015e795645c74b1a0eeef3b570031fb62e769bc5) against their manifests (31.1 GiB combined). The installed LM Studio copy was not read. The target-only `mlx_vlm.server` bound to loopback, but at 11.07 s `/health` still reported `model_ready: false` while evaluating the remaining parameters. The watchdog stopped the load as macOS memory pressure went from normal to warning (`1` to `2`), with the system-wide free percentage down from 86% to 39%. Swap was zero at the warning and 628.25 MiB at cleanup; the process exited and its port closed. **Baseline decode: not measured. DFlash2 decode: not attempted.** There is no streamed text, acceptance count, or throughput comparison. The LM Studio basename is supported when the configs match, but no successful 8-bit run was observed. The separate [4-bit run](#stock-qwen38-27b-with-a-real-mlx-dflash2-head-3541-2026-11-27) measured streaming and nonzero acceptance, with slower decode and different greedy text.
 
 - Nekko Cloud client retries (2026-11-26, #3363): traffic-shape change, nothing measured. By the code: a busy answer used to get 2 more attempts at 0.5 s and 2 s from every client (3 sends within 2.5 s); it now gets at most 2 more at 5 s and 10 s or the server's longer `Retry-After` (cap 60 s) plus 0-50% jitter, so 3 sends spread over at least 15 s; a 504 on `/v1/sync/push` and `/v1/sync/pull` is sent once instead of 3 times. Not measured: how often the live API answers busy, or its load while stalled. Unit tests check the schedule with injected sleeps only.

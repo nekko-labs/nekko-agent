@@ -36,7 +36,7 @@ adb shell am broadcast -a com.android.systemui.demo -e command clock -e hhmm 094
 adb shell am broadcast -a com.android.systemui.demo -e command battery -e level 100 -e plugged true
 adb install -r -t apps/android/app/build/outputs/apk/debug/app-debug.apk
 adb install -r -t apps/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-if [[ "$cls" == "com.nekko.android.VoiceIntegrationEvidenceTest" || "$cls" == "com.nekko.android.WinterThemeTest" ]]; then
+if [[ "$cls" == "com.nekko.android.VoiceIntegrationEvidenceTest" || "$cls" == "com.nekko.android.WinterThemeTest" || "$cls" == "com.nekko.android.QuietReconnectEvidenceTest" ]]; then
   # Record native motion, not the runner's animation-disabled mode.
   for scale in window_animation_scale transition_animation_scale animator_duration_scale; do
     adb shell settings put global "$scale" 1

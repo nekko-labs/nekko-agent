@@ -749,6 +749,7 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(app.buttons["chat.planOpen"].waitForExistence(timeout: 10), "tapping it opens the whole plan")
         XCTAssertTrue(app.staticTexts["Open a pull request"].exists, "every step shows")
         XCTAssertTrue(app.staticTexts["Tucked behind the composer"].exists, "the step being worked shows its note")
+        app.descendants(matching: .any)["chat.planCompleted"].firstMatch.tap()
         // The finished first step has no results for the user (a task link says what the work is for),
         // so it starts squeezed to its title; a tap opens its note and task link.
         XCTAssertFalse(app.staticTexts["Found the message box"].exists, "a finished step without results is squeezed")

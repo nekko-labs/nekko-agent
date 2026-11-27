@@ -3,6 +3,19 @@ import NekkoKit
 import NekkoProtocol
 import Observation
 
+enum PlanDisplay: String, CaseIterable, Identifiable {
+    case full, balanced, one, hidden
+    var id: Self { self }
+    var label: String {
+        switch self {
+        case .full: String(localized: "Show full plan")
+        case .balanced: String(localized: "Balanced · 3 rows (default)")
+        case .one: String(localized: "Show 1 row")
+        case .hidden: String(localized: "Hide entirely")
+        }
+    }
+}
+
 /// Phone-only, non-secret preferences (UserDefaults). Each is a plain stored
 /// property so SwiftUI observes it; writes persist immediately.
 @MainActor
@@ -19,6 +32,7 @@ final class Prefs {
     private let d: UserDefaults
 
     /// `matchComputer` or a desktop preset id (`system` follows this iPhone).
+    var planDisplay: PlanDisplay { didSet { d.set(planDisplay.rawValue, forKey: "planDisplay") } }
     var theme: String { didSet { d.set(theme, forKey: "theme") } }
     /// Face ID / passcode on every open and every return. On by default.
     var appLock: Bool { didSet { d.set(appLock, forKey: "appLock") } }
@@ -98,6 +112,7 @@ final class Prefs {
 
     init(defaults: UserDefaults = .standard) {
         d = defaults
+        planDisplay = defaults.string(forKey: "planDisplay").flatMap(PlanDisplay.init(rawValue:)) ?? .balanced
         // bool(forKey:) also reads `-key YES|NO` launch arguments (UI tests).
         func flag(_ k: String, _ fallback: Bool) -> Bool { defaults.object(forKey: k) == nil ? fallback : defaults.bool(forKey: k) }
         theme = d.string(forKey: "theme").flatMap { $0 == Self.matchComputer || ThemePreset.find($0) != nil ? $0 : nil } ?? Self.matchComputer
