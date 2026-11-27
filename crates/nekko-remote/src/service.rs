@@ -145,6 +145,8 @@ struct FleetDevice {
     admitted: Admitted,
     /// The HELLO key, which also signs its Change proofs.
     key: String,
+    /// A computer (0102 org links, or an account device that said so); else a phone.
+    computer: bool,
 }
 
 pub struct RemoteService {
@@ -204,6 +206,8 @@ impl RemoteService {
                     .with("alsoRelays", get("alsoRelays"))
                     // `on` or `off` once the owner ticks or unticks Nekko Cloud Relay; absent until then.
                     .with("cloudRelay", get("cloudRelay"))
+                    // Decision 0128: `false` turns away devices of the account that have no pairing.
+                    .with("accountDevices", get("accountDevices"))
                     .with("room", get("room"))
                     .with("secret", get("secret"))
                     .with("hostKey", get("hostKey"))
@@ -278,7 +282,8 @@ impl RemoteService {
         }
         if let Some(fleet) = hello_frame.get("fleet") {
             let room = cfg.get("room").and_then(Value::as_str).unwrap_or_default().to_string();
-            return self.verify_fleet(hello_frame, fleet, &room);
+            let account_devices = cfg.get("accountDevices") != Some(&json!(false));
+            return self.verify_fleet(hello_frame, fleet, &room, account_devices);
         }
         // Fleet ids are the fleet's alone: no pairing may take one.
         if hello_frame.get("deviceId").and_then(Value::as_str).is_some_and(crate::fleet::is_fleet_id) {
@@ -355,7 +360,7 @@ impl RemoteService {
     /// found through an org it shares with (decision 0102). It must be signed
     /// with its HELLO key for this exchange, as any HELLO is, and its proof must
     /// satisfy the gate. It never brings a code and never reaches the registry.
-    fn verify_fleet(&self, hello_frame: &Value, fleet: &Value, room: &str) -> Value {
+    fn verify_fleet(&self, hello_frame: &Value, fleet: &Value, room: &str, account_devices: bool) -> Value {
         let deny = |reason: &str| json!({ "type": "denied", "reason": reason });
         let text = |k: &str| hello_frame.get(k).and_then(Value::as_str).filter(|v| !v.is_empty());
         let (Some(device_id), Some(challenge), Some(host_eph), Some(client_eph), Some(hello_key)) =
@@ -387,20 +392,34 @@ impl RemoteService {
         if crate::fleet::link_device_id(&admitted.device_id) != device_id {
             return deny("invalid");
         }
+        // Decision 0128: a device of this account with no pairing (no org), while the owner allows it.
+        let account = admitted.org_id.is_empty();
+        if account && !account_devices {
+            return deny("fleet-off");
+        }
+        // An org link is always a computer (0102); an account device is what its HELLO says.
+        let platform = hello_frame.get("platform").and_then(Value::as_str);
+        let computer = !account || platform == Some(hello::COMPUTER_PLATFORM);
         let now = hello::nekko_num((self.clock)());
-        let name = if admitted.name.is_empty() { "Computer".to_string() } else { admitted.name.clone() };
-        let device = json!({
+        let fallback = if computer { "Computer" } else { hello::default_device_name(platform) };
+        let name = if admitted.name.is_empty() { fallback.to_string() } else { admitted.name.clone() };
+        let mut device = json!({
             "id": device_id,
             "name": hello::cut16(&name, 60),
-            "platform": hello::COMPUTER_PLATFORM,
-            "kind": hello::COMPUTER_PLATFORM,
+            "platform": if computer { hello::COMPUTER_PLATFORM } else { hello::normalize_platform(platform) },
             "fleet": true,
             "changeKey": hello_key,
             "access": { "read": true, "change": true },
             "createdAt": now.clone(),
             "lastSeenAt": now,
         });
-        lock(&self.fleet).insert(device_id.to_string(), FleetDevice { admitted, key: hello_key.to_string() });
+        if computer {
+            device["kind"] = json!(hello::COMPUTER_PLATFORM);
+        }
+        if account {
+            device["account"] = json!(true);
+        }
+        lock(&self.fleet).insert(device_id.to_string(), FleetDevice { admitted, key: hello_key.to_string(), computer });
         Verdict::Welcome { device, enrolled: false }.reply()
     }
 
@@ -415,10 +434,17 @@ impl RemoteService {
     /// timer. Returns the link ids cut off.
     pub fn recheck_fleet(&self) -> Vec<String> {
         let gate = lock(&self.fleet_gate).clone();
+        let account_devices = {
+            let _io = lock(&self.io);
+            self.load().get("accountDevices") != Some(&json!(false))
+        };
         let held: Vec<(String, Admitted)> =
             lock(&self.fleet).iter().map(|(id, d)| (id.clone(), d.admitted.clone())).collect();
-        let gone: Vec<String> =
-            held.into_iter().filter(|(_, a)| !gate.as_ref().is_some_and(|g| g.still(a))).map(|(id, _)| id).collect();
+        let gone: Vec<String> = held
+            .into_iter()
+            .filter(|(_, a)| (a.org_id.is_empty() && !account_devices) || !gate.as_ref().is_some_and(|g| g.still(a)))
+            .map(|(id, _)| id)
+            .collect();
         if gone.is_empty() {
             return gone;
         }
@@ -441,7 +467,14 @@ impl RemoteService {
         let fleet = lock(&self.fleet);
         let mut rows: Vec<Value> = fleet
             .iter()
-            .map(|(id, d)| json!({ "id": id, "name": d.admitted.name, "orgId": d.admitted.org_id }))
+            .map(|(id, d)| {
+                let mut row = json!({ "id": id, "name": d.admitted.name, "orgId": d.admitted.org_id });
+                if d.admitted.org_id.is_empty() {
+                    row["account"] = json!(true);
+                    row["computer"] = json!(d.computer);
+                }
+                row
+            })
             .collect();
         rows.sort_by(|a, b| a["id"].as_str().cmp(&b["id"].as_str()));
         Value::Array(rows)
@@ -553,6 +586,8 @@ impl RemoteService {
                     cfg.get("alsoRelays").cloned().filter(|v| v.as_array().is_some_and(|a| !a.is_empty())),
                 )
                 .with("relays", routes.map(|r| r.rows()))
+                // Decision 0128, only once the owner turned it off: the shape is unchanged for everyone else.
+                .with("accountDevices", Some(json!(false)).filter(|_| cfg.get("accountDevices") == Some(&json!(false))))
                 .to_value()
         } else {
             JsObj::new()
@@ -653,6 +688,24 @@ impl RemoteService {
             self.load()
         };
         self.status_of(self.handle(), &cfg)
+    }
+
+    /// How a device of this computer's account reaches it without pairing
+    /// (decision 0128): every relay the room is on (main first), the room, its
+    /// secret and the host key. None while remote access is off or the owner
+    /// turned account devices off.
+    pub fn reach(&self) -> Option<(Vec<String>, String, String, String)> {
+        let cfg = {
+            let _io = lock(&self.io);
+            self.load()
+        };
+        if !nekko_js::truthy(cfg.get("enabled")) || cfg.get("accountDevices") == Some(&json!(false)) {
+            return None;
+        }
+        let text = |k: &str| s(cfg.get(k)).filter(|v| !v.is_empty()).map(str::to_string);
+        let host_key =
+            s(cfg.get("hostKey")).and_then(crate::proof::parse_key_text).map(|k| crate::proof::public_key(&k))?;
+        Some((Self::relay_urls(&cfg), text("room")?, text("secret")?, host_key))
     }
 
     pub fn pairing(&self) -> Value {
@@ -884,6 +937,23 @@ impl RemoteService {
         Ok(self.status_of(self.handle(), &cfg))
     }
 
+    /// `remote:setAccountDevices(on)` (decision 0128): whether devices of this
+    /// computer's Nekko Cloud account may connect without pairing. Off turns
+    /// away the ones connected that way now; paired devices are not touched.
+    pub fn set_account_devices(&self, on: &Value) -> Result<Value, String> {
+        let on = on.as_bool().ok_or("remote:setAccountDevices needs true or false")?;
+        let cfg = {
+            let _io = lock(&self.io);
+            let cfg = self.load().with("accountDevices", Some(json!(on)));
+            self.save(&cfg)?;
+            cfg
+        };
+        if !on {
+            self.recheck_fleet();
+        }
+        Ok(self.status_of(self.handle(), &cfg))
+    }
+
     /// The Pro default (decision 0116, 2026-11-28): while remote access is on
     /// and this computer's account includes Nekko Cloud Relay (`included`),
     /// hold the room there too, beside whatever else it uses, so a phone of the
@@ -1016,6 +1086,7 @@ impl RemoteService {
             "remote:pair" => self.pair_routed(arg(0), arg(1)),
             "remote:setRoute" => self.set_route(arg(0), arg(1)),
             "remote:setRelays" => self.set_relays(arg(0)),
+            "remote:setAccountDevices" => self.set_account_devices(arg(0)),
             "remote:pairComputer" => Ok(self.pair_computer()),
             "remote:devices" => Ok(self.devices()),
             "remote:revoke" => self.revoke(arg(0)),
@@ -1051,7 +1122,7 @@ impl crate::phone::Devices for RemoteService {
             return Some(crate::phone::PhoneDevice {
                 access: crate::phone::DeviceAccess::default(),
                 key: Some(d.key),
-                computer: true,
+                computer: d.computer,
             });
         }
         let _io = lock(&self.io);
@@ -1222,6 +1293,7 @@ pub const CHANNELS: &[&str] = &[
     "remote:activity",
     "remote:setRoute",
     "remote:setRelays",
+    "remote:setAccountDevices",
 ];
 
 /// `ensurePrivateFile`: owner-only, best effort.

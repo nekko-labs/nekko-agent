@@ -264,14 +264,114 @@ fn the_pro_default_leaves_an_owners_own_relay_and_a_stopped_computer_alone() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(
         dir.path().join("remote.json"),
-        json!({ "enabled": true, "relayUrl": "wss://relay.example.com", "room": "r", "secret": "s", "devices": [] }).to_string(),
+        json!({ "enabled": true, "relayUrl": "wss://relay.example.com", "room": "r", "secret": "s", "devices": [] })
+            .to_string(),
     )
     .unwrap();
-    let svc = RemoteService::new(dir.path(), Arc::new(|b: &mut [u8]| b.fill(7)), Arc::new(|| NOW), Box::new(Fake::default()));
+    let svc =
+        RemoteService::new(dir.path(), Arc::new(|b: &mut [u8]| b.fill(7)), Arc::new(|| NOW), Box::new(Fake::default()));
     assert!(!svc.hold_cloud_relay(true), "the owner's own relay");
 
     let (dir, svc, _) = computer(Value::Null);
     svc.route("remote:disable", &[]).unwrap();
     assert!(!svc.hold_cloud_relay(true), "remote access is off");
     assert!(saved(&dir)["alsoRelays"].is_null());
+}
+
+// Decision 0128: a device of the computer's own account, with no pairing.
+
+/// Stands in for Nekko Cloud's gate: admits any proof for acct-1, in the org (or account, `""`) it names.
+struct AccountGate;
+
+impl nekko_remote::fleet::FleetGate for AccountGate {
+    fn admit(
+        &self,
+        fleet: &Value,
+        _: &nekko_remote::fleet::Binding,
+    ) -> Result<nekko_remote::fleet::Admitted, &'static str> {
+        if fleet["accountId"] != "acct-1" {
+            return Err("fleet-account");
+        }
+        Ok(nekko_remote::fleet::Admitted {
+            device_id: fleet["deviceId"].as_str().unwrap_or_default().to_string(),
+            org_id: fleet["orgId"].as_str().unwrap_or_default().to_string(),
+            key_id: 1,
+            name: "Philip's iPhone".into(),
+        })
+    }
+    fn still(&self, _: &nekko_remote::fleet::Admitted) -> bool {
+        true
+    }
+}
+
+const ACCOUNT_PHONE: &str = "5cce8aed-634d-4d75-8ea2-1029fb361a4f";
+
+fn account_hello(platform: &str, org: &str) -> Value {
+    let id = format!("fleet:{ACCOUNT_PHONE}");
+    let k = SigningKey::from_slice(&[61; 32]).unwrap();
+    let b64 = |b: &[u8]| base64::engine::general_purpose::STANDARD.encode(b);
+    let sig: Signature = k.sign(nekko_remote::hello::hello_text(&id, "r", "c", "h", "d").as_bytes());
+    json!({
+        "type": "hello", "deviceId": id, "protocol": 6, "challenge": "c", "hostEph": "h", "clientEph": "d",
+        "platform": platform,
+        "helloKey": b64(k.verifying_key().to_encoded_point(false).as_bytes()), "sig": b64(&sig.to_bytes()),
+        "fleet": { "v": 1, "accountId": "acct-1", "deviceId": ACCOUNT_PHONE, "orgId": org, "proof": "sealed" },
+    })
+}
+
+#[test]
+fn a_phone_of_the_account_comes_in_as_a_phone_with_no_pairing() {
+    let (_dir, svc, fake) = computer(json!([CLOUD_RELAY_URL]));
+    svc.set_fleet_gate(Arc::new(AccountGate));
+    let reply = verify_on(&fake, CLOUD_RELAY_URL, &account_hello("ios", ""));
+    assert_eq!(reply["type"], "welcome", "{reply}");
+    assert_eq!(reply["device"]["platform"], "ios");
+    assert!(reply["device"].get("kind").is_none(), "not a computer");
+    assert_eq!(reply["device"]["account"], true);
+    let status = svc.route("remote:status", &[]).unwrap();
+    assert!(status.get("accountDevices").is_none(), "on unless turned off; the status keeps its shape");
+    assert_eq!(status["fleet"][0]["account"], true);
+    assert_eq!(status["fleet"][0]["computer"], false);
+    assert_eq!(svc.route("remote:devices", &[]).unwrap().as_array().unwrap().len(), 1, "the registry is untouched");
+}
+
+#[test]
+fn an_org_link_is_still_a_computer_whatever_it_says() {
+    let (_dir, svc, fake) = computer(Value::Null);
+    svc.set_fleet_gate(Arc::new(AccountGate));
+    let reply = verify_on(&fake, TAILNET, &account_hello("ios", "0b7c2d4e-6f1a-4c3b-9d8e-5a4f3e2d1c0b"));
+    assert_eq!(reply["device"]["kind"], "computer");
+    assert!(reply["device"].get("account").is_none());
+}
+
+#[test]
+fn the_owner_can_turn_account_devices_off() {
+    let (dir, svc, fake) = computer(json!([CLOUD_RELAY_URL]));
+    svc.set_fleet_gate(Arc::new(AccountGate));
+    assert_eq!(verify_on(&fake, CLOUD_RELAY_URL, &account_hello("android", ""))["type"], "welcome");
+    assert!(svc.reach().is_some());
+
+    fake.said.lock().unwrap().clear();
+    let status = svc.route("remote:setAccountDevices", &[json!(false)]).unwrap();
+    assert_eq!(status["accountDevices"], false);
+    assert_eq!(saved(&dir)["accountDevices"], false);
+    assert!(status.get("fleet").is_none(), "the connected one is let go");
+    assert!(fake.said.lock().unwrap().iter().any(|s| s.starts_with(&format!("kick fleet:{ACCOUNT_PHONE}"))));
+    assert_eq!(
+        verify_on(&fake, CLOUD_RELAY_URL, &account_hello("android", "")),
+        json!({ "type": "denied", "reason": "fleet-off" })
+    );
+    assert!(svc.reach().is_none(), "nothing to publish: the record becomes a tombstone");
+    assert!(svc.route("remote:setAccountDevices", &[json!("yes")]).is_err());
+}
+
+#[test]
+fn reach_lists_every_relay_the_room_is_on() {
+    let (_dir, svc, _) = computer(json!([CLOUD_RELAY_URL]));
+    let (routes, room, secret, host_key) = svc.reach().unwrap();
+    assert_eq!(routes, [TAILNET, CLOUD_RELAY_URL]);
+    assert_eq!((room.as_str(), secret.as_str()), ("r", "s"));
+    assert!(!host_key.is_empty());
+    svc.route("remote:disable", &[]).unwrap();
+    assert!(svc.reach().is_none());
 }

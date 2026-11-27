@@ -188,6 +188,8 @@ pub struct State {
     /// Highest revision seen per object id: an older one is a rollback and is
     /// ignored, and this never goes down (whatever the server says).
     pub revisions: BTreeMap<String, u64>,
+    /// This computer's `reach` record as last written (decision 0128); none until it is first published.
+    pub reach: Option<crate::reach::ReachSynced>,
     /// Per chat id.
     pub chats: BTreeMap<String, Synced>,
     pub last_sync_at: Option<f64>,

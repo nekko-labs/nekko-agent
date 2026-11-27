@@ -332,6 +332,11 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             let remote = remote.clone();
             Some(Arc::new(move || fleet::connect_info(&remote)))
         },
+        // How this account's devices reach this one without pairing (decision 0128).
+        reach: {
+            let remote = remote.clone();
+            Some(Arc::new(move || fleet::reach_info(&remote)))
+        },
         #[cfg(unix)]
         runners: {
             let runners = runners.clone();

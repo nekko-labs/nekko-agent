@@ -80,6 +80,13 @@ pub fn connect_info(remote: &Remote) -> Option<ConnectInfo> {
     ConnectInfo::new(vec![text("relayUrl")?], text("room")?, text("key")?, text("hostKey")?)
 }
 
+/// What this computer's `reach` record holds (decision 0128): every relay its
+/// room is on, while remote access is on and account devices are let in.
+pub fn reach_info(remote: &Remote) -> Option<ConnectInfo> {
+    let (routes, room, secret, host_key) = remote.reach()?;
+    ConnectInfo::new(routes, room, secret, host_key)
+}
+
 /// Install the gate and keep fleet connections honest: on every account change
 /// and on a timer, cut off devices the account no longer allows, and drop this
 /// desktop's own fleet links once it is signed out or locked.
@@ -112,6 +119,9 @@ pub fn start(remote: Arc<Remote>, computers: Arc<Computers>, cloud: Arc<Cloud>, 
             if tokio::task::spawn_blocking(move || r.hold_cloud_relay(c.relay_included())).await.unwrap_or(false) {
                 crate::logs::note("nekkod: remote access also through Nekko Cloud Relay (included on this plan)");
             }
+            // Decision 0128: the account's devices learn a changed route, room or switch within seconds.
+            let c = cloud.clone();
+            let _ = tokio::task::spawn_blocking(move || c.publish_reach_soon()).await;
             computers.drop_fleet_unless_ready().await;
         }
     });

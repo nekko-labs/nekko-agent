@@ -88,6 +88,10 @@ export interface RemoteStatus {
   alsoRelays?: string[];
   /** Decision 0116, only while there is more than one relay: how each route is doing. Online is any of them. */
   relays?: RelayRouteStatus[];
+  /** Decision 0128: `false` once the owner turned off devices of this computer's Nekko Cloud account connecting without pairing; absent means on. */
+  accountDevices?: boolean;
+  /** Devices let in without a pairing (decisions 0102 and 0128): `account` for this account's own, else through `orgId`'s fleet. */
+  fleet?: { id: string; name: string; orgId: string; account?: boolean; computer?: boolean }[];
 }
 
 /**

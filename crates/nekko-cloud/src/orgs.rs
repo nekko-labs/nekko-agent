@@ -80,6 +80,10 @@ pub struct HostInfo {
     /// How this account's other devices reach its relay agent, while remote
     /// access is on (decision 0102). Sealed under the account keyring.
     pub connect: Option<Arc<dyn Fn() -> Option<crate::ConnectInfo> + Send + Sync>>,
+    /// How a device of this account reaches this computer without pairing
+    /// (decision 0128): every relay its room is on. None while remote access is
+    /// off or the owner turned account devices off; the `reach` record is then a tombstone.
+    pub reach: Option<Arc<dyn Fn() -> Option<crate::ConnectInfo> + Send + Sync>>,
     /// This computer's CI runners, coarse (decision 0064); none off a Mac.
     pub runners: Option<Arc<dyn Fn() -> Vec<RunnerSummary> + Send + Sync>>,
 }

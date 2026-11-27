@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { CLOUD_RELAY_URL, type CloudStatus } from '@nekko-agent/shared';
-import { cloudAvailability, cloudRelayOffer, ConnectThroughView, currentPicks, DeviceRoutePicks, pairingRoutes, picksOf, routeOf, routeTargets, tailnetUrlOf } from './RemoteAccess.js';
+import { AccountDeviceRows, AccountDevicesSwitch, cloudAvailability, cloudRelayOffer, ConnectThroughView, currentPicks, DeviceRoutePicks, pairingRoutes, picksOf, routeOf, routeTargets, tailnetUrlOf } from './RemoteAccess.js';
 
 vi.mock('../store.js', () => ({ useStore: Object.assign(() => undefined, { getState: () => ({}) }) }));
 
@@ -151,5 +151,28 @@ describe('cloudAvailability', () => {
     expect(cloudAvailability('upgrade')).toBe('upgrade');
     expect(cloudAvailability('hidden', false)).toBe('soon');
     expect(cloudAvailability('hidden', true)).toBe('live');
+  });
+});
+
+describe('account devices (decision 0128)', () => {
+  it('offers the switch for devices on the account', () => {
+    const html = renderToStaticMarkup(<AccountDevicesSwitch on onChanged={() => {}} />);
+    expect(html).toContain('Devices on your Nekko Cloud account connect without pairing');
+    expect(html).not.toContain('relay.fly.dev');
+  });
+
+  it('lists only the devices connected through the account, never an org link', () => {
+    const html = renderToStaticMarkup(
+      <AccountDeviceRows
+        rows={[
+          { id: 'fleet:a', name: 'iPhone', orgId: '', account: true, computer: false },
+          { id: 'fleet:b', name: 'Studio Mac', orgId: '0b7c2d4e-6f1a-4c3b-9d8e-5a4f3e2d1c0b' },
+        ]}
+      />,
+    );
+    expect(html).toContain('iPhone');
+    expect(html).toContain('from your Nekko Cloud account');
+    expect(html).not.toContain('Studio Mac');
+    expect(renderToStaticMarkup(<AccountDeviceRows rows={[]} />)).toBe('');
   });
 });

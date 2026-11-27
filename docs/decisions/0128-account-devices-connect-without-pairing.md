@@ -1,4 +1,4 @@
-# 0126. Devices of one Nekko Cloud account connect without pairing
+# 0128. Devices of one Nekko Cloud account connect without pairing
 
 Date: 2026-11-28. Status: accepted. Builds on [0102](0102-fleet-links-open-on-the-account-keys.md) (fleet links), [0116](0116-nekko-cloud-relay-is-a-pro-perk-with-signed-tickets.md) (Nekko Cloud Relay) and [0036](0036-the-relay-sees-a-derived-room-credential-never-the-pairing-secret.md).
 

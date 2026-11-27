@@ -46,6 +46,7 @@ fn device(url: &str, label: &str, models: Vec<LocalModel>) -> Device {
             let list = m.lock().unwrap().clone();
             Box::pin(async move { list })
         }),
+        reach: None,
         connect: None,
         runners: None,
     });

@@ -832,6 +832,7 @@ function makeWebClient(): NekkoApi {
     setRemoteAccess: (deviceId, access) => call(IpcChannels.remoteSetAccess, deviceId, access),
     setRemoteRoute: (deviceId, route) => call(IpcChannels.remoteSetRoute, deviceId, route),
     setRemoteRelays: (urls) => call(IpcChannels.remoteSetRelays, urls),
+    setRemoteAccountDevices: (on) => call(IpcChannels.remoteSetAccountDevices, on),
     getRemoteActivity: (deviceId) => call(IpcChannels.remoteActivity, deviceId),
     // The web and self-hosted editions run on a server: the relay that ships beside
     // them is apps/relay-server itself, so there is nothing for this page to start.

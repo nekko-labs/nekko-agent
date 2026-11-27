@@ -505,6 +505,7 @@ const api: NekkoApi = {
   setRemoteAccess: (deviceId, access) => inv(IpcChannels.remoteSetAccess, deviceId, access),
   setRemoteRoute: (deviceId, route) => inv(IpcChannels.remoteSetRoute, deviceId, route),
   setRemoteRelays: (urls) => inv(IpcChannels.remoteSetRelays, urls),
+  setRemoteAccountDevices: (on) => inv(IpcChannels.remoteSetAccountDevices, on),
   getRemoteActivity: (deviceId) => inv(IpcChannels.remoteActivity, deviceId),
   localRelayStatus: () => inv(IpcChannels.localRelayStatus),
   localRelayStart: () => inv(IpcChannels.localRelayStart),

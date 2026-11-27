@@ -33,6 +33,7 @@ pub mod library;
 mod org_records;
 mod orgs;
 mod pace;
+pub mod reach;
 pub mod records;
 pub mod relay_channel;
 pub mod state;
@@ -148,6 +149,9 @@ pub struct Options {
 
 #[derive(Default)]
 struct Live {
+    /// The `reach` digest a pass was last started for, and when (decision 0128):
+    /// the same one again waits five minutes, so a failing write isn't retried every few seconds.
+    reach_kicked: Option<(String, std::time::Instant)>,
     syncing: bool,
     progress: Option<(usize, usize)>,
     /// The last `/v1/sync/state`.
@@ -549,6 +553,26 @@ impl Cloud {
     /// Where other computers' Library files are copied.
     fn library_dir(&self) -> PathBuf {
         self.dir.join("library")
+    }
+
+    /// Run a pass soon when this computer's `reach` record is out of date (decision 0128).
+    pub fn publish_reach_soon(self: &Arc<Self>) {
+        if !self.ready() || self.keyring(self.key_id()).is_none() {
+            return;
+        }
+        let Some(want) = self.reach_wanted() else { return };
+        {
+            let mut live = lock(&self.live);
+            let recent = live
+                .reach_kicked
+                .as_ref()
+                .is_some_and(|(d, at)| *d == want && at.elapsed() < std::time::Duration::from_secs(300));
+            if recent {
+                return;
+            }
+            live.reach_kicked = Some((want, std::time::Instant::now()));
+        }
+        self.kick();
     }
 
     fn kick(self: &Arc<Self>) {
@@ -1611,6 +1635,10 @@ impl Cloud {
             self.prove(token, self.key_id()).await?;
             let chats_again = self.push(token).await?;
             let library_again = self.push_library(token).await?;
+            // How this computer is reached (decision 0128); a failure waits for the next pass.
+            if let Err(err) = self.push_reach(token).await {
+                eprintln!("nekkod: {err}");
+            }
             if !chats_again && !library_again {
                 return Ok(());
             }

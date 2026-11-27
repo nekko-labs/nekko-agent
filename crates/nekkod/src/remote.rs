@@ -113,6 +113,11 @@ impl Remote {
         self.svc.set_fleet_gate(gate);
     }
 
+    /// How a device of the account reaches this computer without pairing (decision 0128).
+    pub fn reach(&self) -> Option<(Vec<String>, String, String, String)> {
+        self.svc.reach()
+    }
+
     /// Hold the room on Nekko Cloud Relay too while the account includes it (fleet.rs).
     pub fn hold_cloud_relay(&self, included: bool) -> bool {
         self.svc.hold_cloud_relay(included)
