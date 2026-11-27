@@ -174,6 +174,15 @@ public enum ConnectionNotes {
             case .route?:
                 return problem(.warning, "refused", "\(name) only lets this iPhone in through another route.",
                                "Pair again, or change it on \(name).", [.pairAgain])
+            case .fleetOff?:
+                return problem(.warning, "refused", FleetLink.refusalText(.fleetOff, computer: name) ?? "",
+                               "Turn it back on in Remote access there, or pair this iPhone.", [.pairAgain])
+            case .fleetLocked?, .fleetAccount?:
+                return problem(.warning, "refused", FleetLink.refusalText(c.denied ?? .fleetLocked, computer: name) ?? "",
+                               c.denied == .fleetLocked ? "Open Nekko Agent there and sign in to Nekko Cloud." : "Sign in to the same account on both.", [.retry])
+            case .fleetDevice?, .fleetEpoch?:
+                return problem(.warning, "syncing", FleetLink.refusalText(c.denied ?? .fleetDevice, computer: name) ?? "",
+                               "This iPhone tries again after it syncs.", [.retry])
             case .revoked?, .kicked?:
                 return problem(.danger, "refused", "\(name) removed this iPhone.", nil, [.pairAgain])
             default:

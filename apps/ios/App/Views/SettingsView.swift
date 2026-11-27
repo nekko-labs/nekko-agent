@@ -42,7 +42,8 @@ struct ComputersView: View {
                     .accessibilityIdentifier("computers.row")
                     .accessibilityHint("Opens this computer's page")
                     .swipeActions {
-                        Button(role: .destructive) { forgetting = c } label: { Label("Forget", systemImage: "trash") }
+                        // A computer from your account has no pairing to forget: signing out of Nekko Cloud removes it.
+                        if !c.fromAccount { Button(role: .destructive) { forgetting = c } label: { Label("Forget", systemImage: "trash") } }
                         Button { name = c.name; renaming = c } label: { Label("Rename", systemImage: "pencil") }
                     }
                     .contextMenu {
@@ -51,7 +52,7 @@ struct ComputersView: View {
                         }
                         Button { app.prefs.defaultComputer = c.id } label: { Label("Open at launch", systemImage: "star") }
                         Button { name = c.name; renaming = c } label: { Label("Rename", systemImage: "pencil") }
-                        Button(role: .destructive) { forgetting = c } label: { Label("Forget", systemImage: "trash") }
+                        if !c.fromAccount { Button(role: .destructive) { forgetting = c } label: { Label("Forget", systemImage: "trash") } }
                     }
                     ComputerConnectionToggle(computer: c)
                 }
@@ -75,7 +76,8 @@ struct ComputersView: View {
     }
 
     private func subtitle(_ c: Computer) -> String {
-        "\(stateName(store.state(of: c.id))) · \(routeName(c.route)) · \(c.relayHost)"
+        let line = "\(stateName(store.state(of: c.id))) · \(routeName(c.route)) · \(c.relayHost)"
+        return c.fromAccount ? String(localized: "From your Nekko Cloud account") + " · " + line : line
     }
 
     /// Not reachable now: offer to dial at once rather than wait for the next try.

@@ -328,10 +328,13 @@ struct SafetyExitItems: View {
 
     var body: some View {
         if let c = store.active {
-            Button(role: .destructive) { app.safetyAsk = .signOut(c.id) } label: {
-                Label("Sign out this phone", systemImage: "rectangle.portrait.and.arrow.right")
+            // A computer from your account has no pairing to sign out of.
+            if !c.fromAccount {
+                Button(role: .destructive) { app.safetyAsk = .signOut(c.id) } label: {
+                    Label("Sign out this phone", systemImage: "rectangle.portrait.and.arrow.right")
+                }
+                .accessibilityIdentifier("safety.signOut")
             }
-            .accessibilityIdentifier("safety.signOut")
             Button(role: .destructive) { Task { await app.stopRemoteAccess() } } label: {
                 Label("Stop remote access on \(c.name)", systemImage: "wifi.slash")
             }
@@ -451,8 +454,10 @@ struct ThisComputerSection: View {
             }
         } else {
             Section {
-                Button(role: .destructive) { app.safetyAsk = .signOut(computerId) } label: {
-                    Label("Sign out this phone", systemImage: "rectangle.portrait.and.arrow.right")
+                if !computerId.hasPrefix(Computer.accountPrefix) {
+                    Button(role: .destructive) { app.safetyAsk = .signOut(computerId) } label: {
+                        Label("Sign out this phone", systemImage: "rectangle.portrait.and.arrow.right")
+                    }
                 }
             } header: { SectionTitle(String(localized: "This computer")) } footer: {
                 Text("Connect to this computer to stop remote access on it.").foregroundStyle(palette.inkSoft)

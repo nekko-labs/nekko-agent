@@ -45,7 +45,8 @@ extension RelayClientTests {
     /// A client configured as the fixture's phone, against a fake holding the
     /// fixture's keys that never challenges by itself (the test feeds the
     /// fixture's sealed challenge with `offer`).
-    func fixtureClient(_ f: HandshakeFixture, challengeWait: TimeInterval, signer: HelloSigner? = nil) throws -> (RelayClient, Recorder, FakeRelay) {
+    func fixtureClient(_ f: HandshakeFixture, challengeWait: TimeInterval, signer: HelloSigner? = nil, accountDevice: String? = nil,
+                       accountHello: (@Sendable (FleetLink.Binding) -> JSONValue?)? = nil) throws -> (RelayClient, Recorder, FakeRelay) {
         let host = try P256.Signing.PrivateKey(rawRepresentation: f.privateKey("hostKey"))
         let relay = FakeRelay(computer: TestComputer(room: f.room, roomKey: f.keyBytes, hostKey: host), known: [f.device.str("deviceId")!])
         relay.challenges = false
@@ -58,6 +59,11 @@ extension RelayClientTests {
         cfg.retryMax = 0.08
         cfg.challengeWait = challengeWait
         cfg.helloSigner = signer
+        if let accountDevice {
+            cfg.deviceId = FleetLink.linkDeviceId(accountDevice)
+            cfg.pairCode = "ABCD2345" // never sent for an account device
+            cfg.accountHello = accountHello
+        }
         let c = RelayClient(config: cfg, transport: relay)
         let r = Recorder()
         r.attach(c)

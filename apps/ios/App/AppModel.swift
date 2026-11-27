@@ -50,6 +50,8 @@ final class AppModel {
     /// Made in `start()`, with its handlers.
     private var network: NetworkWatcher?
     private var started = false
+    /// The repeating Nekko Cloud sync that keeps the account's computers current.
+    private var reachSync: Task<Void, Never>?
     private var foreground = true
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
 
@@ -262,6 +264,7 @@ final class AppModel {
         if prefs.keepChatList { store.chatListCache = chatLists }
         if prefs.keepTranscripts { store.transcriptCache = transcriptFiles }
         store.load(preferredId: prefs.defaultComputer)
+        watchAccountComputers()
         if !store.computers.isEmpty { registerForPush() }
         // Paired but never onboarded: closed on the first run's last step (iOS hasn't
         // asked yet: show it again), or paired before the first run existed (done).
@@ -269,6 +272,26 @@ final class AppModel {
             Task {
                 let asked = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus != .notDetermined
                 if asked { prefs.onboarded = true } else { showNotificationStep = true }
+            }
+        }
+    }
+
+    // MARK: The account's computers (decision 0128)
+
+    /// Computers of this iPhone's Nekko Cloud account connect with no pairing: their `reach` records come from sync,
+    /// which runs here, on launch, on foreground and every few minutes while the app is open, not only from the Cloud screens.
+    private func watchAccountComputers() {
+        store.accountLink = { [weak self] in self?.cloud.accountLink() }
+        store.accountCatchUp = { [weak self] in await self?.cloud.syncQuietly() }
+        cloud.onReachChange = { [weak self] records in Task { await self?.store.applyReach(records) } }
+        // What was kept from the last sync shows at once; the sync below refreshes it.
+        Task { await store.applyReach(cloud.reach) }
+        reachSync?.cancel()
+        reachSync = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                if self.foreground { await self.cloud.syncQuietly() }
+                try? await Task.sleep(for: .seconds(CloudSync.backgroundEvery))
             }
         }
     }
@@ -282,6 +305,7 @@ final class AppModel {
         OutboxRefresh.cancel()
         if started {
             store.nudge()
+            Task { await cloud.syncQuietly() }
             publishVoiceReadiness()
             Task { await refreshNotificationPermission() }
         }
