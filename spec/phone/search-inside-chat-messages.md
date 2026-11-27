@@ -5,7 +5,7 @@ area: phone
 
 # Phones: search inside chat messages (#3448)
 
-`[engine side implemented 2026-11-27: the phone channel, its argument check and its reply view, unit-tested in packages/shared and nekko-remote; the iPhone and Android search planned in the same stack]`
+`[engine side implemented 2026-11-27: the phone channel, its argument check and its reply view, unit-tested in packages/shared and nekko-remote; Android implemented the same day; the iPhone planned]`
 
 ## User intent
 
@@ -34,4 +34,9 @@ Chats are answered in the asked order while the reply stays under 6 MB of JSON, 
 ## Status
 
 - Engine side: implemented 2026-11-27, unit-tested (`phone-access.test.ts`; `phone_finder.rs` tests).
-- iPhone and Android search: planned in the same stack, with the same screens and wording on both (see [ios-and-android-stay-in-step.md](ios-and-android-stay-in-step.md)).
+- Android: implemented 2026-11-27 (`FinderText.kt` in the protocol module, `FinderTexts.kt`, the chat list's search). JVM-tested, and checked on an API 37 emulator against a fake computer, including one that refuses the channel. Not yet on a physical phone.
+- iPhone: planned, with the same screens and wording (see [ios-and-android-stay-in-step.md](ios-and-android-stay-in-step.md)).
+
+## On the phone
+
+While someone searches the chat list, the phone reads the text of the chats it lists from each chat's own computer, 20 at a time, only for chats it hasn't read yet or that changed since (their summary's `updatedAt`). Every word of the search, in any case or accent, must appear somewhere in the chat: title, first prompt, last reply, a message, or a file a tool call named. A row found beyond its title shows one line under it: the piece of the summary or of the message where a word the title lacks was found. That's 24 characters before the word and 90 in all, with … where text was cut, as the desktop chat finder does. Matching starts with the summaries and gets richer as text arrives. No new words in the interface.

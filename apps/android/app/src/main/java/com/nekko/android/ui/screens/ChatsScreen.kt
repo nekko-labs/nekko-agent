@@ -143,7 +143,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
-import com.nekko.protocol.ChatSearch
+import com.nekko.protocol.FinderSearch
+import com.nekko.android.data.FinderTexts
 import com.nekko.android.ui.components.StatusGlyph
 import com.nekko.android.ui.components.StatusGlyphIcon
 import com.nekko.android.ui.components.Tone
@@ -314,13 +315,22 @@ fun ChatsScreen(
     val needsYou = remember(all, view) {
         if (view.groupBy == ChatListView.GroupBy.STATUS) emptyList() else all.chats.filter { !it.archived && all.activity[it.id] == Activity.NEEDS_YOU }
     }
-    // Search: every word, any case or accent, in the title, first prompt or last reply, archived chats too.
+    // Search: every word, any case or accent, in the title, first prompt or last reply, archived chats too,
+    // and in what the chats said once their computer sends it (#3448): the row then shows the line that matched.
     var query by rememberSaveable { mutableStateOf("") }
     // Search chats, from the computer menu: a field under the top bar (the mode pill steps away) until closed.
     var searching by rememberSaveable { mutableStateOf(false) }
     val closeSearch = { query = ""; searching = false }
     BackHandler(enabled = searching, onBack = closeSearch)
-    val found = remember(all, query) { if (query.isBlank()) emptyList() else ChatSearch.matches(all.chats.filter { it.isVisible }, query) }
+    val finderTexts = remember(repo) { FinderTexts() }
+    val texts by finderTexts.texts.collectAsStateWithLifecycle()
+    val searchKey = all.chats.joinToString(",") { "${it.id}:${it.updatedAt}" }
+    LaunchedEffect(finderTexts, query.isNotBlank(), searchKey, onlineKey) {
+        if (query.isBlank()) return@LaunchedEffect
+        // Each computer is asked about its own chats only, over its own connection, while someone searches.
+        for (pc in all.shown) repo.callerFor(pc.id)?.let { finderTexts.load(pc.id, all.on(pc.id).filter { it.isVisible }, it) }
+    }
+    val found = remember(all, query, texts) { if (query.isBlank()) emptyList() else FinderSearch.hits(all.chats.filter { it.isVisible }, query, texts) }
     val restore: (SessionSummary) -> Unit = { chat ->
         actionError = null
         onOwner(chat) { scope.launch {
@@ -575,9 +585,17 @@ fun ChatsScreen(
                                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
                                     }
                                 }
-                                itemsIndexed(found, key = { _, it -> "found:${it.id}" }) { _, summary ->
-                                    if (summary.archived) ArchivedRow(summary, onLongClick = { pressDone(summary) }) { openChat(summary) }
-                                    else activeRow(summary)
+                                itemsIndexed(found, key = { _, it -> "found:${it.chat.id}" }) { _, hit ->
+                                    val summary = hit.chat
+                                    Column {
+                                        if (summary.archived) ArchivedRow(summary, onLongClick = { pressDone(summary) }) { openChat(summary) }
+                                        else activeRow(summary)
+                                        // Where the words were found, when the title alone doesn't say (#3448).
+                                        hit.snippet?.let { line ->
+                                            Text(line, style = MaterialTheme.typography.bodySmall, color = p.inkSoft, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.padding(start = 40.dp, end = 16.dp, bottom = 6.dp).testTag("chats.row.snippet"))
+                                        }
+                                    }
                                 }
                             } else if (all.chats.isEmpty()) {
                                 item(key = "empty") {
