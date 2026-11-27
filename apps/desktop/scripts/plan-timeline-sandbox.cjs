@@ -68,6 +68,7 @@ app.whenReady().then(async () => {
     await check('dots sit on the line', `(() => { const l = document.querySelector('.plan-timeline-line').getBoundingClientRect(); return [...document.querySelectorAll('[data-tl-dot]')].every(d => { const r = d.getBoundingClientRect(); return Math.abs((r.top + r.height / 2) - (l.top + l.height / 2)) < 2; }); })()`);
     await check('the line fills to the last finished step', `(() => { const f = document.querySelector('.plan-timeline-line[data-filled]').getBoundingClientRect(), d = document.querySelector('[data-tl-dot="step_2"]').getBoundingClientRect(); return Math.abs(f.right - (d.left + d.width / 2)) < 2; })()`);
     await check('the step being worked stays readable under the dots', `JSON.stringify([...document.querySelectorAll('[data-plan-current] [data-plan-step-id]')].map(e => e.dataset.planStepId)) === '["step_3"]'`);
+    await check('folded dots: rocket while building, dotted ring pending', `!!document.querySelector('[data-tl-dot="step_3"] .plan-mark-rocket') && !!document.querySelector('[data-tl-dot="step_4"] [data-plan-pending]')`);
     await shot('timeline-folded');
     const dot = await run(`(() => { const r = document.querySelector('[data-tl-dot="step_1"]').getBoundingClientRect(); return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) }; })()`);
     win.webContents.sendInputEvent({ type: 'mouseMove', ...dot });
@@ -95,12 +96,19 @@ app.whenReady().then(async () => {
     await check('open plan is a vertical timeline with every step in order', `!!document.querySelector('[data-plan-timeline="vertical"]') && JSON.stringify([...document.querySelectorAll('[data-plan-timeline] [data-plan-step-id]')].map(e => e.dataset.planStepId)) === JSON.stringify(['step_1','step_2','step_3','step_4'])`);
     report.openTransform = await run(lineAngle);
     await check('the line runs down the left, through each mark', `(() => { const l = document.querySelector('.plan-timeline-line').getBoundingClientRect(); return l.height > l.width && [...document.querySelectorAll('[data-plan-timeline] [data-tl-dot]')].every(d => { const r = d.getBoundingClientRect(); return Math.abs((r.left + r.width / 2) - (l.left + l.width / 2)) < 2; }); })()`);
+    // The line must read between every pair of marks, not just peek out as dashes.
+    report.openGaps = await run(`(() => { const d = [...document.querySelectorAll('[data-plan-timeline] [data-tl-dot]')].map(e => e.getBoundingClientRect()); return d.slice(1).map((r, i) => Math.round(r.top - d[i].bottom)); })()`);
+    await check('the open line spans from the first mark to the last', `(() => { const l = document.querySelector('.plan-timeline-line').getBoundingClientRect(), d = [...document.querySelectorAll('[data-plan-timeline] [data-tl-dot]')].map(e => e.getBoundingClientRect()); const c = r => r.top + r.height / 2; return Math.abs(l.top - c(d[0])) < 2 && Math.abs(l.bottom - c(d.at(-1))) < 2; })()`);
+    await check('the line crosses every gap between marks', `(() => { const l = document.querySelector('.plan-timeline-line').getBoundingClientRect(), d = [...document.querySelectorAll('[data-plan-timeline] [data-tl-dot]')].map(e => e.getBoundingClientRect()); return d.slice(1).every((b, i) => { const a = d[i], y = (a.bottom + b.top) / 2, x = a.left + a.width / 2; return l.top <= a.bottom && l.bottom >= b.top && Math.abs(x - (l.left + l.width / 2)) < 2 && y > l.top; }); })()`);
+    await check('the line shows at least 10px between every pair of marks when open', `(() => { const d = [...document.querySelectorAll('[data-plan-timeline] [data-tl-dot]')].map(e => e.getBoundingClientRect()); return d.slice(1).every((r, i) => r.top - d[i].bottom >= 10); })()`);
+    await check('open marks: check when done, rocket while building, dotted ring pending', `!!document.querySelector('[data-plan-step-id="step_1"] .text-success') && !!document.querySelector('[data-plan-step-id="step_3"] .plan-mark-rocket') && !!document.querySelector('[data-plan-step-id="step_4"] [data-plan-pending]')`);
     await check('rows sit right of the line', `(() => { const l = document.querySelector('.plan-timeline-line').getBoundingClientRect(); return [...document.querySelectorAll('[data-tl-text]')].every(t => t.getBoundingClientRect().left > l.right); })()`);
     await check('no animation is left running', `document.getAnimations().filter(a => a.playState === 'running' && !/plan-working|ripple/.test(a.animationName || '') && a.effect?.getTiming?.().iterations !== Infinity).length === 0`);
     await shot('timeline-open');
     await run(`document.querySelector('.plan-sheet-toggle').click()`);
     await frames('timeline-fold', 12, 25);
     await sleep(300);
+    await check('the folded line spans from the first dot to the last', `(() => { const l = document.querySelector('.plan-timeline-line').getBoundingClientRect(), d = [...document.querySelectorAll('[data-tl-dot]')].map(e => e.getBoundingClientRect()); const c = r => r.left + r.width / 2; return Math.abs(l.left - c(d[0])) < 2 && Math.abs(l.right - c(d.at(-1))) < 2; })()`);
     await check('folding turns it back into dots', `!!document.querySelector('[data-plan-timeline="horizontal"]')`);
     // A dot click opens the plan at that step.
     await run(`document.querySelector('[data-tl-dot="step_4"]').click()`);
@@ -131,5 +139,5 @@ app.whenReady().then(async () => {
     if (!report.hidden || report.focused) throw Error('Isolation invariant failed');
     report.success = true;
   } catch (e) { report.errors.push(String(e.stack || e)); report.success = false; }
-  finally { fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2)); console.log(JSON.stringify({ checks: report.checks, errors: report.errors, success: report.success, openTransform: report.openTransform })); win.destroy(); app.exit(report.success ? 0 : 1); }
+  finally { fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2)); console.log(JSON.stringify({ checks: report.checks, errors: report.errors, success: report.success, openTransform: report.openTransform, openGaps: report.openGaps })); win.destroy(); app.exit(report.success ? 0 : 1); }
 });

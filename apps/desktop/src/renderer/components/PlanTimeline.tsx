@@ -53,6 +53,8 @@ export const PlanTimeline = forwardRef<PlanTimelineHandle, {
   const geometry = useRef<Snapshot['line']>(undefined);
   const [hover, setHover] = useState<{ id: string; anchor: DOMRect } | null>(null);
   const hideTimer = useRef(0);
+  // While the dots fly, their boxes are mid-transform: measuring then would lay the line short.
+  const flying = useRef(false);
   const done = lastFinished(steps);
 
   const dots = () => [...(box.current?.querySelectorAll<HTMLElement>('[data-tl-dot]') ?? [])];
@@ -60,7 +62,7 @@ export const PlanTimeline = forwardRef<PlanTimelineHandle, {
   /** Places both lines from the first dot's centre to the last (and the last finished) dot's. */
   const layLine = useCallback(() => {
     const el = box.current, t = track.current, f = fill.current;
-    if (!el || !t || !f) return;
+    if (!el || !t || !f || flying.current) return;
     const all = dots();
     if (all.length < 2) { t.style.display = f.style.display = 'none'; geometry.current = undefined; return; }
     const origin = el.getBoundingClientRect();
@@ -112,6 +114,7 @@ export const PlanTimeline = forwardRef<PlanTimelineHandle, {
     // Nothing in flight should flash the sheet's scrollbars.
     const scroller = box.current.closest<HTMLElement>('.plan-sheet-scroll');
     scroller?.setAttribute('data-turning', '');
+    flying.current = true;
     const played: Animation[] = [];
     const timing = { duration, easing: EASE_OUT };
     for (const dot of dots()) {
@@ -141,8 +144,9 @@ export const PlanTimeline = forwardRef<PlanTimelineHandle, {
     )));
     let live = true;
     // Cancelled when the plan switches again mid-flight; either way the scrollbars come back.
-    void Promise.allSettled(played.map(a => a.finished)).then(() => { if (live) scroller?.removeAttribute('data-turning'); });
-    return () => { live = false; scroller?.removeAttribute('data-turning'); };
+    const land = () => { flying.current = false; scroller?.removeAttribute('data-turning'); layLine(); };
+    void Promise.allSettled(played.map(a => a.finished)).then(() => { if (live) land(); });
+    return () => { live = false; flying.current = false; scroller?.removeAttribute('data-turning'); };
   }, [vertical]);
 
   // Opened from a dot: bring that step into view.

@@ -17,7 +17,6 @@ import { PLAN_DISPLAYS, type PlanDisplay } from '../planDisplay.js';
 import { PlanTimeline, type PlanTimelineHandle, type StepDetail } from './PlanTimeline.js';
 import { saveSettings } from '../settingsIndex.js';
 import { PlanRow } from './PlanRow.js';
-import { PlanWorking } from './PlanWorking.js';
 import { StatusIcon, type AgentStatus } from './WorkspaceCard.js';
 import { PrStatusIcon, prStatus, prTone } from './SessionPrChip.js';
 import { issueLook, useIssueInfo } from './PrLinkChip.js';
@@ -43,8 +42,9 @@ export function stepDetail(step: Pick<PlanStep, 'status' | 'verification' | 'upd
 }
 
 /**
- * The step's bullet. A reported check outranks the step's own status, so a
- * done step whose check is still running shows the working ripple, and a
+ * The step's bullet: a dotted ring while pending, the green rocket while
+ * building, a check when done. A reported check outranks the step's own
+ * status, so a done step whose check is still running shows the rocket, and a
  * failed or blocked check shows on the bullet rather than in a chip beside it.
  * With evidence attached, the bullet opens it, unless it sits inside the
  * timeline's dot button (`still`), which opens the plan instead.
@@ -56,13 +56,17 @@ function StepMark({ step, paused, still, dot }: { step: Pick<PlanStep, 'id' | 's
   const evidence = !still && safeProgressLink(v?.evidenceUrl);
   const glyph = running ? (paused
       ? <svg aria-hidden="true" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: 'var(--accent)' }}><path d="M8 5v14M16 5v14" /></svg>
-      : <PlanWorking />)
+      : <span className="plan-mark-rocket status-rocket inline-grid place-items-center" aria-hidden="true"><RocketIcon className="h-4 w-4" /></span>)
     : check === 'passed' || (!check && status === 'done') ? <CheckIcon className="h-3 w-3 text-success" />
     : check === 'failed' ? <span className="grid place-items-center" style={{ color: 'var(--danger)' }}><CloseIcon className="h-3 w-3" /></span>
     : check === 'blocked' ? <span className="grid place-items-center" style={{ color: 'var(--warning)' }}><WarningIcon className="h-3 w-3" /></span>
-    : <svg aria-hidden="true" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: 'var(--ink-faint)' }}>
-        <circle cx="12" cy="12" r="8" />
-        {status === 'skipped' && <path d="M6 18 18 6" />}
+    : status === 'skipped' ? <svg aria-hidden="true" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: 'var(--ink-faint)' }}>
+        <circle cx="12" cy="12" r="8" /><path d="M6 18 18 6" />
+      </svg>
+    // Pending: a dotted ring, still to come.
+    : <svg aria-hidden="true" className="h-3 w-3" data-plan-pending viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" style={{ color: 'var(--ink-soft)' }}>
+        {/* Ten even dots: the dash pattern divides a 40-unit path length exactly. */}
+        <circle cx="12" cy="12" r="8" pathLength={40} strokeDasharray="0.01 3.99" />
       </svg>;
   const tl = dot ? step.id : undefined;
   if (evidence) return <button type="button" className="plan-sheet-mark plan-timeline-mark mt-1 grid h-3 w-3 shrink-0 place-items-center" data-tl-dot={tl} data-plan-check={v?.status} aria-label={label + ', open evidence'} title={title} onClick={(e) => { e.stopPropagation(); open(evidence); }}>{glyph}</button>;

@@ -3336,7 +3336,10 @@ select:not([multiple]):not([size]) {
 @media (hover: hover) { .plan-timeline-dot:hover { background: color-mix(in srgb, var(--ink) 10%, var(--plan-sheet-bg)); } }
 @media (pointer: coarse) { .plan-timeline-dot { width: 32px; height: 32px; } }
 /* Open: the marks sit on the line with the sheet's surface behind them. */
-.plan-timeline-rows .plan-timeline-mark { position: relative; z-index: 1; border-radius: 999px; background: var(--plan-sheet-bg); box-shadow: 0 0 0 2px var(--plan-sheet-bg); }
+/* Open: the marks sit on the line with only the glyph's own disc cut out of it, and the
+   rows are spaced so the line between them reads. */
+.plan-timeline-rows { gap: 8px; }
+.plan-timeline-rows .plan-timeline-mark { position: relative; z-index: 1; border-radius: 999px; background: var(--plan-sheet-bg); }
 .plan-sheet-current { animation: plan-timeline-text var(--dur-fast) var(--ease-out); }
 @keyframes plan-timeline-text { from { opacity: 0; transform: translateX(-16px); } }
 .plan-timeline-card { position: fixed; z-index: 60; max-width: min(320px, calc(100vw - 16px)); padding: 8px 12px; border-radius: 8px; background: var(--surface); box-shadow: var(--shadow-float); font-size: var(--text-xs); line-height: 1.45; color: var(--ink); pointer-events: none; animation: plan-timeline-card var(--dur-med) var(--ease-out); }
@@ -5045,14 +5048,6 @@ html[data-library-transition="list"]::view-transition-new(library-list) { animat
 :is(button, a, [role="button"], summary, label).is-active .gf-icon > .gf-icon-solid { opacity: 1; }
 @media (prefers-reduced-motion: reduce) {
   .gf-icon > svg { transition: none; }
-}
-
-/* Plan ripple follows the supplied SVG timing; no motion in reduced-motion mode. */
-.plan-working { display: grid; place-items: center; color: var(--accent); }
-.plan-working-still { display: none; }
-@media (prefers-reduced-motion: reduce) {
-  .plan-working-motion { display: none; }
-  .plan-working-still { display: block; }
 }
 
 /* File editor syntax colours. Each hue is mixed with the theme's ink, so the
