@@ -1,7 +1,8 @@
 // First, so every module below sees the real packaging state in dev.
 import './devRuntime.js';
 import { NOTIFICATION_VISIBILITY_CHANNEL, visibleNotificationSession, visibleNotificationView, notificationWindowContext, trustedNotificationReporter } from '../notificationVisibility.js';
-import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, powerMonitor, screen, shell, systemPreferences } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, powerMonitor, screen, session, shell, systemPreferences } from 'electron';
+import { clearAppCaches, STORAGE_CLEAR_CACHES_CHANNEL } from '../storageCaches.js';
 import { fileURLToPath } from 'url';
 import { join, resolve, sep } from 'path';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
@@ -469,6 +470,7 @@ function registerDisplayWindows(dataDir: string): void {
   displayWindows = windows;
   const trusted = (e: Electron.IpcMainInvokeEvent | Electron.IpcMainEvent) => applicationWindows.has(e.sender.id);
   ipcMain.handle(DISPLAYS_LIST_CHANNEL, (e) => { if (!trusted(e)) throw new Error('untrusted'); return windows.state(e.sender.id); });
+  ipcMain.handle(STORAGE_CLEAR_CACHES_CHANNEL, (e) => { if (!trusted(e)) throw new Error('untrusted'); return clearAppCaches(session.defaultSession); });
   ipcMain.handle(DISPLAYS_TOGGLE_CHANNEL, (e, id: unknown, on: unknown, reducedMotion: unknown) => {
     if (!trusted(e) || typeof id !== 'string') throw new Error('bad request');
     windows.toggle(id, on === true, reducedMotion === true);

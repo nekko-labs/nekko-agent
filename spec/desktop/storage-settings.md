@@ -5,7 +5,7 @@ area: desktop
 
 # Storage: where Nekko's disk goes, and safe cleanup
 
-`[planned 2026-11-26; design approved by Philip 2026-11-26: nekko-designs/storage-settings-design-v2.html, notice option A]`
+`[implemented 2026-11-27; design approved by Philip 2026-11-26: nekko-designs/storage-settings-design-v2.html, notice option A; not yet seen in a packaged app or on Windows and Linux]`
 
 ## Intent
 
@@ -109,6 +109,15 @@ nekkod measures, never the renderer. `storage:usage` returns the last measuremen
 - Measuring reads sizes and Git state only; it never reads file contents or sends anything off the computer.
 - The cloud breakdown is sizes per kind, which the service already knows; no names, paths or contents.
 - Phones may not call the cleanup channels (`PHONE_DENIED_FOREVER`), like closing an app from the low-memory prompt: freeing disk on a computer is for the person at it.
+
+## Verification
+
+- nekkod unit tests: folder walks (symlinks, unreadable folders, nested build output, no double counting), the cached measurement, the idle rule (3 quiet days, untracked files, unpushed and merged heads, detached heads, a program working inside, locked), removal re-checking and keeping branches, runner image protection and path escapes.
+- nekkod daemon tests against the real binary: `storage:usage` and `storage:disk`, idle preview and bulk removal on a real repository, runner image list and removal.
+- Nekko Cloud API test: `usage.parts` by kind (PGlite).
+- Renderer tests (jsdom): the page's rows and order, measuring, select all and deselect all, confirmations, runner images, caches, cloud states; the low-disk thresholds and Not now; opening the Storage page.
+- Hidden, isolated full-App journey (`storage-settings-sandbox.cjs`, 13 checks, dark and light, 1440 and 390 wide) with this Mac's sizes from 2026-11-26.
+- Not checked: a packaged app, Windows and Linux (process working folders, cache clearing), the Local Web UI in a browser, a real merged-PR lookup through `gh` during bulk removal, and measuring time on a disk with hundreds of worktrees.
 
 ## Not in this version
 

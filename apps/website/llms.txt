@@ -67,6 +67,7 @@ Full docs in one file: https://nekkoagent.com/llms-full.txt. Each page is also a
 - [Simulators in use](https://nekkoagent.com/docs/simulators.md): See which chat is using each booted iOS simulator or Android emulator, what it costs in CPU, watch its screen, and shut it down.
 - [Connections](https://nekkoagent.com/docs/connections.md): Switch off every network connection at once or one by one, and see how often each one is used.
 - [Usage and crash reports](https://nekkoagent.com/docs/usage-reports.md): Opt in to anonymous usage and crash reports, what they contain, and how to see each send.
+- [Storage](https://nekkoagent.com/docs/storage.md): See where Nekko Agent's disk space goes on your computer and in Nekko Cloud, and free it safely: idle worktrees, old CI runner images, caches and chat history.
 - [Voice](https://nekkoagent.com/docs/voice.md): Tap the mic once and talk: dictation that stays on, "Nekko" commands, and speech that never leaves your computer.
 - [Privacy Shield](https://nekkoagent.com/docs/privacy-shield.md): Replace emails, phone numbers, secrets and your own terms with placeholders before a request reaches a cloud model.
 - [Code mode](https://nekkoagent.com/docs/code-mode.md): Let the model write code that calls your tools in a sandbox, so long tool lists and big results cost far fewer tokens.

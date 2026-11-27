@@ -22,7 +22,7 @@ describe('Settings section nav', () => {
 
   it('files the rest under Nekko Agent, then Privacy and devices', () => {
     const under = (label: string) => SETTINGS_GROUPS.filter((g) => groupSection(g) === label).map((g) => g.label);
-    expect(under('Nekko Agent')).toEqual(['General', 'Appearance', 'Agents', 'Tools']);
+    expect(under('Nekko Agent')).toEqual(['General', 'Appearance', 'Agents', 'Tools', 'Storage']);
     expect(under('Privacy and devices')).toEqual(['Safety', 'Connections', 'Phone and computers', 'System']);
     // Each label's groups sit together, so the rail draws each label once.
     const sections = SETTINGS_GROUPS.map(groupSection).filter(Boolean);
