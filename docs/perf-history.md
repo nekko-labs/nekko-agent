@@ -39,6 +39,18 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Selective chat orchestration (#3527, 2026-11-27)
+Area: local inference / engine daemon
+Result: mixed (workload probe, not a before/after build benchmark)
+Conditions: Apple M1 Max, 64 GB, macOS 27.2.1; isolated loopback llama.cpp/Metal; Qwen 3.6 35B-A3B Q4_K_M leader, Gemma 4 E4B Q4_K_M worker. Temperature 0, 768 output tokens per model call. One sequential run per arm on the pre-change daemon, one four-file synthetic read-only audit, nine expected fields. The direct and coordinator-only arms used the same read-it-yourself instruction; the worker arm instructed a split and auto-approved only the narrow fixture assignment. Markdown fences were accepted; prose outside the JSON failed the check.
+
+| Arm | Wall time | Model requests | Result |
+| --- | ---: | ---: | --- |
+| Direct | 45.870 s | 2 | Incorrect: north ledger counts only |
+| Coordinator only | 45.560 s | 2 | Correct values and output shape |
+| Coordinator + Gemma | 99.494 s | 5 | Approved worker returned; correct values, extra prose |
+
+Why: a worker added inference round trips and a handoff on this small task. The experiment does not establish a general speed or quality effect, a hosted-provider comparison, or performance after the new intent gate. Source: isolated scripted evidence from the issue's development run.
 ## iPhone prompt photo thumbnails decode once, off the main thread (#3383, 2026-11-26)
 Area: renderer
 Result: improvement (main-thread cost per photo per row evaluation); not profiled in the running app

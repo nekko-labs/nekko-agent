@@ -71,6 +71,20 @@ private final class RefreshFixtureConnection: RemoteConnection, @unchecked Senda
                 }
             }
         }
+        if ProcessInfo.processInfo.arguments.contains("-refreshStrategy") {
+            let direct: JSONValue = ["tools": "list", "orchestration": "direct", "reason": "not-needed"]
+            let coordinator: JSONValue = ["tools": "code", "orchestration": "coordinator", "reason": "requested"]
+            let messages: [JSONValue] = [
+                ["id": "u1", "role": "user", "content": "Read the project brief.", "turnStrategy": direct],
+                ["id": "a1", "role": "assistant", "content": "The brief calls for checking both ledgers."],
+                ["id": "u2", "role": "user", "content": "What is the review cycle?", "turnStrategy": direct],
+                ["id": "a2", "role": "assistant", "content": "The review cycle is 17 days."],
+                ["id": "u3", "role": "user", "content": "Delegate the ledger review.", "turnStrategy": coordinator],
+                ["id": "a3", "role": "assistant", "content": "The ledgers agree with the audit totals."],
+            ]
+            return ["id": "refresh-fixture", "title": "Ledger audit", "modelId": "claude-opus-5-5",
+                    "updatedAt": 1793800000000, "messages": .array(messages)]
+        }
         let count = ProcessInfo.processInfo.arguments.contains("-refreshLongChat") ? 30 : 2
         let messages: [JSONValue] = (1...count).map { i in
             ["id": .string("m-\(i)"), "role": .string(i % 2 == 0 ? "assistant" : "user"),

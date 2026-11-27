@@ -1,3 +1,4 @@
+import { TurnStrategyRow } from './agent-console/TurnStrategyRow';
 import { fusionEnabled, fusionStrategy } from '@nekko-agent/shared';
 import { useChatEngine, useDropCodeModeOnClaudeAgent } from './codeModeLock.js';
 import { ContextChangeNotice, showContextChangeNotice } from './ContextChangeNotice.js';
@@ -482,6 +483,7 @@ const TranscriptRowView = memo(function TranscriptRowView({
   /** Photo chats: attach a generated picture to the composer to change it. */
   onEditImage?: (src: string) => void;
 }) {
+  if (row.kind === 'strategy') return <TurnStrategyRow strategy={row.strategy} />;
   if (row.kind === 'activity') return <ActivityGroup items={row.items} />;
   if (row.kind === 'compaction') return <CompactionSummary message={row.message} latest={row.latest} />;
   if (row.kind === 'stats') return <div className="msg-ai"><ReplyStatsRow stats={row.stats} /></div>;
