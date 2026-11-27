@@ -60,7 +60,7 @@ object FleetLink {
     }
 
     /**
-     * The sentence for a refusal of an account HELLO (decision 0126), where the phone may have no pairing to fall back on.
+     * The sentence for a refusal of an account HELLO (decision 0128), where the phone may have no pairing to fall back on.
      * `invalid` is the computer's catch-all for a HELLO it could not check.
      */
     fun accountRefusalText(code: String): String? = when (code) {
@@ -76,7 +76,7 @@ object FleetLink {
     /** The empty org id an account HELLO proof carries: account scope, not an organization's. */
     const val ACCOUNT_ORG = ""
 
-    /** A `reach` record's plaintext (decision 0126), or null when it is not in shape. A tombstone is [Reach.deleted]. */
+    /** A `reach` record's plaintext (decision 0128), or null when it is not in shape. A tombstone is [Reach.deleted]. */
     fun parseReach(plain: ByteArray): Reach? = runCatching {
         val v = WireJson.parseToJsonElement(String(plain, Charsets.UTF_8)).jsonObject
         if (v["v"]?.jsonPrimitive?.intOrNull != 1) return null
@@ -221,7 +221,7 @@ class ConnectInfo(val routes: List<String>, val room: String, val secret: String
 class FleetBinding(val room: String, val challenge: String, val hostEph: String, val clientEph: String, val helloKey: String)
 
 /**
- * A computer of this account, as it published itself in a `reach` record (decision 0126): how to dial it with no pairing.
+ * A computer of this account, as it published itself in a `reach` record (decision 0128): how to dial it with no pairing.
  * [deviceId] is the computer's account device id. Holds the room secret, so its `toString` says nothing.
  */
 data class Reach(

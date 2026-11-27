@@ -100,7 +100,7 @@ data class ConnectionFacts(
      * another internet relay, decision 0116), so Tailscale being off is not what keeps it away.
      */
     val offTailnet: Boolean = false,
-    /** A computer of the account, dialed with no pairing (decision 0126): a refusal reads as the account's. */
+    /** A computer of the account, dialed with no pairing (decision 0128): a refusal reads as the account's. */
     val fromAccount: Boolean = false,
 ) {
     /** Only Tailscale reaches this computer: when Tailscale is off, it is the thing to fix. */

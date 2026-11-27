@@ -25,7 +25,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Devices of one Nekko Cloud account connect without pairing (decision 0126): a paired computer's routes gain the
+ * Devices of one Nekko Cloud account connect without pairing (decision 0128): a paired computer's routes gain the
  * `reach` record's, and a computer with no pairing shows from the account and is dialed with the account HELLO.
  */
 @OptIn(ExperimentalCoroutinesApi::class)

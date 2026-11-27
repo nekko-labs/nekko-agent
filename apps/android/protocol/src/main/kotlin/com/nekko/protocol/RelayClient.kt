@@ -53,7 +53,7 @@ enum class DenyReason(val wire: String) {
     UPDATE_REQUIRED("update-required"),
     /** The computer only lets this phone in through another route (its per-device route choice, #3243). */
     ROUTE("route"),
-    /** An account HELLO (decision 0126) the computer refused: see [FleetLink.accountRefusalText]. */
+    /** An account HELLO (decision 0128) the computer refused: see [FleetLink.accountRefusalText]. */
     FLEET_OFF("fleet-off"), FLEET_DEVICE("fleet-device"), FLEET_EPOCH("fleet-epoch"), FLEET_ACCOUNT("fleet-account"), FLEET_LOCKED("fleet-locked");
 
     /** A refusal of an account HELLO. */

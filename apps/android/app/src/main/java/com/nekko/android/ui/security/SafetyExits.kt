@@ -120,7 +120,7 @@ fun safetyExits(s: ComputersState, exits: SafetyExits, res: Resources): List<Saf
     val name = s.active?.name ?: return emptyList()
     val online = s.conn == RelayState.ONLINE
     return buildList {
-        // A computer of the account has no pairing to sign out of (decision 0126).
+        // A computer of the account has no pairing to sign out of (decision 0128).
         if (s.active?.fromAccount != true) add(
             SafetyExit(
                 res.getString(R.string.settings_exit_sign_out),

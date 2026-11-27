@@ -140,7 +140,7 @@ class ComputersRepository(
     /** The background queue saved chats are written on (#3413); null writes on the caller's thread (tests). */
     private val io: com.nekko.protocol.BackgroundIO? = null,
     /**
-     * The account's computers that publish how to reach them (`reach` records, decision 0126), from Nekko Cloud sync.
+     * The account's computers that publish how to reach them (`reach` records, decision 0128), from Nekko Cloud sync.
      * Empty while signed out, so a phone with no sign-in changes nothing.
      */
     private val accountReach: StateFlow<List<Reach>> = MutableStateFlow(emptyList()),
@@ -641,7 +641,7 @@ class ComputersRepository(
             key = secret.key,
             keyBytes = E2E.fromHex(secret.keyHex),
             hostKey = hostKey,
-            // A computer of the account has no pairing: this phone is `fleet:<its account device id>` there (decision 0126).
+            // A computer of the account has no pairing: this phone is `fleet:<its account device id>` there (decision 0128).
             deviceId = identity?.linkDeviceId ?: deviceId(),
             deviceName = deviceName(),
             pairCode = secret.pair,
@@ -1494,7 +1494,7 @@ class ComputersRepository(
     /** Only pairings are saved: a computer from the account is rebuilt from its `reach` record and goes on sign-out. */
     private suspend fun saveIndex(list: List<Computer>) = store.set(INDEX_KEY, StoredJson.encodeIndex(list.filter { !it.fromAccount }))
 
-    // ---- the account's computers (decision 0126) ----
+    // ---- the account's computers (decision 0128) ----
 
     private val accountKeys = java.util.concurrent.ConcurrentHashMap<String, String>()
     private val accountRetried = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
@@ -1634,7 +1634,7 @@ class ComputersRepository(
         /** The service section's reads, and its changes (an install may take a while to be accepted), as on the iPhone. */
         const val SERVICE_READ_TIMEOUT_MS = 10_000L
         const val SERVICE_CHANGE_TIMEOUT_MS = 60_000L
-        /** The id of a computer shown from the account (decision 0126): never a pairing's id. */
+        /** The id of a computer shown from the account (decision 0128): never a pairing's id. */
         const val ACCOUNT_PREFIX = "account:"
         fun secretKey(id: String) = "nekko.computer.$id"
     }

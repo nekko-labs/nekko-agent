@@ -173,7 +173,7 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
                                 leadingIcon = { Icon(Icons.Outlined.Refresh, contentDescription = null) },
                                 onClick = { menu = false; scope.launch { machine.refresh() } },
                             )
-                            // A computer of the account has no pairing to forget (decision 0126): it goes on sign-out.
+                            // A computer of the account has no pairing to forget (decision 0128): it goes on sign-out.
                             if (c?.fromAccount != true) {
                                 HorizontalDivider()
                                 DropdownMenuItem(

@@ -115,7 +115,7 @@ class CloudSync(
         val waitingForApproval: Boolean = false,
         /** While waiting: the one-time code to type on the computer that approves this phone. */
         val joinCode: String? = null,
-        /** The account's computers that publish how to reach them (decision 0126); none while signed out. */
+        /** The account's computers that publish how to reach them (decision 0128); none while signed out. */
         val reach: List<Reach> = emptyList(),
     )
 
@@ -196,7 +196,7 @@ class CloudSync(
         reachRecords.values.mapNotNull { FleetLink.parseReach(it.toByteArray(Charsets.UTF_8)) }.filter { !it.deleted }.sortedBy { it.name.lowercase() }
 
     /**
-     * What the account HELLO needs (decision 0126): null while signed out, not joined, or when this phone's id or the
+     * What the account HELLO needs (decision 0128): null while signed out, not joined, or when this phone's id or the
      * account's ids can't be carried in a HELLO. Call it just before dialing; it reads the current epoch's keyring.
      */
     suspend fun accountIdentity(): AccountIdentity? {
@@ -575,7 +575,7 @@ class CloudSync(
                 }
             }
             "reach" -> {
-                // A computer's own record (decision 0126): it must open, be in shape, and hash back to the object id it is filed under.
+                // A computer's own record (decision 0128): it must open, be in shape, and hash back to the object id it is filed under.
                 val plain = runCatching { SyncCrypto.openRecord(kr, accountId, kid, collection, oid, rev, blob) }.getOrNull() ?: return
                 val r = FleetLink.parseReach(plain) ?: return
                 if (runCatching { SyncCrypto.objectId(kr, "reach", r.deviceId) }.getOrNull() != oid) return
@@ -902,7 +902,7 @@ class CloudSync(
 }
 
 /**
- * Keeps the account's `reach` records fresh while the app is open (decision 0126): one sync at [start] (launch), one
+ * Keeps the account's `reach` records fresh while the app is open (decision 0128): one sync at [start] (launch), one
  * on [onForeground], and one every [intervalMs] after that. Each is [CloudSync.syncQuietly], so a phone that is
  * signed out or not joined does nothing.
  */

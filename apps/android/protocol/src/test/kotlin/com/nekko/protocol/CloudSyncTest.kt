@@ -587,7 +587,7 @@ class CloudSyncTest {
         assertFalse("the recovery key is never stored", secrets.items.values.any { it.contains(mac.recovery.text) })
     }
 
-    // ---- reach records (decision 0126) ----
+    // ---- reach records (decision 0128) ----
 
     private fun sealReach(fake: FakeCloud, mac: Computer, deviceId: String, plain: String, rev: Long, oid: String? = null, keyring: SyncCrypto.Keyring? = null, epoch: Long? = null) {
         val k = keyring ?: mac.keyring

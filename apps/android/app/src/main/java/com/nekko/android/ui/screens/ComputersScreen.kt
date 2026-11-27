@@ -271,7 +271,7 @@ private fun ComputerCard(
                         leadingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null) },
                         onClick = { menu = false; onRename() },
                     )
-                    // A computer of the account has no pairing to forget (decision 0126): it goes on sign-out.
+                    // A computer of the account has no pairing to forget (decision 0128): it goes on sign-out.
                     if (!c.fromAccount) DropdownMenuItem(
                         text = { Text(stringResource(R.string.settings_forget_this_computer), color = p.danger) },
                         leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = p.danger) },
