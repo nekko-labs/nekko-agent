@@ -14,7 +14,7 @@ import type { ChatArtifact } from '../chatArtifacts.js';
 import { canonicalPrUrl, progressAge, safeProgressLink } from './WorkProgress.js';
 import { runPrAction } from './PrCard.js';
 import { PLAN_DISPLAYS, type PlanDisplay } from '../planDisplay.js';
-import { PlanTimeline, type PlanTimelineHandle, type StepDetail } from './PlanTimeline.js';
+import { PLAN_FOLD_EASING, PlanTimeline, type PlanTimelineHandle, type StepDetail } from './PlanTimeline.js';
 import { saveSettings } from '../settingsIndex.js';
 import { PlanRow } from './PlanRow.js';
 import { StatusIcon, type AgentStatus } from './WorkspaceCard.js';
@@ -245,6 +245,8 @@ function SubagentCards({ children, running, onOpen }: { children: SessionSummary
   </div>;
 }
 
+const FOLD_HEIGHT_MS = 150;
+
 /** The composer's plan: flat title rows with inline chips and per-row overflow. */
 const childrenOf = stableSelector((s: { sessions?: SessionSummary[] }, id) => (s.sessions ?? []).filter((c) => c.parentSessionId === id));
 
@@ -263,8 +265,37 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
   const [override, setOverride] = useState<{ mode: PlanDisplay; full: boolean; at?: string }>();
   const full = override?.mode === mode ? override.full : initiallyOpen ?? mode === 'full';
   const timeline = useRef<PlanTimelineHandle>(null);
-  // Record where the dots are, then switch, so the timeline can move them from there.
-  const setFull = (next: boolean, at?: string) => { timeline.current?.capture(); setOverride({ mode, full: next, at }); };
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const stopFold = useRef<() => void>(undefined);
+  const setFull = (next: boolean, at?: string) => {
+    const scroll = scrollRef.current;
+    // Capture the visible geometry before releasing a height that is still in flight.
+    timeline.current?.capture();
+    stopFold.current?.();
+    if (!next && scroll?.animate && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      const from = scroll.getBoundingClientRect().height;
+      scroll.style.height = `${from}px`;
+      let animation: Animation | undefined;
+      const stop = () => {
+        animation?.cancel();
+        scroll.style.height = '';
+        stopFold.current = undefined;
+      };
+      stopFold.current = stop;
+      timeline.current?.afterTurn(() => {
+        if (stopFold.current !== stop) return;
+        // Release the lock and measure the folded layout, in the same frame.
+        scroll.style.height = '';
+        const to = scroll.getBoundingClientRect().height;
+        stopFold.current = undefined;
+        if (from <= to) return;
+        animation = scroll.animate([{ height: `${from}px` }, { height: `${to}px` }], { duration: FOLD_HEIGHT_MS, easing: PLAN_FOLD_EASING });
+        stopFold.current = stop;
+        void animation.finished.then(() => { if (stopFold.current === stop) stop(); }, () => {});
+      });
+    }
+    setOverride({ mode, full: next, at });
+  };
   // These chips are pull requests, so the condition holds wherever they would draw.
   const prsShown = useShown('pr-status', { pr: true });
   const childSessions = useStore((s) => childrenOf(s, sessionId));
@@ -305,7 +336,9 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
   // still share that step's disclosure, without a synthetic phase wrapper.
   const links = useMemo(() => planStepLinks(messages ?? [], plan, basePath, childSessions),
     [messages, plan, basePath, childSessions]);
-  if (!plan.length || mode === 'hidden') return null;
+  const visible = plan.length > 0 && mode !== 'hidden';
+  useLayoutEffect(() => () => stopFold.current?.(), [mode, sessionId, visible]);
+  if (!visible) return null;
   const running = new Set(runningSessionIds());
   const childById = new Map(childSessions.map((c): [string, Child] => [c.id, { id: c.id, title: c.title || 'Sub-agent', running: running.has(c.id) || !!getLiveRun(c.id) || !!c.activeRun }]));
   const openChild = onOpenChild ?? ((id: string) => useStore.getState().openChatPane(id));
@@ -362,18 +395,20 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
   };
   return <div className="plan-sheet-dock"><div className="plan-sheet" data-plan-sheet data-folded={!full || undefined} aria-label="Agent plan">
     <div className="plan-sheet-head">
-      <span className="flex-1 font-semibold text-ink-soft">Plan</span>
+      <button type="button" className="plan-sheet-toggle" onClick={() => setFull(!full)} aria-expanded={full} title={full ? 'Fold the plan' : 'Show the whole plan'}>
+        <span className="font-semibold text-ink-soft">Plan</span>
+        <span className="plan-sheet-progress">
+          <span className="tabular-nums">{progress.done + progress.skipped} of {progress.total} done</span>
+          <PlanCaret direction={full ? 'up' : 'down'} label={full ? 'Fold the plan' : 'Show the whole plan'} />
+        </span>
+      </button>
       <label className="plan-config" title="Configure plan display"><SlidersIcon className="h-3 w-3" />
         <select aria-label="Configure plan display" value={mode} onChange={e => { setOverride(undefined); void saveSettings({ planDisplay: e.target.value as PlanDisplay }); }}>
           {PLAN_DISPLAYS.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
         </select>
       </label>
-      <button type="button" className="plan-sheet-toggle" onClick={() => setFull(!full)} aria-expanded={full} title={full ? 'Fold the plan' : 'Show the whole plan'}>
-        <span className="tabular-nums">{progress.done + progress.skipped} of {progress.total} done</span>
-        <PlanCaret direction={full ? 'up' : 'down'} label={full ? 'Fold the plan' : 'Show the whole plan'} />
-      </button>
     </div>
-    <div className="plan-sheet-scroll">
+    <div ref={scrollRef} className="plan-sheet-scroll">
       <PlanTimeline ref={timeline} steps={plan} vertical={full} focusId={override?.at}
         renderMark={step => <StepMark step={step} paused={paused} still />}
         renderRow={renderRow}

@@ -58,7 +58,7 @@ app.whenReady().then(async () => {
     await run(`(() => { const f=layoutFixture, prs=f.store.getState().prsBySession.a; f.bridge.listSessionPrs=async()=>prs; f.bridge.getPrInfo=async()=>prs[0]; })()`);
     await run(`layoutFixture.store.getState().refreshSessions()`);
     if (process.env.NEKKO_PLAN_LAYOUT !== 'grid') await run(`layoutFixture.store.setState({ focusRequest: { sessionId: 'a' } })`);
-    await run(`layoutFixture.store.setState({settings:{...layoutFixture.store.getState().settings,theme:'dark',themePreset:'x-blueberry-dark'}}); layoutFixture.store.getState().applyTheme()`);
+    await run(`layoutFixture.store.setState({settings:{...layoutFixture.store.getState().settings,theme:'dark',themePreset:undefined}}); layoutFixture.store.getState().applyTheme()`);
     await sleep(1200);
     await run(`(() => { const style = document.createElement('style'); style.textContent = '.plan-sheet { animation: none !important; }'; document.head.append(style); })()`);
     const frames = async (name, count, gap) => { const list = []; for (let i = 0; i < count; i++) { const png = (await win.capturePage(undefined, { stayHidden: true })).toPNG(); list.push(png); fs.mkdirSync(path.join(out, name), { recursive: true }); fs.writeFileSync(path.join(out, name, String(i).padStart(3, '0') + '.png'), png); await sleep(gap); } const gif = path.join(out, name + '.gif'); writeGif(gif, list, Math.round(1000 / gap)); report.captures.push(gif); };
@@ -105,11 +105,72 @@ app.whenReady().then(async () => {
     await check('rows sit right of the line', `(() => { const l = document.querySelector('.plan-timeline-line').getBoundingClientRect(); return [...document.querySelectorAll('[data-tl-text]')].every(t => t.getBoundingClientRect().left > l.right); })()`);
     await check('no animation is left running', `document.getAnimations().filter(a => a.playState === 'running' && !/plan-working|ripple/.test(a.animationName || '') && a.effect?.getTiming?.().iterations !== Infinity).length === 0`);
     await shot('timeline-open');
-    await run(`document.querySelector('.plan-sheet-toggle').click()`);
+    const measureFold = `(() => {
+      const scroll = document.querySelector('.plan-sheet-scroll');
+      const head = document.querySelector('.plan-sheet-toggle');
+      const originalHeight = scroll.getBoundingClientRect().height;
+      window.planFoldSamples = [];
+      head.click();
+      const start = performance.now();
+      function sample() {
+        const height = scroll.getBoundingClientRect().height;
+        const frame = scroll.getAnimations({ subtree: true });
+        const turn = frame.find(a => a.effect.target.matches('.plan-timeline-line') && a.playState === 'running');
+        const shrink = frame.find(a => a.effect.target === scroll && a.playState === 'running');
+        planFoldSamples.push({ originalHeight, height, turn: !!turn, shrink: !!shrink, easing: shrink?.effect.getTiming().easing });
+        if (performance.now() - start < 450) requestAnimationFrame(sample);
+      }
+      requestAnimationFrame(sample);
+    })()`;
+    await run(measureFold);
     await frames('timeline-fold', 12, 25);
     await sleep(300);
     await check('the folded line spans from the first dot to the last', `(() => { const l = document.querySelector('.plan-timeline-line').getBoundingClientRect(), d = [...document.querySelectorAll('[data-tl-dot]')].map(e => e.getBoundingClientRect()); const c = r => r.left + r.width / 2; return Math.abs(l.left - c(d[0])) < 2 && Math.abs(l.right - c(d.at(-1))) < 2; })()`);
     await check('folding turns it back into dots', `!!document.querySelector('[data-plan-timeline="horizontal"]')`);
+    report.foldSamples = await run('window.planFoldSamples');
+    if (!process.env.NEKKO_TEST_SOURCE) {
+      await check('collapse holds the open height until the timeline settles, then eases to its intrinsic height', `(() => {
+        const turning = planFoldSamples.filter(f => f.turn), shrinking = planFoldSamples.filter(f => f.shrink);
+        const last = planFoldSamples.at(-1);
+        return turning.length > 1 && turning.every(f => !f.shrink && Math.abs(f.height - f.originalHeight) < 1)
+          && shrinking.length > 1 && shrinking.some(f => f.height < f.originalHeight && f.height > last.height)
+          && shrinking.every(f => !f.turn && f.easing === 'cubic-bezier(0.35, 0, 0.25, 1)')
+          && last.height < last.originalHeight && document.querySelector('.plan-sheet-scroll').style.height === '';
+      })()`);
+      await win.webContents.debugger.sendCommand('Emulation.setFocusEmulationEnabled', { enabled: true });
+      const press = async (key, code, windowsVirtualKeyCode) => {
+        await win.webContents.debugger.sendCommand('Input.dispatchKeyEvent', { type: 'keyDown', key, code, windowsVirtualKeyCode, text: key === 'Enter' ? '\r' : key });
+        await win.webContents.debugger.sendCommand('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode });
+      };
+      await run(`document.querySelector('.plan-sheet-toggle').focus()`);
+      report.focusBefore = await run(`document.activeElement.outerHTML.slice(0, 180)`);
+      await press('Enter', 'Enter', 13);
+      await sleep(420);
+      report.focusAfter = await run(`document.activeElement.outerHTML.slice(0, 180)`);
+      await check('Enter opens the focused Plan bar', `document.activeElement.matches('.plan-sheet-toggle[aria-expanded="true"]')`);
+      await press(' ', 'Space', 32);
+      await sleep(70);
+      await check('Space folds the focused Plan bar', `document.activeElement.matches('.plan-sheet-toggle[aria-expanded="false"]') && !!document.querySelector('[data-turning]')`);
+      await press('Enter', 'Enter', 13);
+      await sleep(450);
+      await check('reopening during the turn cancels the fold and keeps keyboard focus', `document.activeElement.matches('.plan-sheet-toggle[aria-expanded="true"]') && !!document.querySelector('[data-plan-timeline="vertical"]') && document.querySelector('.plan-sheet-scroll').style.height === '' && !document.querySelector('[data-turning]')`);
+      await run(`document.querySelector('.plan-sheet-toggle').click()`);
+      await sleep(500);
+      const label = await run(`(() => { const el = document.querySelector('.plan-sheet-toggle > span:first-child'); const r = el.getBoundingClientRect(); return { x: Math.round(r.left + 12), y: Math.round(r.top + r.height / 2) }; })()`);
+      for (const type of ['mouseMove', 'mouseDown', 'mouseUp']) win.webContents.sendInputEvent({ type, ...label, button: 'left', clickCount: 1 });
+      await sleep(450);
+      await check('the left Plan label opens the card without changing the saved display', `!!document.querySelector('.plan-sheet-toggle[aria-expanded="true"]') && (layoutFixture.store.getState().settings.planDisplay ?? 'balanced') === 'balanced'`);
+      const settings = `document.querySelector('.plan-config select')`;
+      await check('the sliders are a separate pointer and tab target over the Plan bar', `(() => {
+        const select = ${settings}, r = select.getBoundingClientRect();
+        return document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) === select && !select.closest('button') && select.tabIndex === 0;
+      })()`);
+      await run(`(() => { const s = ${settings}; s.value = 'one'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+      await sleep(450);
+      await check('the separate display control still saves Timeline only', `layoutFixture.store.getState().settings.planDisplay === 'one' && !!document.querySelector('[data-plan-timeline="horizontal"]') && !document.querySelector('[data-plan-current]')`);
+      await run(`(() => { const s = ${settings}; s.value = 'balanced'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+      await sleep(450);
+    }
     // A dot click opens the plan at that step.
     await run(`document.querySelector('[data-tl-dot="step_4"]').click()`);
     await sleep(500);
@@ -121,6 +182,13 @@ app.whenReady().then(async () => {
     await sleep(40);
     report.reducedAnims = await run(`document.getAnimations().map(a => a.effect?.getKeyframes?.().map(k => k.transform).filter(Boolean)).flat()`);
     await check('reduced motion moves nothing, only fades', `document.getAnimations().length > 0 && document.getAnimations().every(a => !(a.effect?.getKeyframes?.() ?? []).some(k => k.transform && k.transform !== 'none'))`);
+    if (!process.env.NEKKO_TEST_SOURCE) {
+      await sleep(400);
+      await run(measureFold);
+      await sleep(320);
+      await check('reduced motion folds immediately without a held height or height animation', `planFoldSamples.length > 0 && planFoldSamples.every(f => !f.shrink && f.height < f.originalHeight)`);
+      await run(`document.querySelector('.plan-sheet-toggle').click()`);
+    }
     await sleep(400);
     await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
     await run(`document.querySelector('.plan-sheet-toggle').click()`);
@@ -135,6 +203,9 @@ app.whenReady().then(async () => {
     await shot('timeline-mobile');
     report.mobile = await run(`({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth })`);
     await check('no sideways scroll at phone width', `document.documentElement.scrollWidth <= innerWidth`);
+    await run(`document.querySelector('.plan-sheet-toggle').click()`);
+    await sleep(500);
+    await shot('timeline-mobile-open');
     report.hidden = !win.isVisible(); report.focused = win.isFocused(); report.bounds = win.getBounds();
     if (!report.hidden || report.focused) throw Error('Isolation invariant failed');
     report.success = true;

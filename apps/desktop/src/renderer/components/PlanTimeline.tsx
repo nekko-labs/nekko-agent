@@ -7,13 +7,15 @@ import { EASE_OUT } from '../easing.js';
 export type StepDetail = { status: string; detail?: string };
 
 /** Lets the sheet record where the dots are before it switches between the line and the list. */
-export type PlanTimelineHandle = { capture: () => void };
+export type PlanTimelineHandle = { capture: () => void; afterTurn: (callback: () => void) => void };
 
 type Point = { x: number; y: number };
 type Snapshot = { dots: Map<string, Point>; line?: { start: Point; angle: number; track: number; done: number } };
 
 /** Durations: the line turns in under 300ms; the text arrives fast behind it. Exits run about a quarter faster. */
-export const TIMELINE_MOTION = { turn: 280, turnBack: 210, text: 160, textStagger: 18, textDelay: 90, textShift: 16 };
+export const TIMELINE_MOTION = { turn: 280, turnBack: 190, text: 160, textStagger: 18, textDelay: 90, textShift: 16 };
+
+export const PLAN_FOLD_EASING = 'cubic-bezier(0.35, 0, 0.25, 1)';
 
 const center = (el: Element): Point => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
 const reduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -51,6 +53,7 @@ export const PlanTimeline = forwardRef<PlanTimelineHandle, {
   const fill = useRef<HTMLSpanElement>(null);
   const snapshot = useRef<Snapshot | null>(null);
   const geometry = useRef<Snapshot['line']>(undefined);
+  const afterTurn = useRef<() => void>(undefined);
   const [hover, setHover] = useState<{ id: string; anchor: DOMRect } | null>(null);
   const hideTimer = useRef(0);
   // While the dots fly, their boxes are mid-transform: measuring then would lay the line short.
@@ -86,8 +89,22 @@ export const PlanTimeline = forwardRef<PlanTimelineHandle, {
       layLine();
       const map = new Map<string, Point>();
       for (const dot of dots()) map.set(dot.dataset.tlDot!, center(dot));
-      snapshot.current = { dots: map, line: geometry.current };
+      let line = geometry.current;
+      if (line && flying.current && box.current && track.current && fill.current) {
+        const t = track.current, f = fill.current, origin = box.current.getBoundingClientRect();
+        const matrix = new DOMMatrixReadOnly(getComputedStyle(t).transform);
+        const filled = new DOMMatrixReadOnly(getComputedStyle(f).transform);
+        line = {
+          start: { x: origin.left + t.offsetLeft + matrix.e, y: origin.top + t.offsetTop + matrix.f },
+          angle: Math.atan2(matrix.b, matrix.a) * 180 / Math.PI,
+          track: t.offsetWidth * Math.hypot(matrix.a, matrix.b),
+          done: f.offsetWidth * Math.hypot(filled.a, filled.b),
+        };
+      }
+      snapshot.current = { dots: map, line };
+      afterTurn.current = undefined;
     },
+    afterTurn(callback) { afterTurn.current = callback; },
   }), [layLine]);
 
   // Keep the line on the dots as the sheet resizes.
@@ -106,9 +123,11 @@ export const PlanTimeline = forwardRef<PlanTimelineHandle, {
   // stretches from its old place, and the rows arrive from the left.
   useLayoutEffect(() => {
     const before = snapshot.current;
+    const finish = afterTurn.current;
     snapshot.current = null;
+    afterTurn.current = undefined;
     setHover(null);
-    if (!before || !box.current || typeof Element === 'undefined' || !Element.prototype.animate) return;
+    if (!before || !box.current || !box.current.animate) { finish?.(); return; }
     const still = reduced();
     const duration = vertical ? TIMELINE_MOTION.turn : TIMELINE_MOTION.turnBack;
     // Nothing in flight should flash the sheet's scrollbars.
@@ -116,7 +135,7 @@ export const PlanTimeline = forwardRef<PlanTimelineHandle, {
     scroller?.setAttribute('data-turning', '');
     flying.current = true;
     const played: Animation[] = [];
-    const timing = { duration, easing: EASE_OUT };
+    const timing = { duration, easing: vertical || still ? EASE_OUT : PLAN_FOLD_EASING };
     for (const dot of dots()) {
       const from = before.dots.get(dot.dataset.tlDot!);
       if (!from) continue;
@@ -144,9 +163,9 @@ export const PlanTimeline = forwardRef<PlanTimelineHandle, {
     )));
     let live = true;
     // Cancelled when the plan switches again mid-flight; either way the scrollbars come back.
-    const land = () => { flying.current = false; scroller?.removeAttribute('data-turning'); layLine(); };
+    const land = () => { flying.current = false; scroller?.removeAttribute('data-turning'); layLine(); finish?.(); };
     void Promise.allSettled(played.map(a => a.finished)).then(() => { if (live) land(); });
-    return () => { live = false; flying.current = false; scroller?.removeAttribute('data-turning'); };
+    return () => { live = false; for (const animation of played) animation.cancel(); flying.current = false; scroller?.removeAttribute('data-turning'); };
   }, [vertical]);
 
   // Opened from a dot: bring that step into view.
