@@ -91,9 +91,12 @@ class AttentionBadgesDeviceTest {
             val open = manager.activeNotifications.single { it.tag == EventNotice.tag("approval") }.notification
             assertNull(open.sound)
             assertNull(open.vibrate)
-            open.contentIntent.send()
-            Thread.sleep(500)
-            assertTrue("opening the chat is not answering", manager.activeNotifications.any { it.tag == EventNotice.tag("approval") })
+            // Tapping it opens the chat without taking it down: no auto-cancel. Sending the content
+            // intent here would launch the real app, which (unpaired on a test emulator) rightly
+            // reconciles the synthetic computer's notices away, at a time of its own choosing.
+            assertNotNull("opening the chat", open.contentIntent)
+            assertEquals("opening the chat is not answering", 0, open.flags and android.app.Notification.FLAG_AUTO_CANCEL)
+            assertTrue(manager.activeNotifications.any { it.tag == EventNotice.tag("approval") })
             notices.post(EventNotice.of("approval", PhoneEvent.FINISHED, "Deploy", "Test computer", true))
             notices.syncAttention("computer-a", listOf(question), silent = true)
             Thread.sleep(500)
