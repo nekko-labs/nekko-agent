@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url';
 import { Marked } from 'marked';
 import { writeContributors } from './build-contributors.mjs';
 import { writeDesignSystem } from './build-design-system.mjs';
+import { ZIP_NAME, writeBrandZip } from './make-brand-kit.mjs';
 
 // The text of a rendered heading: its tags dropped and marked's entities turned
 // back into characters, so the layout can escape it once like any other string.
@@ -835,6 +836,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     write(files);
     console.log(`wrote ${files.size} files to apps/website`);
     console.log(writeDesignSystem(site));
+    console.log(`brand/${ZIP_NAME}: ${writeBrandZip().length} files`);
     console.log(await writeRelease());
     console.log(await writeContributors(site));
     // The page again, now with the avatars that refresh just cached.

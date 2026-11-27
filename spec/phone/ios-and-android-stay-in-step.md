@@ -49,6 +49,7 @@ Both implementations use scoped counts and initial English `status`, `send to NA
 | Nekko in the car: voice-first, active work, Results of voice commands ([spec](carplay.md)) | CarPlay app built 2026-11-14 ([#2781](https://github.com/nekko-labs/nekko-agent/issues/2781)): Linux-tested logic, not yet in CarPlay Simulator; waits on Apple's entitlement | Android Auto as a messaging app through notifications (2026-11-17): a finished reply read aloud in the car, with Reply. No Work list, Results, Allow/Deny or Stop: Android Auto has no category for a voice agent | [#2782](https://github.com/nekko-labs/nekko-agent/issues/2782) |
 | GitHub star ask under the 10th and 50th reply ([spec](../platform/github-star-ask.md)) | Built 2026-11-09 ([#2423](https://github.com/nekko-labs/nekko-agent/issues/2423)): inline card, link to the repository only, verified in Native iOS CI, not on a device | Built 2026-11-09: inline card, link to the repository only, emulator-verified, not on a physical phone | Both: the native store rating request once on the App Store and Google Play (planned). |
 | Open your own computer from an organization's list with no pairing ([spec](../platform/organizations.md), desktop since #2806) | Separate issue #2804 | Protocol layer only (`FleetLink`, unit-tested); no Cloud sign-in, keyring unlock or org list in the app | [#2835](https://github.com/nekko-labs/nekko-agent/issues/2835) |
+| Connect to your account's computers without pairing, and add Nekko Cloud Relay routes to paired computers ([spec](../platform/nekko-cloud-relay.md), decision 0128) | iPhone work in parallel ([#3610](https://github.com/nekko-labs/nekko-agent/issues/3610)); see its PR for status | Protocol and repository layers built 2026-11-28 (`reach` records in `CloudSync`, route merge, account HELLO, `AccountSyncLoop`; JVM tested). Not usable in the app: no Nekko Cloud sign-in on Android yet, so no records are read | [#3611](https://github.com/nekko-labs/nekko-agent/issues/3611), [#2835](https://github.com/nekko-labs/nekko-agent/issues/2835) |
 | Paid cloud clip picker with a live total ([spec](../agents/media-tools-for-chat-agents.md), desktop since #2973 step 6) | Built 2026-11-20 (`ClipPickerCard`, logic in `ClipPicker`): segmented Length, Audio and Resolution, a Total that updates, the cannot-be-stopped warning with where the prompt goes, Cancel and **Make clip · $2.40**; answers carry the total, so no second approval. Logic Linux-tested; app target not built here and no simulator evidence yet | Built 2026-11-20 (`ClipPickerCard`, logic in `ClipPicker.kt`; JVM-tested, no emulator evidence yet) | None: both phones have it ([#3038](https://github.com/nekko-labs/nekko-agent/issues/3038)); visual evidence pending on both. |
 | Agent-made pictures under the tool row, and the **Making a clip** chip ([spec](../agents/media-tools-for-chat-agents.md), desktop since #2973) | Built 2026-11-20: `generate_image` / `edit_image` pictures load on demand through `session:photo` and open in the image viewer; the clip chip shows stage and **Cancel clip**; clips are never a timed wake-up. Logic Linux-tested; no simulator evidence yet | Built 2026-11-20: the same pictures through `session:photo`, opened full screen on a tap; the clip chip with **Cancel clip**. JVM-tested; no emulator evidence yet | None: both phones have it; visual evidence pending on both. |
 | Take back an always-allowed MCP tool or a known recipient (desktop since #2960, decisions 0054 and 0063) | Built 2026-11-17: Model panel → **Allowed without asking** (`ChatGrantsList`), each removal signed with Face ID or the passcode (`knownRecipients` joins `PHONE_GUARDED_OPTION_KEYS`); NekkoKit-tested, app target CI-built | Built 2026-11-18: Model sheet → **Allowed without asking** (`GrantsSheet`), each removal signed with the screen lock through `setRunOption`; controller JVM-tested | None: both phones have it. |
@@ -64,6 +65,12 @@ Both implementations use scoped counts and initial English `status`, `send to NA
 | Model picker: size or context per model, dated snapshots folded, limits under each provider | Built (#2954) | Built 2026-11-25 (`ModelMeta`, `ModelSnapshots`, same cases) | None |
 
 Both: JVM or Linux unit tests only; neither app's screens have been looked at on a device or emulator yet.
+
+## Chat groups and tags (#3334)
+
+| Feature | iPhone | Android | Gap / follow-up |
+| --- | --- | --- | --- |
+| Groups with colours and tags on chats ([spec](../agents/chat-groups.md), desktop since #3335): the list clusters chats by group and shows tags; the title reads group / #tags / title | Not built. `chatGroup` and `tags` already sync and are on the phone allowlist; the groups' names and colours are per-computer localStorage prefs the phone cannot read | Same | [#3478](https://github.com/nekko-labs/nekko-agent/issues/3478) (iPhone), [#3479](https://github.com/nekko-labs/nekko-agent/issues/3479) (Android) |
 
 ## Pending response messages (#2476, #2497)
 
@@ -136,10 +143,18 @@ Nothing is recorded as a true OS exclusive yet.
 | --- | --- | --- | --- |
 | Relay reconnect backoff has 0 to 50% random jitter (#3385) | Implemented, unit-tested in NekkoProtocol | Not implemented: fixed 1, 2, 4 ... 30 s | https://github.com/nekko-labs/nekko-agent/issues/3392 |
 
+## Performance pass (iPhone first, 2026-11-26)
+
+| Feature | iPhone | Android | Follow-up |
+| --- | --- | --- | --- |
+| Streamed text is folded in once per display frame (#3387) | Implemented, unit-tested in NekkoKit | Not implemented: one state update per token | https://github.com/nekko-labs/nekko-agent/issues/3432 |
+| Mermaid web view released when idle, disk cache pruned to 30 days and 64 MB (#3389) | Implemented, unit-tested in NekkoKit | Not implemented: the web view lives for the process and the disk cache grows | https://github.com/nekko-labs/nekko-agent/issues/3436 |
+
 ## Performance pass (Android, 2026-11-26)
 
 | Feature | iPhone | Android | Follow-up |
 | --- | --- | --- | --- |
 | Chat re-reads skip the skills read | Implemented (#3388) | Implemented (#3415) | None |
 | Paged chat open (`session:page`, tail first, older on scroll) | Waits for the engine | Waits for the engine | Engine: [#3439](https://github.com/nekko-labs/nekko-agent/issues/3439); client: iPhone [#3388](https://github.com/nekko-labs/nekko-agent/issues/3388), Android [#3415](https://github.com/nekko-labs/nekko-agent/issues/3415). Both use the contract in #3439. |
+| Search inside chat messages (`sessions:finderText`, a snippet of the matching line) | Planned | Implemented (2026-11-27) | [#3448](https://github.com/nekko-labs/nekko-agent/issues/3448): the engine side ships first; both apps follow in the same stack. See [search-inside-chat-messages.md](search-inside-chat-messages.md). |
 

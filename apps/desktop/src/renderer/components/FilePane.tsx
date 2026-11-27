@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { LineComment, PreviewTextEdit } from '@nekko-agent/shared';
 import { applyTextEdit } from './htmlTextEdit.js';
 import { Markdown } from './Markdown.js';
@@ -22,6 +22,26 @@ const COALESCE_MS = 600;
 const HISTORY_LIMIT = 200;
 const AUTOSAVE_KEY = 'nekko.editor.autoSave';
 const MD_WIDTH_KEY = 'nekko.md.width';
+const MD_AUTO_LOAD_IMAGES_KEY = 'nekko.md.autoLoadImages';
+const mdImagePrefs = new EventTarget();
+
+function readMdAutoLoadImages(): boolean {
+  return window.localStorage.getItem(MD_AUTO_LOAD_IMAGES_KEY) !== 'off';
+}
+
+function subscribeMdAutoLoadImages(notify: () => void): () => void {
+  mdImagePrefs.addEventListener('change', notify);
+  window.addEventListener('storage', notify);
+  return () => {
+    mdImagePrefs.removeEventListener('change', notify);
+    window.removeEventListener('storage', notify);
+  };
+}
+
+function toggleMdAutoLoadImages() {
+  window.localStorage.setItem(MD_AUTO_LOAD_IMAGES_KEY, readMdAutoLoadImages() ? 'off' : 'on');
+  mdImagePrefs.dispatchEvent(new Event('change'));
+}
 
 /** Width of the Markdown reading column. Narrow preserves the original column; Wide is the default. */
 type MdWidth = 'narrow' | 'wide' | 'full';
@@ -150,6 +170,7 @@ function HostFilePane({ path, readOnly, onUnreadable }: { path: string; readOnly
   const [language, setLanguage] = useState<string | null>(null);
   const [autoSave, setAutoSave] = useState(readAutoSavePref);
   const [mdWidth, setMdWidth] = useState<MdWidth>(readMdWidthPref);
+  const mdAutoLoadImages = useSyncExternalStore(subscribeMdAutoLoadImages, readMdAutoLoadImages, () => true);
   const [preview, setPreview] = useState(canPreview); // markdown defaults to rendered
   const [comments, setComments] = useState<LineComment[]>([]);
   const [activeLine, setActiveLine] = useState<number | null>(null);
@@ -439,7 +460,7 @@ function HostFilePane({ path, readOnly, onUnreadable }: { path: string; readOnly
           <span className="shrink-0 text-2xs text-ink-faint" data-file-read-only title="Designs are kept as versions: ask an agent for a new version to change one">View only</span>
         )}
 
-        <span className="ml-auto flex shrink-0 items-center gap-1">
+        <span className={`ml-auto flex items-center gap-1 ${isMd && preview ? 'min-w-0 flex-wrap justify-end' : 'shrink-0'}`}>
           {editable && (
             <>
               {/* Edit actions. The pane has no native menu bar, so undo/redo and
@@ -488,6 +509,17 @@ function HostFilePane({ path, readOnly, onUnreadable }: { path: string; readOnly
               link.click();
               setTimeout(() => URL.revokeObjectURL(url), 1000);
             }} title="Download a copy of this file">Download</button>
+          )}
+          {isMd && preview && (
+            <button
+              type="button"
+              className="ctl-toggle shrink-0 whitespace-nowrap text-2xs"
+              aria-pressed={mdAutoLoadImages}
+              title="Automatically contact the source of remote images in Markdown previews"
+              onClick={toggleMdAutoLoadImages}
+            >
+              <span className="ctl-dot" aria-hidden="true" /> Auto-load images
+            </button>
           )}
           {isMd && preview && (
             <SlideToggle
@@ -559,7 +591,7 @@ function HostFilePane({ path, readOnly, onUnreadable }: { path: string; readOnly
           ) : isMermaid && preview ? (
             <MermaidDiagram code={content} />
           ) : isMd && preview ? (
-            <div className={MD_WIDTH_CLASS[mdWidth]}><Markdown text={content} doc basePath={dir} /></div>
+            <div className={MD_WIDTH_CLASS[mdWidth]}><Markdown text={content} doc basePath={dir} autoLoadImages={mdAutoLoadImages} /></div>
           ) : (
             <div className="relative h-full w-full overflow-hidden">
               {highlighted != null && (

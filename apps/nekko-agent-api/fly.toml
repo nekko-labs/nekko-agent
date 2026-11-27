@@ -26,6 +26,8 @@ primary_region = "iad"   # next to Neon's aws-us-east-1
   FLY_MACHINES_APP = "nekko-cloud-machines"
   NEKKO_RELAY_URL = "wss://nekko-agent-relay.fly.dev"
   PUBLIC_URL = "https://nekko-agent-api.fly.dev"
+  # Organizations and their shared computer fleet (the desktop's Fleet management).
+  NEKKO_ORGS_ENABLED = "1"
 
 [http_service]
   internal_port = 8080

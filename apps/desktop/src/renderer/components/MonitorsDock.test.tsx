@@ -117,23 +117,23 @@ describe('wall dock presentation', () => {
     expect(html).toContain('Claude plan sign-in is no longer available');
     expect(html).not.toContain('data-dock-signin');
   });
-  it('splits Budget into actual and theoretical spend, and never asks for a monthly budget', () => {
+  it('splits Budget into API spend and estimated savings, and never asks for a monthly budget', () => {
     const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: false, budget: true, hardware: false, localModels: false } } };
     const usage = { totalInput: 0, totalOutput: 0, totalCost: 0, byModel: {}, bySession: {}, byProvider: {}, bySessionCost: {}, daily: [{ date: '1970-01-01', input: 0, output: 0, cost: 0, avoidedCosts: { local: 1.23, subscription: 4.56, benchmarkTokens: 100, unpricedTokens: 200 } }], avoidedCosts: { local: 1.23, subscription: 4.56, benchmarkTokens: 100, unpricedTokens: 200 } };
     const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[]} usage={usage} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
     // The Vitals panel is gone from the dock.
     expect(html).not.toContain('tokens today');
-    // Actual is only metered API and cloud spend; theoretical is what local and subscription tokens saved.
-    expect(html).toContain('aria-label="Actual spend"');
-    expect(html).toContain('aria-label="Theoretical spend"');
+    // Metered spend excludes plan and local usage; savings value both at API prices.
+    expect(html).toContain('aria-label="API &amp; cloud spend"');
+    expect(html).toContain('aria-label="Estimated savings"');
     const actual = html.slice(html.indexOf('data-spend="actual"'), html.indexOf('data-spend="theoretical"'));
     expect(actual).toContain('$0.00');
     const theoretical = html.slice(html.indexOf('data-spend="theoretical"'), html.indexOf('monitors-dock__breakdown'));
     expect(theoretical).toContain('$5.79');
-    expect(html).toContain('Local models</dt><dd>$1.23');
-    expect(html).toContain('Subscriptions</dt><dd>$4.56');
+    expect(html).toContain('Local model savings</dt><dd>$1.23');
+    expect(html).toContain('Plan usage value</dt><dd>$4.56');
     // Nothing paid: the whole bar is savings.
-    expect(html).toContain('you paid 0%');
+    expect(html).toContain('0% metered');
     expect(html).not.toContain('data-part="actual"');
     expect(html).not.toContain('Local AI saved');
     expect(html).toContain('200 unpriced tokens excluded');
@@ -158,11 +158,11 @@ describe('wall dock presentation', () => {
     expect(html).toContain('$1.00');
     expect(html).toContain('$2.34');
     expect(html).toContain('$5.67');
-    // Theoretical sums both savings; the bar shows the paid share of the API-price total.
+    // Savings sum both comparisons; the bar shows the metered share of the API-price total.
     expect(html).toContain('$8.01');
-    expect(html).toContain('$9.01 at API prices · you paid 11%');
+    expect(html).toContain('$9.01 at API prices · 11% metered');
     expect(html).toContain('data-part="actual" style="width:');
-    expect(html).toContain('Top paid agent</dt><dd><span class="monitors-dock__breakdown-name" title="Chat">Chat</span>$1.00');
+    expect(html).toContain('Top paid agent</dt><dd><span class="monitors-dock__breakdown-name">Chat unavailable</span>$1.00');
     expect(html).toContain('42 tokens');
     expect(html).toContain('42 local tokens use the fallback');
     expect(html).toContain('7 unpriced tokens excluded');
@@ -301,7 +301,7 @@ describe('Local models monitor', () => {
     expect(two).toContain('data-local-models-unload-all');
   });
   it('draws Settings and Load as Gentleface icons named by their tooltip', () => {
-    storeState.value = { settings: { favoriteModels: ['nekko-engine::gemma'] } };
+    storeState.value = { settings: {}, sessions: [{ providerId: 'nekko-engine', modelId: 'gemma', updatedAt: 20 }] };
     try {
       const html = renderToStaticMarkup(<LocalModels initial={{ status: status(), models }} />);
       const row = html.slice(html.indexOf('data-local-model-shortcut="gemma"'));
@@ -311,27 +311,28 @@ describe('Local models monitor', () => {
       expect(row).not.toContain('>Settings</button>');
     } finally { storeState.value = { settings: {} }; }
   });
-  it('lists starred then recent models that are not loaded, each with Settings and Load', () => {
-    const more = [...models, { id: 'phi', name: 'Phi 4', path: '/m/phi.gguf', sizeBytes: 2 * GB }] as any;
+  it('lists recent models that are not loaded by name alone, with Settings and Load, and no Starred group', () => {
+    const more = [...models, { id: 'phi', name: 'Phi 4', path: '/m/phi.gguf', sizeBytes: 2 * GB, quantization: 'Q4_K_M' }] as any;
     storeState.value = {
-      settings: { favoriteModels: ['nekko-engine::gemma', 'nekko-engine::qwen', 'openai::gpt-5'] },
-      sessions: [{ providerId: 'nekko-engine', modelId: 'phi', updatedAt: 10 }, { providerId: 'nekko-engine', modelId: 'gemma', updatedAt: 20 }],
+      settings: { favoriteModels: ['nekko-engine::gemma', 'nekko-engine::qwen'] },
+      sessions: [{ providerId: 'nekko-engine', modelId: 'phi', updatedAt: 10 }, { providerId: 'nekko-engine', modelId: 'qwen', updatedAt: 20 }],
     };
     try {
       const html = renderToStaticMarkup(<LocalModels initial={{ status: status({ resident: [{ id: 'qwen' }] }), models: more }} />);
-      const starred = html.slice(html.indexOf('data-local-models-group="starred"'), html.indexOf('data-local-models-group="recent"'));
-      expect(starred).toContain('data-local-model-load="gemma"');
-      expect(starred).toContain('data-local-model-settings="gemma"');
-      expect(starred).toContain('aria-label="Unstar Gemma 3 27B"');
+      expect(html).not.toContain('data-local-models-group="starred"');
+      expect(html).not.toContain('data-local-model-star');
+      // Starred but never used: not offered.
+      expect(html).not.toContain('data-local-model-load="gemma"');
       // Loaded already: it has its own row with Unload, not a Load shortcut.
       expect(html).not.toContain('data-local-model-load="qwen"');
-      expect(html).toContain('aria-label="Unstar Qwen3 8B"');
       const recent = html.slice(html.indexOf('data-local-models-group="recent"'));
       expect(recent).toContain('data-local-model-load="phi"');
-      expect(recent).toContain('aria-label="Star Phi 4"');
-      expect(recent).not.toContain('data-local-model-load="gemma"');
+      expect(recent).toContain('data-local-model-settings="phi"');
+      // Just the name: no size or quantization line under it.
+      expect(recent).not.toContain('Q4_K_M');
+      expect(recent).not.toContain('monitors-dock__note');
       // Offered while the server is stopped too: Load starts it.
-      expect(renderToStaticMarkup(<LocalModels initial={{ status: status({ running: false }), models: more }} />)).toContain('data-local-model-load="gemma"');
+      expect(renderToStaticMarkup(<LocalModels initial={{ status: status({ running: false }), models: more }} />)).toContain('data-local-model-load="phi"');
     } finally { storeState.value = { settings: {} }; }
   });
 });

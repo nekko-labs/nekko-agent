@@ -4,6 +4,8 @@ Nekko Agent stands on a lot of other people's work. This page names the parts a 
 
 The full list of every package and crate, with each license text, ships inside the app: in the desktop app, open **Settings**, then **Open-source licenses** under Updates. The Android app lists its own under **Settings**, then **About**. Models you choose to download carry their own licenses, shown before you download them.
 
+Our own names, logo, app icon and mascot are not third-party and not MIT licensed: see [Trademarks and brand assets](TRADEMARKS.md).
+
 Thank you to everyone who built and maintains these.
 
 | Name | Used for | Version | License | License file | Source |
@@ -18,6 +20,7 @@ Thank you to everyone who built and maintains these.
 | Inter Tight, website copy | nekkoagent.com's text font, self-hosted (latin subset) | Fontsource 5.3.0 | OFL-1.1 | apps/website/fonts/OFL-inter-tight.txt | [Fontsource](https://fontsource.org/fonts/inter-tight) |
 | JetBrains Mono, website copy | nekkoagent.com's code font, self-hosted (latin subset) | Fontsource 5.3.0 | OFL-1.1 | apps/website/fonts/OFL-jetbrains-mono.txt | [Fontsource](https://fontsource.org/fonts/jetbrains-mono) |
 | Handjet | nekkoagent.com's LED-style headings, self-hosted (latin subset) | Fontsource 5.3.1 | OFL-1.1 | apps/website/fonts/OFL-handjet.txt | [Fontsource](https://fontsource.org/fonts/handjet) |
+| Inter Tight, brand wordmark | The NEKKO AGENT wordmark in the brand pack's lockups (`apps/website/brand`), drawn as outlines from the website copy at weight 800 (`scripts/brand-kit/wordmark.json`). The outlines are artwork, not a font, and the pack is under the [brand pack license](apps/website/brand/LICENSE.md). Outlined with fontkit and wawoff2 (both MIT), installed only for that step and never shipped. | Fontsource 5.3.0 | OFL-1.1 | apps/website/fonts/OFL-inter-tight.txt | [Fontsource](https://fontsource.org/fonts/inter-tight) |
 | Geist, website copy | The design system page's interface font (nekkoagent.com/design-system), self-hosted (latin subset) | Fontsource 5.3.0 | OFL-1.1 | apps/website/fonts/OFL-geist.txt | [Fontsource](https://fontsource.org/fonts/geist) |
 | Geist Mono, website copy | The design system page's code font, self-hosted (latin subset) | Fontsource 5.3.0 | OFL-1.1 | apps/website/fonts/OFL-geist-mono.txt | [Fontsource](https://fontsource.org/fonts/geist-mono) |
 | Space Mono | nekkoagent.com's retro labels, self-hosted (latin subset) | Fontsource 5.3.0 | OFL-1.1 | apps/website/fonts/OFL-space-mono.txt | [Fontsource](https://fontsource.org/fonts/space-mono) |
@@ -39,7 +42,7 @@ Thank you to everyone who built and maintains these.
 | Hypergate mark | The gate ring on the Connectors page's Hypergate row (`HypergateIcon`), from Hypergate's own site icon without its app tile. Hypergate is a Nekko Labs product. | snapshot | MIT | - | [nekko-labs/hypergate](https://github.com/nekko-labs/hypergate) |
 | Simple Icons | Connector marks, on the desktop and the iPhone's Connectors page (`ConnectorMarks`, with the desktop's full-colour GitLab, Todoist and Trello marks, and Bitbucket's Simple Icons path). The names and marks belong to their owners. | snapshot | CC0-1.0 | - | [simpleicons.org](https://simpleicons.org) |
 | llama.cpp | Runs local models. Downloaded when you set up the model server. | b11985 | MIT | - | [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp) |
-| stable-diffusion.cpp | Local image generation. Downloaded only if you add it. | master-1091-b9d7176 | MIT | - | [leejet/stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp/tree/master-1091-b9d7176) |
+| stable-diffusion.cpp | Local image generation. Downloaded only if you add it. | master-1106-532d2c1 | MIT | - | [leejet/stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp/tree/master-1106-532d2c1) |
 | whisper.cpp and Whisper Tiny.en | Nekko Voice. Downloaded on first use, with its own notice beside it. | v1.9.2 | MIT | - | [ggml-org/whisper.cpp](https://github.com/ggml-org/whisper.cpp) |
 | Ubuntu 24.04 cloud image | The Linux CI runner VM. Downloaded from Canonical onto your Mac when you set up Linux slots; not bundled. | 24.04 (noble, current release) | Ubuntu licensing (GPL-2.0 and other free licenses) | - | [cloud-images.ubuntu.com](https://cloud-images.ubuntu.com/noble/current/) |
 | Docker Engine | Containers inside Linux CI runner VMs, installed from Ubuntu's archive at setup; not bundled. | Ubuntu's docker.io | Apache-2.0 | - | [moby/moby](https://github.com/moby/moby) |

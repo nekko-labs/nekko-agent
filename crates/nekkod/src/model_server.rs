@@ -121,7 +121,11 @@ impl Env for Surroundings {
     fn engine(&self, runtime: &'static str) -> BoxFuture<Option<Engine>> {
         let installs = self.installs.clone();
         Box::pin(async move {
-            let install = installs.detect(runtime).await;
+            let install = if runtime == "mlx-dflash2" {
+                json!({ "binPath": installs.mlx_dflash2_bin_path().await?, "source": "external" })
+            } else {
+                installs.detect(runtime).await
+            };
             let bin = install.get("binPath").and_then(Value::as_str)?.to_string();
             Some(Engine { bin, in_use: EngineInUse::from_install(&install) })
         })

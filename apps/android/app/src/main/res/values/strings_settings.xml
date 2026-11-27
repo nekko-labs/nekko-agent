@@ -466,6 +466,10 @@
     <string name="customize_skills_none">No skills available. Install skills in Customize on your computer.</string>
     <!-- Nekko Agent's service from the phone (#2059), the iPhone's. -->
     <string name="service_title">Nekko Agent service</string>
+    <string name="fleet_runners_title">CI runners</string>
+    <string name="fleet_runners_you">%1$s (this computer)</string>
+    <string name="fleet_runners_offline">Offline</string>
+    <string name="fleet_runners_footer">Macs your organizations share, as %1$s sees them.</string>
     <string name="service_footer">These controls manage Nekko Agent, not the operating system. A restart or install may interrupt chats. An accepted request is not proof that it finished.</string>
     <string name="service_offline">Connect to this computer to see its service status and manage updates.</string>
     <string name="service_reading">Reading service status</string>

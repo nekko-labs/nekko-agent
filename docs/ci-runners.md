@@ -35,6 +35,13 @@ member then sees, under that Mac in **Computers**, one line per runner while it 
 attention". Only the label, the state and the VM counts are shared, sealed so Nekko Cloud
 cannot read them; repos, jobs and why a runner waits stay on the Mac. One Mac needs none of this.
 
+On your iPhone or Android phone, the same lines appear under **CI runners** on the page of the
+computer you are connected to, read through that computer.
+
+Your desktop also tells you when another Mac in your organizations goes offline with a job
+running (GitHub reports that job as failed) or when one of its runners stops with an error.
+Turn these off with the other desktop notifications in Settings.
+
 ## What it does
 
 Nekko Agent registers this Mac as a GitHub Actions **self-hosted runner** for one repo or one

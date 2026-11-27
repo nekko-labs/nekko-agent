@@ -164,3 +164,7 @@ Thought text renders on its first public reasoning event, outside tool disclosur
 ## iOS work-specific header icons (2026-11-06)
 
 Implemented, awaiting native build and visual verification (#1913): the purpose header shows the kind of work, not a generic success check. Homogeneous reads use a document, listings a folder, and mixed exploration a search icon; edit, checks, shell commands, git, web and planning use their matching symbols. Running dots remain separate, and failure text stays visible. Ordinary groups start folded, including running groups. As on desktop, failures start open until the user explicitly folds them. No classifier, transport, privacy or permission changes.
+
+## Failure details and code colors (#3580)
+
+Implemented for the desktop and shared Local Web UI renderer. Hover, keyboard-focus or expand a failed call to read its recorded diagnostic. Ordinary successes do not expose extra output. Commands appear as shell text with any remaining arguments shown as formatted JSON; non-shell inputs remain JSON. Supported language-tagged code fences use the file editor's syntax colors once the fence closes. Unknown languages and oversized blocks stay readable as plain text. Highlighting is local and display-only: no extra tool calls, permissions, or changes to what Copy and Run use. Native phone surfaces are unchanged.

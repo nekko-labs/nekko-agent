@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { GpuFit, LoadParams, LocalModel, PlacementPlan, Recommendation, SplitPreset } from '@nekko-agent/shared';
+import { useCallback, useEffect, useId, useMemo, useState, type CSSProperties } from 'react';
+import type { EngineMemory, GpuFit, LoadParams, LocalModel, PlacementPlan, Recommendation, SplitPreset } from '@nekko-agent/shared';
 import { ENGINE_KV_CACHE_DTYPE } from '@nekko-agent/shared';
 import { Toggle } from '../primitives/index.js';
 import { formatBytes, formatTokens } from '../runtimes/verdict.js';
 import { useStore } from '../../store.js';
 import { Shown } from '../ModeViews.js';
 import { LoadMemoryMeter, useLoadPlacement } from './LoadMemoryMeter.js';
+import { ModelAllocationBar } from './ModelAllocationBar.js';
+import { dflash2DraftName, draftModelCandidates, isStockDflash2Target } from './draftModels.js';
 import {
   KEEP_LABELS,
   PRECISIONS,
@@ -22,7 +24,6 @@ import {
   keepOf,
   keepParams,
   matchesRecommendation,
-  pagesOf,
   precisionOf,
   runOnOf,
   sessionsOf,
@@ -54,6 +55,8 @@ export function EngineLoadDrawer({
   onDone,
   onClose,
   initialSurface = 'simple',
+  attached = false,
+  memory,
 }: {
   providerId: string;
   model: LocalModel & { loaded: boolean; gpuFit?: GpuFit };
@@ -68,6 +71,9 @@ export function EngineLoadDrawer({
   onClose: () => void;
   /** A jump from "where does it run" opens with More controls unfolded. */
   initialSurface?: 'simple' | 'advanced';
+  /** The installed card already supplies the name and outer surface. */
+  attached?: boolean;
+  memory?: EngineMemory;
 }) {
   const pushToast = useStore((s) => s.pushToast);
   const saved = useMemo(() => fromPreset(model.preset), [model.preset]);
@@ -82,7 +88,9 @@ export function EngineLoadDrawer({
   const layers = model.layers;
   const moe = isMoe(model);
   const mlx = model.format === 'mlx';
-  const stops = useMemo(() => contextStops(model.maxContext), [model.maxContext]);
+  const contextId = useId();
+  const recommendedContext = rec?.request.contextTokens;
+  const stops = useMemo(() => contextStops(model.maxContext, recommendedContext), [model.maxContext, recommendedContext]);
 
   const patch = (p: Partial<LoadParams>) => setParams((prev) => ({ ...prev, ...p }));
   /** A hand edit to placement is a custom split. */
@@ -183,6 +191,8 @@ export function EngineLoadDrawer({
   const perSession = contextPerSession(params);
   const sessions = sessionsOf(params);
   const ctxIndex = Math.max(0, stops.indexOf(nearest(stops, perSession)));
+  const recommendedIndex = recommendedContext === undefined ? -1 : stops.indexOf(recommendedContext);
+  const stopPosition = (index: number) => `${100 * index / Math.max(1, stops.length - 1)}%`;
   const setContext = (perSessionTokens: number) => {
     if (split === 'coding') setSplit('custom');
     patch({ contextTokens: perSessionTokens * sessions });
@@ -191,27 +201,67 @@ export function EngineLoadDrawer({
   const keep = keepOf(params);
 
   return (
-    <div className="mt-2 rounded-xl border p-4" style={{ borderColor: 'var(--line)' }} data-engine-load-drawer>
-      <div className="flex flex-wrap items-start gap-2">
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">{model.name}</p>
-          <p className="text-xs text-ink-faint">
-            {[
-              model.parameterSize,
-              model.quantization,
-              moe && model.weightLayout?.experts && `${model.weightLayout.experts} experts`,
-              model.maxContext && `${formatTokens(model.maxContext)} max`,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-          </p>
-        </div>
+    <div className={attached ? undefined : 'mt-2 rounded-xl border border-line p-4'} data-engine-load-drawer>
+      <div className="flex flex-wrap items-start justify-end gap-2">
+        {!attached && (
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">{model.name}</p>
+            <p className="text-xs text-ink-faint">
+              {[
+                model.parameterSize,
+                model.quantization,
+                moe && model.weightLayout?.experts && `${model.weightLayout.experts} experts`,
+                model.maxContext && `${formatTokens(model.maxContext)} max`,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
+          </div>
+        )}
         {plan && plan.verdict !== 'unknown' && <VerdictChip plan={plan} />}
       </div>
 
-      <LoadMemoryMeter model={model} plan={plan} params={params} pending={pending} previous={previous} />
+      {attached ? <ModelAllocationBar model={model} plan={plan} params={params} pending={pending} previous={previous} memory={memory} />
+        : <LoadMemoryMeter model={model} plan={plan} params={params} pending={pending} previous={previous} />}
 
-      <div className="mt-3">
+      <div className="mt-3" data-context-control>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+          <label htmlFor={contextId} className="text-xs font-medium">
+            Context {matches.context && <RecommendedTag />}
+          </label>
+          <div className="flex flex-wrap items-center gap-x-2">
+            <span className="font-mono text-2xs" data-context-label>
+              {formatTokens(perSession)} per session{sessions > 1 ? ` · ${formatTokens(perSession * sessions)} total` : ''}
+            </span>
+            {recommendedContext !== undefined && <button type="button" data-context-reset className="btn btn-ghost px-2 py-0.5 text-2xs"
+              aria-label="Reset context to recommended" title="Reset context only; other settings stay as set"
+              disabled={perSession === recommendedContext} onClick={() => setContext(recommendedContext)}>Reset</button>}
+          </div>
+        </div>
+        <div className="model-context-range" style={{ '--context-stop': stopPosition(ctxIndex),
+          '--context-recommended': recommendedIndex >= 0 ? stopPosition(recommendedIndex) : undefined } as CSSProperties}>
+          <div className="model-context-range__track" aria-hidden="true"><i /><i /><i />
+            {recommendedIndex >= 0 && <span className="model-context-range__marker" />}
+          </div>
+          <input id={contextId} type="range" min={0} max={stops.length - 1} step={1} value={ctxIndex}
+            disabled={stops.length === 1} aria-valuetext={`${formatTokens(perSession)} tokens per session`}
+            aria-describedby={recommendedIndex >= 0 ? `${contextId}-recommendation` : undefined}
+            onChange={(e) => setContext(stops[Number(e.target.value)])} />
+        </div>
+        <div className="flex flex-wrap justify-between gap-x-2 gap-y-1 text-2xs text-ink-faint">
+          <span>{formatTokens(stops[0])}</span>
+          {recommendedIndex >= 0 && <span id={`${contextId}-recommendation`} data-context-recommendation className="text-accent">
+            <span aria-hidden="true">◆ </span>Recommended: {formatTokens(recommendedContext!)}
+          </span>}
+          <span>{formatTokens(stops[stops.length - 1])}{model.maxContext ? ' (model max)' : ''}</span>
+        </div>
+        <p className="mt-1 text-xs leading-relaxed text-ink-faint">
+          Context is used for the content your model reads. Roughly: a book is 100k tokens, a picture can be 250–2,000,
+          a codebase can be 10k–1M+, and a 1–2 paragraph prompt is about 100–300. Counts vary by model and input.
+        </p>
+      </div>
+
+      {(!attached || rec) && <div className="mt-3">
         <button
           className="btn btn-outline text-xs"
           title={rec ? undefined : 'A fitting recommendation is unavailable'}
@@ -236,11 +286,11 @@ export function EngineLoadDrawer({
             </div>
           </div>
         )}
-      </div>
+      </div>}
 
-      {mlx ? (
+      {mlx ? (!attached &&
         <Section title="Run on" hint="MLX models live on the GPU; a Mac shares one memory pool between it and the CPU." />
-      ) : unified ? (
+      ) : unified ? (!attached &&
         <Section
           title="Run on"
           hint="Your Mac shares one pool of memory between the GPU and the CPU, so there is nothing to split. The model runs on the GPU."
@@ -322,35 +372,6 @@ export function EngineLoadDrawer({
         </div>
       )}
 
-      <div className="mt-4">
-        <div className="flex items-baseline justify-between gap-3">
-          <label htmlFor="engine-ctx" className="text-sm font-medium">
-            Context {matches.context && <RecommendedTag />}
-          </label>
-          <span className="font-mono text-xs" data-context-label>
-            {formatTokens(perSession)} per session{sessions > 1 ? ` · ${formatTokens(perSession * sessions)} total` : ''}
-          </span>
-        </div>
-        <input
-          id="engine-ctx"
-          type="range"
-          className="mt-1 w-full"
-          min={0}
-          max={stops.length - 1}
-          step={1}
-          value={ctxIndex}
-          onChange={(e) => setContext(stops[Number(e.target.value)])}
-        />
-        <div className="flex justify-between text-2xs text-ink-faint">
-          <span>{formatTokens(stops[0])}</span>
-          <span>{formatTokens(stops[stops.length - 1])} (model max)</span>
-        </div>
-        <p className="mt-1 text-xs text-ink-faint">
-          How much the model can keep in mind at once: your messages, its replies and any files it reads.{' '}
-          {formatTokens(perSession)} is roughly {pagesOf(perSession)} pages of text.{mlx ? ' MLX allocates its cache as tokens are used.' : ' More context uses more memory. The meter shows an estimate when available.'}
-        </p>
-      </div>
-
       <div className="mt-4 rounded-lg border" style={{ borderColor: 'var(--line)' }}>
         <Fold label="More controls" open={more} onToggle={() => setMore((v) => !v)} id="more" />
         {more && (
@@ -364,7 +385,7 @@ export function EngineLoadDrawer({
               readout={sessions === 1 ? '1 session' : `${sessions} sessions`}
               ends={['1', rec ? `Recommended here: ${rec.request.sessions}` : '', '8']}
               onChange={(i) => setSessions(SESSION_STOPS[i])}
-              hint={`How many chats or agents can get answers at the same time. Each one keeps its own context, so more sessions use more memory.${sessions > 1 ? ` Each of the ${sessions} gets ${formatTokens(perSession)}.` : ''}`}
+              hint={`How many chats or agents can get answers at the same time. Adding sessions increases the total context and can slow replies.${sessions > 1 ? ` Each of the ${sessions} gets ${formatTokens(perSession)}.` : ''}`}
             />
             <Slider
               id="engine-precision"
@@ -624,6 +645,7 @@ export function ExpertControls({
 }) {
   const layers = model.layers;
   const moe = isMoe(model);
+  const mlxDflash2 = model.format === 'mlx' && isStockDflash2Target(model);
   return (
     <div className="space-y-4 border-t px-3 pb-3 pt-3" style={{ borderColor: 'var(--line)' }}>
       <Group title="Where it runs">
@@ -703,7 +725,13 @@ export function ExpertControls({
       </Group>
 
       <Group title="Guessing ahead">
-        <Row label="Speculative decoding" flag="--spec-default" hint="Guesses the next few words from text already in the chat and checks them in one step. Edits that repeat existing code come out several times faster.">
+        <Row
+          label="Speculative decoding"
+          flag={mlxDflash2 ? undefined : '--spec-default'}
+          hint={mlxDflash2
+            ? 'Lets the selected draft guess ahead for the main model to check.'
+            : 'Guesses the next few words from text already in the chat and checks them in one step. Edits that repeat existing code come out several times faster.'}
+        >
           <Toggle value={params.speculative !== false} onChange={(on) => onChange({ speculative: on ? undefined : false })} label="Speculative decoding" />
         </Row>
         {params.speculative !== false && <DraftModelRow model={model} value={params.draftModelId} onChange={(id) => onChange({ draftModelId: id })} />}
@@ -755,10 +783,10 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
-function Row({ label, hint, flag, children }: { label: string; hint: string; flag?: string; children: React.ReactNode }) {
+function Row({ label, hint, flag, wrap, children }: { label: string; hint: string; flag?: string; wrap?: boolean; children: React.ReactNode }) {
   return (
     <div>
-      <div className="flex items-center justify-between gap-3">
+      <div className={`flex items-center justify-between gap-x-3 ${wrap ? 'flex-wrap gap-y-1' : ''}`}>
         <label className="text-xs">{label}</label>
         {children}
       </div>
@@ -798,47 +826,55 @@ function NumberInput({
   );
 }
 
-/**
- * An optional second guesser: a small model of the same family. Offered only
- * from the same architecture and well under the target's size, because a
- * draft that is too large slows ordinary replies down (measured: a 7.5B draft
- * on a 12B model halved prose speed while it sped edits up).
- */
+/** An explicit local selection; listing the models never chooses or fetches one. */
 function DraftModelRow({ model, value, onChange }: { model: LocalModel; value?: string; onChange: (id: string | undefined) => void }) {
-  const [candidates, setCandidates] = useState<LocalModel[]>([]);
+  const [models, setModels] = useState<LocalModel[] | null>(null);
   useEffect(() => {
     let live = true;
     window.nekko
       .engineModels()
       .then((all) => {
         if (!live || !all) return;
-        const family = model.architecture;
-        setCandidates(
-          all.filter(
-            (m) =>
-              m.id !== model.id &&
-              Boolean(family) &&
-              m.architecture === family &&
-              (m.modality === 'draft' || m.modality === 'chat' || !m.modality) &&
-              m.sizeBytes <= model.sizeBytes / 4,
-          ),
-        );
+        setModels(all);
       })
       .catch(() => {});
     return () => {
       live = false;
     };
-  }, [model.id, model.architecture, model.sizeBytes]);
+  }, [model.id]);
+  const candidates = draftModelCandidates(model, models ?? []);
   if (candidates.length === 0 && !value) return null;
+  const heads = candidates.filter(dflash2DraftName);
+  const mlx = model.format === 'mlx';
   return (
-    <Row label="Draft model" flag="--spec-draft-model" hint="A small model from the same family that guesses ahead. Optional; the guessing above needs none.">
-      <select className="input w-40 py-1 text-xs" value={value ?? ''} onChange={(e) => onChange(e.target.value || undefined)}>
+    <Row
+      label="Draft model"
+      wrap={heads.length > 0}
+      flag={mlx ? '--draft-model' : '--spec-draft-model'}
+      hint={heads.length
+        ? mlx
+          ? 'DFlash2 is experimental, slower in tests, and can change greedy output. Needs mlx-vlm 0.8.1. None uses usual MLX.'
+          : 'Stock Qwen3.8-27B only. Use Full (f16) cache, which matched greedy output in tests.'
+        : 'A small model from the same family that guesses ahead. Optional; the guessing above needs none.'}
+    >
+      <select
+        aria-label="Draft model"
+        className={`input ${heads.length ? 'w-60 max-w-full' : 'w-40'} py-1 text-xs`}
+        value={value ?? ''}
+        onChange={(e) => onChange(e.target.value || undefined)}
+      >
         <option value="">None</option>
-        {candidates.map((m) => (
-          <option key={m.id} value={m.id}>
-            {m.id}
-          </option>
-        ))}
+        {value && !candidates.some((m) => m.id === value) && (
+          <option value={value} disabled>{models ? 'Saved draft unavailable' : 'Saved draft'}</option>
+        )}
+        {candidates.map((m) => {
+          const name = dflash2DraftName(m);
+          return (
+            <option key={m.id} value={m.id} title={name ? m.id : undefined}>
+              {name ? (heads.length === 1 ? name : `${name} · ${m.id}`) : m.id}
+            </option>
+          );
+        })}
       </select>
     </Row>
   );

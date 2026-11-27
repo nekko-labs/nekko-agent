@@ -420,6 +420,10 @@
     <string name="customize_skills_none">利用できるスキルはありません。コンピュータのカスタマイズでスキルをインストールしてください。</string>
     <!-- Nekko Agent's service from the phone (#2059), the iPhone's. -->
     <string name="service_title">Nekko Agent サービス</string>
+    <string name="fleet_runners_title">CI ランナー</string>
+    <string name="fleet_runners_you">%1$s（このコンピューター）</string>
+    <string name="fleet_runners_offline">オフライン</string>
+    <string name="fleet_runners_footer">組織で共有している Mac を、%1$s から見た状態で表示します。</string>
     <string name="service_footer">ここで操作するのは Nekko Agent であり、OS ではありません。再起動やインストールでチャットが中断されることがあります。要求が受け付けられても、完了したとは限りません。</string>
     <string name="service_offline">このコンピュータに接続すると、サービスの状態の確認とアップデートの管理ができます。</string>
     <string name="service_reading">サービスの状態を読み込み中</string>

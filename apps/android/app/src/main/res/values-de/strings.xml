@@ -12,4 +12,11 @@
     <string name="chats_showupdated">Aktualisierungszeit</string>
     <string name="chats_showcontext">Kontextfenster</string>
     <string name="chats_showpullrequests">Pull Requests</string>
+    <string name="plan_display">Planansicht</string>
+    <string name="plan_display_configure">Planansicht konfigurieren</string>
+    <string name="plan_display_full">Gesamten Plan anzeigen</string>
+    <string name="plan_display_balanced">Ausgewogen · 3 Zeilen (Standard)</string>
+    <string name="plan_display_one">1 Zeile anzeigen</string>
+    <string name="plan_display_hidden">Vollständig ausblenden</string>
+    <string name="plan_completed_group">Abgeschlossen (%1$d)</string>
 </resources>

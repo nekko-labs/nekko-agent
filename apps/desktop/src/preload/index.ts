@@ -22,7 +22,7 @@ import type {
   OAuthStatus,
   SubscriptionLimits,
 } from '@nekko-agent/shared';
-import { AGENT_REPLAY, HTML_PREVIEW_CHANNELS, IpcChannels, IpcEvents, LIBRARY_THUMBNAIL_CHANNELS } from '@nekko-agent/shared';
+import { AGENT_REPLAY, HTML_PREVIEW_CHANNELS, IpcChannels, IpcEvents, sessionGetArgs, LIBRARY_THUMBNAIL_CHANNELS } from '@nekko-agent/shared';
 import { ENGINE_ENDPOINT_CHANNEL, PICK_FOLDER_CHANNEL, SERVICE_CONTROL_CHANNEL } from '../engineChannels.js';
 import { createEngineSocket, type Listener } from './engine-socket.js';
 import { heldWhileHidden, pageHidden } from './hiddenReads.js';
@@ -43,6 +43,7 @@ import {
   DISPLAYS_PLACEMENT_CHANNEL, DISPLAYS_REPORT_CHANNEL, DISPLAYS_TOGGLE_CHANNEL, type DisplaysState,
   DISPLAYS_DESKTOP_CHANNEL, DISPLAYS_GO_CHANNEL, DISPLAYS_SPACES_MODE_CHANNEL,
 } from '../displayWindows.js';
+import { STORAGE_CLEAR_CACHES_CHANNEL } from '../storageCaches.js';
 
 // Every call goes to the engine's socket (see `routing.ts`).
 const engine = createEngineSocket((operation) => ipcRenderer.invoke(ENGINE_ENDPOINT_CHANNEL, operation));
@@ -139,6 +140,7 @@ const api: NekkoApi = {
   orgDelete: (orgId) => inv(IpcChannels.orgDelete, orgId),
   fleetSetSharing: (orgId, on) => inv(IpcChannels.fleetSetSharing, orgId, on),
   fleetList: (orgId) => inv(IpcChannels.fleetList, orgId),
+  fleetRunners: () => inv(IpcChannels.fleetRunners),
   fleetStatus: () => inv(IpcChannels.fleetStatus),
   voiceStatus: () => inv(IpcChannels.voiceStatus),
   voiceInstall: (engine) => inv(IpcChannels.voiceInstall, engine),
@@ -154,7 +156,7 @@ const api: NekkoApi = {
   engineSettingsSave: (patch) => inv(IpcChannels.engineSettingsSave, patch),
   engineModels: () => inv(IpcChannels.engineModels),
   engineImportModel: (path) => inv(IpcChannels.engineImportModel, path),
-  engineDeleteModel: (id) => inv(IpcChannels.engineDeleteModel, id),
+  engineDeleteModel: (id, confirmedPath) => inv(IpcChannels.engineDeleteModel, id, confirmedPath),
   engineSaveModelPreset: (id, preset) => inv(IpcChannels.engineSaveModelPreset, id, preset),
   engineCatalog: (query, format) => inv(IpcChannels.engineCatalog, query, format),
   engineCatalogModel: (id) => inv(IpcChannels.engineCatalogModel, id),
@@ -206,7 +208,9 @@ const api: NekkoApi = {
   listAgentWatches: (sessionId) => inv(IpcChannels.sessionWatches, sessionId),
   listSessionSummaries: () => inv(IpcChannels.sessionsSummaries),
   createSession: (workspaceId) => inv(IpcChannels.sessionCreate, workspaceId),
-  getSession: (id) => inv(IpcChannels.sessionGet, id),
+  getSession: (id, opts) => inv(IpcChannels.sessionGet, ...sessionGetArgs(id, opts)),
+  sessionPicture: (reference) => inv(IpcChannels.sessionBlob, reference),
+  finderChatText: (ids) => inv(IpcChannels.sessionsFinderText, ids),
   deleteSession: (id) => inv(IpcChannels.sessionDelete, id),
   setSessionWorkspace: (sessionId, workspaceId) => inv(IpcChannels.sessionSetWorkspace, sessionId, workspaceId),
   setSessionSupportingWorkspaces: (sessionId, workspaceIds) => inv(IpcChannels.sessionSetSupportingWorkspaces, sessionId, workspaceIds),
@@ -307,6 +311,13 @@ const api: NekkoApi = {
   getGitStatus: (id, force) => inv(IpcChannels.workspaceGitStatus, id, force),
   listChatWorktrees: () => inv(IpcChannels.chatWorktreesList),
   removeChatWorktree: (root) => inv(IpcChannels.chatWorktreesRemove, root),
+  getStorageUsage: (refresh) => inv(IpcChannels.storageUsage, { refresh: !!refresh }),
+  getDiskSpace: () => inv(IpcChannels.storageDisk),
+  previewIdleWorktrees: () => inv(IpcChannels.storageIdleWorktrees),
+  removeWorktrees: (roots) => inv(IpcChannels.storageRemoveWorktrees, roots),
+  listRunnerImages: () => inv(IpcChannels.storageRunnerImages),
+  removeRunnerImage: (name) => inv(IpcChannels.storageRemoveRunnerImage, name),
+  clearAppCaches: () => ipcRenderer.invoke(STORAGE_CLEAR_CACHES_CHANNEL),
 
   readFile: (path) => inv(IpcChannels.fileRead, path),
   // The main process serves these on loopback, not the engine (main/htmlPreview.ts).
@@ -698,6 +709,10 @@ const chrome: WindowChromeBridge = {
   setTitleBarOverlay: (theme: TitleBarOverlayTheme) => ipcRenderer.send(TITLEBAR_OVERLAY_CHANNEL, theme),
   setPageZoom: (factor) => { if (Number.isFinite(factor) && factor >= 0.8 && factor <= 1.5) webFrame.setZoomFactor(factor); },
   onPageReloading: (listener) => { ipcRenderer.on(PAGE_RELOADING_EVENT, (_event, fadeMs: number) => listener(fadeMs)); },
+  spellingSuggestions: (word) => {
+    if (!process.isMainFrame || typeof word !== 'string' || word.length > 128 || !/^\p{L}[\p{L}\p{M}'’]*$/u.test(word)) return [];
+    return [...new Set(webFrame.getWordSuggestions(word))].filter(suggestion => suggestion && suggestion !== word).slice(0, 3);
+  },
   displays: {
     displayId: process.argv.find((a) => a.startsWith(DISPLAY_ARG))?.slice(DISPLAY_ARG.length) ?? null,
     list: () => ipcRenderer.invoke(DISPLAYS_LIST_CHANNEL),

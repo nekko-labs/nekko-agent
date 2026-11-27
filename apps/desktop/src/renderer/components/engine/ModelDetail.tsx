@@ -174,8 +174,10 @@ export function ModelDetail({
             <h2 className="text-base font-semibold">Variants</h2>
             <p className="mt-0.5 text-xs text-ink-faint">
               Same model, compressed differently. Lower numbers are smaller files that need less memory and answer a
-              little worse; higher numbers keep more of the model and cost disk and RAM. <strong>Q4_K_M</strong> is the
-              usual choice{recommended ? ', marked below' : ''}.
+              little worse; higher numbers keep more of the model and cost disk and RAM.{' '}
+              {recommended && memory && downloadFitVerdict(recommended.sizeBytes, memory.budgetBytes) === 'fits'
+                ? <><strong>{quantOf(recommended)}</strong> is our pick for this machine, the largest that fits its memory with room to spare, marked below.</>
+                : <><strong>Q4_K_M</strong> is the usual choice{recommended ? ', marked below' : ''}.</>}
             </p>
             {releasesOf(model.quants).map(({ variant, quants }) => (
             <Group
@@ -201,7 +203,7 @@ export function ModelDetail({
                       <span
                         className="shrink-0 rounded-full px-2 py-0.5 text-2xs"
                         style={{ background: 'color-mix(in srgb, var(--accent) 16%, transparent)', color: 'var(--accent)' }}
-                        title="The build we suggest for most people"
+                        title="The build we suggest for this machine"
                       >
                         our pick
                       </span>
@@ -596,18 +598,26 @@ export function isInstalledBuild(m: LocalModel, q: CatalogQuant, releases: boole
 }
 
 /**
- * The one build to point at when the question is "which of these": Q4_K_M when the
- * repo publishes it (releases come newest first, so the newest release's), otherwise
- * the lightest build this machine can hold, otherwise the lightest build at all. A
- * build whose format the engine cannot run (`checks`) is never the pick; one that only
- * needs a newer engine still is, since Update fixes that.
+ * The one build to point at when the question is "which of these", from the newest
+ * release (releases come newest first): the largest build this machine holds with
+ * room to spare, since a bigger quant answers better and the memory is already there.
+ * Unquantized builds (F16, BF16, F32) come last: Q8_0 is effectively the same answers
+ * at half the size and twice the speed. With nothing that fits, or no memory reading,
+ * Q4_K_M when the repo publishes it, otherwise the lightest build. A build whose
+ * format the engine cannot run (`checks`) is never the pick; one that only needs a
+ * newer engine still is, since Update fixes that.
  */
 export function recommendedBuild(quants: CatalogQuant[], memory: EngineMemory | undefined, checks: Record<string, ModelLoadCheck>): CatalogQuant | null {
-  const runnable = quants.filter((q) => !(checks[q.file]?.level === 'blocked' && checks[q.file]?.cause !== 'engineAge'));
+  const allowed = quants.filter((q) => !(checks[q.file]?.level === 'blocked' && checks[q.file]?.cause !== 'engineAge'));
+  const runnable = allowed.filter((q) => q.variant === allowed[0]?.variant);
   const q4 = runnable.find((q) => quantOf(q).toUpperCase().startsWith('Q4_K_M'));
+  const full = (q: CatalogQuant) => /^(BF16|FP?16|FP?32)/.test(quantOf(q).toUpperCase());
+  const best = memory && runnable
+    .filter((q) => downloadFitVerdict(q.sizeBytes, memory.budgetBytes) === 'fits')
+    .sort((a, b) => Number(full(a)) - Number(full(b)) || (b.sizeBytes ?? 0) - (a.sizeBytes ?? 0))[0];
+  if (best) return best;
   if (q4) return q4;
-  const fitting = memory ? runnable.filter((q) => downloadFitVerdict(q.sizeBytes, memory.budgetBytes) === 'fits') : runnable;
-  return fitting.filter((q) => q.sizeBytes).sort((a, b) => (a.sizeBytes ?? 0) - (b.sizeBytes ?? 0))[0] ?? null;
+  return memory ? null : runnable.filter((q) => q.sizeBytes).sort((a, b) => (a.sizeBytes ?? 0) - (b.sizeBytes ?? 0))[0] ?? null;
 }
 
 /** A build's chip when the engine has a word about it, in the library rows' own words. */

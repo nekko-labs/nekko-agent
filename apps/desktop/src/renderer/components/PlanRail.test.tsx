@@ -31,19 +31,29 @@ describe('plan sheet, folded and open (#1317)', () => {
     { id: 'c', createdAt: 1, updatedAt: 1, title: 'Auth tests pass', status: 'pending', kind: 'verify' },
     { id: 'd', createdAt: 1, updatedAt: 1, title: 'Open the PR', status: 'pending', kind: 'ship' },
   ] } as unknown as Session;
-  it('opens by default to every step; folded, it collapses to the step being worked: title, pass and its place, with no Change plan', () => {
-    const open = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} />);
-    expect(open).toContain('1 of 4 done');
-    expect(open).toContain('Find every inline check');
-    const folded = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} initiallyOpen={false} />);
-    expect(folded).toContain('data-folded');
-    expect(folded).toContain('aria-expanded="false"');
-    expect(folded).not.toContain('data-plan-kind');
-    expect(folded).toContain('Move checks into one middleware');
-    expect(folded).toContain('Pass 2');
-    expect(folded).toContain('2 of 4');
-    expect(folded).not.toContain('Find every inline check');
-    expect(folded).not.toContain('Change plan');
+  it('starts folded as a timeline: one dot per step in order, and the step being worked under it', () => {
+    const html = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} />);
+    expect(html).toContain('data-folded');
+    expect(html).toContain('data-plan-timeline="horizontal"');
+    expect(html).toContain('1 of 4 done');
+    expect(html).toContain('Configure plan display');
+    expect(html.match(/data-tl-dot="[^"]+"/g)).toEqual(['data-tl-dot="a"', 'data-tl-dot="b"', 'data-tl-dot="c"', 'data-tl-dot="d"']);
+    expect(html.match(/data-plan-dot="[^"]+"/g)).toEqual(['data-plan-dot="done"', 'data-plan-dot="active"', 'data-plan-dot="pending"', 'data-plan-dot="pending"']);
+    expect(html).toContain('aria-label="Step 2 of 4: Move checks into one middleware. Working"');
+    // Only the step being worked keeps a row; the rest wait behind a hover or the open plan.
+    expect(html.match(/data-plan-step-id="[^"]+"/g)).toEqual(['data-plan-step-id="b"']);
+    expect(html).toContain('Pass 2');
+    expect(html).not.toContain('plan-completed');
+  });
+  it('keeps the current step under the dots when folded, and lists every step in published order down the line when open', () => {
+    const dots = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} initiallyOpen={false} />);
+    expect(dots).toContain('data-plan-current');
+    const open = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} initiallyOpen />);
+    expect(open).toContain('data-plan-timeline="vertical"');
+    expect(open).not.toContain('data-plan-current');
+    expect(open.match(/data-plan-step-id="[^"]+"/g)).toEqual(['a', 'b', 'c', 'd'].map(id => `data-plan-step-id="${id}"`));
+    expect(open.match(/data-tl-dot="[^"]+"/g)).toHaveLength(4);
+    expect(open.match(/data-tl-text/g)).toHaveLength(4);
   });
   it('shows the sub-agents as live cards when folded, and puts each under its step when open', () => {
     store.sessions = [
@@ -55,7 +65,8 @@ describe('plan sheet, folded and open (#1317)', () => {
       const folded = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} initiallyOpen={false} />);
       expect(folded).toMatch(/data-subagent-card="k2" data-status="working"[^]*?data-subagent-card="k1" data-status="done"/);
       expect(folded).not.toContain('Not mine');
-      expect(folded).toContain('ollama-local · qwen3:8b');
+      expect(folded).toContain('>qwen3:8b<');
+      expect(folded).not.toContain('ollama-local');
       expect(renderToStaticMarkup(<PlanRail sessionId="s" session={loop} />)).toContain('ollama-local · qwen3:8b');
       const open = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} initiallyOpen />);
       expect(open).toContain('1 of 4 done');
@@ -99,5 +110,14 @@ describe('per-step plan status icons', () => {
       const markup = renderToStaticMarkup(<PlanSheet sessionId="s" session={running} streaming={running === interrupted} prs={[]} initiallyOpen />);
       expect(markup.match(/aria-label="Working"/g)).toHaveLength(2);
     }
+  });
+});
+
+describe('timeline fill', () => {
+  it('fills the line up to the last finished or skipped step, in published order', async () => {
+    const { lastFinished } = await import('./PlanTimeline.js');
+    const s = (status: string) => ({ status }) as { status: 'done' };
+    expect(lastFinished([s('pending'), s('active')])).toBe(-1);
+    expect(lastFinished([s('done'), s('active'), s('skipped'), s('pending')])).toBe(2);
   });
 });

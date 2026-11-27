@@ -17,8 +17,11 @@ import { useCompactionStore } from '../compactionStatus.js';
 import { fillTone } from './contextTone.js';
 import { SessionPrChip } from './SessionPrChip.js';
 import { ProviderMark, providerMarkKind } from './providers/ProviderMark.js';
-import { statusGroupOf, wakeSourcesOf } from '../views/agentPanelView.js';
+import { shownReplyAt, statusGroupOf, wakeSourcesOf } from '../views/agentPanelView.js';
+import { ChatGroupDot } from './ChatGroupDot.js';
 import { cutTitle } from '../views/cutTitle.js';
+import { normalizeChatTags, visibleChatTags } from '../views/chatTags.js';
+import './chatTags.css';
 
 /**
  * One workspace, as a card in the left sidebar.
@@ -173,6 +176,8 @@ function WorkspaceCardImpl({
   now,
   projects,
   subAgentCount = 0,
+  subagentsHidden = false,
+  onToggleSubagents,
   showMetadata = true,
   showModel = true,
   showContext = true,
@@ -184,6 +189,9 @@ function WorkspaceCardImpl({
   showComputer = true,
   showComputerIcons = true,
   zoneTint,
+  chatGroupColor,
+  chatGroupLabel,
+  hideDoneGlyph = false,
   renaming = false,
   onOpen,
   onClose,
@@ -202,6 +210,10 @@ function WorkspaceCardImpl({
   projects: WorkspaceFolder[];
   /** How many sub-agents this chat has spawned. */
   subAgentCount?: number;
+  /** The sub-agent tree under the card is folded away. */
+  subagentsHidden?: boolean;
+  /** Fold or unfold that tree; absent, the count is plain text. */
+  onToggleSubagents?: () => void;
   /** The lines under the title; off, the card is its title row alone. */
   showMetadata?: boolean;
   showModel?: boolean;
@@ -217,6 +229,12 @@ function WorkspaceCardImpl({
   showComputerIcons?: boolean;
   /** The colour of the zone showing this agent on the board; absent when it is not on the board. */
   zoneTint?: number;
+  /** The colour (CSS) of the chat's group, shown as a dot before its title. */
+  chatGroupColor?: string;
+  /** The dot's accessible name: "Group: name", or "Untitled group (Teal)" for a group with no name. */
+  chatGroupLabel?: string;
+  /** No done check: the Done status group says it already. */
+  hideDoneGlyph?: boolean;
   /** The chat's title is a text field, being renamed. */
   renaming?: boolean;
   onOpen: () => void;
@@ -268,7 +286,7 @@ function WorkspaceCardImpl({
   const ctxPct = ctxWindow > 0 ? (ctxUsed / ctxWindow) * 100 : 0;
 
   const windows = workspace ? allPanes(workspace.root).length : 0;
-  const lastReply = session?.lastReplyAt;
+  const lastReply = session ? shownReplyAt(session, status) : undefined;
   const terminalView = terminal ? terminalPresentation(terminal) : null;
   const title = session?.title ?? terminalView?.title ?? 'Agent';
   // A title cut from the first message says so, and the hover shows the whole message.
@@ -306,6 +324,21 @@ function WorkspaceCardImpl({
   const prLine: 'title' | 'model' | 'git' | 'spawn' = !showMetadata
     ? 'title'
     : spawnLine ? 'spawn' : showGit && git ? 'git' : modelLine ? 'model' : 'title';
+  // The chat's tags: up to three as quiet `#tag` text, the rest a "+N" that names
+  // them on hover. They ride the branch line, at its right end opposite the
+  // branch; a card with no branch line gives them a line of their own above its last line.
+  const tagChips = showMetadata && session ? visibleChatTags(session.tags, 3) : null;
+  const hasTags = !!tagChips && tagChips.shown.length > 0;
+  const hiddenTags = hasTags ? normalizeChatTags(session!.tags).slice(tagChips!.shown.length) : [];
+  const tagParts = hasTags ? <>
+    {tagChips!.shown.map((t) => <span key={t} className="chat-tag-chip" title={`#${t}`}>#{t}</span>)}
+    {tagChips!.more > 0 && <span className="chat-tag-more" title={hiddenTags.map((t) => `#${t}`).join(' ')} aria-label={`${tagChips!.more} more: ${hiddenTags.map((t) => `#${t}`).join(' ')}`} data-chat-tags-more>+{tagChips!.more}</span>}
+  </> : null;
+  const gitLine = showGit && !!git;
+  const tagsInline = hasTags && gitLine ? <span className="chat-tags ms-auto shrink justify-end ps-2" data-chat-tags data-chat-tags-inline>{tagParts}</span> : null;
+  const tagsLine = hasTags && !gitLine ? (
+    <div className="chat-tags pl-3 text-2xs leading-3" data-chat-tags>{tagParts}</div>
+  ) : null;
   const prChip = (line: typeof prLine) =>
     showPullRequests && prs.length > 0 && prLine === line ? <span className="ml-auto inline-flex shrink-0 pl-1 text-2xs leading-[15px]"><SessionPrChip prs={prs} /></span> : null;
 
@@ -329,14 +362,16 @@ function WorkspaceCardImpl({
     >
       {zoneTint !== undefined && <span className="agent-chip-zone" style={{ background: `var(--zone-tint-${zoneTint})` }} aria-hidden />}
       <div className="agent-chip-heading flex items-center gap-2">
-        {terminal ? <TerminalIcon className="h-3.5 w-3.5 shrink-0" /> : <StatusIcon status={status ?? (session ? agentStatusOfLane('idle', undefined, wakeSourcesOf(session)) : 'idle')} />}
+        {terminal ? <TerminalIcon className="h-3.5 w-3.5 shrink-0" /> : !(hideDoneGlyph && statusGroupOf(session, status) === 'status:done') && <StatusIcon status={status ?? (session ? agentStatusOfLane('idle', undefined, wakeSourcesOf(session)) : 'idle')} />}
+        {/* The card has no description line, so the dot leads the title. */}
+        {chatGroupColor && chatGroupLabel && <ChatGroupDot color={chatGroupColor} name={chatGroupLabel} label={chatGroupLabel} />}
         {renaming && onRename
           ? <RenameField title={title} onDone={onRename} />
           : <span className="min-w-0 flex-1 truncate text-xs leading-[18px] font-semibold text-ink">
             {cut?.shown ?? title}
           </span>}
         {/* A title-only card has no room for both: its PR says more than the time. */}
-        {showUpdated && lastReply && (!status || status === 'done' || status === 'idle') && !(showPullRequests && prLine === 'title' && prs.length > 0) && (
+        {showUpdated && lastReply && !(showPullRequests && prLine === 'title' && prs.length > 0) && (
           <time className="shrink-0 text-2xs tabular-nums text-ink-faint" dateTime={new Date(lastReply).toISOString()} title={`Last reply ${new Date(lastReply).toLocaleString()}`}>
             {timeAgo(now - lastReply)}
           </time>
@@ -380,6 +415,8 @@ function WorkspaceCardImpl({
           more than one), the provider's logo and the model, then how full the
           context window is. The provider's name is in the tooltip. */}
       {showMetadata && <>
+      {prLine === 'title' && tagsLine}
+      {prLine === 'model' && tagsLine}
       {modelLine && <div className="mt-0.5 flex items-center gap-1 pl-3 text-2xs leading-[15px] text-ink-faint">
         {computerShown && <ComputerChip computer={computer ?? syncedHome} dim={!!computer && computer.state !== 'online'} showIcon={showComputerIcons} />}
         {computerShown && showModel && <span aria-hidden>·</span>}
@@ -416,6 +453,7 @@ function WorkspaceCardImpl({
 
       {/* Line 3: its git position. The project is the group heading the card
           sits under, so the card does not repeat it. */}
+      {prLine === 'git' && tagsLine}
       {showGit && git && (
         <div className="flex items-center gap-1 pl-3 text-2xs leading-[15px] text-ink-faint">
           <Fact
@@ -436,15 +474,31 @@ function WorkspaceCardImpl({
               {git.behind > 0 ? `↓${git.behind}` : ''}
             </Fact>
           ) : null}
+          {tagsInline}
           {prChip('git')}
         </div>
       )}
 
       {/* Line 4: what it has spun up. Only when there is something to say: a
           card for a plain one-window chat should not carry an empty row. */}
+      {prLine === 'spawn' && tagsLine}
       {spawnLine && (
         <div className="flex items-center gap-1 pl-3 text-2xs leading-[15px] text-ink-faint">
-          {showSubagents && subAgentCount > 0 && (
+          {showSubagents && subAgentCount > 0 && (onToggleSubagents ? (
+            <button
+              type="button"
+              data-subagent-fold
+              aria-expanded={!subagentsHidden}
+              className="-mx-1 inline-flex shrink-0 items-center rounded px-1 hover:bg-surface-2"
+              title={subagentsHidden ? "Show this chat's sub-agents" : "Hide this chat's sub-agents"}
+              onClick={(e) => { e.stopPropagation(); onToggleSubagents(); }}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              <Fact tone="var(--accent-2)" icon={<RobotIcon className="h-2.5 w-2.5 shrink-0" />}>
+                {subAgentCount} sub-agent{subAgentCount === 1 ? '' : 's'}
+              </Fact>
+            </button>
+          ) : (
             <Fact
               tone="var(--accent-2)"
               icon={<RobotIcon className="h-2.5 w-2.5 shrink-0" />}
@@ -452,7 +506,7 @@ function WorkspaceCardImpl({
             >
               {subAgentCount} sub-agent{subAgentCount === 1 ? '' : 's'}
             </Fact>
-          )}
+          ))}
           {showWindows && windows > 1 && <span className="shrink-0">{windows} windows</span>}
           {prChip('spawn')}
         </div>

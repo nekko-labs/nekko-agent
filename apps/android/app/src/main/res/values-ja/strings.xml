@@ -12,4 +12,11 @@
     <string name="chats_showupdated">更新時刻</string>
     <string name="chats_showcontext">コンテキストウィンドウ</string>
     <string name="chats_showpullrequests">プルリクエスト</string>
+    <string name="plan_display">プランの表示</string>
+    <string name="plan_display_configure">プランの表示を設定</string>
+    <string name="plan_display_full">プラン全体を表示</string>
+    <string name="plan_display_balanced">バランス · 3 行（デフォルト）</string>
+    <string name="plan_display_one">1 行を表示</string>
+    <string name="plan_display_hidden">完全に非表示</string>
+    <string name="plan_completed_group">完了（%1$d）</string>
 </resources>

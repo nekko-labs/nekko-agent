@@ -69,10 +69,23 @@ export function routeTargets(picks: RoutePicks, tailnetUrl: string | undefined, 
 
 /** What is ticked now: the main relay and the extra ones, by kind. Your own relay counts as neither. */
 export function currentPicks(status: RemoteStatus, local: LocalRelayStatus | null): RoutePicks {
-  const urls = status.enabled ? [status.relayUrl, ...(status.alsoRelays ?? [])].filter(Boolean) as string[] : [];
-  const tailnet = (u: string) => connectionName(u, local) === 'Tailscale' || relayRoute(u) === 'tailscale';
-  return { tailscale: urls.some(tailnet), cloud: urls.some((u) => relayVia(u) === 'cloud') };
+  const urls = relayUrlsOf(status);
+  return { tailscale: urls.some((u) => isTailnetRelay(u, local)), cloud: urls.some((u) => relayVia(u) === 'cloud') };
 }
+
+/**
+ * The tailnet address phones reach this computer on: this computer's relay's
+ * own, else the one remote access already uses. Tailscale stopped here leaves
+ * the relay without one, but the ticked route keeps its address, so ticking
+ * Nekko Cloud Relay beside it doesn't wait on Tailscale coming back.
+ */
+export function tailnetUrlOf(status: RemoteStatus, local: LocalRelayStatus | null): string | undefined {
+  return local?.url ?? relayUrlsOf(status).find((u) => isTailnetRelay(u, local));
+}
+
+const relayUrlsOf = (status: RemoteStatus): string[] =>
+  status.enabled ? [status.relayUrl, ...(status.alsoRelays ?? [])].filter(Boolean) as string[] : [];
+const isTailnetRelay = (u: string, local: LocalRelayStatus | null) => connectionName(u, local) === 'Tailscale' || relayRoute(u) === 'tailscale';
 
 /**
  * Where a pairing link sends a device (decision 0116): for `auto`, every route
@@ -277,9 +290,9 @@ export function RemoteAccess() {
     setUrlProblem(undefined);
     setBusy(true);
     try {
-      let tailnetUrl = localRelay?.url;
-      if (next.tailscale && tailnetUrl) {
-        const t = await relayToEnable(tailnetUrl, { url: tailnetUrl, local: true }, localRelay, () => window.nekko.localRelayStart());
+      let tailnetUrl = tailnetUrlOf(status, localRelay);
+      if (next.tailscale && localRelay?.url) {
+        const t = await relayToEnable(localRelay.url, { url: localRelay.url, local: true }, localRelay, () => window.nekko.localRelayStart());
         if (t.started) setLocalRelay(t.started);
         if (!t.url) return setUrlProblem(t.problem);
         tailnetUrl = t.url;

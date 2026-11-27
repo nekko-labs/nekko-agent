@@ -164,6 +164,7 @@ export const PHONE_CHANNELS = [
   'files:read',
   'files:search',
   'files:write',
+  'fleet:runners',
   'git:branches',
   'git:commit',
   'git:commitMessage',
@@ -209,6 +210,7 @@ export const PHONE_CHANNELS = [
   'session:setOptions',
   'session:setSupportingWorkspaces',
   'session:watches',
+  'sessions:finderText',
   'sessions:summaries',
   'settings:get',
   'settings:update',
@@ -265,6 +267,9 @@ export const PHONE_DENIED_FOREVER: PhoneDeniedGroup = {
     'providers:remove',
     'providers:save',
     'settings:reset',
+    // Removes checkouts on the computer to free its disk: only the person at it decides that.
+    'storage:removeRunnerImage',
+    'storage:removeWorktrees',
   ],
   // `cloud:` / `sync:`: the computer's Nekko Cloud token and sync keys. A phone signs in to Nekko Cloud itself.
   prefixes: ['cloud:', 'dialog:', 'oauth:', 'remote:', 'shell:', 'sync:', 'update:'],
@@ -384,6 +389,8 @@ export const PHONE_CHAT_READ_CHANNELS: readonly string[] = [
   'changes:list',
   'chat:pending',
   'engine:models',
+  // Each organization's computers that run CI runners, and their runners' state (decision 0064).
+  'fleet:runners',
   'limits:get',
   'machine:summary',
   'models:list',
@@ -394,6 +401,7 @@ export const PHONE_CHAT_READ_CHANNELS: readonly string[] = [
   'session:get',
   'session:photo',
   'session:watches',
+  'sessions:finderText',
   'sessions:summaries',
   'settings:get',
   'skills:runnable',
@@ -733,6 +741,7 @@ export const PHONE_SESSION_OPTION_KEYS = [
   'autoModel',
   'autoProviderSwitch',
   'autoQuality',
+  'chatGroup',
   'chatType',
   'cloudOnly',
   'disabledConnectors',
@@ -828,6 +837,10 @@ export const PHONE_SKILL_VIEW = ['category', 'description', 'name', 'source'] as
 /** What a phone receives of each tool (`tools:list`): the name a chat's `disabledTools` holds, and what it does. */
 export const PHONE_TOOL_VIEW = ['description', 'name'] as const;
 
+/** What a phone receives of a fleet computer that runs CI runners (`fleet:runners`, decision 0064), and of each runner. */
+export const PHONE_FLEET_COMPUTER_VIEW = ['deviceId', 'name', 'online', 'os', 'seenAt', 'you'] as const;
+export const PHONE_FLEET_RUNNER_VIEW = ['busy', 'label', 'slots', 'state'] as const;
+
 /**
  * `attachment:upload` (#2777, #2635): a clip from the phone, in order, as
  * `(chatId, uploadId, name, offset, total, chunk)` with `chunk` base64 of at
@@ -894,6 +907,20 @@ export const PHONE_SESSION_VIEW = {
   photoSide: 2048,
   photoChars: 6 * 1024 * 1024,
 } as const;
+
+/**
+ * What a phone's chat search receives from `sessions:finderText` (#3448): what
+ * each asked chat said, so a phrase from the middle of a chat is found without
+ * downloading its transcript. Per chat its title, `updatedAt` and its newest
+ * `messages` messages, each only its role, its text cut to `textChars`
+ * characters and the file paths its tool calls named (`files` of them); never
+ * pictures, reasoning, tool output or where its checkout lives. A phone asks
+ * for at most `chats` chats per call. Chats are answered in the asked order
+ * while the reply stays under `bytes` (well under `PHONE_MAX_FRAME_BYTES`); the
+ * ones left out are absent from the reply and the phone asks for them again.
+ * A chat the computer doesn't have is `null`.
+ */
+export const PHONE_FINDER_VIEW = { chats: 20, messages: 300, textChars: 8000, files: 20, bytes: 6 * 1024 * 1024 } as const;
 
 /**
  * The largest sealed reply frame the agent sends a phone. The relay drops
@@ -1108,6 +1135,14 @@ export function screenPhoneCall(
       if (typeof args[1] !== 'string' || args[1] === '') throw new PhoneAccessError('value-invalid', 'watch id');
       if (args.length > 2) throw new PhoneAccessError('option-denied', 'extra argument');
       return {};
+    case 'sessions:finderText': {
+      // The chats to read, each once: a phone asks a few at a time (PHONE_FINDER_VIEW).
+      const ids = args[0];
+      if (!Array.isArray(ids) || ids.length === 0 || ids.length > PHONE_FINDER_VIEW.chats) throw new PhoneAccessError('value-invalid', 'chat ids');
+      if (!ids.every((id) => typeof id === 'string' && id !== '' && id.length <= 128)) throw new PhoneAccessError('value-invalid', 'chat id');
+      if (args.length > 1) throw new PhoneAccessError('option-denied', 'extra argument');
+      return {};
+    }
     case 'session:photo':
       if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
       if (typeof args[1] !== 'string' || args[1] === '') throw new PhoneAccessError('value-invalid', 'message id');
@@ -1292,8 +1327,28 @@ export function phoneSettingsUpdate(sets: Array<[string, unknown]>, current: unk
 }
 
 /** What a phone receives for a channel's result: secrets never leave the computer. */
+/** `fleet:runners`: per organization, its name and the computers that run CI runners, each with its runners. */
+function phoneFleetRunnersView(result: unknown): { orgs: { orgName: string; computers: Obj[] }[] } {
+  const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+  const orgs = list((result as { orgs?: unknown } | null)?.orgs);
+  return {
+    orgs: orgs.map((o) => {
+      const org = (o ?? {}) as { orgName?: unknown; computers?: unknown };
+      return {
+        orgName: typeof org.orgName === 'string' ? org.orgName : '',
+        computers: list(org.computers).map((c) => ({
+          ...pick(c, PHONE_FLEET_COMPUTER_VIEW),
+          runners: list((c as { runners?: unknown } | null)?.runners).map((r) => pick(r, PHONE_FLEET_RUNNER_VIEW)),
+        })),
+      };
+    }),
+  };
+}
+
 export function redactPhoneResult(channel: string, result: unknown): unknown {
   switch (channel) {
+    case 'sessions:finderText':
+      return phoneFinderTextView(result);
     case 'engine:models':
       return phoneImageModels(result);
     case 'chat:generateImage':
@@ -1310,6 +1365,8 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
       return Array.isArray(result) ? result.map((s) => pick(s, PHONE_SKILL_VIEW)) : [];
     case 'tools:list':
       return Array.isArray(result) ? result.map((t) => pick(t, PHONE_TOOL_VIEW)) : [];
+    case 'fleet:runners':
+      return phoneFleetRunnersView(result);
     case 'session:get':
     case 'chat:steer':
       return phoneSessionView(result);
@@ -1435,6 +1492,66 @@ function phoneMessage(m: unknown, n: number): unknown {
  * tool images dropped and long tool text cut (`PHONE_SESSION_VIEW`). Anything
  * that isn't a session object passes through unchanged.
  */
+/** UTF-8 bytes of a value as JSON: what a reply frame carries. */
+const jsonBytes = (v: unknown): number => new TextEncoder().encode(JSON.stringify(v)).length;
+
+/** One message of a `sessions:finderText` chat as a phone gets it (`PHONE_FINDER_VIEW`). */
+function phoneFinderMessage(m: unknown): Obj | null {
+  if (!isObj(m) || (m.role !== 'user' && m.role !== 'assistant')) return null;
+  const parts = [typeof m.content === 'string' ? m.content : '', isObj(m.skill) && typeof m.skill.input === 'string' ? m.skill.input : ''];
+  const out: Obj = { role: m.role, text: cutText(parts.filter(Boolean).join('\n'), PHONE_FINDER_VIEW.textChars) };
+  const files = (Array.isArray(m.toolCalls) ? m.toolCalls : [])
+    .flatMap((c) => (isObj(c) && isObj(c.input) ? [c.input.path, c.input.file_path] : []))
+    .filter((p): p is string => typeof p === 'string' && p !== '')
+    .slice(0, PHONE_FINDER_VIEW.files)
+    .map((p) => cutText(p, 512));
+  if (files.length) out.files = files;
+  return out;
+}
+
+/** One chat of a `sessions:finderText` reply as a phone gets it, or null. */
+function phoneFinderChat(chat: unknown): Obj | null {
+  if (!isObj(chat)) return null;
+  const all = Array.isArray(chat.messages) ? chat.messages : [];
+  const keep = all.slice(Math.max(0, all.length - PHONE_FINDER_VIEW.messages));
+  const out: Obj = {
+    title: typeof chat.title === 'string' ? cutText(chat.title, 512) : '',
+    updatedAt: typeof chat.updatedAt === 'number' ? chat.updatedAt : null,
+    messages: keep.map(phoneFinderMessage).filter((m): m is Obj => m !== null),
+  };
+  if (all.length > keep.length) out.omittedMessages = all.length - keep.length;
+  return out;
+}
+
+/**
+ * `sessions:finderText` for a phone (#3448, `PHONE_FINDER_VIEW`): each chat cut
+ * to what its search reads, kept in order while the reply fits `bytes`.
+ */
+export function phoneFinderTextView(result: unknown): Obj {
+  const out: Obj = {};
+  if (!isObj(result)) return out;
+  let used = 2;
+  for (const [id, chat] of Object.entries(result)) {
+    const view = phoneFinderChat(chat);
+    let size = jsonBytes(id) + 1 + jsonBytes(view) + 1;
+    if (used + size > PHONE_FINDER_VIEW.bytes) {
+      // Later chats wait for the next call; a first chat too large alone drops its oldest messages instead.
+      if (Object.keys(out).length > 0 || !view) break;
+      const messages = view.messages as Obj[];
+      const sizes = messages.map((m) => jsonBytes(m) + 1);
+      let drop = 0;
+      // `omittedMessages` and its count fit in the 32 bytes held back.
+      while (drop < messages.length && used + size + 32 > PHONE_FINDER_VIEW.bytes) size -= sizes[drop++];
+      view.messages = messages.slice(drop);
+      view.omittedMessages = (typeof view.omittedMessages === 'number' ? view.omittedMessages : 0) + drop;
+      size = jsonBytes(id) + 1 + jsonBytes(view) + 1;
+    }
+    out[id] = view;
+    used += size;
+  }
+  return out;
+}
+
 export function phoneSessionView(session: unknown): unknown {
   if (!isObj(session) || !Array.isArray(session.messages)) return session;
   const all = session.messages;
@@ -1585,6 +1702,8 @@ export function phoneAccessPolicy() {
     machineResidentView: [...PHONE_MACHINE_RESIDENT_VIEW],
     skillView: [...PHONE_SKILL_VIEW],
     toolView: [...PHONE_TOOL_VIEW],
+    fleetComputerView: [...PHONE_FLEET_COMPUTER_VIEW],
+    fleetRunnerView: [...PHONE_FLEET_RUNNER_VIEW],
     queueKeys: [...PHONE_QUEUE_KEYS],
     sessionOptionKeys: [...PHONE_SESSION_OPTION_KEYS],
     guardedOptionKeys: [...PHONE_GUARDED_OPTION_KEYS],
@@ -1650,6 +1769,7 @@ export function phoneAccessPolicy() {
       checkView: [...PHONE_CHECK_VIEW],
     },
     maxFrameBytes: PHONE_MAX_FRAME_BYTES,
+    finderView: { ...PHONE_FINDER_VIEW },
     upload: { ...PHONE_UPLOAD },
     stepUp: stepUpPolicy(),
   };

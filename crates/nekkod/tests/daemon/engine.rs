@@ -120,7 +120,7 @@ async fn serves_the_model_library_and_its_folders_itself() {
     assert_eq!((imported["ok"].clone(), imported["message"].clone()), (json!(true), json!("Added Loose.")));
     let (_, refused) = post(d.port, "engine:deleteModel", json!(["ollama/tiny:latest"]), Some(TOKEN)).await;
     assert_eq!(refused["ok"], false);
-    assert!(ollama.join("blobs/sha256-abc").exists(), "a borrowed folder is never written");
+    assert!(ollama.join("blobs/sha256-abc").exists(), "no confirmation must leave the blob intact");
     let (_, deleted) = post(d.port, "engine:deleteModel", json!([id]), Some(TOKEN)).await;
     assert_eq!(deleted, json!({ "ok": true, "message": "Deleted Tiny." }));
     assert!(!model.exists());
@@ -140,6 +140,19 @@ async fn serves_the_model_library_and_its_folders_itself() {
     assert_eq!(report["suggestions"][0]["provider"], "ollama", "removed, so suggested");
     let settings: Value = serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap();
     assert_eq!(settings["engine"]["modelFolders"], json!([]));
+    post(
+        d.port,
+        "engine:foldersSave",
+        json!([[{ "id": "ollama", "path": ollama, "enabled": true, "provider": "ollama" }]]),
+        Some(TOKEN),
+    )
+    .await;
+    let blob = ollama.join("blobs/sha256-abc");
+    let (_, deleted) = post(d.port, "engine:deleteModel", json!(["ollama/tiny:latest", blob]), Some(TOKEN)).await;
+    assert_eq!(deleted["ok"], true, "{deleted}");
+    assert!(blob.exists(), "Ollama blob must be preserved");
+    assert!(!ollama.join("manifests/registry.ollama.ai/library/tiny/latest").exists());
+
     drop(d);
     std::fs::remove_dir_all(root).ok();
 }
@@ -311,13 +324,13 @@ async fn downloads_models_itself_and_merges_the_hosts_jobs() {
 /// system's own tar (bsdtar on Windows and macOS writes zip from the name).
 fn engine_archive(dir: &std::path::Path) -> (String, &'static str, Vec<u8>) {
     let (build, name, exe) = if cfg!(windows) {
-        ("win-x64-cpu", "llama-b12535-bin-win-cpu-x64.zip", "llama-server.exe")
+        ("win-x64-cpu", "llama-b12565-bin-win-cpu-x64.zip", "llama-server.exe")
     } else if cfg!(target_os = "macos") {
-        ("macos-arm64-metal", "llama-b12535-bin-macos-arm64.tar.gz", "llama-server")
+        ("macos-arm64-metal", "llama-b12565-bin-macos-arm64.tar.gz", "llama-server")
     } else if cfg!(target_arch = "aarch64") {
-        ("linux-arm64-cpu", "llama-b12535-bin-ubuntu-arm64.tar.gz", "llama-server")
+        ("linux-arm64-cpu", "llama-b12565-bin-ubuntu-arm64.tar.gz", "llama-server")
     } else {
-        ("linux-x64-cpu", "llama-b12535-bin-ubuntu-x64.tar.gz", "llama-server")
+        ("linux-x64-cpu", "llama-b12565-bin-ubuntu-x64.tar.gz", "llama-server")
     };
     let src = dir.join("archive-src/build/bin");
     std::fs::create_dir_all(&src).unwrap();
@@ -354,11 +367,11 @@ async fn fake_github(name: &'static str, archive: Vec<u8>) -> u16 {
     let port = listener.local_addr().unwrap().port();
     let digest: String = sha2::Sha256::digest(&archive).iter().map(|b| format!("{b:02x}")).collect();
     let release = json!({
-        "tag_name": "b12535",
+        "tag_name": "b12565",
         "assets": [{ "name": name, "browser_download_url": format!("http://127.0.0.1:{port}/dl/{name}"), "size": archive.len(), "digest": format!("sha256:{digest}") }],
     });
     let app = axum::Router::new()
-        .route("/repos/ggml-org/llama.cpp/releases/tags/b12535", get(move || async move { axum::Json(release) }))
+        .route("/repos/ggml-org/llama.cpp/releases/tags/b12565", get(move || async move { axum::Json(release) }))
         .route(&format!("/dl/{name}"), get(move || async move { archive }));
     tokio::spawn(async move {
         let _ = axum::serve(listener, app).await;
@@ -380,12 +393,12 @@ async fn installs_and_removes_the_engine_itself() {
     let (_, preview) = post(d.port, "engine:installPreview", json!(["llama", build]), Some(TOKEN)).await;
     assert_eq!(
         (preview["version"].clone(), preview["files"][0]["name"].clone()),
-        (json!("b12535"), json!(name)),
+        (json!("b12565"), json!(name)),
         "{preview}"
     );
     let (status, started) = post(d.port, "engine:install", json!([build, "llama"]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{started}");
-    assert_eq!(started["message"], "Downloading llama.cpp b12535.", "{started}");
+    assert_eq!(started["message"], "Downloading llama.cpp b12565.", "{started}");
     let job =
         job_until(d.port, started["jobId"].as_str().unwrap(), |j| j["state"] == "done" || j["state"] == "failed").await;
     assert_eq!(job["state"], "done", "{job}");
@@ -395,7 +408,7 @@ async fn installs_and_removes_the_engine_itself() {
     assert!(!data.join("engine").join(&build).join(name).exists(), "the archive is gone once unpacked");
     let record: Value =
         serde_json::from_str(&std::fs::read_to_string(data.join("engine/engine.json")).unwrap()).unwrap();
-    assert_eq!((record["buildId"].clone(), record["version"].clone()), (json!(build), json!("b12535")));
+    assert_eq!((record["buildId"].clone(), record["version"].clone()), (json!(build), json!("b12565")));
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -405,7 +418,7 @@ async fn installs_and_removes_the_engine_itself() {
     let (_, detected) = post(d.port, "engine:detect", json!(["llama"]), Some(TOKEN)).await;
     assert_eq!(
         (detected["source"].clone(), detected["version"].clone()),
-        (json!("managed"), json!("b12535")),
+        (json!("managed"), json!("b12565")),
         "{detected}"
     );
     assert!(

@@ -27,6 +27,12 @@
           "title": "What's new",
           "source": "docs/hub/whats-new.md",
           "description": "Where to find the highlights of each Nekko Agent release and the full release notes."
+        },
+        {
+          "slug": "brand",
+          "title": "Brand and press kit",
+          "source": "docs/hub/brand.md",
+          "description": "Download the Nekko Agent logo, app icon and mascot, and how to use them in articles, talks and projects."
         }
       ]
     },
@@ -86,6 +92,12 @@
           "title": "Usage and crash reports",
           "source": "docs/usage-reports.md",
           "description": "Opt in to anonymous usage and crash reports, what they contain, and how to see each send."
+        },
+        {
+          "slug": "storage",
+          "title": "Storage",
+          "source": "docs/storage.md",
+          "description": "See where Nekko Agent's disk space goes on your computer and in Nekko Cloud, and free it safely: idle worktrees, old CI runner images, caches and chat history."
         },
         {
           "slug": "voice",
@@ -253,6 +265,12 @@
           "title": "Credits",
           "source": "ASSETS.md",
           "description": "The projects, assets and runtimes Nekko Agent is built on, and their licenses."
+        },
+        {
+          "slug": "trademarks",
+          "title": "Trademarks and brand assets",
+          "source": "TRADEMARKS.md",
+          "description": "What our MIT license covers and what it doesn't: using the Nekko Agent names, logo and mascot, and what forks must change."
         },
         {
           "slug": "architecture",

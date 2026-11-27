@@ -46,6 +46,7 @@ mod engine;
 mod federation;
 mod feedback;
 mod fleet;
+mod fleet_alerts;
 mod gcp;
 mod harness;
 mod host_name;
@@ -104,6 +105,8 @@ mod skill_sources;
 mod small_services;
 mod spawn;
 mod speeds;
+mod storage;
+mod storage_runners;
 mod subagent_model;
 mod subagents;
 mod svg_safe;
@@ -337,6 +340,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         #[cfg(not(unix))]
         runners: None,
     });
+    fleet_alerts::spawn(cloud.clone(), hub.clone());
     {
         // Abandoned downloads can be GBs each (#1035).
         let dir = std::path::PathBuf::from(library.models_dir());

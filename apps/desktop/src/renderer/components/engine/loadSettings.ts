@@ -33,11 +33,12 @@ export const isMoe = (m: Pick<LocalModel, 'weightLayout'>) => (m.weightLayout?.e
 export const hasTables = (m: Pick<LocalModel, 'weightLayout'>) => (m.weightLayout?.tableShare ?? 0) > 0;
 
 /** Context stops this model can be asked for, its own maximum last. */
-export function contextStops(maxContext?: number): number[] {
+export function contextStops(maxContext?: number, recommended?: number): number[] {
   const max = maxContext ?? 131072;
   const stops = CONTEXT_STOPS.filter((s) => s <= max);
   if (stops.at(-1) !== max) stops.push(max);
-  return stops;
+  if (recommended !== undefined && recommended > 0 && recommended < max && !stops.includes(recommended)) stops.push(recommended);
+  return stops.sort((a, b) => a - b);
 }
 
 export function sessionsOf(p: LoadParams): number {

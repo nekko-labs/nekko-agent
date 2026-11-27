@@ -87,6 +87,28 @@ describe("sync auth and plans", () => {
   });
 });
 
+describe("storage by kind", () => {
+  it("splits the account's storage into chats, Library files, kept revisions and shares", async () => {
+    const a = app();
+    const u = await user("pro");
+    await setup(a, u.token);
+    const put = (collection: string, bytes: number) => db.query(
+      "insert into sync_objects (user_id, collection, object_id, revision, key_id, blob) values ($1, $2, $3, 1, 1, $4)",
+      [u.id, collection, oid(), Buffer.alloc(bytes)],
+    );
+    await put("chat", 100);
+    await put("picture", 40);
+    await put("library", 70);
+    await db.query(
+      "insert into sync_object_history (user_id, collection, object_id, revision, key_id, blob) values ($1, 'library', $2, 1, 1, $3)",
+      [u.id, oid(), Buffer.alloc(30)],
+    );
+    await db.query("insert into library_shares (id, user_id, blob) values ($1, $2, $3)", ["A".repeat(22), u.id, Buffer.alloc(9)]);
+    const usage = (await call(a, u.token, "GET", "/v1/sync/state")).json().usage;
+    expect(usage.parts).toEqual({ chats: 140, library: 70, revisions: 30, shares: 9 });
+  });
+});
+
 describe("devices and keyrings", () => {
   it("binds the token to its device and hands each device only its own wrap", async () => {
     const a = app();

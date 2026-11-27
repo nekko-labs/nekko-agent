@@ -1,27 +1,28 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { LIST_PAGE, pageGroups, showMoreLabel } from '../../listPaging.js';
 import type { EngineMemory, LocalModel, ModelModality, ResidentModel } from '@nekko-agent/shared';
-import { MODEL_FOLDER_PROVIDERS, cannotLoadReason } from '@nekko-agent/shared';
+import { MODEL_FOLDER_PROVIDERS, cannotLoadReason, modelModality } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
 import { notifyModelsChanged } from '../../modelCatalog.js';
 import { CheckIcon, ChevronIcon, WarningIcon } from '../../icons.js';
-import { StatusDot } from '../primitives/index.js';
+import { StatusDot, Toggle } from '../primitives/index.js';
 import { formatBytes, formatTokens, placementLabel, placementTitle } from '../runtimes/verdict.js';
 import { EngineLoadDrawer } from './EngineLoadDrawer.js';
 import { ImageGeneration } from './ImageGeneration.js';
+import { ModelMemoryPreview } from './ModelMemoryPreview.js';
 import { loadLocalModel } from './localModelShortcuts.js';
 import { gpuGuidance, sortLibraryModels, type LibraryModel, type ModelSort } from './modelFamilies.js';
 import { ModelRowActions, type ModelRowControl } from './ModelRowActions.js';
 import { RunnableAlternativeOffer } from './RunnableAlternativeOffer.js';
 import { loadableFiles } from './runnableAlternative.js';
-import { localTypeLabel, modelProblem, paramsLabel } from './modelFacts.js';
+import { modelProblem, paramsLabel } from './modelFacts.js';
 import { MiddleTruncate } from '../primitives/MiddleTruncate.js';
 
 /**
  * The models on this machine.
  *
  * A row is a whole model's state in one line: what it is, what kind of model it
- * is, whether it is in memory, whether it loads at start, and the one action
+ * is, what it takes to load, whether it is in memory, and the one action
  * that changes that. Settings live behind the row rather than on it, because
  * the common case is "load this" and the uncommon one is "load this with 32k
  * context and a quantized KV cache".
@@ -32,10 +33,7 @@ import { MiddleTruncate } from '../primitives/MiddleTruncate.js';
  * teach people nothing. A vision model missing its projector still loads, and
  * says plainly what it cannot do until the projector arrives.
  *
- * Not all of them are ours. A model found in Ollama's or LM Studio's folder runs
- * here exactly like one we downloaded, and says where it came from so nobody has
- * to wonder why deleting it is not on offer: that file belongs to another app,
- * and removing it from here would break that app without saying so.
+ * Borrowed models can run here, and deletion warns when it affects another app.
  */
 
 /** The filter is "all" or one bucket; unsupported modalities share a bucket. */
@@ -67,7 +65,6 @@ export function ModelLibrary({
   actions,
   query = '',
   autoloadIds,
-  running,
   resident,
   sortBy,
   memory,
@@ -86,8 +83,6 @@ export function ModelLibrary({
   query?: string;
   /** Ids marked to load when the engine starts. */
   autoloadIds?: Set<string>;
-  /** Whether the engine is serving: autoload is a promise only while it is. */
-  running?: boolean;
   /** The installed-library order selected by the Models page. */
   sortBy?: ModelSort;
 }) {
@@ -146,7 +141,12 @@ export function ModelLibrary({
   };
 
   const toggleAutoload = async (model: LocalModel, on: boolean) => {
-    await window.nekko.engineSetAutoload(model.id, on).catch(() => null);
+    try {
+      await window.nekko.engineSetAutoload(model.id, on);
+    } catch (error) {
+      pushToast('error', error instanceof Error ? error.message : "Couldn't change startup loading.");
+      return;
+    }
     pushToast(
       'info',
       on ? `${model.name} loads when the engine starts.` : `${model.name} no longer loads on start.`,
@@ -339,27 +339,28 @@ export function ModelLibrary({
     const fit = gpuGuidance(m.sizeBytes, memory, m);
     const expanded = !unsupported && open === m.id;
     const panelId = `${settingsId}-${m.id}`;
+    const previewId = `${panelId}-memory`;
     const details = (
       <span className="block min-w-0 flex-1">
         <MiddleTruncate text={m.name} tail={20} className="block max-w-full text-sm font-medium" />
+        <ModelFactChips model={m} />
+        {!expanded && <ModelMemoryPreview model={m} memory={memory} id={previewId} />}
         {actions.isDefault(m) && <span className="text-2xs text-accent">Default</span>}
-        <span className="block text-xs text-ink-soft" data-model-facts>{[localTypeLabel(m), paramsLabel(m.name, m.parameterSize), m.sizeBytes > 0 && formatBytes(m.sizeBytes)].filter(Boolean).join(' · ')}</span>
-        <span className="block text-2xs text-ink-faint" title={m.modality && m.modality !== 'chat' ? modalityTitle(m.modality) : undefined}>
+        <span className="block text-xs text-ink-soft" data-model-facts>{paramsLabel(m.name, m.parameterSize)}</span>
+        <span className="block text-2xs text-ink-faint">
           {[
             fit,
             m.quantization,
             m.maxContext && `${formatTokens(m.maxContext)} max context`,
-            m.format === 'mlx' && 'MLX',
-            autoloadIds?.has(m.id) && 'loads on start',
             m.managed === false && `from ${locationOf(m)}`,
           ].filter(Boolean).join(' · ')}
         </span>
       </span>
     );
     return (
-      <div key={m.id} data-library-row={m.id} className="scroll-mt-4">
+      <div key={m.id} data-library-row={m.id} className="model-library-card scroll-mt-4" data-expanded={expanded}>
         <div
-          className="flex min-h-(--q-row) flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-2 py-2 text-xs transition-colors duration-(--dur-fast) hover:bg-(--q-wash)"
+          className="model-library-card__head relative flex min-h-(--q-row) flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-2 py-2 text-xs transition-colors duration-(--dur-fast) hover:bg-(--q-wash)"
           style={{ opacity: unsupported ? 0.85 : 1, background: m.loaded ? 'var(--accent-soft)' : undefined }}
           data-quiet-row
         >
@@ -372,7 +373,8 @@ export function ModelLibrary({
               title={m.path}
               aria-label={`${m.modality === 'image' ? 'Image settings' : 'Settings'} for ${m.name}`}
               aria-expanded={expanded}
-              aria-controls={expanded ? panelId : undefined}
+              aria-controls={panelId}
+              aria-describedby={expanded ? undefined : previewId}
               data-model-row-toggle
               onClick={() => setOpen(expanded ? null : m.id)}
             >
@@ -399,29 +401,14 @@ export function ModelLibrary({
                 {m.gpuFit === 'full' || m.gpuFit === 'cpu' ? <CheckIcon className="h-3.5 w-3.5" /> : <WarningIcon className="h-3.5 w-3.5" />}
               </span>
             ) : null}
-            {!unsupported && !m.loaded && (
-              <button
-                className={`btn btn-ghost quiet-row-action min-h-8! px-2 py-1 touch:min-h-11! text-2xs ${autoloadIds?.has(m.id) ? 'text-accent' : ''}`}
-                aria-pressed={!!autoloadIds?.has(m.id)}
-                title={
-                  autoloadIds?.has(m.id)
-                    ? 'Loads when the engine starts. Click to stop that.'
-                    : running
-                      ? 'Also load it when the engine starts'
-                      : 'Load it automatically when the engine starts'
-                }
-                onClick={() => void toggleAutoload(m, !autoloadIds?.has(m.id))}
-              >
-                On start
-              </button>
-            )}
+            <ModelRowActions model={m} actions={actions} />
             {unsupported ? null : m.loaded ? (
-              <button className="btn btn-ghost quiet-row-action min-h-8! px-2 py-1 touch:min-h-11! text-2xs" disabled={busy === m.id} onClick={() => void unload(m.id)}>
+              <button className="btn btn-outline ml-1 min-h-8! px-3 py-1 text-xs touch:min-h-11!" disabled={busy === m.id} onClick={() => void unload(m.id)}>
                 {busy === m.id ? 'Unloading…' : 'Unload'}
               </button>
             ) : (
               <button
-                className="btn btn-ghost min-h-8! px-2 py-1 text-2xs font-medium text-accent touch:min-h-11! disabled:opacity-50"
+                className="btn btn-primary ml-1 min-h-8! min-w-16 px-3 py-1 text-xs touch:min-h-11!"
                 title={canLoad ? `Load ${m.name} into memory` : 'Download the engine first'}
                 disabled={busy === m.id || (!canLoad && m.modality !== 'image')}
                 onClick={() => void quickLoad(m)}
@@ -429,9 +416,35 @@ export function ModelLibrary({
                 {busy === m.id ? 'Loading…' : 'Load'}
               </button>
             )}
-            <ModelRowActions model={m} actions={actions} />
           </div>
         </div>
+
+        {!unsupported && (
+          <ModelSettingsReveal id={panelId} open={expanded}>
+            {autoloadIds && <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium">Load when the engine starts</p>
+                <p className="text-2xs text-ink-faint">Uses this model’s saved settings.</p>
+              </div>
+              <Toggle value={autoloadIds.has(m.id)} onChange={(on) => void toggleAutoload(m, on)} label="Load when the engine starts" />
+            </div>}
+            {m.modality === 'image' ? <ImageGeneration model={m} onChanged={onChanged} attached memory={memory} /> : (
+              <EngineLoadDrawer
+                providerId={providerId}
+                model={m}
+                loadedParams={live?.params}
+                attached
+                memory={memory}
+                onFetchCompanions={() => void fetchCompanions(m)}
+                onDone={onChanged}
+                onClose={() => {
+                  setOpen(null);
+                  rootRef.current?.querySelector<HTMLButtonElement>(`[data-library-row="${CSS.escape(m.id)}"] [data-model-row-toggle]`)?.focus();
+                }}
+              />
+            )}
+          </ModelSettingsReveal>
+        )}
 
         {unsupported && (
           <p className="mt-(--q-tight) flex items-start gap-2 px-2 text-2xs text-warning-text">
@@ -474,29 +487,33 @@ export function ModelLibrary({
             )}
           </p>
         )}
-
-        {expanded && (
-          <div id={panelId}>
-            {m.modality === 'image' ? <ImageGeneration model={m} onChanged={onChanged} /> : (
-              <EngineLoadDrawer
-                providerId={providerId}
-                model={m}
-                loadedParams={live?.params}
-                autoloaded={autoloadIds?.has(m.id) ?? false}
-                onToggleAutoload={(on) => void toggleAutoload(m, on)}
-                onFetchCompanions={() => void fetchCompanions(m)}
-                onDone={onChanged}
-                onClose={() => {
-                  setOpen(null);
-                  rootRef.current?.querySelector<HTMLButtonElement>(`[data-library-row="${CSS.escape(m.id)}"] [data-model-row-toggle]`)?.focus();
-                }}
-              />
-            )}
-          </div>
-        )}
       </div>
     );
   }
+}
+
+/** Keep the closing contents only long enough for the panel to slide shut. */
+function ModelSettingsReveal({ id, open, children }: { id: string; open: boolean; children: ReactNode }) {
+  const [retained, setRetained] = useState(open);
+  useEffect(() => {
+    if (open) setRetained(true);
+    else if (retained && matchMedia('(prefers-reduced-motion: reduce)').matches) setRetained(false);
+    else if (retained) {
+      // Fallback for an interrupted or offscreen transition that doesn't fire an end event.
+      const timeout = setTimeout(() => setRetained(false), 300);
+      return () => clearTimeout(timeout);
+    }
+  }, [open, retained]);
+  return (
+    <div id={id} className="model-library-card__reveal" inert={!open}
+      onTransitionEnd={(event) => {
+        if (event.target === event.currentTarget && event.propertyName === 'grid-template-rows' && !open) setRetained(false);
+      }}>
+      <div className="model-library-card__clip">
+        {(open || retained) && <div className="model-library-card__details">{children}</div>}
+      </div>
+    </div>
+  );
 }
 
 /** The group a model's folder belongs to, named for the app that fills it. */
@@ -508,22 +525,16 @@ function locationOf(m: LocalModel): string {
       : 'Another folder';
 }
 
-/** One sentence for the badge tooltip: what the kind means for running it. */
-function modalityTitle(modality: ModelModality): string {
-  switch (modality) {
-    case 'vision':
-      return 'A chat model that can also read images, when its projector file is present';
-    case 'embedding':
-      return 'Turns text into vectors. Answers /v1/embeddings, not chat';
-    case 'image':
-      return 'An image-generation model. Runs in the optional stable-diffusion.cpp runtime';
-    case 'audio':
-      return 'A speech-recognition model. llama.cpp cannot serve it';
-    case 'draft':
-      return 'A speculative-decoding draft head. Only runs attached to its full model';
-    case 'unknown':
-      return 'The file would not parse as a GGUF';
-    default:
-      return 'A chat model';
-  }
+function ModelFactChips({ model }: { model: LocalModel }) {
+  const modality = model.modality ?? modelModality(model);
+  const chip = 'rounded-md bg-(--q-wash) px-1.5 py-0.5 font-medium text-ink-soft';
+  const support: Record<ModelModality, string[]> = {
+    chat: ['Chat'], vision: ['Vision', 'Chat'], embedding: ['Embeddings'], image: ['Image generation'],
+    audio: ['Audio'], draft: ['Speculative decoding'], unknown: ['Unknown'],
+  };
+  return <span className="my-1.5 block space-y-1 text-2xs text-ink-faint" data-model-chips>
+    <span className="flex flex-wrap items-center gap-1.5"><span>Format:</span><span className={chip}>{model.format === 'mlx' ? 'MLX' : 'GGUF'}</span></span>
+    <span className="flex flex-wrap items-center gap-1.5"><span>Supports:</span>{support[modality].map(label =>
+      <span key={label} className={chip} title={label === 'Vision' && model.format !== 'mlx' && !model.hasProjector ? 'Requires a projector file' : undefined}>{label}</span>)}</span>
+  </span>;
 }

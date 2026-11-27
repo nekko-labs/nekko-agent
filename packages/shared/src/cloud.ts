@@ -74,7 +74,8 @@ export interface CloudStatus {
      */
     joinCode: string | null;
     devices: SyncDevice[];
-    usage: { bytes: number; limit: number } | null;
+    /** `parts`: what the storage holds by kind (Settings → Storage); absent from older services. Shares count toward the limit on top of `bytes`. */
+    usage: { bytes: number; limit: number; parts?: { chats: number; library: number; revisions: number; shares: number } } | null;
   };
 }
 
@@ -226,6 +227,11 @@ export interface FleetRunner {
   busy: number;
   /** VMs it may run now, macOS and Linux together. */
   slots: number;
+}
+
+/** `fleet:runners`: per organization, the computers that run CI runners. */
+export interface FleetRunners {
+  orgs: { orgId?: string; orgName: string; computers: Pick<FleetComputerView, 'deviceId' | 'name' | 'os' | 'online' | 'seenAt' | 'you' | 'runners'>[] }[];
 }
 
 /** A local model a shared computer can serve. No URLs, ports or paths. */

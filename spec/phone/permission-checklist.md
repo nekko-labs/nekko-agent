@@ -37,3 +37,38 @@ Connection and alerts come first: notifications (approvals, questions, replies a
 Implemented in the task branch: permission reader/request coordinator, reusable checklist, onboarding replacement and Settings entry point. Native unit and onboarding UI tests cover the inventory and status rules. The real system Settings microphone recovery test taps the trailing switch (the label area is inert on iOS 26) and waits for both the OS toggle and the checklist to report access. Build, test and inspected simulator evidence results are recorded in the linked PR; physical hardware, real local-network authorization, authentication hardware and APNs delivery must not be claimed from simulator-only checks. English source strings use the native localization APIs; new translations have not been supplied.
 
 Android parity is planned in [#2251](https://github.com/nekko-labs/nekko-agent/issues/2251), with the gap recorded in [phone parity](ios-and-android-stay-in-step.md).
+
+## Strict Settings-return evidence (implemented harness, native result pending)
+
+The opt-in `PermissionReturnTimingTests` comparison drives the baseline inline card
+and current accordion by their actual AX capability. Setup requires the full target
+frame inside the scroll viewport and above the pinned Continue footer, not merely
+XCTest isHittable; target geometry and a pre-request screenshot are retained. The
+first native baseline run compiled but tapped below the visible microphone control
+and failed before denial, so it supplied no Settings-return measurement. This
+visibility repair succeeded in the repaired comparison, but neither native leg met acceptance. Both perform a real microphone
+denial and public Settings switch change from 0 to 1. Both then call `app.activate()`
+without a process-state-dependent launch branch. A monotonic ten-second budget
+starts before the Settings toggle and includes toggle/exit observation, activation/session setup and the first AX
+predicate that requires both the status element and Allowed. Screenshots, full AX
+and timing attachments are collected only after the timed assertion. The manual
+mode-evidence workflow retains a recording for this test on each disposable phone.
+
+Retained system archives now explicitly attribute both initial app deaths to TCC (`OS_REASON_TCC`: microphone service changed). BEFORE obtains a new PID; AFTER's open request precedes RunningBoard's termination report and still targets the old PID, with no observed replacement spawn. This supports a teardown/activation race hypothesis, not proof of an app defect or symmetric successful cold launches.
+
+The next common evidence harness preserves the DEBUG route marker and the initial app-owned fixture UI preferences (App lock off and light theme) across argument-free platform launch, never OS authorization or credentials, and requires the real TCC-driven `.notRunning` state before exactly one unconditional activation. Its single monotonic **total Allowed <=10s** clock starts before the Settings toggle: toggle, exit observation, activation and AX/predicate setup all count. It never conditionally relaunches or waits for death outside the clock. The overlay is identical on both pinned original revisions and is not included in ordinary builds. This tighter cold-return experiment is **unverified** until matched native recordings, process paths and total times are inspected; do not compare it directly to old timing starts or present it as warm-resume evidence.
+
+Source regressions cannot certify native timing. A completed comparison must be
+inspected for exact app/harness/device/runtime identities, actual return actions,
+process state and timing on both revisions. Different observed process paths do not
+prove symmetric foreground refresh, even with the same requested action. A timeout
+or return-process failure remains a failure; no deadline, permission or startup
+waiver is implied. Existing native suites and their assertions remain unchanged.
+
+## Common setup readiness repair (implemented, native verification pending)
+
+The common `84dc0b80` experiment [42926857207](https://github.com/nekko-labs/nekko-agent/actions/runs/42926857207) compiled both original apps: BEFORE passed 357 protocol/request tests, AFTER passed 389. Both UI legs failed **before the Settings-return clock**, not at a measured ten-second boundary. BEFORE tapped real Don’t Allow but was still Not checked / Checking when the immediate Settings-label assertion failed; the nonfatal test then tapped the busy control and never opened Settings. AFTER found Continue while the permission containers were still blank and its microphone row absent from AX; row opacity is gated by completion of the real async refresh. Neither leg reached the real Settings 0→1 toggle, TCC exit wait, activation or Allowed assertion. These failures remain valid.
+
+The repaired common driver waits at most 15 seconds for the actual initial row, separately from Continue, and at most 15 seconds after the real denial for both the actual Off in Settings status and enabled Settings action. A failed guard captures the screen and stops; it does not continue with a busy control. This is setup before leaving for Settings, not an off-clock return, TCC death wait or cold relaunch. The original visible-target geometry, real denial and Settings-label assertions remain, and the complete timed return region is unchanged. No fixed sleeps, repeated requests, fabricated grants or return-budget increases are added.
+
+An identical opt-in DEBUG overlay records monotonic uptime and PID at seven real request/refresh boundaries on both pinned original models. Removing the logging blocks restores the permission coordinator source byte for byte; no await is completed early, reordered or replaced, and no authorization provider or value changes. Logging overhead during return remains inside the same ten-second budget. The workflow retains hashes of all three overlaid app files. Exact pending await/root cause is not established by missing shared-cache strings in the prior archives. Source/negative contracts and original-revision compatibility pass, but neither the readiness repair nor the traced return is native-certified until actual compilation, paths, timings and matched native media are inspected.

@@ -2918,6 +2918,12 @@ select:not([multiple]):not([size]) {
 .vt-row > :last-child {
   margin-bottom: 0;
 }
+/* A live turn (the column's footer) and multi-part rows: working-steps lines sit close to the text
+   around them, like finished rows (ACTIVITY_GAP in transcript.ts). The history list above keeps its own gap. */
+:is(.vt-row, .transcript-column) > [data-activity-group]:not(:last-child),
+:is(.vt-row, .transcript-column) > :not(.vt-list):has(+ [data-activity-group]) {
+  margin-bottom: 6px;
+}
 /* Swipe-left times (useSwipeToRevealTimes): a pseudo-element, so the margin
    rules above still see the row's real first and last parts. */
 [data-vt-stamp] {
@@ -3284,10 +3290,13 @@ select:not([multiple]):not([size]) {
 .plan-sheet-dock::before, .plan-sheet-dock::after { content: ''; position: absolute; bottom: 10px; width: 12px; height: 12px; pointer-events: none; }
 .plan-sheet-dock::before { left: -12px; background: radial-gradient(circle at 0 0, transparent 11.5px, var(--plan-sheet-bg) 12px); }
 .plan-sheet-dock::after { right: -12px; background: radial-gradient(circle at 100% 0, transparent 11.5px, var(--plan-sheet-bg) 12px); }
-.plan-sheet { background: var(--plan-sheet-bg); border-radius: 14px 14px 0 0; padding: 8px 12px 16px; font-size: var(--text-xs); line-height: 1.45; animation: plan-sheet-rise 160ms ease-out; }
+.plan-sheet { background: var(--plan-sheet-bg); border-radius: 14px 14px 0 0; padding: 8px 12px 12px; font-size: var(--text-xs); line-height: 1.45; animation: plan-sheet-rise 160ms ease-out; }
 @keyframes plan-sheet-rise { from { transform: translateY(100%); } }
-.plan-sheet-head { display: flex; align-items: center; gap: 8px; padding: 0 2px 4px; font-size: var(--text-2xs); color: var(--ink-faint); }
-.plan-sheet-toggle { display: flex; min-width: 0; flex: 1; align-items: center; gap: 8px; text-align: left; border-radius: 6px; }
+.plan-sheet-head { display: grid; grid-template-columns: minmax(0, 1fr) 24px auto; align-items: stretch; gap: 8px; padding: 0 2px 4px; font-size: var(--text-2xs); color: var(--ink-faint); }
+/* The real button spans the bar; the independent settings control sits above its middle column. */
+.plan-sheet-toggle { grid-area: 1 / 1 / 2 / -1; display: grid; grid-template-columns: subgrid; align-items: center; min-width: 0; text-align: left; border-radius: 6px; cursor: pointer; }
+.plan-sheet-toggle:focus-visible { outline: 2px solid var(--ring); }
+.plan-sheet-progress { grid-column: 3; display: flex; align-items: center; gap: 8px; }
 .plan-sheet-fold { display: block; width: 100%; text-align: left; border-radius: 6px; }
 .plan-sheet-line { display: flex; min-width: 0; align-items: center; gap: 8px; }
 .plan-sheet-fold-chips { padding-left: 20px; }
@@ -3296,7 +3305,11 @@ select:not([multiple]):not([size]) {
 @media (hover: hover) {
   .plan-sheet-chip:hover { background: color-mix(in srgb, var(--ink) 10%, transparent); color: var(--ink); }
 }
-.plan-sheet-steps { max-height: 40vh; overflow-y: auto; }
+.plan-config { grid-area: 1 / 2; position: relative; display: grid; place-items: center; width: 24px; height: 24px; color: var(--ink-soft); border-radius: 6px; }
+.plan-config:hover, .plan-config:focus-within { color: var(--ink); background: var(--surface-2); }
+.plan-config:focus-within { outline: 2px solid var(--ring); }
+.plan-config select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.plan-sheet-scroll { max-height: 40vh; overflow-y: auto; }
 /* Dense flat title rows. Only overflow chiplets open their own row. */
 .plan-sheet-steps { display: flex; flex-direction: column; gap: 2px; padding-top: 2px; }
 .plan-sheet-step { display: grid; grid-template-columns: 12px minmax(0, 1fr); column-gap: 8px; padding: 1px 4px; }
@@ -3318,6 +3331,37 @@ select:not([multiple]):not([size]) {
 .plan-row-content .plan-sheet-pr-actions { position: fixed; z-index: 50; right: auto; bottom: auto; max-width: calc(100vw - 16px); flex-wrap: wrap; padding: 4px; border-radius: 8px; background: var(--surface); box-shadow: var(--shadow-float); }
 @keyframes plan-row-reveal { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .plan-row-more:not([hidden]) { animation: none; } .plan-row-count { transition: none; } }
+/* The plan as a timeline: dots on one line when folded, the line down the left edge when open.
+   Both lines are drawn from the first dot's centre and rotated, so the switch can turn them. */
+.plan-timeline { position: relative; }
+.plan-sheet-scroll[data-turning] { overflow: hidden; }
+.plan-timeline-line { position: absolute; z-index: 0; height: 2px; margin-top: -1px; border-radius: 1px; transform-origin: 0 50%; background: color-mix(in srgb, var(--ink) 14%, transparent); pointer-events: none; }
+.plan-timeline-line[data-filled] { background: color-mix(in srgb, var(--success) 70%, transparent); }
+.plan-timeline-dots { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 6px 2px 4px; }
+.plan-timeline-stop { display: flex; flex: 0 0 auto; }
+.plan-timeline-dot { position: relative; z-index: 1; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 999px; background: var(--plan-sheet-bg); transition: background-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
+.plan-timeline-dot:active { transform: scale(.97); }
+.plan-timeline-dot:focus-visible { outline: 2px solid var(--ring); outline-offset: 0; }
+@media (hover: hover) { .plan-timeline-dot:hover { background: color-mix(in srgb, var(--ink) 10%, var(--plan-sheet-bg)); } }
+@media (pointer: coarse) { .plan-timeline-dot { width: 32px; height: 32px; } }
+/* Open: the marks sit on the line with the sheet's surface behind them. */
+/* Open: the marks sit on the line with only the glyph's own disc cut out of it, and the
+   rows are spaced so the line between them reads. */
+.plan-timeline-rows { gap: 8px; }
+.plan-timeline-rows .plan-timeline-mark { position: relative; z-index: 1; border-radius: 999px; background: var(--plan-sheet-bg); }
+.plan-sheet-current { animation: plan-timeline-text var(--dur-fast) var(--ease-out); }
+@keyframes plan-timeline-text { from { opacity: 0; transform: translateX(-16px); } }
+.plan-timeline-card { position: fixed; z-index: 60; max-width: min(320px, calc(100vw - 16px)); padding: 8px 12px; border-radius: 8px; background: var(--surface); box-shadow: var(--shadow-float); font-size: var(--text-xs); line-height: 1.45; color: var(--ink); pointer-events: none; animation: plan-timeline-card var(--dur-med) var(--ease-out); }
+.plan-timeline-card-meta { font-size: var(--text-2xs); color: var(--ink-faint); }
+.plan-timeline-card-title { overflow-wrap: anywhere; }
+.plan-timeline-card-detail { font-size: var(--text-2xs); color: var(--ink-soft); overflow-wrap: anywhere; }
+@keyframes plan-timeline-card { from { opacity: 0; transform: translateY(4px) scale(.98); } }
+@media (prefers-reduced-motion: reduce) {
+  .plan-timeline-dot { transition: none; }
+  .plan-sheet-current { animation-name: plan-timeline-fade; }
+  .plan-timeline-card { animation-name: plan-timeline-fade; }
+}
+@keyframes plan-timeline-fade { from { opacity: 0; } }
 .plan-sheet-chips { display: flex; gap: 8px; overflow: hidden; padding: 4px 0 1px; }
 .plan-sheet-steps .plan-sheet-chips { flex-wrap: wrap; }
 .plan-sheet-chip { display: inline-flex; flex-shrink: 0; max-width: 100%; align-items: center; gap: 4px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 7%, transparent); padding: 0 8px; font-size: var(--text-2xs); line-height: 18px; color: var(--ink-soft); white-space: nowrap; }
@@ -3325,20 +3369,15 @@ select:not([multiple]):not([size]) {
 .plan-sheet-glyph { display: inline-grid; place-items: center; color: var(--ink-faint); }
 .plan-sheet-glyph.is-running { color: var(--success); }
 .plan-sheet-dot { width: 6px; height: 6px; border-radius: 50%; }
-/* Sub-agents as live cards along the bottom of the plan: a status glyph and the
- * task on one line, what it is doing now under it. One row that scrolls
- * sideways, so many sub-agents never push the composer down. */
-.plan-sheet-agents { display: flex; gap: 6px; overflow-x: auto; padding: 6px 0 2px; scrollbar-width: thin; }
-.plan-sheet-agent { display: flex; flex: 0 0 auto; flex-direction: column; gap: 1px; width: 200px; min-width: 0; border-radius: 8px; background: color-mix(in srgb, var(--surface) 70%, transparent); border: 1px solid color-mix(in srgb, var(--ink) 8%, transparent); padding: 5px 8px; text-align: left; font-size: var(--text-xs); transition: background-color 120ms ease, border-color 120ms ease; }
-.plan-sheet-agent[data-status="working"] { border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
-.plan-sheet-agent[data-status="input"] { border-color: color-mix(in srgb, var(--attention) 55%, transparent); }
-.plan-sheet-agent[data-status="done"] .plan-sheet-agent-line .text-ink { color: var(--ink-soft); }
-.plan-sheet-agent:focus-visible { outline: none; box-shadow: 0 0 0 1px var(--accent); }
-.plan-sheet-agent-line { display: flex; min-width: 0; align-items: center; gap: 6px; }
-.plan-sheet-agent-detail { display: block; padding-left: 18px; font-size: var(--text-2xs); color: var(--ink-faint); }
-@media (hover: hover) { .plan-sheet-agent:hover { background: var(--surface); border-color: color-mix(in srgb, var(--ink) 16%, transparent); } }
-/* The row's label on its left; it stays put while the cards scroll under it. */
-.plan-sheet-agents-head { position: sticky; left: 0; z-index: 1; display: flex; flex: 0 0 auto; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding-right: 4px; background: var(--plan-sheet-bg); font-size: var(--text-2xs); font-weight: 600; color: var(--ink-soft); }
+/* The sticky label and direct children share one line, even in a folded plan. */
+.plan-sheet-agents { display: flex; align-items: center; gap: var(--q-inline); overflow-x: auto; padding-top: var(--q-tight); scrollbar-width: thin; }
+.plan-sheet-agent { display: inline-flex; flex: none; align-items: center; gap: var(--q-tight); max-width: min(28em, 80%); min-height: 28px; padding: 0 var(--q-inline); border-radius: 8px; font-size: var(--text-2xs); color: var(--ink); transition: background-color var(--dur-fast) var(--ease-out); }
+.plan-sheet-agent[data-status="done"] { color: var(--ink-soft); }
+.plan-sheet-agent-model { max-width: 45%; color: var(--ink-faint); }
+.plan-sheet-agent:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+@media (hover: hover) { .plan-sheet-agent:hover { background: var(--q-wash); } }
+@media (pointer: coarse) { .plan-sheet-agent { min-height: 44px; } }
+.plan-sheet-agents-head { position: sticky; left: 0; z-index: 1; display: flex; flex: none; align-items: center; gap: var(--q-tight); padding-right: var(--q-tight); background: var(--plan-sheet-bg); font-size: var(--text-2xs); font-weight: 500; color: var(--ink-soft); }
 
 /* A PR wears its three actions as rounded pills: Approve, Decline, Merge.
  * They fade in when the pointer or keyboard focus is on the chip (or its
@@ -3704,8 +3743,9 @@ select:not([multiple]):not([size]) {
    beam, rocket and glow, just still, so a wall of busy agents left on screen
    behind another app stops costing the GPU. See appActivity.ts. */
 html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inactive] *::after { animation-play-state: paused !important; }
-/* A pane the workspace keeps mounted but parked (ChatPane sets this from usePaneVisible) holds its frame too, as the window does when it is unfocused; the decor clock (decorClock.ts) skips it. */
-[data-pane-hidden] *, [data-pane-hidden] *::before, [data-pane-hidden] *::after { animation-play-state: paused !important; }
+/* A parked pane holds its frame too, but through useParkedAnimations (parkedAnimations.ts), not a rule
+   here: data-pane-hidden flips on every chat switch, and a rule matching every descendant of it restyled
+   both transcripts inside the switch (#712). Keep stylesheet rules off data-pane-hidden. */
 .command-wall-window[data-wall-selected] .wall-num, .wall-composer[data-has-agent] .wall-num { background: var(--accent); color: var(--win); }
 .wall-layout-control { position: relative; display: inline-flex; align-items: center; gap: 8px; }
 /* Reveal by grid track rather than a fixed pixel width: a fixed 38px was
@@ -4799,7 +4839,9 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .greeting-nekko-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
 .greeting-nekko.is-laughing { animation: greeting-laugh 180ms ease-in-out 6; }
 @keyframes greeting-laugh { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
-@media (prefers-reduced-motion: reduce) { .greeting-nekko.is-laughing { animation: none; } }
+[data-part="peek-sparkles"] { animation: peek-twinkle 400ms steps(1, end) infinite; }
+@keyframes peek-twinkle { 50% { fill: var(--ink-soft); } }
+@media (prefers-reduced-motion: reduce) { .greeting-nekko.is-laughing { animation: none; } [data-part="peek-sparkles"] { animation: none; } }
 
 /* Simple and Expert: two icon segments, a chat bubble and angle brackets. */
 .mode-seg { display: inline-flex; flex: none; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-2); }
@@ -5019,14 +5061,6 @@ html[data-library-transition="list"]::view-transition-new(library-list) { animat
   .gf-icon > svg { transition: none; }
 }
 
-/* Plan ripple follows the supplied SVG timing; no motion in reduced-motion mode. */
-.plan-working { display: grid; place-items: center; color: var(--accent); }
-.plan-working-still { display: none; }
-@media (prefers-reduced-motion: reduce) {
-  .plan-working-motion { display: none; }
-  .plan-working-still { display: block; }
-}
-
 /* File editor syntax colours. Each hue is mixed with the theme's ink, so the
    same rule reads on light, dark and every preset without a per-theme table. */
 .code-paint { color: var(--ink); }
@@ -5158,10 +5192,16 @@ html[data-library-transition="list"]::view-transition-new(library-list) { animat
   }
 }
 
+/* The bottom row measures itself, so a narrow composer (a narrow window or a
+   small board zone) folds its labels before anything runs out of its box. */
+[data-composer-mode-row] { container-type: inline-size; }
 @container (max-width: 520px) {
   /* On the bottom row the folder gives way to Mode: icon only. */
   [data-composer-mode-row] > .composer-folders { min-width: 44px; }
   [data-composer-mode-row] > .composer-folders .folder-summary-label { display: none; }
+  /* Mode keeps its icon, its value and the chosen options; the word goes to the tooltip. */
+  [data-composer-mode-row] [data-chat-mode-button] .ctl-menu-label { display: none; }
+  [data-composer-mode-row] [data-chat-mode-button] { gap: 4px; }
 }
 
 /* ---------- First-run setup: the about-you steps (components/onboarding) ---------- */
@@ -5264,4 +5304,59 @@ html[data-library-transition="list"]::view-transition-new(library-list) { animat
   --nekko-line: #f3e8ee;
   --nekko-eyes: #ffffff;
   --nekko-mouth: #854f6c;
+}
+
+/* The installed model's settings emerge from under its header, not from a second card. */
+.model-library-card__head {
+  z-index: 1;
+}
+.model-library-card[data-expanded="true"] .model-library-card__head {
+  background: var(--surface-2);
+}
+.model-library-card__reveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  margin-inline: 4px;
+  transition: grid-template-rows var(--dur-med) var(--ease-out);
+}
+.model-library-card[data-expanded="true"] .model-library-card__reveal {
+  grid-template-rows: 1fr;
+}
+.model-library-card__clip {
+  min-height: 0;
+  overflow: clip;
+}
+.model-library-card__details {
+  padding: 14px 12px 16px;
+  border-radius: 0 0 10px 10px;
+  background: var(--surface);
+  box-shadow: inset 0 10px 12px -9px color-mix(in srgb, var(--shadow-ink) 59%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .model-library-card__reveal { transition: none; }
+}
+
+/* A native input keeps pointer/touch and keyboard behavior; the visible track
+   stops on either side of a narrow bar thumb. */
+.model-context-range {
+  position: relative;
+  height: 27px;
+  border-radius: var(--radius-sm, 6px);
+}
+.model-context-range:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.model-context-range__track { position: absolute; inset: 0 11px; pointer-events: none; }
+.model-context-range__track i { position: absolute; top: 50%; transform: translateY(-50%); height: 6px; border-radius: 999px; }
+.model-context-range__track i:first-child { left: -10px; right: calc(100% - var(--context-stop) + 6px); background: var(--accent-2); }
+.model-context-range__track i:nth-child(2) { left: var(--context-stop); width: 4px; height: 18px; transform: translate(-50%, -50%); background: var(--accent-2); }
+.model-context-range__track i:nth-child(3) { left: calc(var(--context-stop) + 6px); right: -10px; background: color-mix(in srgb, var(--ink-faint) 30%, transparent); }
+.model-context-range__marker {
+  position: absolute; top: 50%; left: var(--context-recommended); width: 8px; height: 8px;
+  transform: translate(-50%, -50%) rotate(45deg); border: 1px solid var(--surface); background: var(--accent);
+}
+.model-context-range > input { position: absolute; inset: 0; appearance: none; width: 100%; height: 100%; margin: 0; background: transparent; cursor: ew-resize; outline: none; }
+.model-context-range > input::-webkit-slider-thumb { appearance: none; width: 22px; height: 27px; background: transparent; }
+.model-context-range > input::-moz-range-thumb { width: 22px; height: 27px; border: none; background: transparent; }
+.model-context-range > input:disabled { cursor: default; }
+@media (pointer: coarse) {
+  .model-context-range { height: 44px; }
 }

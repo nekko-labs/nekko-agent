@@ -35,7 +35,7 @@ export function startMainNotifications(
       if (disposed || settings?.desktopNotifications === false) return;
       let title: string | undefined;
       try {
-        title = (await engine.call<{ title?: string } | null>(IpcChannels.sessionGet, event.sessionId))?.title;
+        title = (await engine.call<{ title?: string } | null>(IpcChannels.sessionGet, event.sessionId, { pictures: 'refs' }))?.title;
       } catch { /* A deleted chat can still report its final event. */ }
       if (disposed) return;
       // Focus alone is insufficient: another chat or a non-chat view may be showing.
@@ -88,6 +88,19 @@ export function startMainNotifications(
     post({ sessionId: `safety:${exit.deviceId}`, kind: 'safety-exit', ...text, link: 'nekko-agent://settings' });
   };
 
+  /** A fleet runner alert from nekkod (decision 0064); a click opens Settings, where Fleet management is. */
+  const notifyFleetAlert = async (alert: { id?: unknown; title?: unknown; body?: unknown }) => {
+    if (typeof alert?.id !== 'string' || typeof alert.title !== 'string' || typeof alert.body !== 'string') return;
+    const key = `runner:${alert.id}`;
+    if (recent.has(key)) return;
+    recent.set(key, Date.now());
+    try {
+      const settings = await engine.call<AppSettings>(IpcChannels.settingsGet);
+      if (disposed || settings?.desktopNotifications === false) return;
+      post({ sessionId: key, kind: 'runner-alert', title: alert.title, body: alert.body, link: 'nekko-agent://settings' });
+    } catch { /* Settings unavailable: do not bypass an opt-out. */ }
+  };
+
   const schedule = () => {
     if (disposed) return;
     clearTimeout(timer);
@@ -128,6 +141,8 @@ export function startMainNotifications(
             void notifyRuns(frame.payload as WorkflowsSnapshot);
           } else if (frame.channel === IpcEvents.remoteSafetyExit && frame.payload) {
             notifySafetyExit(frame.payload as RemoteSafetyExit);
+          } else if (frame.channel === IpcEvents.runnersFleetAlert && frame.payload) {
+            void notifyFleetAlert(frame.payload);
           }
         } catch { /* Ignore malformed or unrelated frames. */ }
       };

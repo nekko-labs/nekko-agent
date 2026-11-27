@@ -1,3 +1,4 @@
+import { TurnStrategyRow } from './agent-console/TurnStrategyRow';
 import { fusionEnabled, fusionStrategy } from '@nekko-agent/shared';
 import { useChatEngine, useDropCodeModeOnClaudeAgent } from './codeModeLock.js';
 import { ContextChangeNotice, showContextChangeNotice } from './ContextChangeNotice.js';
@@ -45,6 +46,7 @@ import { anchorLiveRun, beginResumedRun, clearLiveRun, engineLost, getLiveRun, o
 import { getCachedSession, holdTranscript, loadSession, putCachedSession, withSummaryFields } from '../sessionCache.js';
 import { retryUntilAnswered } from '../retryUntilAnswered.js';
 import { usePaneVisible } from '../paneVisibility.js';
+import { useParkedAnimations } from '../parkedAnimations.js';
 import { useVisibleInterval } from '../visibleInterval.js';
 import { watchEventFilter } from '../agentWatches.js';
 import { reportAgentWorking } from '../workingAgents.js';
@@ -120,6 +122,7 @@ import { NekkoAvatar } from './Mascot.js';
 import { ChatMascot } from './ChatMascot.js';
 import { PixelWaveBackground, pixelWaveFor, showEmptyAgentWave } from './PixelWaveBackground.js';
 import { WorktreeChip } from './WorktreeChip.js';
+import { ChatGroupTagButton } from './ChatGroupTagControls.js';
 import { FolderPicker, openRepoBrowser } from './FolderPicker.js';
 import { environmentActions } from '../environmentActions.js';
 import { summarizeChanges } from '../changeSummary.js';
@@ -481,6 +484,7 @@ const TranscriptRowView = memo(function TranscriptRowView({
   /** Photo chats: attach a generated picture to the composer to change it. */
   onEditImage?: (src: string) => void;
 }) {
+  if (row.kind === 'strategy') return <TurnStrategyRow strategy={row.strategy} />;
   if (row.kind === 'activity') return <ActivityGroup items={row.items} />;
   if (row.kind === 'compaction') return <CompactionSummary message={row.message} latest={row.latest} />;
   if (row.kind === 'stats') return <div className="msg-ai"><ReplyStatsRow stats={row.stats} /></div>;
@@ -1457,6 +1461,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // windows are all full chats, so surface alone cannot choose one. A legacy
   // composer-only pane hands Ctrl+F to the transcript window it drives.
   const paneShown = usePaneVisible();
+  // A parked pane holds its animations; data-pane-hidden below is for the decor clock only (#712).
+  useParkedAnimations(paneRef, paneShown);
   const searchTargetRef = useRef({ surface, selected, paneShown });
   searchTargetRef.current = { surface, selected, paneShown };
   useEffect(() => {
@@ -2987,6 +2993,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     />}
     {/* Simple mode can hide the model and keep effort: then the gauge stands alone. */}
     {!(showModel || needsModel) && showEffort && <EffortSlider {...effortProps} />}
+    <ChatGroupTagButton sessionId={sessionId} />
     </div>
   );
 
@@ -3090,7 +3097,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             renderRow={renderRow}
             estimate={estimate}
             cacheKey={sessionId}
-            className={`${contentWidth} space-y-5`}
+            className={`${contentWidth} transcript-column space-y-5`}
             onPinnedChange={onPinnedChange}
             onGrowWhileUnpinned={onGrowWhileUnpinned}
             stampOf={transcriptRowStamp}

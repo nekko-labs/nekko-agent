@@ -83,6 +83,21 @@ describe('toTranscriptRows', () => {
     expect(new Set(r.map((x) => x.key)).size).toBe(r.length);
   });
 
+  it('keeps working steps close to the turn text, but not to the prompt', () => {
+    const r = rows([
+      msg('u', 'user', 'fix it'),
+      msg('a1', 'assistant', '', { toolCalls: [{ id: 'c', name: 'read_file', input: {} }] }),
+      msg('t', 'tool', 'contents', { toolResult: { toolCallId: 'c', output: 'contents' } }),
+      msg('a2', 'assistant', 'Reading done.', { toolCalls: [{ id: 'd', name: 'read_file', input: {} }] }),
+      msg('t2', 'tool', 'contents', { toolResult: { toolCallId: 'd', output: 'contents' } }),
+      msg('a3', 'assistant', 'Fixed.'),
+      msg('u2', 'user', 'thanks'),
+    ]);
+    expect(r.map((x) => [x.kind, x.gapAfter])).toEqual([
+      ['msg', undefined], ['activity', 6], ['msg', 6], ['activity', 6], ['msg', undefined], ['msg', undefined],
+    ]);
+  });
+
   it('stops at the live turn\'s prompt while the run draws that turn', () => {
     // The daemon checkpoints the transcript after every tool result. Mid-turn
     // the persisted copy already holds the turn's narration and tool calls,
@@ -198,6 +213,20 @@ describe('toTranscriptRows', () => {
   it('gives duplicate ids their own keys', () => {
     const r = rows([msg('tmp', 'user', 'a'), msg('tmp', 'user', 'b')]);
     expect(r[0].key).not.toBe(r[1].key);
+  });
+
+  it('shows admitted strategy above the first known user turn and when it changes', () => {
+    const direct = { tools: 'list', orchestration: 'direct', reason: 'not-needed' } as const;
+    const coordinator = { tools: 'code', orchestration: 'coordinator', reason: 'requested' } as const;
+    const r = rows([
+      msg('old', 'user', 'Old chat'),
+      msg('u1', 'user', 'Quick lookup', { turnStrategy: direct }),
+      msg('a1', 'assistant', 'Found it'),
+      msg('u2', 'user', 'Another lookup', { turnStrategy: { ...direct } }),
+      msg('u3', 'user', 'Delegate', { turnStrategy: coordinator }),
+    ]);
+    expect(r.map(r => r.kind)).toEqual(['msg', 'strategy', 'msg', 'msg', 'msg', 'strategy', 'msg']);
+    expect(r.filter(r => r.kind === 'strategy').map(r => r.strategy)).toEqual([direct, coordinator]);
   });
 
   it('skips an assistant message that would render nothing', () => {
@@ -445,4 +474,16 @@ describe('reconciled lifecycle reload and measurements', () => {
     expect(estimateRowHeight(cards[0], 390)).toBeGreaterThan(estimateRowHeight(cards[1], 390));
     expect(new Set(cards.map(r => r.key)).size).toBe(4);
   });
+});
+
+it('attaches a saved diagnostic to the matching failure, not its successful sibling', () => {
+  const calls = ['failed', 'ok'].map(id => ({ id, name: 'bash', input: {} }));
+  const failure = { toolCallId: 'failed', isError: true, output: 'No such file' };
+  const [block] = toStreamBlocks([
+    msg('calls', 'assistant', '', { toolCalls: calls }),
+    msg('success', 'tool', '', { toolResult: { toolCallId: 'ok', output: 'done' } }),
+    msg('failure', 'tool', '', { toolResult: failure }),
+  ]);
+  expect(block).toMatchObject({ type: 'activity', items: [{ failed: true, result: failure }, { call: calls[1] }] });
+  if (block.type === 'activity') expect(block.items[1]).not.toHaveProperty('result');
 });

@@ -173,12 +173,15 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
                                 leadingIcon = { Icon(Icons.Outlined.Refresh, contentDescription = null) },
                                 onClick = { menu = false; scope.launch { machine.refresh() } },
                             )
-                            HorizontalDivider()
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.settings_forget_ellipsis), color = p.danger) },
-                                leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = p.danger) },
-                                onClick = { menu = false; forgetting = true },
-                            )
+                            // A computer of the account has no pairing to forget (decision 0128): it goes on sign-out.
+                            if (c?.fromAccount != true) {
+                                HorizontalDivider()
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.settings_forget_ellipsis), color = p.danger) },
+                                    leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = p.danger) },
+                                    onClick = { menu = false; forgetting = true },
+                                )
+                            }
                         }
                     }
                 },
@@ -300,6 +303,8 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
             com.nekko.android.ui.settings.RouteChoiceGroup(c.name, listOf(c.relayUrl) + c.alts, c.routeChoice) { next ->
                 scope.launch { repo.setRouteChoice(c.id, next) }
             }
+            // The organizations' CI runners (decision 0064), only while this computer reports some.
+            FleetRunnersSection(repo, c.id, c.name)
             // Nekko Agent's service: status, updates, restart (#2059). Live only while this computer is the active one.
             ServiceSection(repo, c.id, c.name)
             Spacer(Modifier.size(32.dp))

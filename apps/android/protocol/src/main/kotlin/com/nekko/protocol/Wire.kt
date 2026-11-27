@@ -32,6 +32,8 @@ object Channels {
     const val ACTIVITY_STATE = "activity:state"
     const val MODELS_LIST = "models:list"
     const val SESSIONS_SUMMARIES = "sessions:summaries"
+    /** What chats said, for the chat list's search (#3448, `PHONE_FINDER_VIEW`): a few chats at a time. */
+    const val SESSIONS_FINDER_TEXT = "sessions:finderText"
     const val SESSION_CREATE = "session:create"
     const val SESSION_GET = "session:get"
     const val SESSION_SET_OPTIONS = "session:setOptions"
@@ -41,6 +43,8 @@ object Channels {
     /** A mono 16 kHz 16-bit PCM WAV as a JSON array of byte values → the text. */
     const val VOICE_TRANSCRIBE = "voice:transcribe"
     const val ENGINE_MODELS = "engine:models"
+    /** The organizations' computers that run CI runners (decision 0064), through the paired computer. */
+    const val FLEET_RUNNERS = "fleet:runners"
     const val CHAT_GENERATE_IMAGE = "chat:generateImage"
     const val SESSION_PHOTO = "session:photo"
     const val CHAT_SEND = "chat:send"
@@ -151,7 +155,7 @@ object Channels {
         setOf(ServiceChannels.UPDATE_CHECK, ServiceChannels.UPDATE_DOWNLOAD, ServiceChannels.RESTART, ServiceChannels.UPDATE_INSTALL)
 
     val ALL = listOf(
-        ENGINE_MODELS, CHAT_GENERATE_IMAGE, SESSION_PHOTO, SETTINGS_GET, SETTINGS_UPDATE, SESSION_DELETE, VOICE_STATUS, VOICE_TRANSCRIBE, PROVIDERS_LIST, MODELS_LIST, SESSIONS_SUMMARIES, SESSION_CREATE, SESSION_GET,
+        ENGINE_MODELS, CHAT_GENERATE_IMAGE, SESSION_PHOTO, SETTINGS_GET, SETTINGS_UPDATE, SESSION_DELETE, VOICE_STATUS, VOICE_TRANSCRIBE, PROVIDERS_LIST, MODELS_LIST, SESSIONS_SUMMARIES, SESSIONS_FINDER_TEXT, SESSION_CREATE, SESSION_GET,
         SESSION_SET_OPTIONS, CHAT_SEND, CHAT_ABORT, CHAT_QUEUE, CHAT_PENDING, CHAT_ANSWER, TOOL_APPROVE,
         WORKSPACE_LIST, APP_INFO, ACTIVITY_STATE, MACHINE_SUMMARY, SKILLS_RUNNABLE, TOOLS_LIST, CHANGES_LIST, AUDIT_READ, MONITOR_SUMMARY,
         SYSTEM_STATS, GPU_STATS, ENGINE_STATUS, CONTEXT_PREVIEW, SESSION_WATCHES, SESSION_CANCEL_WATCH, MODEL_UNLOAD,
@@ -246,16 +250,19 @@ data class ChatMessage(
     val turnStats: TurnStats? = null,
     /** A picture an image chat made (`generated`), for Edit under it (#2230). */
     val generated: GeneratedPicture? = null,
+    /** The computer’s admitted strategy, present only on a persisted user message. */
+    val turnStrategy: TurnStrategy? = null,
 ) {
     val imageCount: Int get() = images.size
 
     companion object {
         fun from(e: JsonElement?): ChatMessage? {
             val o = e.obj() ?: return null
+            val role = o.str("role") ?: return null
             val skill = o["skill"].obj()?.let { s -> (s.str("name") ?: return@let null) to (s.str("input") ?: "") }
             return ChatMessage(
                 id = o.str("id") ?: return null,
-                role = o.str("role") ?: return null,
+                role = role,
                 content = o.str("content") ?: "",
                 reasoning = o.str("reasoning"),
                 createdAt = o.long("createdAt"),
@@ -267,7 +274,8 @@ data class ChatMessage(
                 toolResult = ToolResult.from(o["toolResult"]),
                 interrupted = o.bool("interrupted"),
                 turnStats = TurnStats.from(o["turnStats"]),
-                generated = if (o.str("role") == "assistant") GeneratedPicture.from(o["generated"]) else null,
+                generated = if (role == "assistant") GeneratedPicture.from(o["generated"]) else null,
+                turnStrategy = if (role == "user") TurnStrategy.from(o["turnStrategy"]) else null,
             )
         }
     }

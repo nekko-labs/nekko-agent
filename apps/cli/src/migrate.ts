@@ -64,7 +64,7 @@ export async function runMigrate(flags: Record<string, string | boolean>, io: Mi
   try {
     const merged = consolidateLegacy(items, env);
     io.out(`Backup of changed files: ${merged.backupDir}`);
-    for (const r of merged.roots) io.out(`  merged ${r.source}: ${r.sessions} sessions, ${r.usageRecords} usage records, ${r.moved.length} items moved${r.conflicts.length ? `, ${r.conflicts.length} left in place (name clash)` : ''}`);
+    for (const r of merged.roots) io.out(`  merged ${r.source}: ${r.sessions} sessions, ${r.usageRecords} usage records, ${r.runners ? `${r.runners} CI runner${r.runners === 1 ? '' : 's'}, ` : ''}${r.moved.length} items moved${r.conflicts.length ? `, ${r.conflicts.length} left in place (name clash)` : ''}`);
     if (flags['keep-old'] !== true) {
       const cleaned = cleanupLegacy(items, env);
       for (const p of cleaned.removed) io.out(`  removed ${p}`);

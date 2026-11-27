@@ -1,6 +1,7 @@
 import { AUTO_ARCHIVE_CHOICES, autoArchiveDays, promptCachingEnabled, telemetryChoice, type AppSettings } from '@nekko-agent/shared';
 import { LANGUAGES, languagePatch, supportedLanguage } from './i18n.js';
 import { textScaleOf, useStore } from './store.js';
+import { PLAN_DISPLAYS, type PlanDisplay } from './planDisplay.js';
 import { TEXT_SCALES } from './textScale.js';
 
 /** Save a settings patch the way the Settings page does: store, theme, a toast on failure. */
@@ -60,6 +61,7 @@ export const SETTINGS_INDEX: SettingEntry[] = [
   { id: 'mascot', label: 'Show Nekko mascot', group: 'customize', keywords: 'fun cat', control: toggle((s) => s.mascotEnabled === true, (v) => ({ mascotEnabled: v })) },
   { id: 'tray-farewell', label: 'Tray farewell', group: 'customize', keywords: 'fun goodbye', control: toggle((s) => s.trayFarewellEnabled !== false, (v) => ({ trayFarewellEnabled: v })) },
   { id: 'desktop-notifications', label: 'Desktop notifications', group: 'general', keywords: 'alerts system', control: toggle((s) => s.desktopNotifications !== false, (v) => ({ desktopNotifications: v })) },
+  { id: 'plan-display', label: 'Plan display', group: 'customize', keywords: 'composer hidden restore full balanced rows completed timeline dots', control: { kind: 'select', options: PLAN_DISPLAYS, get: s => s.planDisplay ?? 'balanced', set: v => ({ planDisplay: v as PlanDisplay }) } },
   { id: 'text-size', label: 'Text size', group: 'customize', keywords: 'font scale zoom accessibility bigger larger smaller preview', control: { kind: 'select', options: TEXT_SCALES.map((n) => ({ value: String(n), label: `${n}%` })), get: (s) => String(textScaleOf(s.textScale)), set: (v) => ({ textScale: Number(v) }) } },
   { id: 'internet-recovery', label: 'Automatically resume after internet restoration', group: 'agents', keywords: 'offline reconnect retry', control: toggle((s) => s.autoResumeOnInternetRestore === true, (v) => ({ autoResumeOnInternetRestore: v })) },
   { id: 'prompt-caching', label: 'Prompt caching', group: 'agents', keywords: 'cache kv', control: toggle((s) => promptCachingEnabled(s), (v) => ({ promptCaching: v })) },

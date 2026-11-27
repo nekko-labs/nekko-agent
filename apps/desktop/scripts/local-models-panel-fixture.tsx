@@ -50,7 +50,7 @@ function Fixture() {
     empty = !!opts.empty;
     resident = [...RESIDENT];
     localStorage.clear();
-    // Phi was in memory an hour ago: it is Recent. Qwen is starred.
+    // Phi was in memory an hour ago: it is Recent.
     localStorage.setItem('nekko.localModels.recent', JSON.stringify([{ id: 'phi4-mini-q4', at: now - 3_600_000 }]));
     const dock = { ...DEFAULT_WALL_STATE.dock, show: true, simpleShow: true, side: opts.side ?? 'right', monitorOrder: ['hardware', 'localModels', 'utilization', 'budget', 'automations'], monitors: { hardware: true, localModels: true, utilization: false, budget: false, automations: false } };
     useStore.setState({ view: 'command', providers: [provider], models: [], activeProviderId: null, sessions: [], terminals: [], workspaces: [], activeWorkspaceId: null, activeSessionId: null, activeProjectId: null, settings: { providers: [provider], workspaceFolders: [], workspaces: [], monitors: { cpu: true, memory: true, gpu: true, vram: true }, theme: 'dark', experimental: {}, agent: {}, ui: {}, favoriteModels: ['nekko-engine::qwen3-8b-q4'], commandWall: { ...DEFAULT_WALL_STATE, zonesIntro: true, root: null, hero: null, autoAdd: false, watermark: Date.now(), dock } }, activeSkillBySession: {}, prsBySession: {}, installedSkillDefs: [], contextPanelOpen: false } as any);

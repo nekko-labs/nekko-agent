@@ -48,6 +48,18 @@ describe('main desktop notifications', () => {
     expect(s.post).toHaveBeenCalledTimes(1);
   });
 
+  it('tells about a fleet runner alert once, and not with notifications off', async () => {
+    const s = setup(); await flush(); s.sockets[0].onopen?.();
+    const alert = { id: 'error:o1/d2/office', title: 'A CI runner needs attention', body: 'CI runner office on Office mini stopped with an error.' };
+    const frame = { data: JSON.stringify({ channel: IpcEvents.runnersFleetAlert, payload: alert }) };
+    s.sockets[0].onmessage?.(frame); s.sockets[0].onmessage?.(frame); await flush();
+    expect(s.post).toHaveBeenCalledTimes(1);
+    expect(s.post).toHaveBeenCalledWith({ sessionId: 'runner:error:o1/d2/office', kind: 'runner-alert', title: alert.title, body: alert.body, link: 'nekko-agent://settings' });
+    s.enable(false);
+    s.sockets[0].onmessage?.({ data: JSON.stringify({ channel: IpcEvents.runnersFleetAlert, payload: { ...alert, id: 'offline:o1/d3' } }) }); await flush();
+    expect(s.post).toHaveBeenCalledTimes(1);
+  });
+
   it('subscribes directly with token, defaults on and deduplicates without any renderer', async () => {
     const s = setup(); await flush();
     expect(s.urls).toEqual(['ws://127.0.0.1:123/api/ws?sessions=&token=a%20b']);

@@ -8,6 +8,10 @@ While a reply is active, a status line outside the collapsible steps identifies 
 
 A tool's duration freezes when that call returns—even if it returned an error and the assistant continues working. For example, a fixed **1.1s** tool time can sit beside an increasing turn timer. That is not evidence that the tool is still running. The turn status disappears when the reply ends; it does not diagnose a quiet provider as stuck or infer background CI progress from a command's output.
 
+## Reading a failed tool call
+
+Open the group marked **1 failed**, then hover, focus, or expand the failed call. Its recorded error appears above its input. Shell commands are shown as commands, with options such as the working directory underneath. Other inputs use formatted JSON. Code blocks in replies use syntax colors when the agent labels the language; **Copy** still copies the original code.
+
 ## Thoughts in the conversation
 
 When a provider supplies thought text, the desktop app and Local Web UI show it directly in the conversation with a thought-bubble icon. Thoughts stay visible while streaming and after the reply is saved, even when the tool activity is collapsed. They appear between tool groups in the order they arrived.
@@ -29,6 +33,8 @@ Related details still belong together: expand a step to see its note or check re
 In the desktop and Local Web UI plan sheet, each active step has an accent-coloured concentric ripple, including when several steps work at once. The centre pulses every 1.5 seconds and outward rings repeat over 3 seconds. An interrupted step shows pause bars instead. Reduced motion uses still rings. Done, pending and skipped retain their usual marks. Activity indicators are not verification passes.
 
 ## Following subagents and plan links
+
+The delegation row shows elapsed time first. A quiet child shows one **no progress** badge after a full minute without reported work. The next child update clears the badge without restarting the elapsed timer. Expand the row to see individual calls.
 
 Subagents stay listed beneath their parent in the Agents panel when you switch to another chat. Completed children remain accessible until archived; explicitly collapsed groups stay collapsed.
 

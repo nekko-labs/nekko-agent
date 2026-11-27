@@ -6,6 +6,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -111,6 +112,12 @@ class CardDetailsDeviceTest {
     @Test fun cardDetailsPersistIndependently() {
         show()
         val before = InstrumentationRegistry.getArguments().getString("baseline") == "true"
+        // A group lists its recent chats and folds older ones under "Show N more": open it so the
+        // fixture's chat, and the details on its row, are on screen.
+        if (compose.onAllNodesWithTag("chats.showMore").fetchSemanticsNodes().isNotEmpty()) {
+            compose.onAllNodesWithTag("chats.showMore").onFirst().performClick()
+            settle()
+        }
         shot("default")
         if (!before) {
             compose.onNodeWithTag("chats.row.model", useUnmergedTree = true).assertExists()

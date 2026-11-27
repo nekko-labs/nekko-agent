@@ -10,6 +10,8 @@ Implemented with focused component coverage: Agent Monitor displays a static spo
 
 ## PlanSheet concentric ripple refresh (verification pending)
 
+`[superseded 2026-11-27 by the green rocket, see below]`
+
 Active, non-paused steps in the desktop/Local Web UI PlanSheet now use the supplied concentric-ripple SVG rather than the static spoke mark. Each active step animates independently in the theme accent colour, including tool-only work and concurrent steps. The centre loops every **1.5 seconds**; two outward rings begin at **1.5 seconds** and **3 seconds**, each expanding and fading over a repeating **3-second** cycle. Paused active steps retain their pause bars; resumed live work takes precedence over interruption history. Done, pending and skipped marks, accessible status labels and tooltips stay unchanged. Reduced motion shows static concentric rings instead of the animated SVG.
 
 This refresh changes presentation only, not plan data, permissions or network access. Earlier static-icon verification is historical and does not verify this animation. Focused state tests and 21 hidden isolated Electron assertions pass, including changing SMIL animated radii, fixed reduced-motion radii and retained pause bars. Matching settled before/after captures and a 24-frame, 2.4-second GIF exist. Actual pixel/motion inspection remains pending because image tools are intermittent; this refresh is not marked shipped. Native plan indicators are outside this refresh.
@@ -19,3 +21,7 @@ This refresh changes presentation only, not plan data, permissions or network ac
 Implemented plan contract: `update_plan` accepts optional verification metadata on a step: `status` (`pending`, `active`, `passed`, `failed`, `blocked`, `unknown`), device, current activity/detail and a safe evidence URL. Metadata persists in the existing session plan and updates by step id. Generic plan statuses remain unchanged. A generic `done` or successful screenshot/browser tool return must never count as a verification pass. Only an explicit inspection report with verification status `passed` counts.
 
 The tool's guidance asks the agent to publish the verification checklist before starting, report the device and current activity, update it during the flow, and keep missing inspection unknown or blocked. This is agent-reported status, not an independent certification. Invalid metadata is ignored safely; device/detail are bounded and credential-bearing or non-HTTP(S) evidence URLs are dropped. Existing steps without metadata retain their legacy behavior and exact serialized golden outputs. Freshness uses the step's existing update time. Renderer presentation and actual pixel inspection are handled in the following UI layer.
+
+## Rocket, dotted ring and check (2026-11-27)
+
+On desktop and the Local Web UI the plan's marks are now: a **dotted ring** (ten even dots, `--ink-soft`) for a pending step, the **green rocket** for a step being built (the same `status-rocket` glyph agent cards use for Working, in `--success`, also for a running check on a done step), and the **check** for done. Paused keeps its pause bars; failed, blocked and skipped are unchanged. Reduced motion holds the rocket still. The concentric ripple (`PlanWorking`) is removed. Phones are unchanged. See [the plan as a timeline](plan-sheet-on-the-composer.md#the-plan-as-a-timeline-2026-11-27).

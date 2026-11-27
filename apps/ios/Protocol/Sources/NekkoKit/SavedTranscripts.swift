@@ -61,6 +61,7 @@ extension ChatMessage {
         }
         if interrupted { o["interrupted"] = .bool(true) }
         if let turnStats { o["turnStats"] = turnStats.json }
+        if role == "user", let turnStrategy { o["turnStrategy"] = turnStrategy.json }
         return .object(o)
     }
 }
@@ -384,6 +385,10 @@ public final class SavedTranscripts {
         h.combine(s.providerId); h.combine(s.modelId); h.combine(s.workspaceId); h.combine(s.mode); h.combine(s.chatType)
         h.combine(s.messages.count)
         h.combine(s.messages.first?.id)
+        // The computer can backfill a prompt’s strategy without appending a message.
+        for m in s.messages where m.role == "user" {
+            if let strategy = m.turnStrategy { h.combine(m.id); h.combine(strategy) }
+        }
         if let m = s.messages.last {
             h.combine(m.id); h.combine(m.content.utf8.count); h.combine(m.reasoning?.utf8.count)
             h.combine(m.toolCalls.count); h.combine(m.toolResult?.output.utf8.count); h.combine(m.interrupted)

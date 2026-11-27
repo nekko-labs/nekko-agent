@@ -1,5 +1,5 @@
 import { setChatOptionsAndDefaults, settingsPatchWithModeReset } from '../chatDefaults.js';
-import { AGENT_REPLAY, HTML_PREVIEW_CHANNELS, IpcChannels, IpcEvents, challengeIsGenuine, deriveKey, ephemeralKeys, publicKeyText, relayAuth, RELAY_PAIRING_VERSION, REMOTE_PROTOCOL_VERSION, helloProof, seal, sessionInfo, sessionKey, open, withApiServerDefaults, RELEASE_NOTES_URL, LOCAL_RELAY_PORT } from '@nekko-agent/shared';
+import { AGENT_REPLAY, HTML_PREVIEW_CHANNELS, IpcChannels, IpcEvents, sessionGetArgs, challengeIsGenuine, deriveKey, ephemeralKeys, publicKeyText, relayAuth, RELAY_PAIRING_VERSION, REMOTE_PROTOCOL_VERSION, helloProof, seal, sessionInfo, sessionKey, open, withApiServerDefaults, RELEASE_NOTES_URL, LOCAL_RELAY_PORT } from '@nekko-agent/shared';
 import type { AgentReplay, LocalRelayStatus, NetworkVisibilityStatus, AppSettings, AgentEvent, IndexStatus, NekkoApi, AppInfo, ClaudeCapabilityStatus, ClaudeCodeStatus, ClaudePlanUsageStatus, ClaudePolicyStatus, UpdateInfo, TerminalEvent, OAuthStatus, SubscriptionLimits } from '@nekko-agent/shared';
 import { readBrandKey } from './brandStorage.js';
 import { openTerminalSocket } from './terminal-socket.js';
@@ -458,6 +458,7 @@ function makeWebClient(): NekkoApi {
     fleetSetSharing: (orgId, on) => call(IpcChannels.fleetSetSharing, orgId, on),
     fleetList: (orgId) => call(IpcChannels.fleetList, orgId),
     fleetStatus: () => call(IpcChannels.fleetStatus),
+    fleetRunners: () => call(IpcChannels.fleetRunners),
     voiceStatus: () => call(IpcChannels.voiceStatus),
   voiceInstall: (engine) => call(IpcChannels.voiceInstall, engine),
   voiceCancelInstall: () => call(IpcChannels.voiceCancelInstall),
@@ -472,7 +473,7 @@ function makeWebClient(): NekkoApi {
     engineSettingsSave: (patch) => call(IpcChannels.engineSettingsSave, patch),
     engineModels: () => call(IpcChannels.engineModels),
     engineImportModel: (path) => call(IpcChannels.engineImportModel, path),
-    engineDeleteModel: (id) => call(IpcChannels.engineDeleteModel, id),
+    engineDeleteModel: (id, confirmedPath) => call(IpcChannels.engineDeleteModel, id, confirmedPath),
     engineSaveModelPreset: (id, preset) => call(IpcChannels.engineSaveModelPreset, id, preset),
     engineCatalog: (query, format) => call(IpcChannels.engineCatalog, query, format),
     engineCatalogModel: (id) => call(IpcChannels.engineCatalogModel, id),
@@ -528,7 +529,9 @@ function makeWebClient(): NekkoApi {
     listAgentWatches: (sessionId) => call(IpcChannels.sessionWatches, sessionId),
     listSessionSummaries: () => call(IpcChannels.sessionsSummaries),
     createSession: (workspaceId) => call(IpcChannels.sessionCreate, workspaceId),
-    getSession: (id) => call(IpcChannels.sessionGet, id),
+    getSession: (id, opts) => call(IpcChannels.sessionGet, ...sessionGetArgs(id, opts)),
+    sessionPicture: (reference) => call(IpcChannels.sessionBlob, reference),
+    finderChatText: (ids) => call(IpcChannels.sessionsFinderText, ids),
     deleteSession: (id) => call(IpcChannels.sessionDelete, id),
     setSessionWorkspace: (sessionId, workspaceId) => call(IpcChannels.sessionSetWorkspace, sessionId, workspaceId),
     setSessionSupportingWorkspaces: (sessionId, workspaceIds) =>
@@ -634,6 +637,12 @@ function makeWebClient(): NekkoApi {
     getGitStatus: (id, force) => call(IpcChannels.workspaceGitStatus, id, force),
     listChatWorktrees: () => call(IpcChannels.chatWorktreesList),
     removeChatWorktree: (root) => call(IpcChannels.chatWorktreesRemove, root),
+    getStorageUsage: (refresh) => call(IpcChannels.storageUsage, { refresh: !!refresh }),
+    getDiskSpace: () => call(IpcChannels.storageDisk),
+    previewIdleWorktrees: () => call(IpcChannels.storageIdleWorktrees),
+    removeWorktrees: (roots) => call(IpcChannels.storageRemoveWorktrees, roots),
+    listRunnerImages: () => call(IpcChannels.storageRunnerImages),
+    removeRunnerImage: (name) => call(IpcChannels.storageRemoveRunnerImage, name),
 
     readFile: (path) => call(IpcChannels.fileRead, path),
     // The Local Web UI server serves pages on a port of its own, over plain

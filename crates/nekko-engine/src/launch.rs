@@ -57,7 +57,21 @@ pub struct Companions {
     pub mmproj: Option<String>,
     pub chat_template_file: Option<String>,
     pub draft_model: Option<String>,
+    /// The draft file's GGUF architecture, which decides how it is used:
+    /// a `dflash` drafter drafts a block at a time, anything else token by token.
+    pub draft_arch: Option<String>,
 }
+
+/// llama.cpp's `--spec-type` for a draft file of this architecture. DFlash and
+/// DFlash 2 share `draft-dflash`: the server tells them apart from the file.
+pub fn draft_spec_type(arch: Option<&str>) -> &'static str {
+    if arch.is_some_and(|a| a.to_lowercase().contains("dflash")) { "draft-dflash" } else { "draft-simple" }
+}
+
+/// How many tokens a DFlash drafter drafts per step, as its authors run it
+/// (the model card's example); llama.cpp's own default of 3 suits small
+/// token-by-token drafts and wastes most of a block drafter's block.
+pub const DFLASH_DRAFT_TOKENS: &str = "7";
 
 impl Companions {
     pub fn to_value(&self) -> Value {
@@ -185,9 +199,11 @@ pub fn build_args(
     if explicit && supports("--fit") {
         push(&mut args, "--fit", "off".into());
     }
-    if truthy(p, "parallelSlots") && nekko_js::to_number(p.get("parallelSlots")) > 1.0 {
-        let slots = nekko_js::to_number(p.get("parallelSlots"));
-        push(&mut args, "--parallel", text(p.get("parallelSlots")));
+    // llama-server's automatic default can admit four sequences. Match the
+    // planner and UI even when a single session isn't saved explicitly.
+    let slots = p.get("parallelSlots").and_then(Value::as_f64).unwrap_or(1.0).clamp(1.0, 64.0).floor();
+    push(&mut args, "--parallel", nekko_js::number_to_string(slots));
+    if slots > 1.0 {
         // One shared pool any session can grow into, each capped at its share.
         if supports("--kv-unified") {
             args.push("--kv-unified".into());
@@ -266,8 +282,13 @@ pub fn build_args(
         if let Some(draft) = &companions.draft_model
             && supports("--spec-draft-model")
         {
-            for a in ["--spec-draft-model", draft, "--spec-draft-ngl", "all", "--spec-type", "draft-simple"] {
+            let kind = draft_spec_type(companions.draft_arch.as_deref());
+            for a in ["--spec-draft-model", draft, "--spec-draft-ngl", "all", "--spec-type", kind] {
                 args.push(a.into());
+            }
+            if kind == "draft-dflash" && supports("--spec-draft-n-max") {
+                args.push("--spec-draft-n-max".into());
+                args.push(DFLASH_DRAFT_TOKENS.into());
             }
         }
     }
@@ -292,6 +313,15 @@ pub fn mlx_args(model: &Value, port: &str, params: &Value, draft: Option<&str>) 
         }
     }
     args
+}
+
+/// `mlx_vlm.server` (mlx-vlm 0.8.1): DFlash2 uses the DFlash round loop,
+/// and the draft config supplies the block size (not MLX-LM's token count).
+pub(crate) fn mlx_dflash2_args(target: &str, port: &str, draft: &str) -> Vec<String> {
+    ["--model", target, "--host", "127.0.0.1", "--port", port, "--draft-model", draft, "--draft-kind", "dflash"]
+        .into_iter()
+        .map(str::to_string)
+        .collect()
 }
 
 /* ------------------------------------------------------------ companions */
@@ -478,7 +508,7 @@ pub fn diffusion_args(
 /// Why a model cannot be loaded here (`unsupportedLoadReason`).
 pub fn unsupported_load_reason(model: &Value) -> Option<String> {
     let name = model.get("name").filter(|n| !n.is_null()).map(nekko_js::display).unwrap_or_else(|| "This model".into());
-    if str_of(model, "format") == Some("mlx") {
+    if str_of(model, "format") == Some("mlx") && str_of(model, "modality") != Some("draft") {
         return (!truthy(model, "mlxRunnable"))
             .then(|| format!("{name} is an MLX model, which runs on Apple Silicon Macs only."));
     }

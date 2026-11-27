@@ -3,19 +3,23 @@
  * and every artifact a chat produced, per chat, so the finder can search whole
  * conversations rather than the summary alone.
  *
- * Built in the renderer from transcripts the host already serves (`getSession`),
- * so nothing new is stored on disk. Each chat is read once per version: an
- * entry stays valid while the chat's `updatedAt` is unchanged, and the index
- * survives the popup closing, so a second search is a filter over memory.
- * Only text is kept, never images, videos, reasoning or tool output.
+ * Built in the renderer from the text-only view the daemon serves
+ * (`finderChatText`: messages and file-naming tool arguments, no pictures,
+ * reasoning or tool output, kept per chat file version), so nothing new is
+ * stored on disk and a chat's pictures never cross the wire to be searched.
+ * Each chat is read once per version: an entry stays valid while the chat's
+ * `updatedAt` is unchanged, and the index survives the popup closing, so a
+ * second search is a filter over memory.
  */
-import type { Session, SessionSummary } from '@nekko-agent/shared';
+import type { FinderChatText, Session, SessionSummary } from '@nekko-agent/shared';
 import { getCachedSession } from '../sessionCache.js';
 import { sessionArtifacts } from '../artifactsIndex.js';
 import type { IndexedChat, IndexedMessage } from './chatFinder.js';
 
-/** Transcripts read at once. Enough to keep IPC busy, few enough not to stall the host. */
-const BATCH = 6;
+/** Chats asked for in one call: text only, so a call stays small. */
+const BATCH = 25;
+/** Calls in flight at once. */
+const PARALLEL = 2;
 
 const index = new Map<string, IndexedChat>();
 
@@ -28,6 +32,18 @@ export function indexChat(session: Pick<Session, 'id' | 'title' | 'messages' | '
   }
   return { updatedAt: session.updatedAt, messages, artifacts: sessionArtifacts(session, basePath) };
 }
+
+/** The index's input for a chat the daemon sent as text only. */
+const fromText = (v: FinderChatText): Pick<Session, 'id' | 'title' | 'messages' | 'updatedAt' | 'workspaceId' | 'gitWorktrees'> => ({
+  id: v.id ?? '',
+  title: v.title,
+  updatedAt: v.updatedAt ?? 0,
+  workspaceId: v.workspaceId ?? undefined,
+  // Only `path` is read from a worktree (`basePathOf`).
+  gitWorktrees: v.gitWorktrees as Session['gitWorktrees'],
+  // The tool calls carry only name and file arguments, which is all the index reads.
+  messages: v.messages.map((m) => ({ ...m, id: m.id ?? '', createdAt: m.createdAt ?? 0 })) as unknown as Session['messages'],
+});
 
 /** Where a chat's relative links resolve: its checkout of the primary folder, else that folder. */
 export function basePathOf(session: Pick<Session, 'workspaceId' | 'gitWorktrees'>, workspaces: ReadonlyArray<{ id: string; path: string }>): string | undefined {
@@ -62,17 +78,35 @@ export async function refreshChatIndex(
   const total = todo.length;
   let done = 0;
   onProgress({ done, total });
-  for (let i = 0; i < todo.length; i += BATCH) {
-    if (signal?.aborted) return;
-    await Promise.all(todo.slice(i, i + BATCH).map(async (summary) => {
+  const batches: SessionSummary[][] = [];
+  for (let i = 0; i < todo.length; i += BATCH) batches.push(todo.slice(i, i + BATCH));
+  const read = async (batch: SessionSummary[]): Promise<void> => {
+    const fresh: SessionSummary[] = [];
+    for (const summary of batch) {
       const cached = getCachedSession(summary.id);
-      const full = cached && cached.updatedAt >= summary.updatedAt ? cached : await window.nekko.getSession(summary.id).catch(() => null);
-      if (full && Array.isArray(full.messages)) index.set(summary.id, indexChat({ ...full, updatedAt: summary.updatedAt }, basePathOf(full, workspaces)));
+      if (cached && cached.updatedAt >= summary.updatedAt && Array.isArray(cached.messages)) index.set(summary.id, indexChat({ ...cached, updatedAt: summary.updatedAt }, basePathOf(cached, workspaces)));
+      else fresh.push(summary);
+    }
+    if (!fresh.length) return;
+    const views = await Promise.resolve().then(() => window.nekko.finderChatText(fresh.map((s) => s.id))).catch(() => null);
+    await Promise.all(fresh.map(async (summary) => {
+      // A daemon without the text channel, or a chat it could not read: the whole transcript instead.
+      const view = views?.[summary.id];
+      const text = view && Array.isArray(view.messages) ? fromText(view) : views ? null : await window.nekko.getSession(summary.id).catch(() => null);
+      if (text && Array.isArray(text.messages)) index.set(summary.id, indexChat({ ...text, updatedAt: summary.updatedAt }, basePathOf(text, workspaces)));
     }));
-    done = Math.min(total, i + BATCH);
-    if (signal?.aborted) return;
-    onProgress({ done, total });
-  }
+  };
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(PARALLEL, batches.length) }, async () => {
+    while (next < batches.length) {
+      if (signal?.aborted) return;
+      const batch = batches[next++];
+      await read(batch);
+      done = Math.min(total, done + batch.length);
+      if (signal?.aborted) return;
+      onProgress({ done, total });
+    }
+  }));
 }
 
 /** Tests only. */

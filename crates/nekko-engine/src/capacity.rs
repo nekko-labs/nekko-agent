@@ -20,11 +20,6 @@ const MIN_CONTEXT: f64 = 512.0;
 const CONTEXT_STOPS: [f64; 7] = [131072.0, 65536.0, 32768.0, 16384.0, 8192.0, 4096.0, 2048.0];
 /// llama.cpp's default `--ubatch-size`: a sliding-window layer holds its window plus one micro-batch.
 const UBATCH_TOKENS: f64 = 512.0;
-/// The sequences `llama-server` serves when it is not given `--parallel`
-/// (`n_parallel = auto`, one unified cache), which is how the engine starts a
-/// one-slot load.
-const AUTO_SEQUENCES: f64 = 4.0;
-
 /// `Math.max(a, b)`: `NaN` if either is.
 pub fn jmax(a: f64, b: f64) -> f64 {
     if a.is_nan() || b.is_nan() { f64::NAN } else { a.max(b) }
@@ -272,12 +267,9 @@ fn kv_dtype<'a>(facts: &ModelFacts, req: &'a FitRequest) -> &'a str {
 ///
 /// With a layout read from the file, as `llama-server` allocates it: the
 /// full-attention layers hold the whole context once, however many slots
-/// share it. Sliding-window layers hold a window per sequence: with one slot
-/// the engine passes no `--parallel`, so the server runs four sequences over
-/// one unified cache (`4 x window + ubatch` cells); with `--parallel N` each
-/// slot keeps `window + ubatch` of its `context / N`. Checked against
-/// llama-server b11429 on Gemma 4 12B at 32k: 1440 MiB of window cache
-/// unified, 960 MiB with two slots.
+/// share it. Sliding-window layers hold a window plus a micro-batch per
+/// sequence, capped at the context per slot. With two slots, llama-server
+/// b11429 measured 960 MiB of window cache on Gemma 4 12B at 32k total.
 ///
 /// Otherwise the uniform estimate, with a full cache per slot, which is what
 /// Ollama allocates (`num_ctx` per parallel request).
@@ -287,8 +279,6 @@ pub fn kv_cache_bytes(facts: &ModelFacts, req: &FitRequest) -> Option<f64> {
         let ctx = jmax(0.0, req.context_tokens);
         let window_cells = if l.sliding_window <= 0.0 {
             ctx
-        } else if slots <= 1.0 {
-            jmin(ctx, AUTO_SEQUENCES * l.sliding_window + UBATCH_TOKENS)
         } else {
             slots * jmin((ctx / slots).floor(), l.sliding_window + UBATCH_TOKENS)
         };

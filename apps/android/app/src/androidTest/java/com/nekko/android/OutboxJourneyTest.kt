@@ -77,10 +77,15 @@ class OutboxJourneyTest {
     private val device = InstrumentationRegistry.getArguments().getString("nekkoDevice") ?: Build.MODEL.replace(' ', '_')
 
     @Test fun sentOfflineThenDelivered() {
-        computer.online = false
+        // The chat is read first, then the computer goes away: a chat that never loaded refuses
+        // to queue text, since it could be an image chat (#2212).
         val repo = repo()
         val vm = ChatViewModel("s1", repo, null, null)
         compose.setContent { NekkoTheme(dark = false) { ChatScreen(vm, onBack = {}) } }
+        compose.waitUntil(10_000) { computer.calls.contains(Channels.SESSION_GET) }
+        settle()
+        computer.online = false
+        computer.goOffline()
         compose.waitUntil(10_000) { compose.onAllNodes(hasTestTag("composer.sendsLater")).fetchSemanticsNodes().isNotEmpty() }
         compose.onAllNodes(hasSetTextAction()).onFirst().performTextInput("Run the tests when you're back")
         settle()

@@ -14,9 +14,8 @@ import { RangeToggles } from './RangeToggles.js';
 import type { InsightRange } from '../insightRanges.js';
 import { MonitorComputerSwitch, useMonitors, useResourceSample, useWatchedComputer } from './ResourceMonitor.js';
 import { BackgroundChip, useBackgroundState } from './BackgroundChip.js';
-import { ServerIcon, MoneyIcon, SlidersIcon, CubeIcon, PanelIcon, StarIcon } from '../icons.js';
+import { ServerIcon, MoneyIcon, SlidersIcon, CubeIcon, PanelIcon } from '../icons.js';
 import { ENGINE_PROVIDER_ID, loadLocalModel, localModelShortcuts, noteLocalModelsUsed, readRecentLocalModels } from './engine/localModelShortcuts.js';
-import { nextFavoriteModels } from './agent-console/modelPickerInteractions.js';
 import { GfBarChartHorizontalIcon, GfBeachIcon, GfBoltIcon, GfCloseIcon, GfMinusIcon, GfPlayCircleIcon, SettingsIcon } from '../gentleface-icons.js';
 import { ProviderMark, providerMarkKind } from './providers/ProviderMark.js';
 import { formatBytes, formatTokens, placementLabel, placementTitle } from './runtimes/verdict.js';
@@ -384,7 +383,7 @@ export function MonitorsDock(props: MonitorsDockProps) {
           <ResizableMonitorBody label={p.label}>
             {p.key === 'automations' && <div className="monitors-dock__app"><AutomationsPane tasks={props.tasks} running={props.running} now={props.now} onOpen={props.onOpenChat} /></div>}
             {p.key === 'utilization' && <Utilization providers={props.providers} usage={props.usage} now={props.now} onOpenModels={props.onOpenModels} />}
-            {p.key === 'budget' && <Budget usage={props.usage} sessions={props.sessions} providers={props.providers} now={props.now} />}
+            {p.key === 'budget' && <Budget usage={props.usage} sessions={props.sessions} onOpenChat={props.onOpenChat} now={props.now} />}
             {p.key === 'hardware' && <Hardware providers={props.providers} />}
             {p.key === 'localModels' && <LocalModels />}
           </ResizableMonitorBody>
@@ -630,7 +629,7 @@ function UsageAttributionRows({ a, compact }: { a: NonNullable<ReturnType<typeof
   </dl>;
 }
 
-function Budget({ usage, now, sessions, providers }: Pick<MonitorsDockProps, 'usage' | 'now' | 'sessions' | 'providers'>) {
+function Budget({ usage, now, sessions, onOpenChat }: Pick<MonitorsDockProps, 'usage' | 'now' | 'sessions' | 'onOpenChat'>) {
   const benchmark = useStore((s) => s.settings?.localCostBenchmark ?? DEFAULT_LOCAL_COST_BENCHMARK);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -651,45 +650,46 @@ function Budget({ usage, now, sessions, providers }: Pick<MonitorsDockProps, 'us
     } catch { setError('Could not update cloud comparison. Please try again.'); }
     finally { setSaving(false); }
   };
-  // Actual: what metered API keys and cloud usage cost. Theoretical: what the
-  // local and subscription tokens would have cost at API prices, i.e. saved.
-  const theoretical = avoided ? avoided.local + avoided.subscription : null;
-  const atApiPrices = spend != null && theoretical != null ? spend + theoretical : null;
-  const paidShare = atApiPrices ? (spend! / atApiPrices) * 100 : null;
-  const topTitle = top && top[1] > 0 ? sessions.find(s => s.id === top[0])?.title ?? 'Chat' : null;
+  const savings = avoided ? avoided.local + avoided.subscription : null;
+  const atApiPrices = spend != null && savings != null ? spend + savings : null;
+  const meteredShare = atApiPrices ? (spend! / atApiPrices) * 100 : null;
+  const topSpend = top && top[1] > 0 ? top[1] : null;
+  const topChat = topSpend != null ? sessions.find(s => s.id === top?.[0]) : undefined;
   const compact = (n: number) => new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(n);
   return <div className="monitors-dock__metrics monitors-dock__budget">
     <RangeToggles chart="Budget" range={range} onChange={setRange} />
     <div className="monitors-dock__spend-grid">
-      <section className="monitors-dock__spend" data-spend="actual" aria-label="Actual spend">
-        <span className="monitors-dock__spend-label">Actual spend</span>
+      <section className="monitors-dock__spend" data-spend="actual" aria-label="API & cloud spend">
+        <span className="monitors-dock__spend-label">API &amp; cloud spend</span>
         <strong className="monitors-dock__spend-value">{spend == null ? 'Unavailable' : formatUSD(spend)}</strong>
-        <span className="monitors-dock__spend-hint">API and cloud bills</span>
+        <span className="monitors-dock__spend-hint">Includes estimates · no plan fees</span>
       </section>
-      <section className="monitors-dock__spend" data-spend="theoretical" aria-label="Theoretical spend">
-        <span className="monitors-dock__spend-label">Theoretical spend</span>
-        <strong className="monitors-dock__spend-value">{theoretical == null ? 'Unavailable' : formatUSD(theoretical)}</strong>
+      <section className="monitors-dock__spend" data-spend="theoretical" aria-label="Estimated savings">
+        <span className="monitors-dock__spend-label">Estimated savings</span>
+        <strong className="monitors-dock__spend-value">{savings == null ? 'Unavailable' : formatUSD(savings)}</strong>
         <span className="monitors-dock__spend-hint">Local and subscriptions</span>
       </section>
     </div>
-    {paidShare != null && <div className="monitors-dock__split">
-      <div className="monitors-dock__split-bar" role="img" aria-label={`You paid ${Math.round(paidShare)}% of the ${formatUSD(atApiPrices!)} this usage costs at API prices`}>
-        {paidShare > 0 && <span data-part="actual" style={{ width: `${paidShare}%` }} />}
-        {paidShare < 100 && <span data-part="theoretical" style={{ width: `${100 - paidShare}%` }} />}
+    {meteredShare != null && <div className="monitors-dock__split">
+      <div className="monitors-dock__split-bar" role="img" aria-label={`${Math.round(meteredShare)}% metered out of ${formatUSD(atApiPrices!)} total at API prices`}>
+        {meteredShare > 0 && <span data-part="actual" style={{ width: `${meteredShare}%` }} />}
+        {meteredShare < 100 && <span data-part="theoretical" style={{ width: `${100 - meteredShare}%` }} />}
       </div>
-      <p className="monitors-dock__note">{formatUSD(atApiPrices!)} at API prices · you paid {Math.round(paidShare)}%</p>
+      <p className="monitors-dock__note">{formatUSD(atApiPrices!)} at API prices · {Math.round(meteredShare)}% metered</p>
     </div>}
     <dl className="monitors-dock__breakdown" aria-label={`Budget breakdown, ${BUDGET_RANGE_LABEL[range].toLowerCase()}`}>
-      <div data-row="local"><dt>Local models</dt><dd>{avoided ? formatUSD(avoided.local) : 'Unavailable'}{ranged?.localTokens != null && <small>{ranged.localTokens.toLocaleString()} tokens</small>}</dd></div>
-      <div data-row="subscription"><dt>Subscriptions</dt><dd>{avoided ? formatUSD(avoided.subscription) : 'Unavailable'}</dd></div>
+      <div data-row="local"><dt>Local model savings</dt><dd>{avoided ? formatUSD(avoided.local) : 'Unavailable'}{ranged?.localTokens != null && <small>{ranged.localTokens.toLocaleString()} tokens</small>}</dd></div>
+      <div data-row="subscription"><dt>Plan usage value</dt><dd>{avoided ? formatUSD(avoided.subscription) : 'Unavailable'}</dd></div>
       {ranged && ranged.pictures > 0 && <div data-row="pictures"><dt>Paid pictures</dt><dd>{formatUSD(ranged.pictureCost)}<small>{ranged.pictures === 1 ? '1 picture' : `${ranged.pictures.toLocaleString()} pictures`}</small></dd></div>}
-      <div data-row="top"><dt>Top paid agent</dt><dd>{topTitle ? <><span className="monitors-dock__breakdown-name" title={topTitle}>{topTitle}</span>{formatUSD(top![1])}</> : ranged?.bySessionCost == null ? 'Unavailable' : 'No API spend'}</dd></div>
+      <div data-row="top"><dt>Top paid agent</dt><dd>{topSpend != null ? <>{topChat
+        ? <button type="button" className="monitors-dock__breakdown-name monitors-dock__chat-link" title={`Open ${topChat.title || 'chat'}`} onClick={() => onOpenChat(topChat.id)}>{topChat.title || 'Chat'}</button>
+        : <span className="monitors-dock__breakdown-name">Chat unavailable</span>}{formatUSD(topSpend)}</> : ranged?.bySessionCost == null ? 'Unavailable' : 'No API spend'}</dd></div>
       <div data-row="tokens"><dt>Tokens</dt><dd title={ranged ? `${ranged.input.toLocaleString()} in · ${ranged.output.toLocaleString()} out` : undefined}>{ranged ? `${compact(ranged.input)} in · ${compact(ranged.output)} out` : 'Unavailable'}</dd></div>
     </dl>
     {ranged?.attribution && <UsageAttributionRows a={ranged.attribution} compact={compact} />}
-    <p className="monitors-dock__note">{BUDGET_RANGE_LABEL[range]} · UTC. Theoretical is the API price of the same tokens, before plan fees, hardware and electricity.</p>
+    <p className="monitors-dock__note">{BUDGET_RANGE_LABEL[range]} · UTC. Savings compare the same tokens at API prices, before plan fees, hardware and electricity.</p>
     <details><summary>Cloud pricing comparison</summary>
-      <label className="monitors-dock__benchmark">Fallback for unpriced local models
+      <label className="monitors-dock__benchmark">Fallback when local models lack a paid price
         <select value={benchmark} disabled={saving} onChange={(e) => void changeBenchmark(e.target.value)}>
           <option value="">None (leave unpriced)</option>
           {MODEL_COMPARISON_TIERS.map(tier => <optgroup key={tier.label} label={tier.label}>
@@ -698,7 +698,7 @@ function Budget({ usage, now, sessions, providers }: Pick<MonitorsDockProps, 'us
           <optgroup label="Legacy comparisons">{MODEL_PRICING.filter(p => !MODEL_COMPARISON_TIERS.some(t => (t.models as readonly string[]).includes(p.match))).map(p => <option key={p.match} value={p.match}>{p.match} · ${p.input} in / ${p.output} out</option>)}</optgroup>
         </select>
       </label>
-      <p className="monitors-dock__note">USD per million tokens. Matched models use their published price; the fallback is a comparison, not the same model.</p>
+      <p className="monitors-dock__note">USD per million tokens. Local models without a paid catalog price use the fallback, a comparison rather than an exact match.</p>
       {price && <p className="monitors-dock__note">Fallback: ${price.input} input / ${price.output} output per 1M tokens.</p>}
       <p className="monitors-dock__note"><a href={MODEL_PRICING_SOURCE} target="_blank" rel="noreferrer">OpenRouter pricing catalog</a> · checked {MODEL_PRICING_CHECKED_AT}. <a href="https://ollama.com/pricing" target="_blank" rel="noreferrer">Ollama cloud rates</a></p>
       <p className="monitors-dock__note">Standard text-token estimates, not invoices. Provider routes, long context, tools and batch rates can differ. Tiers are comparison choices, not verified capability rankings. No monthly plan fees are included.</p>
@@ -739,8 +739,8 @@ const LOCAL_MODELS_POLL_MS = 6000;
 /**
  * What the local engine holds in memory and where each model runs, with
  * Unload on every model (picture models included: one fills the GPU) and a
- * jump to its own settings on Model Server. Below that, a few starred and
- * recent models with Load and Settings, so the next one is a click away.
+ * jump to its own settings on Model Server. Below that, a few recent models
+ * by name with Load and Settings, so the next one is a click away.
  * GPU offload, context and KV cache themselves stay on Model Server, which
  * explains what changing them costs.
  */
@@ -748,7 +748,6 @@ const engineChats = stableSelector((s: { sessions?: SessionSummary[] }) => (s.se
 
 export function LocalModels({ initial }: { initial?: { status: EngineStatus | null; models: LocalModel[] } } = {}) {
   const computer = useWatchedComputer();
-  const favorites = useStore((s) => s.settings?.favoriteModels);
   const chats = useStore(engineChats);
   const [busy, setBusy] = useState<string | null>(null);
   const [status, setStatus] = useState<EngineStatus | null>(initial?.status ?? null);
@@ -807,30 +806,19 @@ export function LocalModels({ initial }: { initial?: { status: EngineStatus | nu
     noteLocalModelsUsed([{ id: m.id, at: Date.now() }]);
     return act(m.id, 'load', () => loadLocalModel(ENGINE_PROVIDER_ID, m));
   };
-  const toggleStar = async (id: string) => {
-    await window.nekko.updateSettings({ favoriteModels: nextFavoriteModels(favorites, `${ENGINE_PROVIDER_ID}::${id}`) }).catch(() => null);
-    void store().refreshSettings(false);
-  };
-  const starredSet = new Set(favorites ?? []);
-  const star = (id: string, name: string) => {
-    const on = starredSet.has(`${ENGINE_PROVIDER_ID}::${id}`);
-    return <button type="button" className="monitors-dock__star" data-local-model-star={id} aria-pressed={on} aria-label={on ? `Unstar ${name}` : `Star ${name}`} title={on ? 'Starred: offered here when it is not loaded' : 'Star it to keep it offered here'} onClick={() => void toggleStar(id)}><StarIcon className="h-3 w-3" filled={on} /></button>;
-  };
   const kind = (m: LocalModel | undefined) => m?.modality && m.modality !== 'chat' ? MODALITY_LABELS[m.modality] : null;
-  const shortcuts: { starred: LocalModel[]; recent: LocalModel[] } = computer || !installed ? { starred: [], recent: [] } : localModelShortcuts({ models, resident: resident.map((r) => r.id), favorites, seen: readRecentLocalModels(), chats: chats ?? [] });
+  const recent: LocalModel[] = computer || !installed ? [] : localModelShortcuts({ models, resident: resident.map((r) => r.id), seen: readRecentLocalModels(), chats: chats ?? [] });
   // A cog with a tooltip: the row's name already says whose settings they are.
   const settingsButton = (id: string, name: string, modality: LocalModel['modality'] | undefined) =>
     <button type="button" className="monitors-dock__icon-action" data-local-model-settings={id} aria-label={`Open ${name} settings`} title={modality === 'image' ? 'Picture settings' : 'Settings: GPU offload, context and memory'} onClick={() => store().openLocalModelSettings(id)}><SettingsIcon className="monitors-dock__icon" /></button>;
   const shortcutRow = (m: LocalModel) => <div className="monitors-dock__local-model" key={m.id} data-local-model-shortcut={m.id}>
     <div className="monitors-dock__metric-row">
-      {star(m.id, m.name)}
       <strong className="monitors-dock__provider-name" title={m.name}>{m.name}</strong>
       {settingsButton(m.id, m.name, m.modality)}
       {busy === m.id
         ? <span className="monitors-dock__busy" role="status">Loading…</span>
         : <button type="button" className="monitors-dock__icon-action" data-local-model-load={m.id} aria-label={`Load ${m.name}`} title="Load" onClick={() => void load(m)}><GfPlayCircleIcon className="monitors-dock__icon" /></button>}
     </div>
-    <p className="monitors-dock__note">{[kind(m), m.parameterSize, m.quantization, formatBytes(m.sizeBytes)].filter(Boolean).join(' · ')}</p>
   </div>;
   if (!read) return <div className="monitors-dock__metrics monitors-dock__local-models"><p className="monitors-dock__note">{computer ? 'Reading that computer\'s engine…' : 'Reading the local engine…'}</p></div>;
   return <div className="monitors-dock__metrics monitors-dock__local-models">
@@ -846,7 +834,6 @@ export function LocalModels({ initial }: { initial?: { status: EngineStatus | nu
         const rest = [kind(model), r.contextLength ? `${formatTokens(r.contextLength)} context` : null, bytes ? formatBytes(bytes) : null].filter((x): x is string => Boolean(x));
         return <div className="monitors-dock__local-model" key={r.id} data-local-model={r.id}>
           <div className="monitors-dock__metric-row">
-            {!computer && model && star(r.id, name)}
             <strong className="monitors-dock__provider-name" title={name}>{name}</strong>
             {!computer && settingsButton(r.id, name, model?.modality)}
             <button type="button" className="monitors-dock__text-button" data-local-model-unload={r.id} aria-label={`Unload ${name}`} disabled={busy === r.id || busy === '*'} onClick={() => computer ? change('model:unload', [ENGINE_PROVIDER_ID, r.id]) : void unload(r.id)}>{busy === r.id ? 'Unloading…' : 'Unload'}</button>
@@ -859,8 +846,7 @@ export function LocalModels({ initial }: { initial?: { status: EngineStatus | nu
         </div>;
       })}
     {!computer && status?.running && resident.length > 1 && <button type="button" className="monitors-dock__text-button" data-local-models-unload-all disabled={busy !== null} onClick={() => void unloadAll()}>{busy === '*' ? 'Unloading…' : 'Unload all'}</button>}
-    {shortcuts.starred.length > 0 && <div className="monitors-dock__local-group" data-local-models-group="starred"><p className="monitors-dock__local-group-label">Starred</p>{shortcuts.starred.map(shortcutRow)}</div>}
-    {shortcuts.recent.length > 0 && <div className="monitors-dock__local-group" data-local-models-group="recent"><p className="monitors-dock__local-group-label">Recent</p>{shortcuts.recent.map(shortcutRow)}</div>}
+    {recent.length > 0 && <div className="monitors-dock__local-group" data-local-models-group="recent"><p className="monitors-dock__local-group-label">Recent</p>{recent.map(shortcutRow)}</div>}
     {computer && installed && status?.running && server && <ComputerModelServer id={computer} server={server} resident={resident.map((r) => r.id)} change={change} />}
     {/* The Model Server page and a model's settings are this computer's. */}
     {!computer && <button type="button" className="monitors-dock__text-button" onClick={openServer}>{installed ? 'Open Model Server' : 'Set up a local model'}</button>}

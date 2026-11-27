@@ -267,6 +267,7 @@ impl Cloud {
             }
             "fleet:list" => self.fleet_list(&org_id_arg(args, 0)?).await,
             "fleet:status" => Ok(self.fleet_status()),
+            "fleet:runners" => self.fleet_runners().await,
             _ => Err(format!("unknown channel {channel}")),
         }
     }
@@ -970,6 +971,35 @@ impl Cloud {
         }
     }
 
+    /// Each organization's computers that run CI runners (decision 0064), for phones and
+    /// notifications: the name, OS, whether it is online, and its runners. An org this
+    /// device can't read is left out rather than failing the rest.
+    async fn fleet_runners(&self) -> Result<Value, String> {
+        let token = self.token()?;
+        let res = self.api.get(&token, "/v1/orgs").await.map_err(org_error)?;
+        let mut out = Vec::new();
+        for o in res["orgs"].as_array().into_iter().flatten() {
+            let Some(id) = o["id"].as_str().filter(|id| valid_org_id(id)) else { continue };
+            let Ok(list) = self.fleet_list(id).await else { continue };
+            let computers: Vec<Value> = list["computers"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter(|c| c["runners"].as_array().is_some_and(|r| !r.is_empty()))
+                .map(|c| {
+                    json!({
+                        "deviceId": c["deviceId"], "name": c["name"], "os": c["os"], "online": c["online"],
+                        "seenAt": c["seenAt"], "you": c["you"], "runners": c["runners"],
+                    })
+                })
+                .collect();
+            if !computers.is_empty() {
+                out.push(json!({ "orgId": id, "orgName": o["name"], "computers": computers }));
+            }
+        }
+        Ok(json!({ "orgs": out }))
+    }
+
     fn fleet_status(&self) -> Value {
         let sharing_set = lock(&self.state).sharing.clone();
         let live = lock(&self.live);
@@ -1141,7 +1171,13 @@ mod tests {
         AccountRecord {
             epoch: 1,
             recovery_public: "rp".into(),
-            devices: vec![TrustedDevice { id: DEV.into(), public_key: host.into(), label: "Desk".into() }],
+            devices: vec![TrustedDevice {
+                id: DEV.into(),
+                public_key: host.into(),
+                label: "Desk".into(),
+                caps: vec![],
+            }],
+            compressed: false,
         }
     }
 
@@ -1235,6 +1271,7 @@ mod tests {
             code: code.into(),
             message: code.into(),
             body: Box::new(Value::Null),
+            retry_after: None,
         };
         assert_eq!(org_error(err(402, "plan-required")), NEEDS_PLAN);
         assert_eq!(org_error(err(403, "needs-synced-device")), LOCKED);

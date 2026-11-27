@@ -40,7 +40,7 @@ export function PhotoViewer({ items, index: start, trusted, onClose, onMenu, onC
   }, [many, go]);
 
   const caption = item.alt || (item.url ? imageHost(item.url) : 'Image');
-  const pill = 'flex min-h-9 items-center gap-2 rounded-full bg-surface px-4 py-1 text-sm font-medium text-ink shadow-(--shadow-float) hover:bg-surface-2 disabled:opacity-50';
+  const pill = 'btn btn-outline cursor-pointer bg-surface shadow-(--shadow-float)';
 
   return (
     <Modal title={many ? `Photo ${index + 1} of ${items.length}: ${caption}` : caption} onClose={onClose} scrim="rgba(0,0,0,0.78)" overlayClassName="p-4" zIndex={55}>
@@ -57,14 +57,14 @@ export function PhotoViewer({ items, index: start, trusted, onClose, onMenu, onC
           <button className={pill} aria-label="Close image" onClick={onClose}><CloseIcon className="h-4 w-4" /> Close</button>
         </div>
         <div className="relative flex min-h-0 w-full flex-1 items-center justify-center">
-          {many && <button className="absolute left-0 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-surface/90 text-xl text-ink shadow-(--shadow-float) hover:bg-surface-2" aria-label="Previous photo" onClick={(e) => { e.stopPropagation(); go(-1); }}>‹</button>}
+          {many && <button className="absolute left-0 z-10 flex h-11 w-11 items-center justify-center cursor-pointer rounded-full bg-surface/90 text-xl text-ink shadow-(--shadow-float) hover:bg-surface-2" aria-label="Previous photo" onClick={(e) => { e.stopPropagation(); go(-1); }}>‹</button>}
           {src ? (
             <img
               key={src}
               src={src}
               alt={caption}
               referrerPolicy="no-referrer"
-              className="block max-h-full max-w-[calc(100%-7rem)] object-contain"
+              className={`block max-h-full object-contain ${many ? 'max-w-[calc(100%-7rem)]' : 'max-w-full'}`}
               onClick={(e) => e.stopPropagation()}
               onContextMenu={(e) => onMenu(e, shown)}
               title="Right-click to copy or save"
@@ -81,7 +81,7 @@ export function PhotoViewer({ items, index: start, trusted, onClose, onMenu, onC
               </> : <span>Loading image…</span>}
             </div>
           )}
-          {many && <button className="absolute right-0 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-surface/90 text-xl text-ink shadow-(--shadow-float) hover:bg-surface-2" aria-label="Next photo" onClick={(e) => { e.stopPropagation(); go(1); }}>›</button>}
+          {many && <button className="absolute right-0 z-10 flex h-11 w-11 items-center justify-center cursor-pointer rounded-full bg-surface/90 text-xl text-ink shadow-(--shadow-float) hover:bg-surface-2" aria-label="Next photo" onClick={(e) => { e.stopPropagation(); go(1); }}>›</button>}
         </div>
       </div>
     </Modal>

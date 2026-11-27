@@ -162,7 +162,11 @@ saw in memory and the models your local chats used, newest first. **Load** uses 
 saved settings, or the recommended ones when it has none, and starts the engine if it is
 stopped.
 
-**Reading the VRAM bar.** In the model library, the bar starts with the model and adds the extra memory for minimum, recommended and maximum context. A plain tail is memory left after maximum context; a striped tail is memory the load would need beyond what is available. Hover a band or focus its label for the numbers.
+**Installed model cards.** **Format** and **Supports** show how each model is packaged and what it can do. The collapsed card previews estimated load memory or shows a striped comparison with the on-disk weights. Open the model name to see a single memory breakdown, followed by the context slider. Known context allocations resize as you change the setting; a dashed section means part or all of the estimate is unknown. **Load** still uses saved settings, and **Load when the engine starts** is in the expanded card.
+
+**Deleting models from another folder.** Check the source and path in the required confirmation: deleting a model may make it unavailable in the app that downloaded it. The action leaves shared companions alone. For a Hugging Face-style MLX cache, it removes weight links, not the files they point to. For Ollama, it removes only the selected tag manifest; use Ollama to manage the retained blobs if you need to reclaim disk space.
+
+**Reading the VRAM bar.** In a model family’s GPU facts, the bar starts with the model and adds the extra memory for minimum, recommended and maximum context. A plain tail is memory left after maximum context; a striped tail is memory the load would need beyond what is available. Hover a band or focus its label for the numbers.
 
 **Configuring a load.** A model's drawer leads with a **memory meter**: graphics memory
 (VRAM) and system memory (RAM) as two bars, each split into other apps, this model (its
@@ -197,6 +201,27 @@ loaded, pin in memory; none of them move the work off the GPU). **Expert** holds
 remaining flag, each with a sentence and the flag it sets. Controls a build does not support
 fall back to `--override-tensor` patterns or are left out. Any of it can be saved as that
 model's default.
+
+### Use DFlash2 with stock Qwen3.8-27B
+
+DFlash2 is an optional second model that guesses several tokens at once for the main model to check. Use it only with the original `Qwen/Qwen3.8-27B` checkpoint (a quantized copy is fine), not a fine-tune, merge or different Qwen release. Use a target and draft from the same row:
+
+| Format | Stock target | Matching draft | Runtime |
+| --- | --- | --- | --- |
+| GGUF | `Qwen3.8-27B-Q4_K_M.gguf` from [ggml-org/Qwen3.8-27B-GGUF](https://huggingface.co/ggml-org/Qwen3.8-27B-GGUF) | `Qwen3.8-27B-DFlash2-Q4_K_M.gguf` from [incoai/Qwen3.8-27B-DFlash2-GGUF](https://huggingface.co/incoai/Qwen3.8-27B-DFlash2-GGUF) | Use Model Server's pinned llama.cpp build `b12556`. The pair was verified with the standalone macOS arm64 Metal release of that build (`50518b64c`). |
+| MLX | The full [mlx-community/Qwen3.8-27B-4bit](https://huggingface.co/mlx-community/Qwen3.8-27B-4bit) folder | The full [incoai/Qwen3.8-27B-DFlash2](https://huggingface.co/incoai/Qwen3.8-27B-DFlash2) folder, with `config.json` beside its `.safetensors` weights | Apple Silicon only. Install `mlx-vlm==0.8.1` separately and put its `mlx_vlm.server` executable on the **Model Server daemon's** `PATH` before starting it. A terminal that finds it does not mean a GUI-launched daemon can. Model Server's regular MLX install (`mlx_lm.server`) is not this runtime. |
+
+1. Download both yourself and place them under a folder the built-in engine scans. For example, use `<models folder>/chat/…` and `<models folder>/draft/…` for the GGUF files, or `<models folder>/vision/mlx-community_Qwen3.8-27B-4bit/` and `<models folder>/draft/incoai_Qwen3.8-27B-DFlash2/` for the MLX folders. Keep MLX model folders intact and keep their published names (or the managed `owner_repo` names); the daemon checks the target folder name and both configs. For an existing external library, add its parent folder instead of copying the weights. These are local paths, not Hugging Face repo IDs entered in the drawer.
+2. Open the **target's** load drawer in Model Server. Under **More controls → Expert → Guessing ahead**, leave **Speculative decoding** on and choose **Qwen3.8-27B-DFlash2** under **Draft model**. The draft is not a standalone chat model. If it isn't offered, check that both models are in the local library, in the same format, and have the names/metadata above.
+3. **Load model** (or **Reload with these settings**) tries the pair once. **Save as default** keeps the selection for future loads. Choose **None** to stop using the head. Opening the drawer or loading a model with no head selected does not download either model or the DFlash2 runtime.
+
+The head needs extra memory; benefit depends on how often the main model accepts its guesses. For ordinary MLX loads, use **None** and the regular MLX runtime. Ordinary drafts still use the existing picker and load settings.
+
+**Measured GGUF behavior.** On a 64 GiB M1 Max with `b12556`, the draft raised aggregate decode from 12.10 to 19.59 tokens/s with **Full (f16)** cache, matching the target-only token IDs and text on all three short greedy prompts. With **Standard (q8_0)** cache, decode rose from 11.49 to 20.01 tokens/s, but the numbered-list reply differed from the target-only reply. Use Full (f16) to reproduce the parity check; neither result guarantees identical output on other prompts. This was a standalone server test, not a desktop or daemon test. See [the GGUF measurements](perf-history.md#follow-up-pinned-b12556-gguf-on-metal-3541-2026-11-27).
+
+**Measured MLX behavior.** On a 64 GiB M1 Max, the public stock 4-bit target streamed with both the full BF16 DFlash2 head and the [upstream-recommended](https://pypi.org/project/mlx-vlm/0.8.1/) 4-bit/group64 conversion. The converted head used 71.9% less disk space for its weights and accepted 233 of 380 proposed tokens. Across the three short prompts, it decoded at 4.306 tokens/s versus 4.340 for the full head and 12.890 and 16.950 for the two target-only runs. The heads agreed with each other, but neither matched target-only greedy text. Leave **Draft model** set to **None** for target-only speed and output on this setup. If experimenting with MLX DFlash2 to save weight storage, keep the converted folder named `Qwen3.8-27B-DFlash2` under a different parent from the full head. See [the conversion command and measurements](perf-history.md#follow-up-4-bitgroup64-mlx-dflash2-head-3541-2026-11-27).
+
+**8-bit memory limit.** The pairing check recognizes the LM Studio basename `Qwen3.8-27B-MLX-8bit` when the configs match. This is not a guarantee the weights fit: on a 64 GiB M1 Max, the public 8-bit copy hit a macOS memory-pressure warning before the target finished loading. The draft was not started, and the user's installed LM Studio copy was not tested. See [the 8-bit preload record](perf-history.md#unmeasured).
 
 **Thinking** is on by default. For a built-in llama.cpp model, open **More controls >
 Expert > Thinking** to turn it off for that model, then load or save the settings.

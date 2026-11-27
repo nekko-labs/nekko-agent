@@ -9,11 +9,17 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
  * Values cross the boundary as 6-digit hex so callers can hand them straight to
  * a CSS custom property.
  */
+/** The hue gradient around the disc, also drawn by pickers that want the same rainbow. */
+export const HUE_CONIC_GRADIENT = `conic-gradient(from 0deg,
+  hsl(0 100% 50%), hsl(60 100% 50%), hsl(120 100% 50%),
+  hsl(180 100% 50%), hsl(240 100% 50%), hsl(300 100% 50%), hsl(360 100% 50%))`;
+
 export function ColorWheel({
   value,
   onChange,
   size = 132,
   label,
+  sliderOrientation = 'horizontal',
 }: {
   value: string;
   onChange: (hex: string) => void;
@@ -21,9 +27,17 @@ export function ColorWheel({
   size?: number;
   /** Accessible name for the disc (the picker says which color it edits). */
   label?: string;
+  /** Where the lightness slider sits: under the disc (the theme settings), or to its right, as tall as the disc. */
+  sliderOrientation?: 'horizontal' | 'vertical';
 }) {
   const discRef = useRef<HTMLDivElement>(null);
-  const [h, s, l] = hexToHsl(value);
+  const vertical = sliderOrientation === 'vertical';
+  // The wheel keeps its own hue, saturation and lightness. Hex alone forgets the
+  // hue at black or white (and blurs it near them), so dragging lightness to an
+  // end and back would land on grey with the knob jumped to the center.
+  const [held, setHeld] = useState<Hsl>(() => hexToHsl(value));
+  const [h, s, l] = resolveHsl(held, value);
+  const emit = useCallback((next: Hsl) => { setHeld(next); onChange(hslToHex(...next)); }, [onChange]);
   // Dragging past the rim should keep tracking the pointer, so the whole
   // gesture lives on the window rather than the disc.
   const [dragging, setDragging] = useState(false);
@@ -40,9 +54,9 @@ export function ColorWheel({
       const angle = (Math.atan2(dy, dx) * 180) / Math.PI + 90;
       const hue = (angle + 360) % 360;
       const sat = Math.min(1, Math.hypot(dx, dy) / radius) * 100;
-      onChange(hslToHex(hue, sat, l));
+      emit([hue, sat, l]);
     },
-    [l, onChange],
+    [l, emit],
   );
 
   useEffect(() => {
@@ -69,11 +83,11 @@ export function ColorWheel({
     const step = e.shiftKey ? 4 : 6;
     if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
       const dir = e.key === 'ArrowRight' ? 1 : -1;
-      if (e.shiftKey) onChange(hslToHex(h, clamp(s + dir * step, 0, 100), l));
-      else onChange(hslToHex((h + dir * step + 360) % 360, s, l));
+      if (e.shiftKey) emit([h, clamp(s + dir * step, 0, 100), l]);
+      else emit([(h + dir * step + 360) % 360, s, l]);
     } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       const dir = e.key === 'ArrowUp' ? 1 : -1;
-      onChange(hslToHex(h, s, clamp(l + dir * 3, 0, 100)));
+      emit([h, s, clamp(l + dir * 3, 0, 100)]);
     } else {
       return;
     }
@@ -81,7 +95,7 @@ export function ColorWheel({
   };
 
   return (
-    <div className="flex flex-col items-center gap-2" style={{ width: size }}>
+    <div className={vertical ? 'flex w-full flex-row items-stretch' : 'flex flex-col items-center gap-2'} style={vertical ? undefined : { width: size }}>
       <div
         ref={discRef}
         role="slider"
@@ -103,9 +117,7 @@ export function ColorWheel({
           // Hue around, saturation outward; the lightness track below does the rest.
           background: `
             radial-gradient(circle at 50% 50%, #fff 0%, rgba(255, 255, 255, 0) 70%),
-            conic-gradient(from 0deg,
-              hsl(0 100% 50%), hsl(60 100% 50%), hsl(120 100% 50%),
-              hsl(180 100% 50%), hsl(240 100% 50%), hsl(300 100% 50%), hsl(360 100% 50%))
+            ${HUE_CONIC_GRADIENT}
           `,
           // Match the disc to the chosen lightness so the knob sits on its color.
           filter: `brightness(${0.45 + (l / 100) * 1.1})`,
@@ -123,20 +135,75 @@ export function ColorWheel({
           }}
         />
       </div>
-      <input
+      {/* Vertical: the bar stands centred in the room right of the disc. */}
+      {vertical ? <div className="flex flex-1 justify-center" data-lightness-column><VerticalLightness h={h} s={s} l={l} height={size} label={label ? `${label} lightness` : 'Lightness'} onChange={(next) => emit([h, s, next])} /></div> : <input
         type="range"
         min={0}
         max={100}
         value={Math.round(l)}
         aria-label={label ? `${label} lightness` : 'Lightness'}
-        onChange={(e) => onChange(hslToHex(h, s, Number(e.target.value)))}
+        onChange={(e) => emit([h, s, Number(e.target.value)])}
         className="h-2 w-full cursor-pointer appearance-none rounded-full"
         style={{
           background: `linear-gradient(to right, hsl(${h} ${s}% 4%), hsl(${h} ${s}% 50%), hsl(${h} ${s}% 96%))`,
         }}
-      />
+      />}
     </div>
   );
+}
+
+/**
+ * The lightness track standing beside the disc, light at the top: a slider the
+ * height of the disc. Up and down arrows (and Page and Home/End) change it, and
+ * a press or drag on the track sets it.
+ */
+function VerticalLightness({ h, s, l, height, label, onChange }: { h: number; s: number; l: number; height: number; label: string; onChange: (l: number) => void }) {
+  const set = (e: React.PointerEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    onChange(lightnessAt(e.clientY, rect.top, rect.height));
+  };
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    const next = e.key === 'ArrowUp' || e.key === 'ArrowRight' ? l + 3 : e.key === 'ArrowDown' || e.key === 'ArrowLeft' ? l - 3
+      : e.key === 'PageUp' ? l + 10 : e.key === 'PageDown' ? l - 10 : e.key === 'Home' ? 0 : e.key === 'End' ? 100 : null;
+    if (next === null) return;
+    e.preventDefault();
+    onChange(Math.round(clamp(next, 0, 100)));
+  };
+  return (
+    <div
+      role="slider"
+      tabIndex={0}
+      aria-orientation="vertical"
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(l)}
+      onKeyDown={onKeyDown}
+      onPointerDown={(e) => { e.currentTarget.setPointerCapture?.(e.pointerId); set(e); }}
+      onPointerMove={(e) => { if (e.buttons & 1) set(e); }}
+      className="relative w-4 shrink-0 cursor-pointer rounded-full outline-none focus-visible:ring-2"
+      style={{ height, background: `linear-gradient(to bottom, hsl(${h} ${s}% 96%), hsl(${h} ${s}% 50%), hsl(${h} ${s}% 4%))` }}
+    >
+      <span aria-hidden data-lightness-thumb className="pointer-events-none absolute left-1/2 h-1 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white" style={{ top: `${100 - l}%`, boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.45)' }} />
+    </div>
+  );
+}
+
+type Hsl = [number, number, number];
+
+/**
+ * The wheel's colour: what it holds while `value` is still the hex it last sent
+ * (so hue and saturation survive black, white and rounding), else `value` itself
+ * (a preset, a typed hex, another group's colour).
+ */
+export function resolveHsl(held: Hsl, value: string): Hsl {
+  return hslToHex(...held) === (value ?? '').trim().toLowerCase() ? held : hexToHsl(value);
+}
+
+/** The lightness a press at `clientY` sets on a vertical track: light at the top, clamped to the track. */
+export function lightnessAt(clientY: number, top: number, height: number): number {
+  if (!(height > 0)) return 50;
+  return Math.round(clamp(100 - ((clientY - top) / height) * 100, 0, 100));
 }
 
 function clamp(n: number, min: number, max: number): number {

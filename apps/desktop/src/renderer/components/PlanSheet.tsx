@@ -1,4 +1,4 @@
-import { SubagentRoute } from './SubagentRoute.js';
+import { shortModelName } from './agent-console/SubagentCue.js';
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ChatMessage, IssueInfo, PlanStep, PrInfo, Session, SessionSummary } from '@nekko-agent/shared';
 import { lastReplyInterrupted, parsePrUrl, planProgress } from '@nekko-agent/shared';
@@ -8,25 +8,25 @@ import { sheetPlan } from '../claudeAgentPlan.js';
 import { useShown } from '../simpleMode.js';
 import { useStore } from '../store.js';
 import { stableSelector } from '../selectStable.js';
-import { CheckIcon, CloseIcon, RocketIcon, TagIcon, WarningIcon } from '../icons.js';
+import { CheckIcon, CloseIcon, RocketIcon, SlidersIcon, TagIcon, WarningIcon } from '../icons.js';
 import { GfIcon } from '../gentleface-icons.js';
 import type { ChatArtifact } from '../chatArtifacts.js';
 import { canonicalPrUrl, progressAge, safeProgressLink } from './WorkProgress.js';
 import { runPrAction } from './PrCard.js';
+import { PLAN_DISPLAYS, type PlanDisplay } from '../planDisplay.js';
+import { PLAN_FOLD_EASING, PlanTimeline, type PlanTimelineHandle, type StepDetail } from './PlanTimeline.js';
+import { saveSettings } from '../settingsIndex.js';
 import { PlanRow } from './PlanRow.js';
-import { PlanWorking } from './PlanWorking.js';
 import { StatusIcon, type AgentStatus } from './WorkspaceCard.js';
 import { PrStatusIcon, prStatus, prTone } from './SessionPrChip.js';
 import { issueLook, useIssueInfo } from './PrLinkChip.js';
 import { NO_STATUS, childActivity } from '../subagentActivity.js';
 
 /**
- * The step's bullet. A reported check outranks the step's own status, so a
- * done step whose check is still running shows the working ripple, and a
- * failed or blocked check shows on the bullet rather than in a chip beside it.
- * With evidence attached, the bullet opens it.
+ * A step's status in words, and the detail behind it. A reported check names
+ * the step; the step's own status is the fallback.
  */
-function StepMark({ step, paused }: { step: Pick<PlanStep, 'status' | 'verification' | 'updatedAt'>; paused: boolean }) {
+export function stepDetail(step: Pick<PlanStep, 'status' | 'verification' | 'updatedAt' | 'note'>, paused: boolean): StepDetail & { running: boolean; check?: string; title: string } {
   const { status } = step;
   const v = step.verification;
   const check = v && v.status !== 'pending' && v.status !== 'unknown' ? v.status : undefined;
@@ -36,21 +36,41 @@ function StepMark({ step, paused }: { step: Pick<PlanStep, 'status' | 'verificat
   const stepLabel = status === 'active' ? 'Working' : status === 'done' ? 'Done' : status === 'skipped' ? 'Skipped' : 'Pending';
   const checkLabel = v && `${(VERIFY[v.status] ?? VERIFY.unknown).label}${v.device ? ` on ${v.device}` : ''}`;
   const evidence = safeProgressLink(v?.evidenceUrl);
-  // A reported check names the bullet; the step's own status is the fallback.
   const label = running && paused ? 'Paused' : checkLabel ?? stepLabel;
   const title = v ? `${label} · Agent-reported, not inferred from tool results · ${progressAge(step.updatedAt, Date.now(), ['active', 'pending'].includes(v.status))}${v.detail ? ' · ' + v.detail : ''}${evidence ? ' · Open evidence' : ''}` : label;
+  return { status: label, detail: v?.detail || step.note, running, check, title };
+}
+
+/**
+ * The step's bullet: a dotted ring while pending, the green rocket while
+ * building, a check when done. A reported check outranks the step's own
+ * status, so a done step whose check is still running shows the rocket, and a
+ * failed or blocked check shows on the bullet rather than in a chip beside it.
+ * With evidence attached, the bullet opens it, unless it sits inside the
+ * timeline's dot button (`still`), which opens the plan instead.
+ */
+function StepMark({ step, paused, still, dot }: { step: Pick<PlanStep, 'id' | 'status' | 'verification' | 'updatedAt' | 'note'>; paused: boolean; still?: boolean; dot?: boolean }) {
+  const { status } = step;
+  const v = step.verification;
+  const { status: label, running, check, title } = stepDetail(step, paused);
+  const evidence = !still && safeProgressLink(v?.evidenceUrl);
   const glyph = running ? (paused
       ? <svg aria-hidden="true" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: 'var(--accent)' }}><path d="M8 5v14M16 5v14" /></svg>
-      : <PlanWorking />)
+      : <span className="plan-mark-rocket status-rocket inline-grid place-items-center" aria-hidden="true"><RocketIcon className="h-4 w-4" /></span>)
     : check === 'passed' || (!check && status === 'done') ? <CheckIcon className="h-3 w-3 text-success" />
     : check === 'failed' ? <span className="grid place-items-center" style={{ color: 'var(--danger)' }}><CloseIcon className="h-3 w-3" /></span>
     : check === 'blocked' ? <span className="grid place-items-center" style={{ color: 'var(--warning)' }}><WarningIcon className="h-3 w-3" /></span>
-    : <svg aria-hidden="true" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: 'var(--ink-faint)' }}>
-        <circle cx="12" cy="12" r="8" />
-        {status === 'skipped' && <path d="M6 18 18 6" />}
+    : status === 'skipped' ? <svg aria-hidden="true" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: 'var(--ink-faint)' }}>
+        <circle cx="12" cy="12" r="8" /><path d="M6 18 18 6" />
+      </svg>
+    // Pending: a dotted ring, still to come.
+    : <svg aria-hidden="true" className="h-3 w-3" data-plan-pending viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" style={{ color: 'var(--ink-soft)' }}>
+        {/* Ten even dots: the dash pattern divides a 40-unit path length exactly. */}
+        <circle cx="12" cy="12" r="8" pathLength={40} strokeDasharray="0.01 3.99" />
       </svg>;
-  if (evidence) return <button type="button" className="plan-sheet-mark mt-1 grid h-3 w-3 shrink-0 place-items-center" data-plan-check={v?.status} aria-label={label + ', open evidence'} title={title} onClick={(e) => { e.stopPropagation(); open(evidence); }}>{glyph}</button>;
-  return <span className="mt-1 grid h-3 w-3 shrink-0 place-items-center" data-plan-check={v?.status} role="img" aria-label={label} title={title}>{glyph}</span>;
+  const tl = dot ? step.id : undefined;
+  if (evidence) return <button type="button" className="plan-sheet-mark plan-timeline-mark mt-1 grid h-3 w-3 shrink-0 place-items-center" data-tl-dot={tl} data-plan-check={v?.status} aria-label={label + ', open evidence'} title={title} onClick={(e) => { e.stopPropagation(); open(evidence); }}>{glyph}</button>;
+  return <span className={`plan-timeline-mark grid h-3 w-3 shrink-0 place-items-center${still ? '' : ' mt-1'}`} data-tl-dot={tl} data-plan-check={v?.status} role="img" aria-label={label} title={still ? undefined : title}>{glyph}</span>;
 }
 
 /**
@@ -187,7 +207,7 @@ const CARD_ORDER: Record<AgentStatus, number> = { input: 0, working: 1, error: 2
 /**
  * A sub-agent's card status, the glyph the agent panel draws for it: a
  * question or approval it is waiting on, a run in flight, a failed or stopped
- * run, else done. The live line says what it is doing right now.
+ * run, else done. The live detail is available in the tooltip.
  */
 export function subagentCardState(child: SessionSummary, running: boolean): { status: AgentStatus; detail: string } {
   const activity = childActivity(child, running);
@@ -202,7 +222,7 @@ export function subagentCardState(child: SessionSummary, running: boolean): { st
 
 /**
  * The chat's sub-agents as live cards along the bottom of the plan: each one's
- * status glyph, its task as a one-line title, and what it is doing now. A card
+ * status glyph, task and short model name on one line. A card
  * opens that sub-agent's chat. Those waiting on you lead, then the working ones.
  */
 function SubagentCards({ children, running, onOpen }: { children: SessionSummary[]; running: Set<string>; onOpen: (id: string) => void }) {
@@ -214,23 +234,23 @@ function SubagentCards({ children, running, onOpen }: { children: SessionSummary
     <span className="plan-sheet-agents-head" aria-hidden><GfIcon name="bots" className="h-3.5 w-3.5" />Agents</span>
     {cards.map(({ child, status, detail }) => {
       const title = child.title || 'Sub-agent';
+      const model = child.modelId && shortModelName(child.modelId);
       return <button key={child.id} type="button" className="plan-sheet-agent" data-subagent-card={child.id} data-status={status}
-        title={`Open ${title}${detail ? `\n${detail}` : ''}`} aria-label={`${title}, ${CARD_STATUS[status]}. Open sub-agent`} onClick={() => onOpen(child.id)}>
-        <span className="plan-sheet-agent-line">
-          <StatusIcon status={status} />
-          <span className="min-w-0 flex-1 truncate text-ink" dir="auto">{title}</span>
-        </span>
-        <SubagentRoute child={child} />
-        <span className="plan-sheet-agent-detail truncate" dir="auto">{CARD_STATUS[status]}{detail ? ` · ${detail}` : ''}</span>
+        title={[`Open ${title}`, child.modelId, detail || CARD_STATUS[status]].filter(Boolean).join('\n')} aria-label={`${title}, ${CARD_STATUS[status]}${model ? `, ${model}` : ''}. Open sub-agent`} onClick={() => onOpen(child.id)}>
+        <StatusIcon status={status} />
+        <span className="plan-sheet-agent-title truncate" dir="auto">{title}</span>
+        {model && <span className="plan-sheet-agent-model truncate" dir="auto">{model}</span>}
       </button>;
     })}
   </div>;
 }
 
+const FOLD_HEIGHT_MS = 150;
+
 /** The composer's plan: flat title rows with inline chips and per-row overflow. */
 const childrenOf = stableSelector((s: { sessions?: SessionSummary[] }, id) => (s.sessions ?? []).filter((c) => c.parentSessionId === id));
 
-export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpenChild, initiallyOpen = true }: {
+export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpenChild, initiallyOpen }: {
   sessionId: string;
   session: Session | null;
   streaming: boolean;
@@ -241,9 +261,41 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
   /** Start with the whole plan showing rather than folded. */
   initiallyOpen?: boolean;
 }) {
-  // The whole plan is open by default; the user folds it to one line when they
-  // want the chrome out of the way.
-  const [collapsed, setCollapsed] = useState(initiallyOpen === false);
+  const mode = useStore(s => s.settings?.planDisplay ?? 'balanced');
+  const [override, setOverride] = useState<{ mode: PlanDisplay; full: boolean; at?: string }>();
+  const full = override?.mode === mode ? override.full : initiallyOpen ?? mode === 'full';
+  const timeline = useRef<PlanTimelineHandle>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const stopFold = useRef<() => void>(undefined);
+  const setFull = (next: boolean, at?: string) => {
+    const scroll = scrollRef.current;
+    // Capture the visible geometry before releasing a height that is still in flight.
+    timeline.current?.capture();
+    stopFold.current?.();
+    if (!next && scroll?.animate && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      const from = scroll.getBoundingClientRect().height;
+      scroll.style.height = `${from}px`;
+      let animation: Animation | undefined;
+      const stop = () => {
+        animation?.cancel();
+        scroll.style.height = '';
+        stopFold.current = undefined;
+      };
+      stopFold.current = stop;
+      timeline.current?.afterTurn(() => {
+        if (stopFold.current !== stop) return;
+        // Release the lock and measure the folded layout, in the same frame.
+        scroll.style.height = '';
+        const to = scroll.getBoundingClientRect().height;
+        stopFold.current = undefined;
+        if (from <= to) return;
+        animation = scroll.animate([{ height: `${from}px` }, { height: `${to}px` }], { duration: FOLD_HEIGHT_MS, easing: PLAN_FOLD_EASING });
+        stopFold.current = stop;
+        void animation.finished.then(() => { if (stopFold.current === stop) stop(); }, () => {});
+      });
+    }
+    setOverride({ mode, full: next, at });
+  };
   // These chips are pull requests, so the condition holds wherever they would draw.
   const prsShown = useShown('pr-status', { pr: true });
   const childSessions = useStore((s) => childrenOf(s, sessionId));
@@ -284,7 +336,9 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
   // still share that step's disclosure, without a synthetic phase wrapper.
   const links = useMemo(() => planStepLinks(messages ?? [], plan, basePath, childSessions),
     [messages, plan, basePath, childSessions]);
-  if (!plan.length) return null;
+  const visible = plan.length > 0 && mode !== 'hidden';
+  useLayoutEffect(() => () => stopFold.current?.(), [mode, sessionId, visible]);
+  if (!visible) return null;
   const running = new Set(runningSessionIds());
   const childById = new Map(childSessions.map((c): [string, Child] => [c.id, { id: c.id, title: c.title || 'Sub-agent', running: running.has(c.id) || !!getLiveRun(c.id) || !!c.activeRun }]));
   const openChild = onOpenChild ?? ((id: string) => useStore.getState().openChatPane(id));
@@ -316,63 +370,53 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
   };
   const artifactChip = (artifact: ChatArtifact) => <button key={artifact.path} type="button" className="plan-sheet-chip" data-plan-chip="link" title={artifact.path} onClick={() => openArtifact(artifact, sessionId)}>{artifact.live ? 'Preview: ' + artifact.live.host + artifact.live.route : 'File: ' + artifact.filename}</button>;
   const kids = (own?: PlanStepLinks) => (own?.subagents ?? []).map(id => childById.get(id)).filter((c): c is Child => !!c);
-  const position = plan.indexOf(current) + 1;
-
-  if (collapsed) {
-    const own = links.get(current.id);
-    // The current step's PRs, else the newest PR the chat opened, so a finished plan still shows where it landed.
-    const shownPrs = !prsShown ? [] : own?.prs.length ? own.prs : [...links.values()].flatMap(l => l.prs).slice(-1);
+  const renderRow = (step: PlanStep) => {
+    const own = links.get(step.id);
+    const checks = ci.get(step.id) ?? [];
+    const stepKids = kids(own);
+    const summary = !full && step === current;
+    const projects = summary && !own?.projects.length ? links.get(plan[0].id)?.projects : own?.projects;
+    const rowPrs = summary && !own?.prs.length ? [...links.values()].flatMap(l => l.prs).slice(-1) : own?.prs;
     const chips = [
-      ...shownPrs.map(prChip),
-      // The step's own task links, else the chat's (the first step's), which say what this work is for.
-      ...(own?.projects.length ? own.projects : links.get(plan[0].id)?.projects ?? []).map(link => <ProjectChip key={link.url} link={link} />),
+      ...(projects ?? []).map(link => <ProjectChip key={link.url} link={link} />),
+      ...stepKids.map(child => <SubagentChip key={child.id} child={child} onOpen={openChild} />),
+      ...(prsShown ? rowPrs ?? [] : []).map(prChip),
+      ...checks.flatMap(ciChips),
       ...(own?.artifacts ?? []).map(artifactChip),
-    ].filter(Boolean);
-    return <div className="plan-sheet-dock"><div className="plan-sheet" data-plan-sheet data-folded aria-label="Agent plan">
-      <PlanRow chips={chips} title={<button type="button" className="plan-sheet-fold" onClick={() => setCollapsed(false)} aria-expanded={false} title="Show the whole plan">
-        <span className="plan-sheet-line">
-          <StepMark step={current} paused={paused} />
-          <span className={`min-w-0 flex-1 truncate ${current.status === 'done' ? 'text-ink-soft' : 'text-ink'}`} title={current.title}>{current.title}</span>
-          <Pass step={current} />
-          <span className="shrink-0 tabular-nums text-2xs text-ink-faint">{position} of {plan.length}</span>
-          <PlanCaret direction="down" label="Show the whole plan" />
-        </span>
-      </button>} />
-      <SubagentCards children={childSessions} running={running} onOpen={openChild} />
-    </div></div>;
-  }
-
-  return <div className="plan-sheet-dock"><div className="plan-sheet" data-plan-sheet aria-label="Agent plan">
+    ];
+    const squeezed = step.status === 'done' || step.status === 'skipped';
+    return <li key={step.id} className="plan-sheet-step" data-plan-step={squeezed ? 'done' : step.status} data-plan-step-id={step.id}>
+      <StepMark step={step} paused={paused} dot={full} />
+      <div className="min-w-0" data-tl-text><PlanRow chips={chips} title={<span className="plan-sheet-line">
+        <span className={`min-w-0 truncate ${squeezed ? 'text-ink-soft' : 'text-ink'}${step.status === 'skipped' ? ' line-through' : ''}`} title={step.title}>{step.title}</span>
+        <Pass step={step} />
+      </span>} /></div>
+    </li>;
+  };
+  return <div className="plan-sheet-dock"><div className="plan-sheet" data-plan-sheet data-folded={!full || undefined} aria-label="Agent plan">
     <div className="plan-sheet-head">
-      <button type="button" className="plan-sheet-toggle" onClick={() => setCollapsed(true)} aria-expanded title="Fold the plan">
+      <button type="button" className="plan-sheet-toggle" onClick={() => setFull(!full)} aria-expanded={full} title={full ? 'Fold the plan' : 'Show the whole plan'}>
         <span className="font-semibold text-ink-soft">Plan</span>
-        <span className="tabular-nums">{progress.done + progress.skipped} of {progress.total} done</span>
-        <span className="flex-1" />
-        <PlanCaret direction="up" label="Fold the plan" />
+        <span className="plan-sheet-progress">
+          <span className="tabular-nums">{progress.done + progress.skipped} of {progress.total} done</span>
+          <PlanCaret direction={full ? 'up' : 'down'} label={full ? 'Fold the plan' : 'Show the whole plan'} />
+        </span>
       </button>
+      <label className="plan-config" title="Configure plan display"><SlidersIcon className="h-3 w-3" />
+        <select aria-label="Configure plan display" value={mode} onChange={e => { setOverride(undefined); void saveSettings({ planDisplay: e.target.value as PlanDisplay }); }}>
+          {PLAN_DISPLAYS.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
+        </select>
+      </label>
     </div>
-    <ol className="plan-sheet-steps">
-      {plan.map(step => {
-        const own = links.get(step.id);
-        const checks = ci.get(step.id) ?? [];
-        const stepKids = kids(own);
-        const chips = [
-          ...(own?.projects ?? []).map(link => <ProjectChip key={link.url} link={link} />),
-          ...stepKids.map(child => <SubagentChip key={child.id} child={child} onOpen={openChild} />),
-          ...(prsShown ? own?.prs ?? [] : []).map(prChip),
-          ...checks.flatMap(ciChips),
-          ...(own?.artifacts ?? []).map(artifactChip),
-        ];
-        const squeezed = step.status === 'done' || step.status === 'skipped';
-        return <li key={step.id} className="plan-sheet-step" data-plan-step={squeezed ? 'done' : step.status} data-plan-step-id={step.id}>
-          <StepMark step={step} paused={paused} />
-          <PlanRow chips={chips} title={<span className="plan-sheet-line">
-            <span className={`min-w-0 truncate ${squeezed ? 'text-ink-soft' : 'text-ink'}${step.status === 'skipped' ? ' line-through' : ''}`} title={step.title}>{step.title}</span>
-            <Pass step={step} />
-          </span>} />
-        </li>;
-      })}
-    </ol>
+    <div ref={scrollRef} className="plan-sheet-scroll">
+      <PlanTimeline ref={timeline} steps={plan} vertical={full} focusId={override?.at}
+        renderMark={step => <StepMark step={step} paused={paused} still />}
+        renderRow={renderRow}
+        describe={(step): StepDetail => { const { status, detail } = stepDetail(step, paused); return { status, detail }; }}
+        onPick={id => setFull(true, id)} />
+      {/* Folded, the step being worked stays readable under the dots, with its PRs and links. */}
+      {!full && mode !== 'one' && current && <ol className="plan-sheet-steps plan-sheet-current" data-plan-current>{renderRow(current)}</ol>}
+    </div>
     <SubagentCards children={childSessions} running={running} onOpen={openChild} />
   </div></div>;
 }

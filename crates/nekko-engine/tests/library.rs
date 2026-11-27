@@ -186,6 +186,34 @@ fn guesses_modality_and_context_as_the_host_does() {
 }
 
 #[test]
+fn discovers_a_renamed_gguf_dflash_head_from_its_header() {
+    let dir = scratch("gguf-dflash-discovery");
+    let head = dir.join("renamed.gguf");
+    std::fs::write(
+        &head,
+        build(&json!({ "pairs": [
+            ["general.architecture", { "type": "string", "value": "dflash" }],
+            ["dflash.block_size", { "type": "u32", "value": 8 }],
+            ["dflash.selector_rank", { "type": "u32", "value": 256 }]
+        ] })),
+    )
+    .unwrap();
+    let cfg = LibraryConfig {
+        models_dir: dir.to_string_lossy().into_owned(),
+        folders: vec![],
+        mlx_runnable: false,
+        now: 1.0,
+    };
+    let rows = library::list(&cfg).unwrap();
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    let row = &rows[0];
+    assert_eq!(row["architecture"], "dflash");
+    assert_eq!(row["modality"], "draft");
+    assert!(nekko_engine::launch::unsupported_load_reason(row).unwrap().contains("not on its own"));
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
 fn finds_the_other_apps_folders_as_the_host_does() {
     let g = golden();
     for case in g["candidates"].as_array().unwrap() {
@@ -497,7 +525,7 @@ fn lists_imports_deletes_and_reports_as_the_host_does() {
                 let (count, size) = library::probe(&s(0), args[1].as_str());
                 json!({ "modelCount": count, "sizeBytes": size })
             }
-            "remove" => library::remove(&cfg, &s(0)).unwrap(),
+            "remove" => library::remove(&cfg, &s(0), None).unwrap(),
             "folders" | "seed" => {
                 let env = args[0].as_object().unwrap().clone();
                 let home = env["HOME"].as_str().unwrap().to_string();
@@ -532,4 +560,126 @@ fn lists_imports_deletes_and_reports_as_the_host_does() {
         }
     }
     std::fs::remove_dir_all(dir).ok();
+}
+
+#[test]
+fn discovers_mlx_dflash2_heads_from_the_config_not_the_folder_name() {
+    let dir = scratch("mlx-dflash2-discovery");
+    let head = dir.join("local-head");
+    std::fs::create_dir_all(&head).unwrap();
+    std::fs::write(head.join("model.safetensors"), [0; 32]).unwrap();
+    let cfg =
+        LibraryConfig { models_dir: dir.to_string_lossy().into_owned(), folders: vec![], mlx_runnable: true, now: 1.0 };
+    let mut config = json!({ "model_type": "qwen3", "quantization": { "group_size": 64, "bits": 4 } });
+    let write = |v: &Value| std::fs::write(head.join("config.json"), v.to_string()).unwrap();
+    write(&config);
+    assert_eq!(library::list(&cfg).unwrap()[0]["modality"], "chat");
+    config["architectures"] = json!(["DFlash2DraftModel"]);
+    config.as_object_mut().unwrap().remove("quantization");
+    write(&config);
+    let row = library::list(&cfg).unwrap().remove(0);
+    assert_eq!(row["format"], "mlx");
+    assert_eq!(row["modality"], "draft");
+    assert_eq!(row["hasProjector"], false);
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn imports_keep_external_dflash_heads_visible_by_id_without_copying_them() {
+    let dir = scratch("external-dflash-import");
+    let cfg = LibraryConfig {
+        models_dir: dir.join("models").to_string_lossy().into_owned(),
+        folders: vec![],
+        mlx_runnable: false,
+        now: 0.0,
+    };
+    let head = build(&json!({"pairs": [
+        ["general.name", {"type":"string", "value":"Qwen3.8-27B-DFlash2"}],
+        ["general.architecture", {"type":"string", "value":"dflash"}]
+    ]}));
+    let add = |sub: &str| {
+        let p = dir.join(sub).join("head.gguf");
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(&p, &head).unwrap();
+        let added = library::import_file(&cfg, &p.to_string_lossy()).unwrap();
+        assert_eq!(added["ok"], true);
+        (p, added["model"]["id"].as_str().unwrap().to_string())
+    };
+    let (first, a) = add("one");
+    let (second, b) = add("two");
+    assert_ne!(a, b);
+    assert!(!Path::new(&cfg.models_dir).join("head.gguf").exists());
+    assert_eq!(library::list(&cfg).unwrap().len(), 2);
+    for (path, id) in [(&first, &a), (&second, &b)] {
+        let row = library::find(&cfg, id).unwrap().unwrap();
+        assert_eq!(row["path"], path.to_string_lossy().as_ref());
+        assert_eq!(row["name"], "Qwen3.8-27B-DFlash2");
+        assert_eq!(row["architecture"], "dflash");
+        assert_eq!(row["modality"], "draft");
+    }
+    library::save_preset(&cfg, &b, &json!({"contextTokens":2048})).unwrap();
+    assert_eq!(library::import_file(&cfg, &second.to_string_lossy()).unwrap()["model"]["id"], b);
+    assert_eq!(library::find(&cfg, &b).unwrap().unwrap()["preset"]["contextTokens"], 2048);
+    std::fs::remove_file(first).unwrap();
+    assert!(library::find(&cfg, &a).unwrap().is_none());
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn confirmed_external_gguf_deletes_only_its_named_shards() {
+    let dir = scratch("external-gguf-delete");
+    let outside = dir.join("external");
+    std::fs::create_dir_all(&outside).unwrap();
+    let first = outside.join("Tiny-00001-of-00002.gguf");
+    let second = outside.join("Tiny-00002-of-00002.gguf");
+    let projector = outside.join("mmproj-Tiny.gguf");
+    let other = outside.join("other.gguf");
+    for file in [&first, &second, &projector, &other] {
+        std::fs::write(file, build(&json!({"pairs": []}))).unwrap();
+    }
+    let cfg = LibraryConfig {
+        models_dir: dir.join("models").to_string_lossy().into_owned(),
+        folders: vec![json!({ "id": "external", "path": outside, "provider": "lmstudio", "enabled": true })],
+        mlx_runnable: false,
+        now: 0.0,
+    };
+    let row = library::list(&cfg).unwrap().into_iter().find(|r| r["path"] == first.to_string_lossy().as_ref()).unwrap();
+    let id = row["id"].as_str().unwrap();
+    assert_eq!(library::remove(&cfg, id, None).unwrap()["ok"], false);
+    assert_eq!(library::remove(&cfg, id, other.to_str()).unwrap()["ok"], false);
+    assert!(first.exists() && second.exists());
+    assert_eq!(library::remove(&cfg, id, first.to_str()).unwrap()["ok"], true);
+    assert!(!first.exists() && !second.exists());
+    assert!(other.exists() && projector.exists());
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn confirmed_mlx_removes_weights_and_links_without_following_them() {
+    let dir = scratch("mlx-safe-delete");
+    let models = dir.join("models");
+    let model = models.join("model-mlx");
+    std::fs::create_dir_all(&model).unwrap();
+    let config = model.join("config.json");
+    let plain = model.join("model-1.safetensors");
+    let link = model.join("model-2.safetensors");
+    let shared = dir.join("shared-weight");
+    std::fs::write(&config, r#"{"model_type":"qwen3"}"#).unwrap();
+    std::fs::write(&plain, [0; 32]).unwrap();
+    std::fs::write(&shared, [0; 32]).unwrap();
+    std::os::unix::fs::symlink(&shared, &link).unwrap();
+    let cfg = LibraryConfig {
+        models_dir: models.to_string_lossy().into_owned(),
+        folders: vec![],
+        mlx_runnable: true,
+        now: 0.0,
+    };
+    let row = library::list(&cfg).unwrap().remove(0);
+    let id = row["id"].as_str().unwrap();
+    assert_eq!(library::remove(&cfg, id, model.to_str()).unwrap()["ok"], true);
+    assert!(library::list(&cfg).unwrap().is_empty());
+    assert!(config.exists() && shared.exists());
+    assert!(!plain.exists() && std::fs::symlink_metadata(&link).is_err());
+    std::fs::remove_dir_all(dir).unwrap();
 }

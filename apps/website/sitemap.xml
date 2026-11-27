@@ -53,6 +53,11 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://nekkoagent.com/docs/brand</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://nekkoagent.com/docs/file-recovery</loc>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
@@ -94,6 +99,11 @@
   </url>
   <url>
     <loc>https://nekkoagent.com/docs/usage-reports</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://nekkoagent.com/docs/storage</loc>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -229,6 +239,11 @@
   </url>
   <url>
     <loc>https://nekkoagent.com/docs/credits</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://nekkoagent.com/docs/trademarks</loc>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>

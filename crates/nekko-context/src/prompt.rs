@@ -208,6 +208,13 @@ const PRINCIPLES: Section = Section {
             ),
         },
         Rule {
+            large: "Title a PR by the initiative or goal it serves, unless the project's guidelines, agent instructions, work tracking preferences or recent PR titles already set a convention (then follow that): `<Initiative>: <what changed>`, for example `Optimizations: Android: write saved chats off the main thread` or `Nekko Cloud: Sync: each chat belongs to the computer that started it`. The initiative is the body of work the change belongs to (a feature area, product or goal such as Optimizations, CI or Security & Privacy), not the platform it touches. Look at the repository's recent PR titles first and reuse an initiative they already use before naming a new one, so the set stays small and stable. Keep a narrower existing prefix after the initiative and drop words the initiative repeats. A change that serves no initiative keeps a plain title.",
+            medium: V::Own(
+                r#"Title a PR `<Initiative>: <what changed>` (for example `Optimizations: Android: write saved chats off the main thread`), naming the body of work or goal it serves, not the platform, unless the project's guidelines, preferences or recent PR titles already set a convention. Reuse an initiative recent PRs already use before naming a new one."#,
+            ),
+            small: V::Omit,
+        },
+        Rule {
             large: "Every PR description must include an explicit Unfinished work / release blockers section. List incomplete scope, known bugs, unsupported platforms, missing tests or visual evidence, and verification limitations with concrete next steps; write None only when verified. Keep this section current after each pushed batch. Do not leave these notes only in chat, comments, or local files. Verify the published description after updating it; if publication fails, report that failure and keep the PR draft/unmerged rather than claiming the notes are published.",
             medium: V::Own(
                 r#"Every PR description needs an Unfinished work / release blockers section: incomplete scope, known bugs, missing tests or evidence, each with a next step (write None only when verified). Keep it current after each push and check the published text."#,
@@ -499,6 +506,18 @@ mod tests {
         assert!(medium.contains("Unfinished work / release blockers"));
         assert!(medium.contains("--add-assignee @me"));
         assert!(medium.contains("If someone else is already assigned, tell the user"));
+    }
+
+    #[test]
+    fn pr_titles_name_their_initiative_unless_the_project_has_a_convention() {
+        for profile in [PromptProfile::Large, PromptProfile::Medium] {
+            let text = intro(profile);
+            assert!(text.contains("Title a PR"), "{profile:?}");
+            assert!(text.contains("`<Initiative>: <what changed>`"), "{profile:?}");
+            assert!(text.contains("recent PR titles already set a convention"), "{profile:?}");
+            assert!(text.contains("not the platform"), "{profile:?}");
+        }
+        assert!(!intro(PromptProfile::Small).contains("<Initiative>"));
     }
 
     #[test]

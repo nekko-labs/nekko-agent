@@ -55,6 +55,7 @@ Full docs in one file: https://nekkoagent.com/llms-full.txt. Each page is also a
 - [Features by task](https://nekkoagent.com/docs/features.md): Find Nekko Agent features for local AI coding, file recovery, batch edits, memory, approvals, automation and MCP, with setup guides and limits.
 - [Walkthrough](https://nekkoagent.com/docs/walkthrough.md): A picture-by-picture tour of the app.
 - [What's new](https://nekkoagent.com/docs/whats-new.md): Where to find the highlights of each Nekko Agent release and the full release notes.
+- [Brand and press kit](https://nekkoagent.com/docs/brand.md): Download the Nekko Agent logo, app icon and mascot, and how to use them in articles, talks and projects.
 
 ### Using Nekko Agent
 
@@ -67,6 +68,7 @@ Full docs in one file: https://nekkoagent.com/llms-full.txt. Each page is also a
 - [Simulators in use](https://nekkoagent.com/docs/simulators.md): See which chat is using each booted iOS simulator or Android emulator, what it costs in CPU, watch its screen, and shut it down.
 - [Connections](https://nekkoagent.com/docs/connections.md): Switch off every network connection at once or one by one, and see how often each one is used.
 - [Usage and crash reports](https://nekkoagent.com/docs/usage-reports.md): Opt in to anonymous usage and crash reports, what they contain, and how to see each send.
+- [Storage](https://nekkoagent.com/docs/storage.md): See where Nekko Agent's disk space goes on your computer and in Nekko Cloud, and free it safely: idle worktrees, old CI runner images, caches and chat history.
 - [Voice](https://nekkoagent.com/docs/voice.md): Tap the mic once and talk: dictation that stays on, "Nekko" commands, and speech that never leaves your computer.
 - [Privacy Shield](https://nekkoagent.com/docs/privacy-shield.md): Replace emails, phone numbers, secrets and your own terms with placeholders before a request reaches a cloud model.
 - [Code mode](https://nekkoagent.com/docs/code-mode.md): Let the model write code that calls your tools in a sandbox, so long tool lists and big results cost far fewer tokens.
@@ -97,6 +99,7 @@ Full docs in one file: https://nekkoagent.com/llms-full.txt. Each page is also a
 
 - [Contributing](https://nekkoagent.com/docs/contributing.md): Set up a development checkout, the project layout, and what a pull request needs.
 - [Credits](https://nekkoagent.com/docs/credits.md): The projects, assets and runtimes Nekko Agent is built on, and their licenses.
+- [Trademarks and brand assets](https://nekkoagent.com/docs/trademarks.md): What our MIT license covers and what it doesn't: using the Nekko Agent names, logo and mascot, and what forks must change.
 - [Architecture](https://nekkoagent.com/docs/architecture.md): How the desktop app, the TypeScript host and the Rust engine daemon fit together.
 - [Release signing](https://nekkoagent.com/docs/release-signing.md): How the macOS and Windows builds are signed and notarized.
 
