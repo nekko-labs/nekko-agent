@@ -4,6 +4,8 @@ Nekko Agent stands on a lot of other people's work. This page names the parts a 
 
 The full list of every package and crate, with each license text, ships inside the app: in the desktop app, open **Settings**, then **Open-source licenses** under Updates. The Android app lists its own under **Settings**, then **About**. Models you choose to download carry their own licenses, shown before you download them.
 
+Our own names, logo, app icon and mascot are not third-party and not MIT licensed: see [Trademarks and brand assets](TRADEMARKS.md).
+
 Thank you to everyone who built and maintains these.
 
 | Name | Used for | Version | License | License file | Source |
@@ -18,6 +20,7 @@ Thank you to everyone who built and maintains these.
 | Inter Tight, website copy | nekkoagent.com's text font, self-hosted (latin subset) | Fontsource 5.3.0 | OFL-1.1 | apps/website/fonts/OFL-inter-tight.txt | [Fontsource](https://fontsource.org/fonts/inter-tight) |
 | JetBrains Mono, website copy | nekkoagent.com's code font, self-hosted (latin subset) | Fontsource 5.3.0 | OFL-1.1 | apps/website/fonts/OFL-jetbrains-mono.txt | [Fontsource](https://fontsource.org/fonts/jetbrains-mono) |
 | Handjet | nekkoagent.com's LED-style headings, self-hosted (latin subset) | Fontsource 5.3.1 | OFL-1.1 | apps/website/fonts/OFL-handjet.txt | [Fontsource](https://fontsource.org/fonts/handjet) |
+| Inter Tight, brand wordmark | The NEKKO AGENT wordmark in the brand pack's lockups (`apps/website/brand`), drawn as outlines from the website copy at weight 800 (`scripts/brand-kit/wordmark.json`). The outlines are artwork, not a font, and the pack is under the [brand pack license](apps/website/brand/LICENSE.md). Outlined with fontkit and wawoff2 (both MIT), installed only for that step and never shipped. | Fontsource 5.3.0 | OFL-1.1 | apps/website/fonts/OFL-inter-tight.txt | [Fontsource](https://fontsource.org/fonts/inter-tight) |
 | Geist, website copy | The design system page's interface font (nekkoagent.com/design-system), self-hosted (latin subset) | Fontsource 5.3.0 | OFL-1.1 | apps/website/fonts/OFL-geist.txt | [Fontsource](https://fontsource.org/fonts/geist) |
 | Geist Mono, website copy | The design system page's code font, self-hosted (latin subset) | Fontsource 5.3.0 | OFL-1.1 | apps/website/fonts/OFL-geist-mono.txt | [Fontsource](https://fontsource.org/fonts/geist-mono) |
 | Space Mono | nekkoagent.com's retro labels, self-hosted (latin subset) | Fontsource 5.3.0 | OFL-1.1 | apps/website/fonts/OFL-space-mono.txt | [Fontsource](https://fontsource.org/fonts/space-mono) |

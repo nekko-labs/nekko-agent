@@ -73,3 +73,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development workflow, projec
 ## License
 
 MIT (c) [Nekko Labs](https://nekkolabs.com). Contributions welcome: see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+The MIT license covers the code, not our names and marks. Nekko Agent, Nekko Labs, the cat logo, the app icon and Nekko the mascot are trademarks of Nekko Labs: you may use them to write about Nekko Agent (logos in the [brand and press kit](https://nekkoagent.com/docs/brand)), and a fork you share needs its own name and icon. See [TRADEMARKS.md](TRADEMARKS.md).
