@@ -2,8 +2,6 @@
 
 **The personal, local AI agent you can trust.**
 
-*Nekko comes from neko, Japanese for cat.*
-
 ![Nekko Agent](docs/brand/nekko-banner-1280x640.png)
 
 Run powerful AI models on your own computer, or bring in supported online providers when you want them. Chat, cowork and code in one app, or use the same engine from the Local Web UI, CLI or MCP.
