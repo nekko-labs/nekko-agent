@@ -51,7 +51,7 @@ does today. On that basis:
 **For marketing:** "Nekko returns code edits 3.9x sooner than LM Studio" and
 "2.6x faster chat with DFlash2" hold for Qwen3.8-27B on this Mac, with the
 conditions stated. Nothing should be claimed for Inkling 2 Mini until Nekko's
-engine pin loads it and the prefill penalty is explained.
+engine pin loads it (#3647) and the prefill penalty is explained (#3648).
 
 ## What was measured
 
@@ -309,7 +309,7 @@ Inkling 2 Mini (llama.cpp b12818; code edits exploratory):
   and without the drafter, read the prompt at about 130 tok/s against about 215
   for plain llama.cpp; on Qwen3.8 the same flags cost nothing (136 against 138).
   The suspects are the q8_0 KV cache Nekko defaults to (#3327) and the 65,536
-  context; not isolated yet.
+  context; not isolated yet (#3648).
 - **The replies do not change on the dense model.** On Qwen3.8 code edits Nekko's
   1,313-token replies were the same text as plain llama.cpp's in every request,
   and all were correct. An earlier check (#3541) found one prompt where DFlash2
@@ -330,8 +330,8 @@ Inkling 2 Mini (llama.cpp b12818; code edits exploratory):
    plain MLX in #3541's checks (single runs); Basalt and squid5090 are NVIDIA-only.
 4. **Sustained load, long prompts, other Macs.** Burst only, prompts under 2,000
    tokens, one M1 Max.
-5. **Inkling through Nekko's router**, once the engine pin loads it, and the
-   prefill penalty traced flag by flag.
+5. **Inkling through Nekko's router**, once the engine pin loads it (#3647), and
+   the prefill penalty traced flag by flag (#3648).
 
 ## Reproducing
 
