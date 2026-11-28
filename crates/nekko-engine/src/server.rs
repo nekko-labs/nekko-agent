@@ -1034,6 +1034,10 @@ impl ModelServer {
             spec.insert("upstreamModel".into(), json!(target_path));
             spec.insert("env".into(), json!({ "HF_HUB_OFFLINE": "1" }));
         } else if !image {
+            if mlx {
+                // mlx_lm maps this name to its launch-time --model directory.
+                spec.insert("upstreamModel".into(), json!("default_model"));
+            }
             spec.insert("healthExpect".into(), json!("\"ok\""));
         }
         spec.insert("budgetSecs".into(), json!(LOAD_BUDGET_SECS));

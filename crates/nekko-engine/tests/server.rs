@@ -923,7 +923,7 @@ async fn mlx_dflash2_requires_explicit_selection_and_uses_the_vlm_contract() {
     for spec in &specs[..3] {
         assert_eq!(spec["bin"], "<root>/engine/mlx_lm.server");
         assert_eq!(spec["healthExpect"], "\"ok\"");
-        assert!(spec.get("upstreamModel").is_none());
+        assert_eq!(spec["upstreamModel"], "default_model");
     }
     assert_eq!(specs[0]["args"], specs[1]["args"]);
     assert_eq!(

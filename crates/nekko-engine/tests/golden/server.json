@@ -2534,6 +2534,8 @@
               ],
               "kind": "chat",
               "healthPath": "/health",
+              "upstreamModel": "default_model",
+
               "healthExpect": "\"ok\"",
               "budgetSecs": 600
             }

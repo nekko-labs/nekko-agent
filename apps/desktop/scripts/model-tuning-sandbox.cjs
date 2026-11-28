@@ -99,20 +99,32 @@ app.whenReady().then(async () => {
       await check('saved settings, untouched: no unsaved-settings line', "!document.querySelector('[data-unsaved]')");
       await speculativeOff();
       await captureFooter('saved-speculative-off');
-      await check('a change from the saved settings says it applies to this load only', "document.querySelector('[data-unsaved]')?.innerText.includes('this load only')");
+      await check('editing saves the selected model without loading it', "integration.saves().at(-1)?.preset.speculative === false && !integration.loads().length");
       await click('[aria-label="Speculative decoding"]');
-      await check('switching it back to the saved value clears the line', "!document.querySelector('[data-unsaved]')");
+      await check('switching it back clears the saved override', "integration.saves().length === 2 && integration.saves().at(-1).preset.speculative === undefined");
       // Saved with Speculative decoding off while the running copy still has it on.
       await reset({ scenario: 'dense24', preset: { ...savedPreset, speculative: false }, loaded: savedPreset });
       await captureFooter('loaded-before-save');
       await check('saved settings the running copy does not use say a reload applies them', "document.querySelector('[data-stale]')?.innerText.includes('Reload to use these now') && !document.querySelector('[data-unsaved]')");
       await click('[data-fold="more"]'); await click('[data-fold="expert"]'); await click('[aria-label="Speculative decoding"]');
-      await check('back to what is running, unsaved: only the unsaved line', "!document.querySelector('[data-stale]') && !!document.querySelector('[data-unsaved]')");
+      await check('saving what is already running clears the reload notice', "!document.querySelector('[data-stale]') && integration.saves().length === 1");
       await reset({ scenario: 'dense24', preset: { ...savedPreset, speculative: false }, loaded: { ...savedPreset, speculative: false } });
       await check('running with the saved settings: no reload line', "!document.querySelector('[data-stale]') && !document.querySelector('[data-unsaved]')");
       await reset({ scenario: 'dense8' });
       await capture('dense8-open');
       await check('a dense model too big for 8 GB moves feed-forward to RAM', "document.querySelector('[data-engine-load-drawer]').innerText.includes('Feed-forward')");
+    }
+    await reset({ scenario: 'dense24', stock: true, preset: savedPreset });
+    await captureFooter('stock-draft-config');
+    if (!base) {
+      await run(`(()=>{const el=document.querySelector('select[aria-label="Draft model"]');el.value='library/example/DFlash2';el.dispatchEvent(new Event('change',{bubbles:true}))})()`);
+      await sleep(300);
+      await check('draft selection saves against the target without a load', "integration.saves().at(-1)?.id === 'library/example/stock' && integration.saves().at(-1).preset.draftModelId === 'library/example/DFlash2' && !integration.loads().length");
+      const preset = await run('integration.saves().at(-1).preset');
+      await reset({ scenario: 'dense24', preset: savedPreset });
+      await check('another variant does not show the stock draft', `!document.querySelector('select[aria-label="Draft model"]')`);
+      await reset({ scenario: 'dense24', stock: true, preset });
+      await check('reopening the target restores its saved draft without another write', `document.querySelector('select[aria-label="Draft model"]').value === 'library/example/DFlash2' && !integration.saves().length`);
     }
   } catch (e) { report.errors.push(String(e && e.stack || e)); }
   fs.writeFileSync(path.join(dir, 'report.json'), JSON.stringify(report, null, 2));

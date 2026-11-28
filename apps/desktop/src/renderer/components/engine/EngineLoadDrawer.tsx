@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { EngineMemory, GpuFit, LoadParams, LocalModel, PlacementPlan, Recommendation, SplitPreset } from '@nekko-agent/shared';
 import { ENGINE_KV_CACHE_DTYPE } from '@nekko-agent/shared';
 import { Toggle } from '../primitives/index.js';
@@ -15,7 +15,6 @@ import {
   contextPerSession,
   contextStops,
   differsFromLoaded,
-  differsFromSaved,
   expertCacheMiB,
   fromPreset,
   fromRecommendation,
@@ -44,6 +43,9 @@ import {
  * It deliberately predicts memory, never tokens per second: we can measure the
  * one and would be inventing the other.
  */
+
+// Library presets share an index file; finish earlier writes before later edits.
+let presetWrites = Promise.resolve();
 
 export function EngineLoadDrawer({
   providerId,
@@ -92,21 +94,31 @@ export function EngineLoadDrawer({
   const recommendedContext = rec?.request.contextTokens;
   const stops = useMemo(() => contextStops(model.maxContext, recommendedContext), [model.maxContext, recommendedContext]);
 
-  const patch = (p: Partial<LoadParams>) => setParams((prev) => ({ ...prev, ...p }));
-  /** A hand edit to placement is a custom split. */
-  const patchCustom = (p: Partial<LoadParams>) => {
-    setSplit('custom');
-    patch(p);
+  const edits = useRef(0);
+  const [saveFailed, setSaveFailed] = useState(false);
+  const configure = (next: LoadParams, nextSplit = split) => {
+    const revision = ++edits.current;
+    setParams(next);
+    setSplit(nextSplit);
+    setSaveFailed(false);
+    presetWrites = presetWrites.then(() => window.nekko.engineSaveModelPreset(model.id, { ...next, splitPreset: nextSplit })).then(() => {
+      if (edits.current === revision) onDone();
+    }).catch(() => {
+      if (edits.current === revision) {
+        setSaveFailed(true);
+        pushToast('error', `Couldn’t save settings for ${model.name}.`);
+      }
+    });
   };
-
-  const applyRecommendation = useCallback(
-    (r: Recommendation) => {
-      setParams((prev) => fromRecommendation(r.request, model, prev));
-      setSplit(r.request.runOn === 'hybrid' ? 'fill' : 'custom');
-      setApplied(true);
-    },
-    [model],
-  );
+  const patch = (p: Partial<LoadParams>, nextSplit = split) => configure({ ...params, ...p }, nextSplit);
+  const patchCustom = (p: Partial<LoadParams>) => patch(p, 'custom');
+  const applyRecommendation = (r: Recommendation, persist = true) => {
+    const next = fromRecommendation(r.request, model, params);
+    const nextSplit = r.request.runOn === 'hybrid' ? 'fill' : 'custom';
+    if (persist) configure(next, nextSplit);
+    else { setParams(next); setSplit(nextSplit); }
+    setApplied(true);
+  };
 
   // The recommendation, once per open. With no saved settings it is applied
   // straight away, so a model opened for the first time shows a setup that fits.
@@ -118,7 +130,7 @@ export function EngineLoadDrawer({
       .then((r) => {
         if (!live || !r || r.plan.verdict === 'unknown' || r.plan.verdict === 'wont-load') return;
         setRec(r);
-        if (!model.preset) applyRecommendation(r);
+        if (!model.preset && !edits.current) applyRecommendation(r, false);
       })
       .catch(() => {});
     return () => {
@@ -131,14 +143,10 @@ export function EngineLoadDrawer({
   const unified = hardware?.unified ?? false;
   const noGpu = model.gpuFit === 'cpu' || (hardware !== null && hardware.deviceName === null);
   const matches = matchesRecommendation(params, rec?.request, layers);
-  // A load from chat or at engine start uses the saved settings, not these.
-  const unsaved = differsFromSaved(params, saved.params);
-  // Save as default does not touch the running copy; only a reload does.
-  const stale = !unsaved && model.loaded && !!loadedParams && differsFromLoaded(params, loadedParams);
+  const stale = model.loaded && !!loadedParams && differsFromLoaded(params, loadedParams);
 
   const setRunOn = (r: RunOn) => {
-    setSplit('custom');
-    patch(
+    patchCustom(
       r === 'gpu'
         ? { gpuLayers: layers ?? 999, cpuMoeLayers: undefined, cpuFfnLayers: undefined, kvOnGpu: undefined, moeCacheMiB: undefined }
         : r === 'cpu'
@@ -149,20 +157,21 @@ export function EngineLoadDrawer({
 
   const pickPreset = async (p: SplitPreset) => {
     const full = { gpuLayers: layers ?? 999, cpuMoeLayers: undefined, cpuFfnLayers: undefined, kvOnGpu: undefined, moeCacheMiB: undefined };
-    setSplit(p);
-    if (p === 'custom') return patch({ cpuMoeLayers: undefined, cpuFfnLayers: undefined, moeCacheMiB: undefined, kvOnGpu: undefined });
-    if (p === 'context-ram') return patch({ ...full, kvOnGpu: false });
+    const revision = edits.current;
+    if (p === 'custom') return patch({ cpuMoeLayers: undefined, cpuFfnLayers: undefined, moeCacheMiB: undefined, kvOnGpu: undefined }, p);
+    if (p === 'context-ram') return patch({ ...full, kvOnGpu: false }, p);
     if (p === 'experts') {
       const next = { ...params, ...full, cpuMoeLayers: layers, lazyTables: hasTables(model) ? true : params.lazyTables };
       const placed = await window.nekko.runtimePlace(providerId, model.id, toPlacementRequest(next, model)).catch(() => null);
-      return setParams({ ...next, moeCacheMiB: placed ? expertCacheMiB(placed, model) : undefined });
+      if (edits.current === revision) configure({ ...next, moeCacheMiB: placed ? expertCacheMiB(placed, model) : undefined }, p);
+      return;
     }
     const goal = p === 'coding' ? 'context' : 'fill';
     const r = await window.nekko
       .runtimeRecommend(providerId, model.id, { goal, request: { ...toPlacementRequest({ ...params, ...full }, model), runOn: 'hybrid' } })
       .catch(() => null);
     if (!r || r.plan.verdict === 'unknown' || r.plan.verdict === 'wont-load') return pushToast('error', "Couldn't work out a split that fits.");
-    setParams((prev) => ({ ...fromRecommendation(r.request, model, prev), ...(p === 'coding' ? { speculative: undefined } : {}) }));
+    if (edits.current === revision) configure({ ...fromRecommendation(r.request, model, params), ...(p === 'coding' ? { speculative: undefined } : {}) }, p);
   };
 
   const load = async () => {
@@ -182,20 +191,13 @@ export function EngineLoadDrawer({
     }
   };
 
-  const saveDefault = async () => {
-    await window.nekko.engineSaveModelPreset(model.id, { ...params, splitPreset: split });
-    pushToast('success', `Saved as the default settings for ${model.name}.`);
-    onDone();
-  };
-
   const perSession = contextPerSession(params);
   const sessions = sessionsOf(params);
   const ctxIndex = Math.max(0, stops.indexOf(nearest(stops, perSession)));
   const recommendedIndex = recommendedContext === undefined ? -1 : stops.indexOf(recommendedContext);
   const stopPosition = (index: number) => `${100 * index / Math.max(1, stops.length - 1)}%`;
   const setContext = (perSessionTokens: number) => {
-    if (split === 'coding') setSplit('custom');
-    patch({ contextTokens: perSessionTokens * sessions });
+    patch({ contextTokens: perSessionTokens * sessions }, split === 'coding' ? 'custom' : split);
   };
   const setSessions = (n: number) => patch({ contextTokens: perSession * n, parallelSlots: n > 1 ? n : undefined });
   const keep = keepOf(params);
@@ -459,23 +461,19 @@ export function EngineLoadDrawer({
         </div>
       )}
 
-      {unsaved && (
-        <p className="mt-4 text-2xs text-ink-faint" data-unsaved>
-          These settings apply to this load only. Save as default to keep them.
-        </p>
-      )}
+      {isStockDflash2Target(model) && <DraftModelRow model={model} value={params.speculative === false ? undefined : params.draftModelId}
+        onChange={(id) => patch({ draftModelId: id, speculative: id ? undefined : params.speculative })} />}
+      <p className="mt-4 text-2xs text-ink-faint">{saveFailed ? 'Settings not saved.' : 'Changes are saved for this model.'}</p>
       {stale && (
         <p className="mt-4 text-2xs text-ink-faint" data-stale>
           The loaded model still runs with its earlier settings. Reload to use these now.
         </p>
       )}
-      <div className={`${unsaved || stale ? 'mt-2' : 'mt-4'} flex flex-wrap items-center gap-2`}>
+      <div className={`mt-2 flex flex-wrap items-center gap-2`}>
         <button className="btn btn-primary py-1 text-xs" onClick={load} disabled={loading} data-load>
           {loading ? 'Loading…' : model.loaded ? 'Reload with these settings' : 'Load model'}
         </button>
-        <button className="btn btn-outline py-1 text-xs" onClick={saveDefault} title="Use these settings every time this model loads">
-          Save as default
-        </button>
+        {saveFailed && <button className="btn btn-outline py-1 text-xs" onClick={() => configure(params)}>Retry save</button>}
         <button className="btn btn-ghost py-1 text-xs" onClick={onClose}>
           Close
         </button>
@@ -734,7 +732,7 @@ export function ExpertControls({
         >
           <Toggle value={params.speculative !== false} onChange={(on) => onChange({ speculative: on ? undefined : false })} label="Speculative decoding" />
         </Row>
-        {params.speculative !== false && <DraftModelRow model={model} value={params.draftModelId} onChange={(id) => onChange({ draftModelId: id })} />}
+        {!isStockDflash2Target(model) && params.speculative !== false && <DraftModelRow model={model} value={params.draftModelId} onChange={(id) => onChange({ draftModelId: id })} />}
       </Group>
 
       <Group title="Memory and loading">
