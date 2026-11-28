@@ -64,6 +64,8 @@ macro_rules! regex {
     }};
 }
 
+mod dependent;
+
 fn test(r: &Regex, s: &str) -> bool {
     r.find(s).is_some()
 }
@@ -148,7 +150,7 @@ pub struct Catalog {
 }
 
 /// Bump when the header reader learns something new, so facts kept by an older one are read again.
-const HEADER_FACTS_VERSION: u64 = 1;
+const HEADER_FACTS_VERSION: u64 = 2;
 
 /// `encodeURIComponent`.
 pub fn encode_uri_component(s: &str) -> String {
@@ -274,10 +276,11 @@ fn natural(a: &str, b: &str) -> std::cmp::Ordering {
 /// the catalog's own output (and its goldens) stay as they were. A repo with
 /// several releases labels a build `v2.1 Q8_0`; its `quant` is the format alone.
 pub fn with_stock(mut model: Value) -> Value {
+    let dependent = model["dependent"] == true;
     for q in model.get_mut("quants").and_then(Value::as_array_mut).into_iter().flatten() {
         let mlx = q.get("format").and_then(Value::as_str) == Some("mlx");
         let format = q.get("quant").or_else(|| q.get("label")).and_then(Value::as_str).unwrap_or_default();
-        let stock = !mlx && crate::gguf::is_stock_quant(format);
+        let stock = !dependent && q["dependent"] != true && !mlx && crate::gguf::is_stock_quant(format);
         if let Some(o) = q.as_object_mut() {
             o.insert("stock".into(), json!(stock));
         }
@@ -422,7 +425,7 @@ pub fn mlx_quant(id: &str, tree: &Value, tagged_mlx: bool) -> Option<Value> {
     weights.sort_by(|a, b| b.size.partial_cmp(&a.size).unwrap_or(std::cmp::Ordering::Equal));
     if !files.iter().any(|f| f.path.as_deref() == Some("config.json"))
         || weights.is_empty()
-        || !(tagged_mlx || test(regex!("mlx", "i"), id))
+        || !(tagged_mlx || test(regex!("mlx", "i"), id) || id == "incoai/Qwen3.8-27B-DFlash2")
     {
         return None;
     }
@@ -518,6 +521,10 @@ impl Catalog {
         (status == 206 || (status == 200 && from == 0)).then_some(body)
     }
 
+    pub fn facts_are_dependent(facts: &Value) -> bool {
+        facts["adapter"] == true || facts["architecture"].as_str().is_some_and(dependent::draft_arch)
+    }
+
     /// What a repo file's header says that decides whether an engine can run it
     /// (`unknownWeightType`, `minEngineBuild`), without any request: from this
     /// session's reads, or from the folder of facts kept for good under the file's hash.
@@ -578,6 +585,21 @@ impl Catalog {
         }
         if let Some(b) = meta.min_engine_build {
             facts.insert("minEngineBuild".into(), json!(b));
+        }
+        for (k, v) in [
+            ("architecture", meta.architecture),
+            ("adapterBaseRepo", meta.adapter_base_repo),
+            ("sourceRepo", meta.source_repo),
+        ] {
+            if let Some(v) = v {
+                facts.insert(k.into(), json!(v));
+            }
+        }
+        if meta.dependent_adapter {
+            facts.insert("adapter".into(), json!(true));
+        }
+        if meta.lora {
+            facts.insert("lora".into(), json!(true));
         }
         Some(Value::Object(facts))
     }
@@ -654,9 +676,8 @@ impl Catalog {
         let mut groups: Vec<(String, Vec<(String, f64)>)> = Vec::new();
         for f in ggufs {
             let path = f.path.clone().unwrap_or_default();
-            // A projector rides along with a build; a LoRA adapter is not a
-            // model at all and cannot be run on its own.
-            if test(regex!("mmproj", "i"), &path) || test(regex!(r"(^|[-_./])lora([-_.]|$)", "i"), &path) {
+            // The projector rides alongside the main model; adapters have their own choices.
+            if test(regex!("mmproj", "i"), &path) {
                 continue;
             }
             let group = regex_replace(regex!(r"-\d{5}-of-\d{5}\.gguf$", "i"), &path, ".gguf");
@@ -672,8 +693,11 @@ impl Catalog {
             parts.sort_by(|a, b| by_locale(&a.0, &b.0));
             let quant = quant_label(&group);
             let mut extra: Vec<String> = parts[1..].iter().map(|p| p.0.clone()).collect();
-            extra.extend(projector.clone());
-            extra.extend(sidecars.iter().cloned());
+            let dependent = dependent::hint(&parts[0].0);
+            if !dependent {
+                extra.extend(projector.clone());
+                extra.extend(sidecars.iter().cloned());
+            }
             let mut o = Map::new();
             // The label is how a build is asked for (and its download job
             // named), so two builds never share one.
@@ -685,6 +709,9 @@ impl Catalog {
             o.insert("file".into(), json!(parts[0].0));
             o.insert("sizeBytes".into(), crate::num(parts.iter().fold(0.0, |n, p| n + p.1)));
             o.insert("extraFiles".into(), json!(extra));
+            if dependent {
+                o.insert("dependent".into(), json!(true));
+            }
             if let Some(note) = quant_note(&quant) {
                 o.insert("note".into(), json!(note));
             }
@@ -729,7 +756,18 @@ impl Catalog {
             "{HF_API}/models?{filter}&search={}&sort=downloads&direction=-1&limit={limit}&full=true",
             encode_uri_component(q)
         );
-        let Some(Value::Array(rows)) = self.get_json(url).await else { return Vec::new() };
+        let Some(Value::Array(mut rows)) = self.get_json(url).await else { return Vec::new() };
+        // The known MLX head is usable by mlx-vlm but is not tagged `mlx` upstream.
+        let head = "incoai/Qwen3.8-27B-DFlash2";
+        if mlx_format
+            && !q.is_empty()
+            && head.to_ascii_lowercase().contains(&q.to_ascii_lowercase())
+            && !rows.iter().any(|r| r["id"] == head || r["modelId"] == head)
+            && let Some(mut row) = self.get_json(format!("{HF_API}/models/{head}")).await
+        {
+            row["id"] = json!(head);
+            rows.insert(0, row);
+        }
         let found = futures_util::future::join_all(rows.iter().take(limit).map(|row| async move {
             let id = nekko_js::coalesce(row.get("id"), row.get("modelId")).filter(|v| nekko_js::truthy(Some(v)))?;
             let id = nekko_js::display(id);
@@ -748,6 +786,9 @@ impl Catalog {
                 o.insert("parameterSize".into(), json!(p));
             }
             o.insert("tags".into(), json!(capability_tags(&all_tags, repo.unwrap_or(""))));
+            if dependent::dependent_hint(&id, &all_tags, &quants) {
+                o.insert("dependent".into(), json!(true));
+            }
             o.insert("quants".into(), json!(quants));
             copy(&mut o, "downloads", row.get("downloads"));
             copy(&mut o, "likes", row.get("likes"));
@@ -789,6 +830,9 @@ impl Catalog {
             }
             copy(&mut o, "summary", card("summary"));
             o.insert("tags".into(), json!(capability_tags(&tags, repo.unwrap_or(""))));
+            if dependent::dependent_hint(id, &tags, &quants) {
+                o.insert("dependent".into(), json!(true));
+            }
             o.insert("quants".into(), json!(quants));
             copy(&mut o, "downloads", field("downloads"));
             copy(&mut o, "likes", field("likes"));

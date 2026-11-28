@@ -975,3 +975,109 @@ async fn mlx_dflash2_fails_closed_without_a_runtime_or_matching_config() {
         assert_eq!(spawned(&fake), 0);
     }
 }
+
+/// Synthetic GGUF headers exercise real library discovery and load validation
+/// without downloading model weights or running an inference process.
+fn write_lora_fixture(dir: &Path, name: &str, fields: &[(&str, &str)]) {
+    let mut data = b"GGUF".to_vec();
+    data.extend(3u32.to_le_bytes());
+    data.extend(0u64.to_le_bytes());
+    data.extend((fields.len() as u64).to_le_bytes());
+    for (key, value) in fields {
+        data.extend((key.len() as u64).to_le_bytes());
+        data.extend(key.as_bytes());
+        data.extend(8u32.to_le_bytes());
+        data.extend((value.len() as u64).to_le_bytes());
+        data.extend(value.as_bytes());
+    }
+    std::fs::write(dir.join(name), data).unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn lora_selection_loads_the_base_and_never_silently_falls_back() {
+    let dir = scratch("lora-files");
+    let p = Path::new(&dir);
+    let arch = ("general.architecture", "llama");
+    let source = ("general.source.repo_url", "https://huggingface.co/Owner/Base");
+    let dependency = ("general.base_model.0.repo_url", "https://huggingface.co/Owner/Base");
+    let adapter = [("general.type", "adapter"), ("adapter.type", "lora"), arch, dependency];
+    write_lora_fixture(p, "base.gguf", &[arch, source]);
+    write_lora_fixture(p, "other.gguf", &[arch, (source.0, "https://huggingface.co/Owner/Base-Chat")]);
+    write_lora_fixture(p, "unproven.gguf", &[arch, ("general.name", "Owner/Base")]);
+    write_lora_fixture(p, "a space.gguf", &adapter);
+    write_lora_fixture(p, "comma,part.gguf", &adapter);
+    write_lora_fixture(p, "unknown.gguf", &adapter[..3]);
+    let mut wrong_arch = adapter;
+    wrong_arch[2].1 = "qwen3";
+    write_lora_fixture(p, "wrong-arch.gguf", &wrong_arch);
+    let mlx = p.join("mlx-adapter");
+    std::fs::create_dir(&mlx).unwrap();
+    std::fs::write(mlx.join("adapters.safetensors"), b"fixture").unwrap();
+    std::fs::write(
+        mlx.join("adapter_config.json"),
+        r#"{"fine_tune_type":"lora","base_model_name_or_path":"Owner/Base"}"#,
+    )
+    .unwrap();
+    let cfg =
+        nekko_engine::library::LibraryConfig { models_dir: dir.clone(), folders: vec![], mlx_runnable: true, now: 1.0 };
+    let models = json!(nekko_engine::library::list(&cfg).unwrap());
+    assert_eq!(
+        models.as_array().unwrap().iter().find(|m| m["id"] == "a space").unwrap()["companion"],
+        json!({"kind":"lora", "baseRepo":"Owner/Base"})
+    );
+    let engine = json!({ "source": "managed", "version": "b12556" });
+    let (unsupported, no_lora) = engine_rig("lora-no-flag", engine.clone(), models.clone());
+    let picked = json!({ "adapterModelId": "a space", "kvCacheDtype": "f16" });
+    let result = no_lora.load("base", picked.clone()).await;
+    assert_eq!(result["ok"], false, "{result}");
+    assert!(result["message"].as_str().unwrap().contains("does not support --lora"));
+    assert_eq!(spawned(&unsupported), 0);
+
+    let (fake, server) = engine_rig_with_flags("lora-load", engine, models, &["--lora", "--spec-default"]);
+    assert_eq!(server.router_load("a space", false).await["status"], 400);
+    assert!(server.router_models().await["data"].as_array().unwrap().iter().all(|m| m["id"] != "a space"));
+    for (base, params, expected) in [
+        ("a space", json!({}), "cannot run on its own"),
+        ("mlx-adapter", json!({}), "cannot run on its own"),
+        ("base", json!({"adapterModelId": "mlx-adapter"}), "only for GGUF"),
+        ("base", json!({"adapterModelId": 1}), "library ID"),
+        ("base", json!({"adapterModelId": "base"}), "library ID"),
+        ("base", json!({"adapterModelId": "missing"}), "not in the library"),
+        ("base", json!({"adapterModelId": "unknown"}), "Cannot verify"),
+        ("base", json!({"adapterModelId": "wrong-arch"}), "architectures do not match"),
+        ("base", json!({"adapterModelId": "comma,part"}), "cannot be passed safely"),
+        ("base", json!({"draftModelId": "a space"}), "cannot be used as a speculative draft"),
+        ("base", json!({"adapterModelId": "a space", "draftModelId": "other"}), "cannot be combined"),
+        ("unproven", picked.clone(), "Cannot verify"),
+        ("other", picked.clone(), "exact base repository"),
+    ] {
+        let result = server.load(base, params).await;
+        assert_eq!(result["ok"], false, "{result}");
+        assert!(result["message"].as_str().unwrap().contains(expected), "{result}");
+    }
+    assert_eq!(spawned(&fake), 0);
+    assert_eq!(server.load("base", json!({})).await["ok"], true);
+    assert_eq!(server.load("base", json!({"adapterModelId":"missing"})).await["ok"], false);
+    assert_eq!(server.loaded_ids(), ["base"]);
+    assert_eq!(spawned(&fake), 1);
+    assert_eq!(server.load("base", picked.clone()).await["ok"], true);
+    assert_eq!(server.load("base", picked.clone()).await["ok"], true);
+    assert_eq!(spawned(&fake), 2);
+    assert_eq!(server.resident()[0]["params"], picked);
+    {
+        let calls = fake.calls.lock().unwrap();
+        let spawn = calls.iter().rev().find_map(|c| c.get("spawn")).unwrap();
+        let args = spawn["args"].as_array().unwrap();
+        let normalized = |flag| -> String {
+            let i = args.iter().position(|a| a == flag).unwrap();
+            args[i + 1].as_str().unwrap().replace('\\', "/")
+        };
+        assert!(normalized("--model").ends_with("/base.gguf"));
+        assert!(normalized("--lora").ends_with("/a space.gguf"));
+        assert!(!args.contains(&json!("--spec-default")));
+        assert_eq!(spawn["modelId"], "base");
+    }
+    assert_eq!(server.load("base", json!({"adapterModelId":null})).await["ok"], true);
+    assert_eq!(spawned(&fake), 3);
+    std::fs::remove_dir_all(dir).unwrap();
+}

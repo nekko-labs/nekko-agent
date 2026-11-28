@@ -211,6 +211,7 @@ export interface LoadParams {
    * replies down even while it speeds edits up.
    */
   draftModelId?: string;
+  adapterModelId?: string;
   /** The first N layers keep their experts in RAM (`--n-cpu-moe`); all of them is `--cpu-moe`. */
   cpuMoeLayers?: number;
   /** The first N layers run their feed-forward from RAM (`--n-cpu-ffn`), for dense models. */

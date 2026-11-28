@@ -35,6 +35,10 @@ pub struct GgufMetadata {
     pub quantization: Option<String>,
     pub parameter_size: Option<String>,
     pub chat_template: Option<String>,
+    pub(crate) dependent_adapter: bool,
+    pub(crate) lora: bool,
+    pub(crate) adapter_base_repo: Option<String>,
+    pub(crate) source_repo: Option<String>,
     /// The KV cache layer by layer, when the tensor table was read.
     pub kv_layout: Option<KvLayout>,
     /// Expert, feed-forward and lookup-table shares, when the tensor table was read.
@@ -286,7 +290,8 @@ fn parse(buf: &[u8], last: bool) -> Parsed {
     let mut r = Reader { buf, at: 8 };
     let mut tensors = 0.0;
     let mut arrays: Vec<(String, Vec<f64>)> = Vec::new();
-    let read = |r: &mut Reader, tensors: &mut f64, arrays: &mut Vec<(String, Vec<f64>)>| {
+    let mut adapter_marker = false;
+    let mut read = |r: &mut Reader, tensors: &mut f64, arrays: &mut Vec<(String, Vec<f64>)>| {
         *tensors = r.u64()? as f64;
         let pairs = r.u64()? as f64;
         if pairs > MAX_SAFE || pairs > 100_000.0 {
@@ -297,6 +302,7 @@ fn parse(buf: &[u8], last: bool) -> Parsed {
         for _ in 0..pairs as u64 {
             let key = r.string()?;
             let tag = r.u32()?;
+            adapter_marker |= key.starts_with("adapter.");
             if tag == 9 {
                 if let Some(values) = r.array()? {
                     arrays.push((key, values));
@@ -330,6 +336,7 @@ fn parse(buf: &[u8], last: bool) -> Parsed {
         // no layout, but a tensor type past llama.cpp's own that was already read is still a fact about the file.
         Err(_) => meta.unknown_weight_type = bytes.foreign,
     }
+    meta.dependent_adapter |= adapter_marker || bytes.adapter_tensors;
     Parsed::Done(Some(Box::new(meta)))
 }
 
@@ -385,6 +392,7 @@ const LAZY_TABLE_BYTES: f64 = 4.0 * 1024.0 * 1024.0 * 1024.0;
 /// Tensor bytes by what they are for, summed over the table.
 #[derive(Default)]
 struct WeightBytes {
+    adapter_tensors: bool,
     total: f64,
     expert: f64,
     ffn: f64,
@@ -462,6 +470,7 @@ fn tensor_table(r: &mut Reader, count: f64, out: &mut Vec<AttnTensor>, bytes: &m
         }
         let kind = r.u32()?;
         r.u64()?; // offset
+        bytes.adapter_tensors |= name.ends_with(".lora_a") || name.ends_with(".lora_b");
         bytes.add(&name, &shape, kind);
         let Some(rest) = name.strip_prefix("blk.") else { continue };
         let Some((layer, tail)) = rest.split_once('.') else { continue };
@@ -558,6 +567,25 @@ fn kv_layout(
     Some(layout)
 }
 
+/// A canonical, case-sensitive Hugging Face model id. No local paths,
+/// revision selectors, URL aliases, or repository-name heuristics.
+pub(crate) fn repo_id(value: &str) -> Option<&str> {
+    let valid = |part: &str| {
+        !part.is_empty()
+            && part.as_bytes().first().is_some_and(u8::is_ascii_alphanumeric)
+            && part.as_bytes().last().is_some_and(u8::is_ascii_alphanumeric)
+            && part.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
+            && !part.contains("..")
+            && !part.contains("--")
+    };
+    let (owner, repo) = value.split_once('/')?;
+    (valid(owner) && valid(repo)).then_some(value)
+}
+
+fn hf_repo_url(value: &str) -> Option<&str> {
+    repo_id(value.strip_prefix("https://huggingface.co/")?.trim_end_matches('/'))
+}
+
 fn to_metadata(kv: &[(String, Val)]) -> GgufMetadata {
     let heads = num_of(kv, "attention.head_count");
     let embedding = num_of(kv, "embedding_length");
@@ -566,7 +594,26 @@ fn to_metadata(kv: &[(String, Val)]) -> GgufMetadata {
         _ => None,
     });
     let file_type_id = num_of(kv, "general.file_type");
+    let exact = |key: &str| kv.iter().find(|(k, _)| k == key).map(|(_, v)| v);
+    let string = |key: &str| match exact(key) {
+        Some(Val::Str(s)) => Some(s.as_str()),
+        _ => None,
+    };
+    let lora = string("general.type") == Some("adapter") && string("adapter.type") == Some("lora");
+    let single_base = matches!(exact("general.base_model.count"), None | Some(Val::Num(1.0)))
+        && !kv.iter().any(|(k, _)| {
+            k.strip_prefix("general.base_model.").and_then(|s| s.split_once('.')).is_some_and(|(i, _)| i != "0")
+        });
     GgufMetadata {
+        dependent_adapter: string("general.type") == Some("adapter"),
+        lora,
+        adapter_base_repo: (lora && single_base)
+            .then(|| string("general.base_model.0.repo_url").and_then(hf_repo_url).map(str::to_string))
+            .flatten(),
+        source_repo: exact("general.source.repo_url")
+            .map_or_else(|| string("general.repo_url"), |_| string("general.source.repo_url"))
+            .and_then(hf_repo_url)
+            .map(str::to_string),
         architecture: str_of(kv, "general.architecture"),
         name: str_of(kv, "general.name"),
         layers: num_of(kv, "block_count"),

@@ -332,3 +332,69 @@ async fn the_variants_list_and_the_library_judge_the_same_header_alike() {
     std::fs::remove_dir_all(work).ok();
     std::fs::remove_dir_all(dir).ok();
 }
+
+#[tokio::test]
+async fn lora_requires_header_provenance_and_reuses_an_exact_installed_base() {
+    let base = "example/Exact-Base";
+    let file = "Style-LoRA-F16.gguf";
+    let adapter = gguf_bytes(
+        &[
+            ("general.architecture", "llama"),
+            ("general.type", "adapter"),
+            ("adapter.type", "lora"),
+            ("general.base_model.0.repo_url", "https://huggingface.co/example/Exact-Base"),
+        ],
+        &[("general.base_model.count", 1)],
+        &[("test.lora_a", 1)],
+    );
+    let h = hub(&[(file, 256.0, Some(adapter))]);
+    let catalog = Catalog::new(h, Box::new(|| None), Box::new(|| false));
+    let model = catalog.model(REPO).await;
+    let build = &model["quants"][0];
+    assert_eq!(build["file"], file, "adapter files must not disappear from the catalog");
+    let rows = [
+        json!({"id":"wrong", "name":"Similar", "loraBaseRepo":"example/Other", "architecture":"llama", "modality":"chat"}),
+        json!({"id":"right", "name":"Exact", "loraBaseRepo":base, "architecture":"llama", "modality":"chat"}),
+    ];
+    let selected = catalog.companion(&model, build, &rows, false).await.unwrap();
+    assert_eq!(selected["kind"], "lora");
+    assert_eq!(selected["installedBase"]["id"], "right");
+    assert!(selected["base"].is_null());
+    let unresolved = catalog.companion(&model, build, &rows[..1], false).await.unwrap();
+    assert!(unresolved["base"].is_null() && unresolved["installedBase"].is_null());
+    assert!(unresolved["reason"].is_string());
+}
+
+#[tokio::test]
+async fn dflash2_offers_the_stock_runtime_build_and_accounts_for_its_projector() {
+    let draft = "incoai/Qwen3.8-27B-DFlash2-GGUF";
+    let base = "ggml-org/Qwen3.8-27B-GGUF";
+    let draft_file = "Qwen3.8-27B-DFlash2-Q4_K_M.gguf";
+    let base_file = "Qwen3.8-27B-Q4_K_M.gguf";
+    let tree = |files: &[(&str, u64)]| {
+        json!(files.iter().map(|(path, size)| json!({"type":"file", "path":path, "size":size})).collect::<Vec<_>>())
+    };
+    let mut docs = Map::new();
+    docs.insert(format!("{HF_API}/models/{draft}/tree/main?recursive=true"), tree(&[(draft_file, 800_000_000)]));
+    docs.insert(
+        format!("{HF_API}/models/{base}/tree/main?recursive=true"),
+        tree(&[(base_file, 16_000_000_000), ("mmproj-BF16.gguf", 700_000_000)]),
+    );
+    let files = HashMap::from([(
+        hf_file_url(draft, draft_file),
+        gguf_bytes(&[("general.architecture", "dflash")], &[], &[("draft.weight", 0)]),
+    )]);
+    let catalog = Catalog::new(
+        Arc::new(Hub { json: docs, files, byte_reads: Mutex::default() }),
+        Box::new(|| None),
+        Box::new(|| false),
+    );
+    let model = catalog.model(draft).await;
+    assert_eq!(model["dependent"], true);
+    let offered = catalog.companion(&model, &model["quants"][0], &[], false).await.unwrap();
+    assert_eq!(offered["baseRepo"], "Qwen/Qwen3.8-27B");
+    assert_eq!(
+        offered["base"],
+        json!({"repo":base, "quant":"Q4_K_M", "file":base_file, "sizeBytes":16_700_000_000u64})
+    );
+}

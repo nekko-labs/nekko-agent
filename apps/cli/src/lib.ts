@@ -32,6 +32,8 @@ import type {
   GpuFit,
   CatalogModel,
   DownloadJob,
+  NekkoApi,
+
   RuntimeStatus,
   StopResult,
   LoadParams,
@@ -155,7 +157,7 @@ export interface Client {
   engineModels(): Promise<Array<LocalModel & { loaded: boolean; gpuFit?: GpuFit }>>;
   engineCatalog(query?: string): Promise<CatalogModel[]>;
   engineCatalogModel(id: string): Promise<CatalogModel | null>;
-  engineDownloadModel(modelId: string, quantLabel: string): Promise<{ ok: boolean; message: string; jobId?: string }>;
+  engineDownloadModel: NekkoApi['engineDownloadModel'];
   engineDownloads(): Promise<DownloadJob[]>;
   engineCancelDownload(id: string): Promise<void>;
   engineDeleteModel(id: string, confirmedPath?: string): Promise<{ ok: boolean; message: string }>;
@@ -329,7 +331,7 @@ function httpClient(url: string, token?: string): Client {
     engineModels: () => call(IpcChannels.engineModels),
     engineCatalog: (query) => call(IpcChannels.engineCatalog, query),
     engineCatalogModel: (id) => call(IpcChannels.engineCatalogModel, id),
-    engineDownloadModel: (id, quant) => call(IpcChannels.engineDownloadModel, id, quant),
+    engineDownloadModel: (id, quant, choice) => call(IpcChannels.engineDownloadModel, id, quant, choice),
     engineDownloads: () => call(IpcChannels.engineDownloads),
     engineCancelDownload: (id) => call(IpcChannels.engineCancelDownload, id).then(() => undefined),
     engineDeleteModel: (id, confirmedPath) => call(IpcChannels.engineDeleteModel, id, confirmedPath),

@@ -310,7 +310,21 @@ export function downloadFitVerdict(
 /* ------------------------------------------------------------------ catalog */
 
 /** One quantization of one model: the thing actually downloaded. */
+export interface CatalogBaseArtifact {
+  repo: string;
+  quant: string;
+  file: string;
+  sizeBytes: number;
+}
+
 export interface CatalogQuant {
+  companion?: {
+    kind: 'draft' | 'lora' | 'unsupported';
+    baseRepo?: string;
+    base?: CatalogBaseArtifact;
+    installedBase?: { id: string; name: string };
+    reason?: string;
+  };
   /** e.g. `Q4_K_M`. */
   label: string;
   /** Repo-relative file name. */
@@ -344,6 +358,7 @@ export interface CatalogQuant {
 
 /** A model as offered for download, before it exists on disk. */
 export interface CatalogModel {
+  dependent?: boolean;
   /** Stable id: `<owner>/<repo>` on Hugging Face. */
   id: string;
   name: string;
@@ -590,6 +605,9 @@ export function cannotLoadReason(
 
 /** A model on disk (a GGUF file, or an MLX model folder), with whatever it told us. */
 export interface LocalModel {
+  companion?: { kind: 'lora'; baseRepo?: string };
+  dependentWeights?: boolean;
+  loraBaseRepo?: string;
   /** `<owner>/<repo>/<file>` for a downloaded model; the file name for an imported one. */
   id: string;
   name: string;
@@ -683,6 +701,7 @@ export interface EngineLoadPreset {
   seed?: number;
   speculative?: boolean;
   draftModelId?: string;
+  adapterModelId?: string;
   ttlSeconds?: number;
   cpuMoeLayers?: number;
   cpuFfnLayers?: number;
