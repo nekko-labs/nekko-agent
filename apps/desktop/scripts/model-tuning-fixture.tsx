@@ -67,6 +67,8 @@ function place(req: any) {
   };
 }
 
+localStorage.setItem('nekko.chatMode', 'expert');
+const saves: {id: string; preset: any}[] = [];
 const loads: any[] = [];
 const bridge: any = {
   runtimeAutoFit: async () => (data[scenario] as any).autoFit,
@@ -89,22 +91,24 @@ const bridge: any = {
     return d.speed;
   },
   runtimeLoad: async (_p: string, _m: string, params: any) => { loads.push(params); return { ok: true, message: 'Loaded.' }; },
-  engineSaveModelPreset: async () => {},
-  engineModels: async () => [],
+  engineSaveModelPreset: async (id: string, preset: any) => { saves.push({ id, preset }); },
+  engineModels: async () => [{ id: 'library/example/DFlash2', name: 'Qwen3.8-27B-DFlash2', format: 'gguf', architecture: 'dflash', modality: 'draft', sizeBytes: 1024 }],
 };
 Object.assign(window, { nekko: new Proxy(bridge, { get(target, key: string) { if (key in target) return target[key]; if (key.startsWith('on')) return () => () => {}; return () => Promise.resolve(null); } }) });
 
 function Fixture() {
   const [epoch, setEpoch] = useState(0);
-  const reset = (opts: { scenario?: Scenario; preset?: any; loaded?: any } = {}) => {
+  const reset = (opts: { scenario?: Scenario; preset?: any; loaded?: any; stock?: boolean } = {}) => {
+    (window as any).__stock = opts.stock;
     scenario = opts.scenario ?? 'moe8';
     loads.length = 0;
+    saves.length = 0;
     useStore.setState({ toasts: [] } as any);
     (window as any).__preset = opts.preset;
     (window as any).__loaded = opts.loaded;
     setEpoch((e) => e + 1);
   };
-  Object.assign(window, { integration: { reset, loads: () => loads, place, data } });
+  Object.assign(window, { integration: { reset, saves: () => saves, loads: () => loads, place, data } });
   const d = data[scenario] as any;
   const model = {
     ...MODELS[scenario],
@@ -112,6 +116,7 @@ function Fixture() {
     sizeBytes: d.facts.weightsBytes, layers: d.facts.layers, maxContext: d.facts.maxContext, kvHeads: 8,
     weightLayout: d.facts.weightLayout, loaded: !!(window as any).__loaded, preset: (window as any).__preset,
   };
+  if ((window as any).__stock) Object.assign(model, { id: 'library/example/stock', name: 'Qwen3.8-27B', architecture: 'qwen35', layers: 64 });
   return (
     <div className="bg-paper" style={{ minHeight: '100vh', padding: 24, boxSizing: 'border-box' }}>
       <div style={{ maxWidth: 720, margin: '0 auto' }} className="rounded-xl" key={epoch}>

@@ -199,8 +199,7 @@ few KB of per word; with the file memory-mapped it stays on the SSD.
 KV cache type, from most reliable to fastest) and keep in memory (load when needed, keep
 loaded, pin in memory; none of them move the work off the GPU). **Expert** holds every
 remaining flag, each with a sentence and the flag it sets. Controls a build does not support
-fall back to `--override-tensor` patterns or are left out. Any of it can be saved as that
-model's default.
+fall back to `--override-tensor` patterns or are left out. Edits are saved for this variant as you make them. A running copy keeps its old settings until you reload it.
 
 ### Use DFlash2 with stock Qwen3.8-27B
 
@@ -212,8 +211,8 @@ DFlash2 is an optional second model that guesses several tokens at once for the 
 | MLX | The full [mlx-community/Qwen3.8-27B-4bit](https://huggingface.co/mlx-community/Qwen3.8-27B-4bit) folder | The full [incoai/Qwen3.8-27B-DFlash2](https://huggingface.co/incoai/Qwen3.8-27B-DFlash2) folder, with `config.json` beside its `.safetensors` weights | Apple Silicon only. Install `mlx-vlm==0.8.1` separately and put its `mlx_vlm.server` executable on the **Model Server daemon's** `PATH` before starting it. A terminal that finds it does not mean a GUI-launched daemon can. Model Server's regular MLX install (`mlx_lm.server`) is not this runtime. |
 
 1. Download both yourself and place them under a folder the built-in engine scans. For example, use `<models folder>/chat/…` and `<models folder>/draft/…` for the GGUF files, or `<models folder>/vision/mlx-community_Qwen3.8-27B-4bit/` and `<models folder>/draft/incoai_Qwen3.8-27B-DFlash2/` for the MLX folders. Keep MLX model folders intact and keep their published names (or the managed `owner_repo` names); the daemon checks the target folder name and both configs. For an existing external library, add its parent folder instead of copying the weights. These are local paths, not Hugging Face repo IDs entered in the drawer.
-2. Open the **target's** load drawer in Model Server. Under **More controls → Expert → Guessing ahead**, leave **Speculative decoding** on and choose **Qwen3.8-27B-DFlash2** under **Draft model**. The draft is not a standalone chat model. If it isn't offered, check that both models are in the local library, in the same format, and have the names/metadata above.
-3. **Load model** (or **Reload with these settings**) tries the pair once. **Save as default** keeps the selection for future loads. Choose **None** to stop using the head. Opening the drawer or loading a model with no head selected does not download either model or the DFlash2 runtime.
+2. Open the **target's** load drawer in Model Server. Choose **Qwen3.8-27B-DFlash2** under **Draft model**. The draft is not a standalone chat model. If it isn't offered, check that both models are in the local library, in the same format, and have the names/metadata above.
+3. **Load model** (or **Reload with these settings**) applies the saved selection now. Future loads use it too. Choose **None** to stop using the head. Opening the drawer or loading a model with no head selected does not download either model or the DFlash2 runtime.
 
 The head needs extra memory; benefit depends on how often the main model accepts its guesses. For ordinary MLX loads, use **None** and the regular MLX runtime. Ordinary drafts still use the existing picker and load settings.
 

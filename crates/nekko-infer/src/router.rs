@@ -517,7 +517,8 @@ fn timings(tail: &[u8]) -> Option<DecodeSample> {
 fn local_model_body(body: &[u8], model: &str) -> Result<Bytes, &'static str> {
     let mut body: Value = serde_json::from_slice(body).map_err(|_| "Expected a JSON object.")?;
     let body = body.as_object_mut().ok_or("Expected a JSON object.")?;
-    if body.get("adapter_path").is_some_and(|v| !v.is_null()) {
+    // MLX-LM uses its CLI alias; only mlx-vlm runs a validated stock pair.
+    if model != "default_model" && body.get("adapter_path").is_some_and(|v| !v.is_null()) {
         return Err("Adapters are not supported with the stock MLX DFlash2 pair.");
     }
     body.insert("model".into(), Value::String(model.into()));
@@ -551,6 +552,14 @@ fn percent_decode(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mlx_lm_uses_the_launch_directory_for_external_library_ids() {
+        let original = json!({"model":"library/example/tiny-model", "adapter_path":"local-adapter", "stream":true});
+        let bytes = local_model_body(&serde_json::to_vec(&original).unwrap(), "default_model").unwrap();
+        let sent: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(sent, json!({"model":"default_model", "adapter_path":"local-adapter", "stream":true}));
+    }
 
     #[test]
     fn picks_the_model_from_a_body() {

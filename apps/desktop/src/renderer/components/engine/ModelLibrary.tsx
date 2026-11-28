@@ -351,6 +351,10 @@ export function ModelLibrary({
           {[
             fit,
             m.quantization,
+            m.preset?.speculative === false ? 'Speculative decoding off' : m.preset?.draftModelId && `Draft: ${m.preset.draftModelId}`,
+            m.preset?.contextTokens && `${formatTokens(m.preset.contextTokens)} configured`,
+            m.preset?.kvCacheDtype && `${m.preset.kvCacheDtype} cache`,
+            m.preset?.parallelSlots && `${m.preset.parallelSlots} sessions`,
             m.maxContext && `${formatTokens(m.maxContext)} max context`,
             m.managed === false && `from ${locationOf(m)}`,
           ].filter(Boolean).join(' · ')}
