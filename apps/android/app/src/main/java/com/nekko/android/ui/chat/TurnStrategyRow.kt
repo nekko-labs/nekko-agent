@@ -15,7 +15,7 @@ import com.nekko.android.R
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.TurnStrategy
 
-/** A change in admitted modes, not an activity indicator. */
+/** A turn’s admitted strategy, not an activity indicator. */
 @Composable
 internal fun TurnStrategyRow(strategy: TurnStrategy) {
     val p = Nekko.palette
@@ -40,5 +40,8 @@ internal fun TurnStrategyRow(strategy: TurnStrategy) {
     Column(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(stringResource(R.string.strategy_heading), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, color = p.inkSoft)
         Text(summary, style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+        strategy.modelId?.let { Text(stringResource(R.string.strategy_model, it), style = MaterialTheme.typography.bodySmall, color = p.inkFaint) }
+        val worker = strategy.subagentModelId ?: if (strategy.subagentsDeferred) stringResource(R.string.strategy_deferred) else null
+        worker?.let { Text(stringResource(R.string.strategy_subagent_model, it), style = MaterialTheme.typography.bodySmall, color = p.inkFaint) }
     }
 }

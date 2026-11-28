@@ -1,7 +1,7 @@
 import NekkoProtocol
 import SwiftUI
 
-/// A change in admitted modes, not an activity indicator.
+/// A turn’s admitted strategy, not an activity indicator.
 struct TurnStrategyView: View {
     let strategy: TurnStrategy
     @Environment(\.palette) private var palette
@@ -24,19 +24,29 @@ struct TurnStrategyView: View {
         }
     }
 
+    private var details: [String] {
+        var lines = [summary]
+        if let model = strategy.modelId, !model.isEmpty { lines.append(String(localized: "Model: \(model)")) }
+        let worker = strategy.subagentModelId ?? (strategy.subagentsDeferred ? String(localized: "Chosen at delegation") : nil)
+        if let worker, !worker.isEmpty { lines.append(String(localized: "Planned sub-agent model: \(worker)")) }
+        return lines
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Strategy")
                 .font(.caption.weight(.medium))
                 .foregroundStyle(palette.inkSoft)
-            Text(summary)
-                .font(.caption)
-                .foregroundStyle(palette.inkFaint)
-                .fixedSize(horizontal: false, vertical: true)
+            ForEach(Array(details.enumerated()), id: \.offset) { _, line in
+                Text(verbatim: line)
+                    .font(.caption)
+                    .foregroundStyle(palette.inkFaint)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text("Strategy") + Text(verbatim: ": \(summary)"))
+        .accessibilityLabel(Text("Strategy") + Text(verbatim: ": \(details.joined(separator: ", "))"))
         .accessibilityIdentifier("turn-strategy")
     }
 }

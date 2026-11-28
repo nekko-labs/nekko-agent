@@ -669,8 +669,8 @@ enum TranscriptRow: Identifiable {
                 out.append(.summary(turn: turnIds[t], steps: steps[t], thought: thought[t], running: running && t == turnIds.count - 1))
             }
             if !row.isStep || isOpen {
-                if let section = row.strategyItem(strategies) { out.append(section) }
                 out.append(.row(row, reasoning: isOpen))
+                if let section = row.strategyItem(strategies) { out.append(section) }
             }
             // End-of-turn details stay visible even when Simple folds the tool-only turn.
             out += row.footerItems(footers)
@@ -704,9 +704,8 @@ enum TranscriptRow: Identifiable {
 
     static func detailed(_ rows: [TranscriptRow], footers: [String: TurnDetails], strategies: [String: TurnStrategy] = [:]) -> [FoldItem] {
         rows.flatMap { row in
-            var items: [FoldItem] = []
+            var items: [FoldItem] = [.row(row, reasoning: true)]
             if let section = row.strategyItem(strategies) { items.append(section) }
-            items.append(.row(row, reasoning: true))
             return items + row.footerItems(footers)
         }
     }

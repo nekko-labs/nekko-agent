@@ -1410,7 +1410,18 @@ impl Turns {
         } else {
             None
         };
-        let strategy = if claude_code {
+        let turn_model = str_at(opts, "modelId").filter(|m| !js::trim(m).is_empty() && *m != "__auto__");
+        // Reuse this snapshot for the harness so the displayed default and the
+        // launch setting cannot disagree if settings change before streaming.
+        let claude_subagent_model = if claude_code {
+            let st = self.settings.clone();
+            let saved = tokio::task::spawn_blocking(move || st.shared()).await.unwrap_or_default();
+            let providers = saved.get("providers").and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
+            crate::subagent_model::claude_code_env(saved.get("orchestration"), providers, turn_model)
+        } else {
+            None
+        };
+        let mut strategy = if claude_code {
             json!({"tools": "claude-code", "orchestration": "external"})
         } else {
             let tools = if code_mode.is_some() {
@@ -1437,6 +1448,29 @@ impl Turns {
             }
             value
         };
+        if let Some(model) = turn_model {
+            strategy["modelId"] = if claude_code {
+                json!(nekko_agent::providers::claude_code::concrete_model_id(model))
+            } else {
+                json!(model)
+            };
+        }
+        let can_delegate = tools
+            .iter()
+            .chain(code_mode.iter().flat_map(|code| code.wrapped.iter()))
+            .any(|tool| turn::catalog::name(tool) == "spawn_agent");
+        if claude_code || can_delegate {
+            let model = if claude_code {
+                claude_subagent_model.as_deref()
+            } else {
+                crate::subagent_model::planned_default(settings.get("orchestration"), turn_model)
+            };
+            if let Some(model) = model {
+                strategy["subagentModelId"] = json!(model);
+            } else {
+                strategy["subagentsDeferred"] = json!(true);
+            }
+        }
         let workspaces: Vec<Value> = if sandbox {
             turn::variants::sandbox_workspaces(&loaded)
         } else {
@@ -1634,6 +1668,7 @@ impl Turns {
                 &facts["provider"],
                 &mode,
                 str_at(facts, "effort"),
+                claude_subagent_model,
                 wake,
             )
             .await;
@@ -1893,6 +1928,7 @@ impl Turns {
         provider: &Value,
         mode: &str,
         effort: Option<&str>,
+        subagent_model: Option<String>,
         wake: bool,
     ) {
         use crate::harness::{BRIDGE_SERVER, BRIDGE_TOOL, INTERRUPT_GRACE, Wanted, permission_mode, provider_account};
@@ -1948,15 +1984,7 @@ impl Turns {
             effort: effort.filter(|e| *e != "normal").map(str::to_string),
             permission_mode: permission_mode(mode),
             config_dir,
-            subagent_model: {
-                let settings = self.settings.shared();
-                let providers = settings.get("providers").and_then(Value::as_array).cloned().unwrap_or_default();
-                crate::subagent_model::claude_code_env(
-                    settings.get("orchestration").filter(|o| !o.is_null()),
-                    &providers,
-                    str_at(opts, "modelId"),
-                )
-            },
+            subagent_model,
         };
         let same_account = |s: &Value| str_at(s, "claudeCodeAccount") == account.as_deref();
         let set_account = |obj: &mut serde_json::Map<String, Value>| match &account {

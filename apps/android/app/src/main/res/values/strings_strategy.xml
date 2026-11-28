@@ -9,4 +9,7 @@
     <string name="strategy_coordinator">Orchestration</string>
     <string name="strategy_worker">Worker</string>
     <string name="strategy_external">Claude Code manages its own tools.</string>
+    <string name="strategy_model">Model: %1$s</string>
+    <string name="strategy_subagent_model">Planned sub-agent model: %1$s</string>
+    <string name="strategy_deferred">Chosen at delegation</string>
 </resources>

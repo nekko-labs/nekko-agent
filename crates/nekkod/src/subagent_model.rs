@@ -26,6 +26,17 @@ use serde_json::{Value, json};
 
 pub use nekko_turn::plan::subagent_preference as preference;
 
+/// The configured default for a future spawn that omits overrides. Do not
+/// query catalogs or pick an assignment's route just to annotate the transcript.
+pub fn planned_default<'a>(orchestration: Option<&'a Value>, parent_model: Option<&'a str>) -> Option<&'a str> {
+    if let Some(route) = orchestration.and_then(|o| o.get("delegationRoute")).filter(|r| !r.is_null()) {
+        let exact = |value: &'a Value| value.as_str().filter(|id| !id.is_empty() && nekko_js::trim(id) == *id);
+        exact(route.get("providerId")?)?;
+        return exact(route.get("modelId")?).filter(|id| *id != "__auto__");
+    }
+    if preference(orchestration) == "inherit" { parent_model } else { None }
+}
+
 /// A model's tier for this choice: the Auto router's (`modelTier`), except
 /// that a small variant of a top family (`gpt-5-mini`) is light, and Fable
 /// is above Opus.
@@ -223,6 +234,17 @@ pub fn claude_code_env(orchestration: Option<&Value>, providers: &[Value], model
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn planned_default_does_not_resolve_automatic_or_invalid_routes() {
+        assert_eq!(planned_default(None, Some("parent")), None);
+        let mut orchestration = json!({"subagentModel": "inherit"});
+        assert_eq!(planned_default(Some(&orchestration), Some("parent")), Some("parent"));
+        orchestration["delegationRoute"] = json!({"providerId": "p", "modelId": "worker"});
+        assert_eq!(planned_default(Some(&orchestration), Some("parent")), Some("worker"));
+        orchestration["delegationRoute"]["providerId"] = json!(" ");
+        assert_eq!(planned_default(Some(&orchestration), Some("parent")), None);
+    }
+
     #[test]
     fn worker_effort_is_capped_after_a_catalog_default() {
         use nekko_agent::EffortLevel::{High, Low, Medium};

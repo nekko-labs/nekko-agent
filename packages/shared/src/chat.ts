@@ -62,6 +62,9 @@ export interface TurnStrategy {
   tools: 'code' | 'list' | 'none' | 'claude-code';
   orchestration: 'direct' | 'coordinator' | 'worker' | 'external';
   reason?: 'not-needed' | 'requested' | 'separable' | 'unavailable' | 'off';
+  modelId?: string;
+  subagentModelId?: string;
+  subagentsDeferred?: boolean;
 }
 
 export interface ChatMessage {
