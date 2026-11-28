@@ -890,6 +890,7 @@ export interface NekkoApi {
   engineDownloadModel(
     modelId: string,
     quantLabel: string,
+    choice?: { file: string; base?: import('./engine.js').CatalogBaseArtifact },
   ): Promise<{ ok: boolean; message: string; jobId?: string }>;
   /**
    * Fetch the files a model already on disk is missing: its projector (vision)

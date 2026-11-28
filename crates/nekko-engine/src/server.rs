@@ -8,10 +8,13 @@
 
 use crate::capacity::{FitRequest, Hardware, PlanOptions, compute_fit};
 use crate::launch::{
-    Companions, build_args, diffusion_args, explain_load_error, is_missing_dll_exit, missing_dll_message, mlx_args,
-    mlx_dflash2_args, resolve_companions, unsupported_load_reason,
+    Companions, build_args, diffusion_args, explain_load_error, is_missing_dll_exit, lora_args, missing_dll_message,
+    mlx_args, mlx_dflash2_args, resolve_companions, unsupported_load_reason,
 };
-use crate::library::{default_context_tokens, model_facts_for, validate_mlx_dflash2_pair};
+use crate::library::{
+    default_context_tokens, dependent_weights, gguf_is_dependent_now, model_facts_for, validate_lora_pair,
+    validate_mlx_dflash2_pair,
+};
 use crate::load_check::{EngineInUse, Level, load_check};
 use crate::{BoxFuture, num};
 use nekko_tools::path::native as path;
@@ -314,7 +317,7 @@ fn js_eq(a: Option<&Value>, b: Option<&Value>) -> bool {
 
 /// A reload with the same settings is not a reload (`sameParams`).
 fn same_params(a: &Value, b: &Value) -> bool {
-    const KEYS: [&str; 21] = [
+    const KEYS: [&str; 22] = [
         "contextTokens",
         "gpuLayers",
         "kvCacheDtype",
@@ -330,6 +333,7 @@ fn same_params(a: &Value, b: &Value) -> bool {
         "seed",
         "speculative",
         "draftModelId",
+        "adapterModelId",
         "cpuMoeLayers",
         "cpuFfnLayers",
         "moeCacheMiB",
@@ -753,7 +757,7 @@ impl ModelServer {
         }
         let caching = self.env.prompt_caching();
         let existing = get(&self.state.lock().unwrap().children, id).cloned();
-        if let Some(existing) = existing {
+        if let Some(existing) = &existing {
             if same_params(&existing.params, &params) && existing.prompt_caching == Some(caching) {
                 let now = self.env.now();
                 let mut s = self.state.lock().unwrap();
@@ -772,7 +776,6 @@ impl ModelServer {
                 entry.params = Value::Object(p);
                 return reply(true, format!("{id} is already loaded."));
             }
-            self.unload(id).await;
         }
 
         let Some(model) = self.env.find_model(id.to_string()).await else {
@@ -780,6 +783,29 @@ impl ModelServer {
         };
         let image = model.get("modality").and_then(Value::as_str) == Some("image");
         let mlx = model.get("format").and_then(Value::as_str) == Some("mlx");
+        let reject = |message: String| {
+            self.set_error(id, &message);
+            reply(false, message)
+        };
+        if dependent_weights(&model) {
+            return reject(unsupported_load_reason(&model).expect("dependent weights are not standalone"));
+        }
+        if !mlx && gguf_is_dependent_now(&model) {
+            return reject("These weights contain an adapter, not a standalone model. Refresh the library and select a compatible base.".into());
+        }
+        let adapter_path = match params.get("adapterModelId") {
+            None | Some(Value::Null) => None,
+            Some(Value::String(adapter_id)) if !adapter_id.trim().is_empty() && adapter_id != id => {
+                let Some(adapter) = self.env.find_model(adapter_id.clone()).await else {
+                    return reject(format!("The selected LoRA adapter {adapter_id} is not in the library."));
+                };
+                match validate_lora_pair(&model, &adapter) {
+                    Ok(path) => Some(path),
+                    Err(e) => return reject(e),
+                }
+            }
+            _ => return reject("Select a distinct LoRA adapter by its library ID.".into()),
+        };
         let is_dflash2 = |m: &Value| m["format"] == "mlx" && m["modality"] == "draft";
         if is_dflash2(&model) {
             let message = unsupported_load_reason(&model).expect("draft models are not standalone");
@@ -793,6 +819,16 @@ impl ModelServer {
             Some(d) => self.env.find_model(d.clone()).await,
             None => None,
         };
+        if params["speculative"] != false {
+            if draft.as_ref().is_some_and(|d| dependent_weights(d) || gguf_is_dependent_now(d)) {
+                return reject("An adapter cannot be used as a speculative draft model.".into());
+            }
+            if adapter_path.is_some() && draft_id.is_some() {
+                return reject(
+                    "LoRA pairing cannot be combined with a speculative draft. Select no draft and try again.".into(),
+                );
+            }
+        }
         let dflash2 =
             draft.as_ref().filter(|d| is_dflash2(d)).filter(|_| params.get("speculative") != Some(&Value::Bool(false)));
         let target_path = text(model.get("path"));
@@ -847,6 +883,17 @@ impl ModelServer {
                 return reply(false, check.reason);
             }
             self.say(check.reason);
+        }
+        let adapter_args = if let Some(path) = &adapter_path {
+            match lora_args(path, self.env.flags(bin.clone()).await.as_ref()) {
+                Ok(args) => Some(args),
+                Err(e) => return reject(e),
+            }
+        } else {
+            None
+        };
+        if existing.is_some() {
+            self.unload(id).await;
         }
         if !mlx {
             let copied = self.env.vc_runtime(&path::dirname(&bin));
@@ -986,7 +1033,14 @@ impl ModelServer {
                     p.shift_remove("contextTokens");
                 }
             }
-            Ok(build_args(&model, DAEMON_PORT, &Value::Object(p), &companions, &|f| flags.contains(f), caching))
+            if adapter_args.is_some() {
+                // Automatic speculation was not validated with a LoRA attached.
+                p.insert("speculative".into(), Value::Bool(false));
+            }
+            let mut args =
+                build_args(&model, DAEMON_PORT, &Value::Object(p), &companions, &|f| flags.contains(f), caching);
+            args.extend(adapter_args.into_iter().flatten());
+            Ok(args)
         };
         let args = match args {
             Ok(a) => a,
@@ -1373,6 +1427,9 @@ impl ModelServer {
         let Some(model) = self.env.find_model(requested.to_string()).await else {
             return json!({ "ok": false, "status": 404, "message": format!("No model named {requested}. Check /v1/models.") });
         };
+        if dependent_weights(&model) {
+            return json!({ "ok": false, "status": 400, "message": unsupported_load_reason(&model) });
+        }
         if (model.get("modality").and_then(Value::as_str) == Some("image")) != image {
             let message = if image {
                 "This endpoint needs an image-generation model."
@@ -1405,15 +1462,19 @@ impl ModelServer {
         self.sync().await;
         let models = self.env.list_models().await;
         let loaded: HashSet<String> = self.loaded_ids().into_iter().collect();
-        let data: Vec<Value> = models.iter().map(|m| model_row(m, loaded.contains(&text(m.get("id"))))).collect();
+        let data: Vec<Value> = models
+            .iter()
+            .filter(|m| !dependent_weights(m))
+            .map(|m| model_row(m, loaded.contains(&text(m.get("id")))))
+            .collect();
         json!({ "object": "list", "data": data })
     }
 
     /// `GET /v1/models/{id}` (`routerModel`).
     pub async fn router_model(&self, id: &str) -> Value {
         match self.env.find_model(id.to_string()).await {
-            Some(m) => model_row(&m, get(&self.state.lock().unwrap().children, id).is_some()),
-            None => Value::Null,
+            Some(m) if !dependent_weights(&m) => model_row(&m, get(&self.state.lock().unwrap().children, id).is_some()),
+            _ => Value::Null,
         }
     }
 

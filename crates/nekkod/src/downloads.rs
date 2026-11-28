@@ -148,18 +148,106 @@ impl ModelDownloads {
     }
 
     /// One quantization of a catalog model (`downloadModel`).
-    async fn download_model(&self, model_id: &str, quant: &str) -> Value {
-        let model = self.catalog.model(model_id).await;
+    async fn download_model(&self, model_id: &str, quant: &str, choice: &Value) -> Value {
+        let mut model = self.catalog.model(model_id).await;
+        let selected = model["quants"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|q| q["label"] == quant && (choice.is_null() || q["file"] == choice["file"]))
+            .cloned();
+        let Some(selected) = selected else { return acquire::refusal("That build is no longer published.") };
         let dir = self.library.models_dir();
+        let mut base_plan = None;
+        let file = selected["file"].as_str().unwrap_or_default();
+        // No library scan for an ordinary build. A detail download has already read its
+        // header, but other entry points may not have, so check the selected file here.
+        let facts = if selected["format"] == "mlx" { None } else { self.catalog.file_facts(model_id, file).await };
+        let dependent = model["dependent"] == true
+            || selected["dependent"] == true
+            || !choice.is_null()
+            || facts.as_ref().is_some_and(Catalog::facts_are_dependent);
+        if dependent {
+            let installed = match self.library.list().await {
+                Ok(m) => m,
+                Err(e) => return acquire::refusal(format!("Could not check the local base models: {e}")),
+            };
+            if let Some(companion) = self.catalog.companion(&model, &selected, &installed, true).await {
+                if choice.is_null() {
+                    return acquire::refusal("Open this companion in the catalog to choose how to download it.");
+                }
+                if let Some(reason) = companion["reason"].as_str() {
+                    return acquire::refusal(reason);
+                }
+                let offered = &companion["base"];
+                let accepted = &choice["base"];
+                if companion["installedBase"].is_null() {
+                    if offered.is_null() {
+                        return acquire::refusal("No compatible base build was verified.");
+                    }
+                    if !accepted.is_null() {
+                        if offered != accepted {
+                            return acquire::refusal(
+                                "The compatible base download changed. Reopen the model page and check its size before downloading both.",
+                            );
+                        }
+                        let repo = offered["repo"].as_str().unwrap_or_default();
+                        let label = offered["quant"].as_str().unwrap_or_default();
+                        let mut base = self.catalog.model(repo).await;
+                        let build = base["quants"]
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                            .find(|q| q["label"] == label && q["file"] == offered["file"])
+                            .cloned();
+                        let Some(build) = build else {
+                            return acquire::refusal("The compatible base build is no longer available.");
+                        };
+                        base["quants"] = json!([build]);
+                        let plan = acquire::model_download_plan(&base, repo, label, &dir, &landed);
+                        if plan["ok"] != true {
+                            return plan;
+                        }
+                        base_plan = Some(plan);
+                    }
+                }
+                // A GGUF adapter is one file. It must not inherit the repository's
+                // projector or tokenizer (including when its filename did not say LoRA).
+                if companion["kind"] == "lora" {
+                    let mut selected = selected;
+                    selected["extraFiles"] = json!([]);
+                    model["quants"] = json!([selected]);
+                } else {
+                    model["quants"] = json!([selected]);
+                }
+            } else if !choice["base"].is_null() {
+                return acquire::refusal("This build does not have a verified base download.");
+            } else {
+                model["quants"] = json!([selected]);
+            }
+        } else {
+            model["quants"] = json!([selected]);
+        }
         let plan = acquire::model_download_plan(&model, model_id, quant, &dir, &landed);
         if plan["ok"] != true {
-            return acquire::refusal(nekko_js::display(&plan["message"]));
+            return plan;
         }
+        // Plan and validate both before enqueuing either. Do not re-download a
+        // compatible installed base, even if it appeared after the page opened.
+        let paired = base_plan.is_some();
+        let job = self.start_plan(&plan);
+        if let Some(base) = base_plan {
+            self.start_plan(&base);
+        }
+        json!({ "ok": true, "message": if paired { json!("Queued the companion and its base model.") } else { plan["message"].clone() }, "jobId": job["id"] })
+    }
+
+    fn start_plan(&self, plan: &Value) -> Value {
         let job = self.start(&plan["main"], plan["verifyGguf"] == true);
         for extra in plan["extras"].as_array().into_iter().flatten() {
             self.start(extra, false);
         }
-        json!({ "ok": true, "message": plan["message"], "jobId": job["id"] })
+        job
     }
 
     /// The files a model on disk is missing, from its repo (`downloadCompanions`).
@@ -224,7 +312,9 @@ impl ModelDownloads {
     pub async fn route(self: &Arc<Self>, channel: &str, args: &[Value]) -> Result<Value, String> {
         let text = |i: usize| args.get(i).map(nekko_js::display).unwrap_or_else(|| "undefined".into());
         match channel {
-            "engine:downloadModel" => Ok(self.download_model(&text(0), &text(1)).await),
+            "engine:downloadModel" => {
+                Ok(self.download_model(&text(0), &text(1), args.get(2).unwrap_or(&Value::Null)).await)
+            }
             "engine:downloadCompanions" => self.download_companions(&text(0)).await,
             "engine:imageCompanions" => self.image_companions(&text(0)).await,
             "engine:downloadImageCompanions" => self.download_image_companions(&text(0)).await,

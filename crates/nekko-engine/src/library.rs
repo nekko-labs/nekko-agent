@@ -259,7 +259,9 @@ fn scan_folder(root: &Root) -> Vec<String> {
             }
             if entry.is_dir && depth < max {
                 walk(&full, depth + 1, max, out);
-            } else if entry.is_file && ends_gguf(&entry.name) {
+            } else if ends_gguf(&entry.name)
+                && (entry.is_file || (Path::new(&full).is_file() && hf_snapshot_repo(&full).is_some()))
+            {
                 out.push(full);
             }
         }
@@ -409,7 +411,7 @@ fn add_kv_layout(stored: &mut Map<String, Value>, p: &str) -> bool {
 /// Which header checks a stored row has been through. Bump it when a check is
 /// added (an unknown tensor type and a minimum engine build are the first):
 /// rows below it are read once more, and then carry the answer in the index.
-const HEADER_CHECKS: u64 = 1;
+const HEADER_CHECKS: u64 = 2;
 
 /// A row described before the header checks existed (or before the latest one)
 /// gets their answers once, from its header, and is marked so it is not read
@@ -445,7 +447,148 @@ fn refresh_header_checks(stored: &mut Map<String, Value>, p: &str) -> bool {
 fn put_header_checks(row: &mut Map<String, Value>, meta: &GgufMetadata) {
     assign(row, "unknownWeightType", meta.unknown_weight_type.map(|t| num(f64::from(t))));
     assign(row, "minEngineBuild", meta.min_engine_build.map(|b| num(f64::from(b))));
+    assign(row, "companion", meta.lora.then(|| lora_companion(meta.adapter_base_repo.as_deref())));
+    assign(row, "dependentWeights", (meta.dependent_adapter && !meta.lora).then_some(json!(true)));
+    assign(row, "loraBaseRepo", meta.source_repo.as_ref().filter(|_| !meta.dependent_adapter).map(|r| json!(r)));
     row.insert("headerChecks".into(), num(HEADER_CHECKS as f64));
+}
+
+fn lora_companion(base_repo: Option<&str>) -> Value {
+    match base_repo {
+        Some(repo) => json!({ "kind": "lora", "baseRepo": repo }),
+        None => json!({ "kind": "lora" }),
+    }
+}
+
+pub(crate) fn dependent_weights(model: &Value) -> bool {
+    model.get("companion").is_some_and(Value::is_object) || model["dependentWeights"] == true
+}
+
+/// A file may have changed since its index row was written. Do not turn
+/// adapter weights into a standalone launch just because the row is stale.
+pub(crate) fn gguf_is_dependent_now(model: &Value) -> bool {
+    model["path"]
+        .as_str()
+        .is_some_and(|p| Path::new(p).is_file() && gguf::read_metadata(p).is_some_and(|m| m.dependent_adapter))
+}
+
+pub(crate) fn validate_lora_pair(base: &Value, adapter: &Value) -> Result<String, String> {
+    let gguf = |m: &Value| m["format"].is_null() || m["format"] == "gguf";
+    if !gguf(base) || !gguf(adapter) {
+        return Err(
+            "LoRA pairing is supported only for GGUF with llama.cpp; MLX adapters cannot be loaded here.".into()
+        );
+    }
+    if dependent_weights(base)
+        || !matches!(base["modality"].as_str(), Some("chat" | "vision" | "embedding"))
+        || adapter.pointer("/companion/kind").and_then(Value::as_str) != Some("lora")
+    {
+        return Err("Choose a standalone GGUF base and a GGUF LoRA adapter from the library.".into());
+    }
+    let read = |m: &Value| {
+        let p = m["path"].as_str()?;
+        let file = Path::new(p);
+        if !file.is_absolute() || !ends_gguf(p) || !file.is_file() {
+            return None;
+        }
+        gguf::read_metadata(p).map(|meta| (p.to_string(), meta))
+    };
+    let Some((base_path, base_meta)) = read(base) else { return Err("The base GGUF is not readable.".into()) };
+    let Some((adapter_path, adapter_meta)) = read(adapter) else {
+        return Err("The adapter GGUF is not readable.".into());
+    };
+    if base_meta.dependent_adapter
+        || !adapter_meta.lora
+        || Path::new(&base_path).canonicalize().ok() == Path::new(&adapter_path).canonicalize().ok()
+        || test(regex!(r"-\d{5}-of-\d{5}\.gguf$"), &adapter_path)
+    {
+        return Err("A LoRA load requires one standalone base file and one distinct, unsplit LoRA adapter file.".into());
+    }
+    let expected = adapter_meta
+        .adapter_base_repo
+        .as_deref()
+        .filter(|repo| adapter.pointer("/companion/baseRepo").and_then(Value::as_str) == Some(*repo));
+    let actual = base_meta.source_repo.as_deref().or_else(|| {
+        (base["loraBaseRepoFromLayout"] == true)
+            .then(|| base["loraBaseRepo"].as_str().and_then(gguf::repo_id))
+            .flatten()
+    });
+    match (expected, actual) {
+        (Some(expected), Some(actual)) if expected == actual => {}
+        (Some(expected), Some(actual)) => {
+            return Err(format!("This adapter requires the exact base repository {expected}, not {actual}."));
+        }
+        _ => return Err("Cannot verify the exact base repository for this LoRA pair.".into()),
+    }
+    if base_meta.architecture.is_none() || base_meta.architecture != adapter_meta.architecture {
+        return Err("The GGUF LoRA adapter and base architectures do not match.".into());
+    }
+    if adapter_meta.unknown_weight_type.is_some() {
+        return Err("This LoRA adapter uses a weight type not supported by stock llama.cpp.".into());
+    }
+    Ok(adapter_path)
+}
+
+/// Managed downloads and HF snapshots encode the distribution repository, not
+/// a guess from the filename, model title or a third-party library's index.
+fn layout_repo(root: &Root, p: &str) -> Option<String> {
+    if root.is_ollama() {
+        return None;
+    }
+    let parts = rel_parts(&root.path, p);
+    let parts: Vec<_> = parts.iter().map(String::as_str).collect();
+    if let [kind, dir, _] = parts.as_slice()
+        && root.managed
+        && matches!(*kind, "chat" | "vision" | "embedding" | "image" | "audio" | "draft" | "unknown")
+    {
+        let (owner, repo) = dir.split_once('_')?;
+        // The managed folder scheme replaces the original slash with '_'.
+        // Do not reverse an encoding with more than one possible split.
+        if repo.contains('_')
+            || !Path::new(p)
+                .canonicalize()
+                .ok()?
+                .starts_with(Path::new(&root.path).join(kind).join(dir).canonicalize().ok()?)
+        {
+            return None;
+        }
+        let id = format!("{owner}/{repo}");
+        return gguf::repo_id(&id).map(str::to_string);
+    }
+    hf_snapshot_repo(p)
+}
+
+fn hf_snapshot_repo(p: &str) -> Option<String> {
+    let file = Path::new(p);
+    let snapshot = file.parent()?;
+    let snapshots = snapshot.parent()?;
+    let cache = snapshots.parent()?;
+    if snapshots.file_name()?.to_str()? != "snapshots" {
+        return None;
+    }
+    let revision = snapshot.file_name()?.to_str()?;
+    if revision.len() != 40 || !revision.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let resolved = file.canonicalize().ok()?;
+    if !resolved.starts_with(snapshot.canonicalize().ok()?) && !resolved.starts_with(cache.join("blobs")) {
+        return None;
+    }
+    let (owner, repo) = cache.file_name()?.to_str()?.strip_prefix("models--")?.split_once("--")?;
+    let id = format!("{owner}/{repo}");
+    gguf::repo_id(&id).map(str::to_string)
+}
+
+fn add_layout_repo(row: &mut Map<String, Value>, root: &Root, p: &str) {
+    if !row.contains_key("loraBaseRepo")
+        && row.get("readable") == Some(&json!(true))
+        && !row.contains_key("companion")
+        && !row.contains_key("dependentWeights")
+        && let Some(repo) = layout_repo(root, p)
+    {
+        row.insert("loraBaseRepo".into(), json!(repo));
+        row.insert("loraBaseRepoFromLayout".into(), json!(true));
+    }
 }
 
 /// Rows indexed when an unknown `general.file_type` was shown as `type 143`:
@@ -606,6 +749,8 @@ pub struct MlxInfo {
     pub kv_bytes_per_token: Option<u64>,
     pub vision: bool,
     pub dflash2: bool,
+    companion: Option<Value>,
+    dependent_weights: bool,
     pub size: f64,
 }
 
@@ -654,6 +799,26 @@ pub fn read_mlx_model(dir: &str) -> Option<MlxInfo> {
         .map(|e| e.file_name().to_string_lossy().into_owned())
         .collect();
     let weights: Vec<&String> = entries.iter().filter(|e| lower(e).ends_with(".safetensors")).collect();
+    let adapter_config = path::join(&[dir, "adapter_config.json"]);
+    let adapter_weights =
+        weights.iter().any(|w| matches!(lower(w).as_str(), "adapters.safetensors" | "adapter_model.safetensors"));
+    if adapter_weights || (!weights.is_empty() && Path::new(&adapter_config).is_file()) {
+        let config = read_json(&adapter_config).unwrap_or_default();
+        let kind = config["fine_tune_type"].as_str().or_else(|| config["peft_type"].as_str());
+        let lora = kind.map_or(adapter_weights, |k| k.eq_ignore_ascii_case("lora"));
+        let base_repo = config["base_model_name_or_path"].as_str().and_then(gguf::repo_id);
+        return Some(MlxInfo {
+            architecture: None,
+            quantization: None,
+            max_context: None,
+            kv_bytes_per_token: None,
+            vision: false,
+            dflash2: false,
+            companion: lora.then(|| lora_companion(base_repo)),
+            dependent_weights: !lora,
+            size: weights.iter().map(|w| size_of(&path::join(&[dir, w]))).sum(),
+        });
+    }
     if !entries.iter().any(|e| e == "config.json") || weights.is_empty() {
         return None;
     }
@@ -694,6 +859,8 @@ pub fn read_mlx_model(dir: &str) -> Option<MlxInfo> {
         kv_bytes_per_token: mlx_kv_bytes_per_token(&config),
         vision: nekko_js::truthy(field(&config, "vision_config").as_ref()),
         dflash2,
+        companion: None,
+        dependent_weights: false,
         size,
     })
 }
@@ -758,8 +925,13 @@ pub(crate) fn validate_mlx_dflash2_pair(target: &str, draft: &str) -> bool {
 fn scan_mlx_folder(root: &Root) -> Vec<(String, MlxInfo)> {
     fn walk(dir: &str, depth: u32, max: u32, out: &mut Vec<(String, MlxInfo)>) {
         let Ok(entries) = nodefs::read_dir(dir) else { return };
-        if entries.iter().any(|e| e.is_file && e.name == "config.json")
-            && let Some(info) = read_mlx_model(dir)
+        if entries.iter().any(|e| {
+            e.is_file
+                && matches!(
+                    e.name.as_str(),
+                    "config.json" | "adapter_config.json" | "adapters.safetensors" | "adapter_model.safetensors"
+                )
+        }) && let Some(info) = read_mlx_model(dir)
         {
             out.push((dir.to_string(), info));
             return;
@@ -928,6 +1100,7 @@ pub fn list(cfg: &LibraryConfig) -> Result<Vec<Value>, String> {
             let mut row = stored;
             // Index bookkeeping, not a fact about the model.
             row.shift_remove("headerChecks");
+            add_layout_repo(&mut row, root, &p);
             row.insert("path".into(), json!(p));
             row.insert("sizeBytes".into(), num(size));
             row.insert("managed".into(), json!(root.managed));
@@ -973,7 +1146,11 @@ pub fn list(cfg: &LibraryConfig) -> Result<Vec<Value>, String> {
             row.insert("managed".into(), json!(root.managed));
             row.insert("folderId".into(), root.id.clone());
             assign(&mut row, "folderProvider", root.provider.clone());
-            let modality = if info.dflash2 {
+            assign(&mut row, "companion", info.companion);
+            assign(&mut row, "dependentWeights", info.dependent_weights.then_some(json!(true)));
+            let modality = if row.contains_key("companion") || info.dependent_weights {
+                "unknown"
+            } else if info.dflash2 {
                 "draft"
             } else if info.vision {
                 "vision"
@@ -1000,7 +1177,11 @@ pub fn list(cfg: &LibraryConfig) -> Result<Vec<Value>, String> {
         let has = projector_dirs.contains(&lower(&path::dirname(p))) || companion_ids.contains(&companions_key(&id));
         row.insert("hasProjector".into(), json!(has));
         let name = format!("{id} {}", row.get("name").map(nekko_js::display).unwrap_or_default());
-        let modality = row_modality(row, &name);
+        let modality = if row.contains_key("companion") || row.contains_key("dependentWeights") {
+            "unknown"
+        } else {
+            row_modality(row, &name)
+        };
         row.insert("modality".into(), json!(modality));
     }
 
@@ -1072,6 +1253,7 @@ pub fn import_file(cfg: &LibraryConfig, p: &str) -> Result<Value, String> {
     index.write(cfg)?;
     let mut model = stored.clone();
     model.shift_remove("headerChecks");
+    add_layout_repo(&mut model, &primary, p);
     model.insert("path".into(), json!(p));
     model.insert("sizeBytes".into(), num(size));
     model.insert("managed".into(), json!(true));

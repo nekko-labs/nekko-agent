@@ -94,6 +94,21 @@ pub fn known_flags(help: &str) -> HashSet<String> {
     regex!(r"--[a-z0-9][a-z0-9-]*", "").find_iter(help).map(|m| help[m.range()].to_string()).collect()
 }
 
+/// llama.cpp parses --lora as a CSV list. A single library selection must
+/// never be interpreted as two files, or as a different, quoted path.
+pub(crate) fn lora_args(path: &str, flags: &HashSet<String>) -> Result<[String; 2], String> {
+    if !flags.contains("--lora") {
+        return Err("This llama.cpp runtime does not support --lora. Install or update the managed runtime.".into());
+    }
+    if path.contains([',', '"', '\r', '\n', '\0']) {
+        return Err(
+            "This adapter path cannot be passed safely to llama.cpp. Move it to a path without commas or quotes."
+                .into(),
+        );
+    }
+    Ok(["--lora".into(), path.to_string()])
+}
+
 /// The KV cache type a load runs with: the one it names, else the engine's
 /// default (`capacity::ENGINE_KV_CACHE_DTYPE`, q8_0). With Flash Attention
 /// switched off, f16: llama.cpp refuses a quantized V cache without it.
@@ -508,6 +523,11 @@ pub fn diffusion_args(
 /// Why a model cannot be loaded here (`unsupportedLoadReason`).
 pub fn unsupported_load_reason(model: &Value) -> Option<String> {
     let name = model.get("name").filter(|n| !n.is_null()).map(nekko_js::display).unwrap_or_else(|| "This model".into());
+    if crate::library::dependent_weights(model) {
+        return Some(format!(
+            "{name} contains dependent adapter weights. It requires a compatible base model and cannot run on its own."
+        ));
+    }
     if str_of(model, "format") == Some("mlx") && str_of(model, "modality") != Some("draft") {
         return (!truthy(model, "mlxRunnable"))
             .then(|| format!("{name} is an MLX model, which runs on Apple Silicon Macs only."));

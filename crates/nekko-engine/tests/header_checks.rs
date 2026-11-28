@@ -204,7 +204,7 @@ fn rows_indexed_before_the_header_checks_get_them_once() {
     assert_eq!(q2["minEngineBuild"], 11556);
     assert!(q2.get("unknownWeightType").is_none());
     let on_disk: Value = serde_json::from_str(&std::fs::read_to_string(&index).unwrap()).unwrap();
-    assert!(on_disk["models"].as_object().unwrap().values().all(|m| m["headerChecks"] == 1), "{on_disk}");
+    assert!(on_disk["models"].as_object().unwrap().values().all(|m| m["headerChecks"] == 2), "{on_disk}");
 
     // Marked, so the next listing does not open the files again: a file that changed behind the index's back is
     // not noticed, and the index is not rewritten.

@@ -663,7 +663,7 @@ impl Table {
         );
         t.add(
             crate::catalog::CHANNELS,
-            handler!(|ctx, channel, args| crate::catalog::route(&ctx.catalog, channel, &args).await),
+            handler!(|ctx, channel, args| crate::catalog::route(&ctx.catalog, &ctx.library, channel, &args).await),
         );
         t.add(
             crate::catalog::CHECK_CHANNELS,

@@ -56,12 +56,41 @@ pub fn new(settings: &crate::settings::Settings, hf: Option<String>, data_dir: &
     )
 }
 
-pub async fn route(catalog: &Catalog, channel: &str, args: &[Value]) -> Result<Value, String> {
+pub async fn route(
+    catalog: &Catalog,
+    library: &Arc<crate::library::Library>,
+    channel: &str,
+    args: &[Value],
+) -> Result<Value, String> {
     let arg = |i: usize| args.get(i).unwrap_or(&Value::Null);
     match channel {
         "engine:catalog" => Ok(Value::Array(catalog.catalog(arg(0), arg(1)).await)),
         "engine:catalogModel" => Ok(with_stock(catalog.model(&nekko_js::display(arg(0))).await)),
-        "engine:catalogDetail" => Ok(with_stock(catalog.detail(&nekko_js::display(arg(0))).await)),
+        "engine:catalogDetail" => {
+            let id = nekko_js::display(arg(0));
+            let mut model = with_stock(catalog.detail(&id).await);
+            let quants = model["quants"].as_array().cloned().unwrap_or_default();
+            let needs_library = model["dependent"] == true
+                || quants.iter().any(|q| {
+                    q["dependent"] == true
+                        || q["file"].as_str().is_some_and(|file| catalog.known_facts(&id, file).is_some())
+                });
+            if needs_library {
+                let installed = library.list().await?;
+                let mut resolved = Vec::new();
+                for mut q in quants {
+                    if let Some(companion) = catalog.companion(&model, &q, &installed, false).await {
+                        q["companion"] = companion;
+                    }
+                    resolved.push(q);
+                }
+                if !resolved.is_empty() && resolved.iter().all(|q| !q["companion"].is_null()) {
+                    model["dependent"] = Value::Bool(true);
+                }
+                model["quants"] = Value::Array(resolved);
+            }
+            Ok(model)
+        }
         other => Err(format!("{other} is not a catalog channel")),
     }
 }

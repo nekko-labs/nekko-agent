@@ -178,7 +178,7 @@ async fn a_model_is_cached() {
 /// A repo that publishes several releases of one model, each in the same
 /// quantizations (`nokeepai/Inkling-2-Mini-Unbound-GGUF`): every build gets its
 /// own label, so asking for one never fetches another, and LoRA adapters are
-/// not offered as models.
+/// offered separately as dependent weights.
 #[tokio::test]
 async fn releases_in_one_repo_stay_apart() {
     let id = "nokeepai/Inkling-2-Mini-Unbound-GGUF";
@@ -212,7 +212,7 @@ async fn releases_in_one_repo_stay_apart() {
             q["file"].as_str().unwrap()
         )
     };
-    let rows: Vec<String> = quants.iter().map(row).collect();
+    let rows: Vec<String> = quants.iter().filter(|q| q["dependent"] != true).map(row).collect();
     assert_eq!(
         rows,
         [
@@ -226,5 +226,11 @@ async fn releases_in_one_repo_stay_apart() {
         ]
     );
     assert_eq!(quants[1]["note"], "Effectively full quality. Large.", "the note follows the quantization");
-    assert!(quants.iter().all(|q| q["extraFiles"][0] == "mmproj-Inkling-2-Mini-BF16.gguf"));
+    assert!(
+        quants
+            .iter()
+            .filter(|q| q["dependent"] != true)
+            .all(|q| q["extraFiles"][0] == "mmproj-Inkling-2-Mini-BF16.gguf")
+    );
+    assert_eq!(quants.iter().filter(|q| q["dependent"] == true && q["extraFiles"] == json!([])).count(), 2);
 }
