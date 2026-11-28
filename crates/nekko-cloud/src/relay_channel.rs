@@ -127,7 +127,7 @@ impl Channel {
 
 impl Cloud {
     /// Nekko Cloud Relay is on this account's plan and shown to it.
-    pub(crate) fn relay_included(&self) -> bool {
+    pub fn relay_included(&self) -> bool {
         self.vault.get("token").is_some()
             && self.account().is_some_and(|a| a.cloud_relay && (a.plan == "pro" || a.plan == "team" || a.staff))
     }

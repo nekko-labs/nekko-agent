@@ -347,11 +347,14 @@ impl Cloud {
         let proof = fleet["proof"].as_str().ok_or("invalid")?;
         let plain = open_hello_proof(&ring, &me, key_id, device, proof).map_err(|_| "invalid")?;
         let said: Value = serde_json::from_slice(&plain).map_err(|_| "invalid")?;
-        let org_id = said["orgId"].as_str().filter(|o| valid_uuid(o)).ok_or("invalid")?.to_string();
+        // An empty org is the account itself (decision 0128): a device of this
+        // account with no pairing. The computer's own switch for that is checked
+        // where the device is let in (`remote.json` `accountDevices`).
+        let org_id = said["orgId"].as_str().filter(|o| o.is_empty() || valid_uuid(o)).ok_or("invalid")?.to_string();
         if said != binding_json(&org_id, b) {
             return Err("invalid");
         }
-        if !lock(&self.state).sharing.contains(&org_id) {
+        if !org_id.is_empty() && !lock(&self.state).sharing.contains(&org_id) {
             return Err("fleet-off");
         }
         let record = self.account_record().filter(|r| r.epoch == key_id).ok_or("fleet-epoch")?;
@@ -365,7 +368,7 @@ impl Cloud {
             && self.token().is_ok()
             && self.key_id() == a.key_id
             && self.keyring(a.key_id).is_some()
-            && lock(&self.state).sharing.contains(&a.org_id)
+            && (a.org_id.is_empty() || lock(&self.state).sharing.contains(&a.org_id))
             && self.account_record().is_some_and(|r| r.epoch == a.key_id && r.trusts(&a.device_id))
     }
 }

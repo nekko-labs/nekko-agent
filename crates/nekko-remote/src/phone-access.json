@@ -1174,7 +1174,8 @@
    "remoteAccess": [
     "remote:enable",
     "remote:attach",
-    "remote:setRelays"
+    "remote:setRelays",
+    "remote:setAccountDevices"
    ],
    "pairing": [
     "remote:pair",

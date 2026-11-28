@@ -62,6 +62,7 @@ fn device(url: &str, label: &str) -> Device {
             };
             Box::pin(async move { vec![m] })
         }),
+        reach: None,
         connect: Some(Arc::new(move || c.lock().unwrap().clone())),
         runners: None,
     });
@@ -361,6 +362,16 @@ async fn a_device_of_the_account_opens_a_chat_on_a_shared_computer_and_loses_it_
     future["keyId"] = json!(proof["keyId"].as_u64().unwrap() + 1);
     assert_eq!(desk.cloud.fleet_admit(&future, &b), Err("fleet-epoch"));
 
+    // Decision 0128: an account proof (no org) is let in by the gate with no sharing at all, and
+    // stays in after sharing is off; it is still bound to its handshake and its account.
+    let account_proof = laptop.cloud.fleet_hello("", &b).unwrap();
+    let admitted = desk.cloud.fleet_admit(&account_proof, &b).expect("an account device");
+    assert_eq!(admitted.org_id, "");
+    assert_eq!(desk.cloud.fleet_admit(&account_proof, &replayed), Err("invalid"));
+    let mut posing = account_proof.clone();
+    posing["accountId"] = json!("a1111111-2b3d-4e5f-8a6b-9c0d1e2f3a4b");
+    assert_eq!(desk.cloud.fleet_admit(&posing, &b), Err("fleet-account"));
+
     // The desk turns sharing off: the live link is cut, and a redial is refused.
     call(&desk, "fleet:setSharing", json!([org_id, false])).await.unwrap();
     assert_eq!(svc.recheck_fleet(), vec![link_device_id(&account_device)]);
@@ -376,6 +387,7 @@ async fn a_device_of_the_account_opens_a_chat_on_a_shared_computer_and_loses_it_
         .clone();
     assert_eq!(state, State::Denied("fleet-off".into()));
     again.stop();
+    assert!(desk.cloud.fleet_still(&admitted), "an account device doesn't depend on org sharing");
 
     // Sharing back on: in again. Then the desk removes the laptop from the account (a new key
     // epoch): the link is cut, and the old proof is worth nothing.

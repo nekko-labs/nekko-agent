@@ -86,6 +86,8 @@ If you turn on step-up (Settings, Security), raising a chat's mode from a comput
 
 ## Pairing a phone
 
+**With Nekko Cloud you don't need to pair.** Sign in to the same Nekko Cloud account on the computer and on the phone (Pro or Team, with sync turned on), and turn on remote access on the computer. The phone finds the computer and connects through Nekko Cloud Relay, end-to-end encrypted. A phone you paired before also picks up the relay this way, with no new code. To require pairing for every device, turn off **Devices on your Nekko Cloud account connect without pairing** in Remote access. Pairing, below, is for Tailscale without Nekko Cloud and for a phone that isn't signed in. (Needs the iPhone and Android app versions that read your account's computers; see [the spec](../spec/platform/nekko-cloud-relay.md).)
+
 1. On your computer: **Settings → Phone pairing** (second in the left-hand list), then in **Remote access**
    tick how phones connect under **Phones connect through**: **Tailscale** (free, needs the Tailscale
    app on both), **Nekko Cloud Relay** (Pro: works anywhere, nothing to install; *Coming soon* until it
@@ -895,10 +897,10 @@ The app calls this **Nekko Cloud** and never shows the URL. Self-hosting stays f
 
 **Nekko Cloud Relay is part of Nekko Cloud Pro and Team** (in progress, behind a switch until launch; [the spec](../spec/platform/nekko-cloud-relay.md)):
 
-- Sign in to Nekko Cloud on the computer. On Pro or Team, tick **Nekko Cloud Relay** under *Phones connect through*; on Free the row offers **Upgrade to Pro**.
+- Sign in to Nekko Cloud on the computer. On Pro or Team, **Nekko Cloud Relay** is ticked for you under *Phones connect through* while remote access is on (untick it and it stays off); on Free the row offers **Upgrade to Pro**.
 - Tick both **Tailscale** and **Nekko Cloud Relay** and the computer is reachable both ways at once: phones with Tailscale go direct, phones without it (or away from it) come in through the relay. Untick Tailscale to use the relay alone.
 - With both ticked, **Pair a device** shows which ways the next device may use, and each paired device has its own **Connects through** ticks (Tailscale, Nekko Cloud Relay, at least one). The computer enforces them: a phone allowed only Tailscale is turned away if it tries the relay.
-- On the phone, each computer's page has **Connect through** with the same two ticks, limited to the ways its pairing code carried. A phone paired before Nekko Cloud Relay was ticked needs a fresh code to gain it.
+- On the phone, each computer's page has **Connect through** with the same two ticks. A phone signed in to the same Nekko Cloud account learns every way the computer is reachable from your account, so it needs no fresh code; a phone that isn't signed in has only the ways its pairing code carried.
 - Everything stays end-to-end encrypted. The relay checks a short-lived ticket your computer gets from Nekko Cloud, so it knows your plan, not who you are.
 - Signed-in computers on Pro also tell each other through the relay when they come online and when they've synced something, so another computer pulls new chats at once instead of within the minute.
 
