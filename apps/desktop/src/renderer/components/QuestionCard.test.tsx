@@ -40,14 +40,12 @@ describe('QuestionCard', () => {
     }
   });
 
-  it('defaults to orange attention styling with brighter panel and option surfaces', () => {
+  it('defaults to warning accent styling and preserves the option surfaces', () => {
     const out = html();
     expect(out).toContain('data-question-tone="attention"');
     expect(out).toContain('--accent:var(--warning)');
     expect(out).toContain('--on-accent:#201609');
-    expect(out).toContain('var(--warning) 8%, var(--surface-2)');
     expect(out).toContain('white 4%, var(--surface-2)');
-    expect(out).not.toContain('background:var(--surface)');
   });
 
   it('preserves an explicit accent opt-in without a self-referencing accent variable', () => {

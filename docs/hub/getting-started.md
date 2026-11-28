@@ -285,7 +285,7 @@ In a Claude Agent chat, Claude Code compacts the conversation itself: on its own
 
 ### Answering agent questions
 
-When an agent needs a choice, its question opens at the bottom of the conversation without moving your typing focus, even when another agent asks while you are writing. Scroll the conversation to read the reply and question together; the question has no separate scrollbar. Click or Tab into the question to answer it: use the options, arrow and number keys, or type something else, then send your answer. Multiple questions show one step at a time, with Back and Next. Moving between steps keeps the keyboard in the question only while you are interacting with it. The pixel question-mark icon identifies the question.
+When an agent needs a choice, its question opens at the bottom of the conversation without moving your typing focus, even when another agent asks while you are writing. Scroll the conversation to read the reply and question together; the question has no separate scrollbar. Click or Tab into the question to answer it: use the options, arrow and number keys, or type something else, then send your answer. Multiple questions show one step at a time, with Back and Next. Moving between steps keeps the keyboard in the question only while you are interacting with it. On desktop and the Local Web UI, look for the rounded card with a soft amber shadow and the pixel question-mark icon.
 
 ### Links and files in replies
 
