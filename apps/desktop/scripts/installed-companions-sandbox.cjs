@@ -57,7 +57,11 @@ app.whenReady().then(async () => {
         await check(`Load sends the base and ${field}, never the companion alone`, `fixture.loads[${index}]?.[0]==='nekko-engine' && fixture.loads[${index}][1]==='base' && fixture.loads[${index}][2].${field}==='${id}' && !fixture.loads[${index}][2].${otherField} && fixture.loads[${index}][2].contextTokens===8192`);
       }
       await check('DFlash2 overrides a saved speculative-off choice; LoRA clears the saved draft', `fixture.loads[0][2].speculative===true && fixture.loads[1][2].speculative===false`);
-      const filter = name => run(`(() => { const input = document.querySelector('[aria-label="Filter my models"]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,${JSON.stringify(name)}); input.dispatchEvent(new Event('input',{bubbles:true})); })()`);
+      const filter = async name => {
+        await run(`(() => { const input = document.querySelector('[aria-label="Filter my models"]'); input.focus(); input.select(); })()`);
+        if (name) await win.webContents.insertText(name);
+        else win.webContents.delete();
+      };
       await filter('Writing Style Adapter');
       await check('Searching for a paired companion shows its base family', `document.querySelectorAll('[data-model-family]').length===1 && !!document.querySelector('[data-model-family=qwen3827b]')`);
       for (const [id, name, reason] of [['unknown','Unknown Source LoRA','exact base checkpoint is unknown'], ['mismatch','Wrong Checkpoint LoRA','Install the compatible GGUF base'], ['mlx-lora','MLX Style Adapter','requires GGUF']]) {
