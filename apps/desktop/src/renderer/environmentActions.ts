@@ -1,3 +1,4 @@
+import { folderPathKey, sameFolderPath } from '@nekko-agent/shared';
 import type { Session, SessionMeta } from '@nekko-agent/shared';
 import type { QuestionActions } from './components/QuestionCard.js';
 import { addFolderPathToChat, addFolderToChat, addRepoToChat } from './sessionFolders.js';
@@ -24,7 +25,15 @@ export function environmentActions(sessionId: string, chat: () => ChatFolders, o
         const folder = [...ids].reverse().map((id) => folders.find((f) => f.id === id)).find(Boolean);
         return folder ? added(`the folder ${folder.name}`, folder.path) : '(Added the chosen folder to this chat\'s environment.)';
       }
-      const { session: s, folder } = await addFolderPathToChat(sessionId, chat(), action.path);
+      // Managed checkouts are work locations, not new environment folders.
+      // A redundant action should submit the selected label without a note.
+      const pathKey = folderPathKey(action.path).replaceAll('\\', '/');
+      if (/(?:^|\/)\.git\/nekko-worktrees(?:\/|$)/.test(pathKey)) return '';
+      const current = chat();
+      const ids = [current?.workspaceId, ...(current?.supportingWorkspaceIds ?? [])];
+      const folders = useStore.getState().settings?.workspaces ?? [];
+      if (folders.some((f) => ids.includes(f.id) && sameFolderPath(f.path, action.path))) return '';
+      const { session: s, folder } = await addFolderPathToChat(sessionId, current, action.path);
       if (!folder) throw new Error(`Couldn't add ${action.path}: it isn't a folder this app can open.`);
       if (s) onSession(s);
       return added(`the folder ${folder.name}`, folder.path);

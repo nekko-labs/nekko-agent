@@ -28,6 +28,8 @@ A chat's folders are its **environment**: the local folders and the git reposito
   - `connectRepo`: answering swaps the options for the repository list (or **Connect repositories**), and picking one clones and adds it.
   A plain option such as "Search this computer" stays a normal answer, and the agent then searches with its file tools. The answer the agent reads carries what was added and its full path. A cancelled picker keeps the question open. An unknown or malformed action is dropped and the option works as a plain answer.
 
+- **Ordinary choices do not ask to add folders** `[implemented in source]`: model guidance and the `ask_user` tool reserve option actions for explicit choices about adding a missing project. Desktop and the Local Web UI treat `addFolder` options pointing at a Nekko-managed git worktree or a folder already in the chat as plain answers: keep the label and typed note, skip workspace registration, and do not report a folder add. Real additions still report where the agent can work. Existing saved replies and folders are not rewritten.
+
 ## Privacy and security
 
 - The connector token reaches git only as an `http.<provider origin>/.extraheader` passed through `GIT_CONFIG_*` environment variables: never on the command line, never written to the clone's `.git/config`, and never sent to any host but the provider's own origin. The daemon refuses a clone URL that is not `https://<provider origin>/<fullName>[.git]`.

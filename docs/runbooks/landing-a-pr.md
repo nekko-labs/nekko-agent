@@ -147,6 +147,14 @@ Both also run nightly. Until #712 is fixed, `perf` misses the cold-chat paint
 budget on unchanged code about half the time; see
 [failing checks](failing-checks.md). Do not merge with `--admin`: it skips `gate`.
 
+The shared `.claude/settings.json` disables Claude Code's default commit and PR
+credit and session URLs. For a local backstop, enable the optional commit hook
+with `git config --local core.hooksPath .githooks` if you do not already use a
+hooks path. This setting applies to all worktrees of the clone. The hook rejects
+common generated footers and session links; it does not rewrite messages or
+scan history. Read back the final PR description after editing or uploading
+evidence. Legitimate provider mentions and human trailers are welcome.
+
 The auto-merge workflow arms auto-merge on every ready PR into main, so `gh pr
 merge --auto --squash` is a belt to its braces. It also runs on every push, so a
 fix to a red PR merges itself once `gate` goes green. Every 15 minutes

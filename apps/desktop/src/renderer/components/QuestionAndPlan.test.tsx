@@ -23,12 +23,21 @@ describe('agent question in the window', () => {
   it('wears the warning tone, larger, when it is how a window asks for you', () => {
     const html = renderToStaticMarkup(<QuestionCard request={request} onAnswer={() => {}} onSkip={() => {}} tone="attention" />);
     expect(html).toContain('data-question-tone="attention"');
-    expect(html).toContain('var(--warning) 70%');
+    expect(html).toContain('--accent:var(--warning)');
     expect(html).toContain('text-sm font-semibold');
     const plain = renderToStaticMarkup(<QuestionCard request={request} onAnswer={() => {}} onSkip={() => {}} />);
     expect(plain).toContain('data-question-tone="attention"');
     const accent = renderToStaticMarkup(<QuestionCard request={request} onAnswer={() => {}} onSkip={() => {}} tone="accent" />);
     expect(accent).toContain('data-question-tone="accent"');
+  });
+  it('uses a neutral, rounded card with a soft tone shadow instead of a border', () => {
+    const html = renderToStaticMarkup(<QuestionCard request={request} onAnswer={() => {}} onSkip={() => {}} />);
+    expect(html).toContain('class="question-card rounded-2xl p-3 outline-hidden"');
+    expect(cssRule(styles, '.question-card[data-question-tone]')).toMatchObject({
+      background: 'var(--surface)',
+      'box-shadow': expect.stringContaining('var(--accent)'),
+    });
+    expect(cssRule(styles, '.conversation-question > [data-question-tone]')).not.toHaveProperty('box-shadow');
   });
   // Source pin, pending the wall e2e journey: the question reaches the pane
   // from the host (a promise or an agent event), which a server render never

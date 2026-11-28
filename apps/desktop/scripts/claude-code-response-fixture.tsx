@@ -1,6 +1,6 @@
 // Synthetic bridge only. No host, provider requests, credentials or external I/O.
-// A Claude Agent chat: Claude Code's replies have a speaker header;
-// a turn routed to a local model in the same chat does not.
+// A Claude Agent chat with one Claude Code reply and one routed local reply.
+// Expert mode keeps both turns’ model statistics visible in the comparison.
 // Run: NEKKO_FIXTURE=claude-code-response-fixture.tsx NEKKO_SANDBOX=claude-code-response-sandbox.cjs node chat-search-integration.cjs
 import React from 'react';
 import { createRoot } from 'react-dom/client';
@@ -12,6 +12,7 @@ import { useStore } from '../src/renderer/store';
 import { MessageBubble } from '../src/renderer/components/agent-console/MessageBubble';
 import '../src/renderer/styles.css';
 
+localStorage.setItem('nekko.chatMode', 'expert');
 useStore.setState({
   providers: [
     { id: 'cc', kind: 'claude-code', label: 'Claude Agent', enabled: true },

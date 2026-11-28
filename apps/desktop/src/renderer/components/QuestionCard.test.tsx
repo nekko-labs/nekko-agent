@@ -40,14 +40,12 @@ describe('QuestionCard', () => {
     }
   });
 
-  it('defaults to orange attention styling with brighter panel and option surfaces', () => {
+  it('defaults to warning accent styling and preserves the option surfaces', () => {
     const out = html();
     expect(out).toContain('data-question-tone="attention"');
     expect(out).toContain('--accent:var(--warning)');
     expect(out).toContain('--on-accent:#201609');
-    expect(out).toContain('var(--warning) 8%, var(--surface-2)');
     expect(out).toContain('white 4%, var(--surface-2)');
-    expect(out).not.toContain('background:var(--surface)');
   });
 
   it('preserves an explicit accent opt-in without a self-referencing accent variable', () => {
@@ -189,6 +187,15 @@ describe('environment actions on options (#2404)', () => {
     expect(pendingAction(q, ['Choose a folder'], { q1: { label: 'Choose a folder' } })).toBeUndefined();
     // Changing the pick after one action ran asks for the new one.
     expect(pendingAction(q, ['From GitHub'], { q1: { label: 'Choose a folder' } })?.action).toEqual({ kind: 'connectRepo' });
+  });
+
+  it('preserves the selected answer and typed text when a folder action is a no-op', () => {
+    const done = { q1: { label: 'Choose a folder', note: '' } };
+    const pick = { questionId: 'q1', labels: ['Choose a folder'] };
+    expect(pendingAction(q, pick.labels, done)).toBeUndefined();
+    expect(withActionNotes([pick], done)).toEqual([pick]);
+    const typed = { ...pick, note: 'Keep this text' };
+    expect(withActionNotes([typed], done)).toEqual([typed]);
   });
 
   it('tells the agent what was added alongside the picked answer', () => {
