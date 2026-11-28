@@ -261,7 +261,6 @@ export function toTranscriptRows(
   };
   let latestSummary: string | undefined;
   for (const m of messages) if (m.compaction) latestSummary = m.id;
-  let lastStrategy: TurnStrategy | undefined;
   const append = (chunk: ChatMessage[]) => {
     for (const b of toStreamBlocks(chunk, messages)) {
       if (b.type !== 'msg') {
@@ -275,11 +274,8 @@ export function toTranscriptRows(
       }
       if (m.role === 'assistant' && !m.content && !m.reasoning && !m.toolCalls?.length && !m.images?.length) continue;
       const strategy = m.role === 'user' && m.turnStrategy;
-      if (strategy && (strategy.tools !== lastStrategy?.tools || strategy.orchestration !== lastStrategy.orchestration || strategy.reason !== lastStrategy.reason)) {
-        rows.push({ key: unique('strategy_' + m.id), kind: 'strategy', strategy, gapAfter: 10 });
-        lastStrategy = strategy;
-      }
       rows.push({ key: unique('m_' + m.id), kind: 'msg', message: m, voice: b.voice, prUrls: [], ...(persisted.has(m) ? {} : m.role === 'user' ? { displayOnly: true } : {}) });
+      if (strategy) rows.push({ key: unique('strategy_' + m.id), kind: 'strategy', strategy, gapAfter: 10 });
     }
   };
   let start = 0;
@@ -323,7 +319,10 @@ export function toTranscriptRows(
  */
 export function estimateRowHeight(row: TranscriptRow, width: number): number {
   const gap = row.gapAfter ?? 20;
-  if (row.kind === 'strategy') return (width < 420 ? 68 : 52) + gap;
+  if (row.kind === 'strategy') {
+    const { modelId, subagentModelId, subagentsDeferred } = row.strategy;
+    return (width < 420 ? 60 : 44) + (modelId ? 16 : 0) + (subagentModelId || subagentsDeferred ? 16 : 0) + gap;
+  }
   if (row.kind === 'activity') return 22 + gap;
   if (row.kind === 'prs') return row.urls.length * (row.live ? 90 : 46) + gap;
   if (row.kind === 'stats') return 18 + gap;

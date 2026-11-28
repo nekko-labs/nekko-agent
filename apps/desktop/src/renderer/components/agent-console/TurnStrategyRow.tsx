@@ -14,12 +14,16 @@ const reasons = {
 export function TurnStrategyRow({ strategy }: { strategy: TurnStrategy }) {
   const headingId = useId();
   return (
-    <section aria-labelledby={headingId} data-turn-strategy className="rounded-md border border-line px-3 py-2 text-xs">
-      <h3 id={headingId} className="m-0 font-medium">Strategy</h3>
-      <p className="m-0 mt-1 text-ink-muted">
+    <section aria-labelledby={headingId} data-turn-strategy className="py-2 text-xs [overflow-wrap:anywhere]">
+      <h3 id={headingId} className="m-0 font-medium text-ink-soft">Strategy</h3>
+      <p className="m-0 mt-1 text-ink-faint">
         {strategy.orchestration === 'external' ? orchestra.external : `${tools[strategy.tools]} · ${orchestra[strategy.orchestration]}`}
         {strategy.reason && <> · {reasons[strategy.reason]}</>}
       </p>
+      {strategy.modelId && <p className="m-0 text-ink-faint">Model: {strategy.modelId}</p>}
+      {(strategy.subagentModelId || strategy.subagentsDeferred) && (
+        <p className="m-0 text-ink-faint">Planned sub-agent model: {strategy.subagentModelId || 'Chosen at delegation'}</p>
+      )}
     </section>
   );
 }

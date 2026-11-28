@@ -30,7 +30,7 @@ import java.io.File
 class ChatStrategyDeviceTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
-    @Test fun showsFirstStrategyAndChangesOnly() {
+    @Test fun showsStrategyAndModelsAfterEachPrompt() {
         val messages = listOf(
             Block.User("u1", "Read the project brief."),
             Block.Assistant("a1", "The brief calls for checking both ledgers."),
@@ -39,8 +39,8 @@ class ChatStrategyDeviceTest {
             Block.User("u3", "Delegate the ledger review."),
             Block.Assistant("a3", "The ledgers agree with the audit totals."),
         )
-        val direct = TurnStrategy(TurnStrategy.Tools.LIST, TurnStrategy.Orchestration.DIRECT)
-        val coordinator = TurnStrategy(TurnStrategy.Tools.CODE, TurnStrategy.Orchestration.COORDINATOR)
+        val direct = TurnStrategy(TurnStrategy.Tools.LIST, TurnStrategy.Orchestration.DIRECT, modelId = "gpt-fixture")
+        val coordinator = TurnStrategy(TurnStrategy.Tools.CODE, TurnStrategy.Orchestration.COORDINATOR, modelId = "gpt-fixture", subagentModelId = "gpt-fixture-mini")
         val rows = transcriptRows(messages.map { it.id to it }, true, false, emptySet(), strategies = mapOf("u1" to direct, "u2" to direct, "u3" to coordinator))
         compose.setContent {
             NekkoTheme(dark = false) {
@@ -58,9 +58,11 @@ class ChatStrategyDeviceTest {
         }
         compose.waitForIdle()
         compose.onAllNodes(hasText("The ledgers agree with the audit totals.")).assertCountEquals(1)
-        compose.onAllNodes(hasText("Strategy")).assertCountEquals(2)
-        compose.onAllNodes(hasText("Tool list · Direct")).assertCountEquals(1)
+        compose.onAllNodes(hasText("Strategy")).assertCountEquals(3)
+        compose.onAllNodes(hasText("Tool list · Direct")).assertCountEquals(2)
         compose.onAllNodes(hasText("Code mode · Orchestration")).assertCountEquals(1)
+        compose.onAllNodes(hasText("Model: gpt-fixture")).assertCountEquals(3)
+        compose.onAllNodes(hasText("Planned sub-agent model: gpt-fixture-mini")).assertCountEquals(1)
         val bitmap = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot() ?: error("No strategy screenshot")
         val dir = File(ApplicationProvider.getApplicationContext<NekkoApp>().getExternalFilesDir(null), "evidence").apply { mkdirs() }
         File(dir, "chat-strategy.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }

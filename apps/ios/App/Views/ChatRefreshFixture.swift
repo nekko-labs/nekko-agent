@@ -72,8 +72,8 @@ private final class RefreshFixtureConnection: RemoteConnection, @unchecked Senda
             }
         }
         if ProcessInfo.processInfo.arguments.contains("-refreshStrategy") {
-            let direct: JSONValue = ["tools": "list", "orchestration": "direct", "reason": "not-needed"]
-            let coordinator: JSONValue = ["tools": "code", "orchestration": "coordinator", "reason": "requested"]
+            let direct: JSONValue = ["tools": "list", "orchestration": "direct", "reason": "not-needed", "modelId": "claude-opus-5-5"]
+            let coordinator: JSONValue = ["tools": "code", "orchestration": "coordinator", "reason": "requested", "modelId": "claude-opus-5-5", "subagentModelId": "claude-sonnet-5-5"]
             let messages: [JSONValue] = [
                 ["id": "u1", "role": "user", "content": "Read the project brief.", "turnStrategy": direct],
                 ["id": "a1", "role": "assistant", "content": "The brief calls for checking both ledgers."],

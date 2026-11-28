@@ -22,7 +22,7 @@ struct TurnStrategyTests {
         await cache.flush()
         #expect(cache.saved("s")?.session.messages.first?.turnStrategy == nil)
 
-        let revised = try session(["tools": "code", "orchestration": "coordinator", "reason": "separable", "extra": "ignore"])
+        let revised = try session(["tools": "code", "orchestration": "coordinator", "reason": "separable", "modelId": "parent", "subagentModelId": "worker", "subagentsDeferred": true, "extra": "ignore"])
         #expect(legacy.messages != revised.messages)
         cache.save(revised)
         await cache.flush()
@@ -30,10 +30,10 @@ struct TurnStrategyTests {
         reopened.use(files, computerId: "pc")
         let restored = try #require(reopened.saved("s"))
         #expect(restored.session.messages == revised.messages)
-        #expect(restored.session.messages.first?.turnStrategy?.json == ["tools": "code", "orchestration": "coordinator", "reason": "separable"])
+        #expect(restored.session.messages.first?.turnStrategy?.json == ["tools": "code", "orchestration": "coordinator", "reason": "separable", "modelId": "parent", "subagentModelId": "worker", "subagentsDeferred": true])
     }
 
-    @Test func sectionsCompareModesNotReasons() throws {
+    @Test func sectionsIncludeRepeatedModes() throws {
         func message(_ id: String, _ strategy: JSONValue?, role: String = "user") throws -> ChatMessage {
             var raw: [String: JSONValue] = ["id": .string(id), "role": .string(role)]
             raw["turnStrategy"] = strategy
@@ -50,7 +50,7 @@ struct TurnStrategyTests {
             message("u5", ["tools": "claude-code", "orchestration": "external"]),
         ]
         let sections = TurnStrategy.sections(messages, shownIds: ["u1": "live-u1"])
-        #expect(Set(sections.keys) == ["live-u1", "u3", "u4", "u5"])
+        #expect(Set(sections.keys) == ["live-u1", "u2", "u3", "u4", "u5"])
         #expect(messages[2].turnStrategy == nil)
         #expect(messages[3].turnStrategy == nil)
         #expect(sections["u3"]?.reason == nil)

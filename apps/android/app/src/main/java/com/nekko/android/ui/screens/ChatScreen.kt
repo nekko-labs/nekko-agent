@@ -1136,21 +1136,18 @@ internal fun transcriptRows(
             out += TranscriptRow.Footer(at.pollFirstEntry().value)
         }
     }
-    var lastStrategy: TurnStrategy? = null
-    fun strategyBefore(item: Pair<String, Block>) {
+    fun strategyAfter(item: Pair<String, Block>) {
         val user = item.second as? Block.User ?: return
         val strategy = strategies[user.id] ?: return
-        if (strategy == lastStrategy) return
-        lastStrategy = strategy
         flush()
         out += TranscriptRow.Strategy(item.first, strategy)
     }
     if (showSteps) {
         keyed.forEachIndexed { i, item ->
             footersBefore(i)
-            strategyBefore(item)
             pendingOpen = true
             pending += item
+            strategyAfter(item)
         }
     } else {
         TurnSteps.fold(keyed, { it.second }, { it.first }, running, open).forEach { r ->
@@ -1158,10 +1155,10 @@ internal fun transcriptRows(
                 is TurnSteps.Row.Summary -> { footersBefore(index[r.turn] ?: 0); flush(); out += TranscriptRow.Steps(r) }
                 is TurnSteps.Row.Item -> {
                     footersBefore(index[r.item.first] ?: 0)
-                    strategyBefore(r.item)
                     if (r.stepsOpen != pendingOpen) flush()
                     pendingOpen = r.stepsOpen
                     pending += r.item
+                    strategyAfter(r.item)
                 }
             }
         }
