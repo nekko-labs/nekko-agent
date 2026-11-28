@@ -203,6 +203,8 @@ def section(only=None):
     runs = sorted(glob.glob(os.path.join(ROOT, "runs", "*")))
     if only:
         runs = [r for r in runs if any(o in os.path.basename(r) for o in only)]
+    # A run still measuring has no manifest yet.
+    runs = [r for r in runs if os.path.exists(os.path.join(r, "manifest.json"))]
     ok, excluded = [], []
     for run in runs:
         m, rows = load(run)
