@@ -13,7 +13,7 @@ final class LiveDashboardEvidenceTests: XCTestCase {
                 "-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-uiTestReset", "YES",
                 "-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-theme", "light",
                 "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL",
-                "-liveActivityLevel", level, "-uiTestPhoneProvider"
+                "-liveActivityLevel", level, "-uiTestPhoneProvider", "-phoneCloudBeta", "YES"
             ]
             // The baseline's in-process provider opens Chats without pairing, a real key,
             // or a network request. Do not use -uiTestLiveCard: ActivityKit can refuse

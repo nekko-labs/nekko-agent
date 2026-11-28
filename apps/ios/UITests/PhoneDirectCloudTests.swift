@@ -108,9 +108,27 @@ final class PhoneDirectCloudTests: XCTestCase {
         app.terminate()
     }
 
+    /// The beta off (a new install's default): no computer means Welcome, whose link says beta
+    /// and turns it on; This iPhone's Models page opens from it.
+    func testBetaOffWelcomeLinkTurnsItOn() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-uiTestReset", "YES", "-theme", "light", "-AppleLanguages", "(en)",
+                               "-phoneCloudBeta", "NO"]
+        app.launch()
+        let link = app.buttons["welcome.phoneModels"].firstMatch
+        XCTAssertTrue(link.waitForExistence(timeout: 10))
+        XCTAssertTrue(link.label.contains("(beta)"), "the link says beta while it is off")
+        attach(app, "phone-cloud-beta-off-welcome")
+        link.tap()
+        XCTAssertTrue(app.buttons["phoneModels.add"].firstMatch.waitForExistence(timeout: 5), "This iPhone's Models page")
+        attach(app, "phone-cloud-beta-models-page")
+        app.terminate()
+    }
+
     private func launch(_ fixture: String, theme: String, extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-uiTestReset", "YES", "-theme", theme, "-AppleLanguages", "(en)", fixture] + extra
+        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-uiTestReset", "YES", "-theme", theme, "-AppleLanguages", "(en)",
+                               "-phoneCloudBeta", "YES", fixture] + extra
         app.launch()
         return app
     }

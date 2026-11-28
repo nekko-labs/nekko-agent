@@ -159,8 +159,13 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > `apps/android` (pairing, chats, live replies, approvals and questions; direct cloud text chats in progress for #2414, not released) and
 > SwiftUI in `apps/ios`. The Expo app described below stays as the reference until they reach parity.
 >
-> **Chats on this phone (Android, in progress for [#2414](https://github.com/nekko-labs/nekko-agent/issues/2414)).**
-> From Chats, choose **This phone**, even with no paired computer or provider. Add a provider there:
+> **Chats on this phone (beta, iPhone and Android).** Off until you turn it on: **Settings → Beta →
+> Cloud models on This iPhone** (**This phone** on Android). With no computer paired, the iPhone's
+> welcome screen offers **Or try a model provider on this iPhone (beta)**, which turns it on. Turning
+> it off hides This phone in Chats and Run on and the **Models on This phone** page, and stops a reply
+> that is coming in; your providers, keys and chats stay for when you turn it back on. A phone that
+> already had a provider or a chat before the setting existed starts with it on.
+> Then, from Chats, choose **This phone**, even with no paired computer or provider. Add a provider there:
 > Claude API, OpenAI, OpenRouter, Google Gemini, Ollama Cloud, Claude in Amazon Bedrock (Mantle
 > Messages), Claude in Microsoft Foundry, Claude on Vertex AI, or an HTTPS OpenAI-compatible API.
 > OpenRouter is one tap: **Sign in with OpenRouter**, approve in the browser, done. For the Claude
@@ -179,10 +184,9 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > Expanded/book layouts show list and chat around a reported hinge; tabletop separates transcript
 > and composer. Physical posture transitions and OEM keyboards remain untested. Forms are English-only.
 > Foundry requires a deployment matching an offered model ID; Vertex tokens need manual renewal.
-> Android implementation and synthetic tests do not establish live provider entitlement or visual
-> approval. Captured screenshots/video await inspection. The iPhone counterpart is separate,
-> unshipped [draft PR #2462](https://github.com/nekko-labs/nekko-agent/pull/2462); #2414 stays open
-> until both platform PRs land. See the [Android specification](../spec/phone/android-direct-cloud-chats.md).
+> Synthetic tests do not establish live provider entitlement. See the
+> [Android specification](../spec/phone/android-direct-cloud-chats.md) and the
+> [beta setting](../spec/phone/phone-cloud-models-beta-setting.md).
 >
 
 > The Android app's look is chosen on the phone: **Settings → Appearance → Theme** offers

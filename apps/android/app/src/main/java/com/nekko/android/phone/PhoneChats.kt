@@ -34,6 +34,11 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
          * iPhone's #2923), for the limit line. In memory only: never saved or sent anywhere.
          */
         val rateLimits: Map<String, com.nekko.protocol.PhoneRateLimits> = emptyMap(),
+        /**
+         * The beta setting ([PhoneCloudBeta], off for a new install): off hides every way in and
+         * sends nothing; the providers, keys and chats stay for when it is turned back on.
+         */
+        val available: Boolean = true,
     )
     private val mutable = MutableStateFlow(State())
     val state = mutable.asStateFlow()
@@ -53,6 +58,15 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
     private fun now() = System.currentTimeMillis()
     private fun ready() = check(mutable.value.ready) { "Unlock and load phone chats first." }
 
+    /** Anything was ever set up here: a provider (on or off) or a chat. Decides the beta's first value. */
+    val hasAnything: Boolean get() = mutable.value.let { it.providers.isNotEmpty() || it.chats.isNotEmpty() }
+
+    /** Turn the beta on or off; off stops every reply that is coming in. */
+    fun setAvailable(on: Boolean) = synchronized(gate) {
+        if (!on) tasks.keys.toList().forEach { stop(it) }
+        mutable.update { it.copy(available = on) }
+    }
+
     suspend fun load() = lock.withLock {
         if (mutable.value.ready) return@withLock
         val providers = secrets.get(providersSlot)?.let { json.decodeFromString(ListSerializer(PhoneProvider.serializer()), it) }.orEmpty()
@@ -62,7 +76,8 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
         val usage = secrets.get(usageSlot)?.let { runCatching { com.nekko.protocol.PhoneUsageLedger.from(Json.parseToJsonElement(it)) }.getOrNull() }
             ?: com.nekko.protocol.PhoneUsageLedger()
         val tone = com.nekko.protocol.PhoneTone.parse(secrets.get(toneSlot))
-        synchronized(gate) { mutable.value = State(ready = true, providers = providers, chats = chats, usage = usage, tone = tone) }
+        // The beta setting was decided before the load (PhoneCloudBeta.atLaunch): keep it.
+        synchronized(gate) { mutable.value = State(ready = true, providers = providers, chats = chats, usage = usage, tone = tone, available = mutable.value.available) }
     }
 
     /** The tone for the next reply of every chat on this phone; saved messages are never rewritten. */
@@ -352,6 +367,7 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
     }
     suspend fun newChat(providerId: String, modelId: String): String = lock.withLock {
         ready()
+        check(mutable.value.available) { "Turn on cloud models on this phone in Settings first." }
         check(mutable.value.providers.any { it.id == providerId && it.enabled }) { "Enable a provider first." }
         check(mutable.value.models[providerId]?.any { it.id == modelId } == true) { "Choose a model." }
         val c = PhoneChat("phone:${id()}", "New chat", providerId, modelId, now(), now())
@@ -377,7 +393,7 @@ class PhoneChats(private val secrets: SecureStore, private val http: PhoneHTTP, 
     /** Send text, photos (image data URLs) or both; [retry] asks again for the last reply. */
     fun send(chatId: String, text: String, retry: Boolean = false, images: List<String> = emptyList()) = synchronized(gate) {
         val photos = images.filter { PhoneProviders.imagePart(it) != null }.take(PhoneProviders.MAX_IMAGES)
-        if (!mutable.value.ready || tasks.containsKey(chatId) || (!retry && text.isBlank() && photos.isEmpty())) return@synchronized
+        if (!mutable.value.ready || !mutable.value.available || tasks.containsKey(chatId) || (!retry && text.isBlank() && photos.isEmpty())) return@synchronized
         val attempt = id()
         lateinit var task: Job
         task = scope.launch(start = CoroutineStart.LAZY) {

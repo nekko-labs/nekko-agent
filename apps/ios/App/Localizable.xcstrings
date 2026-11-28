@@ -45772,6 +45772,166 @@
           }
         }
       }
+    },
+    "Beta": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beta"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beta"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bêta"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ベータ"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beta"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "测试版"
+          }
+        }
+      }
+    },
+    "Cloud models on %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cloud-Modelle auf %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modelos en la nube en %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modèles cloud sur %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@のクラウドモデル"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modelos na nuvem em %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@上的云端模型"
+          }
+        }
+      }
+    },
+    "Chat with a cloud provider on your own key, with no computer. Turning it off keeps your keys and chats.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chatte mit einem Cloud-Anbieter über deinen eigenen Schlüssel, ganz ohne Computer. Beim Ausschalten bleiben deine Schlüssel und Chats erhalten."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chatea con un proveedor en la nube con tu propia clave, sin computadora. Si lo desactivas, se conservan tus claves y chats."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discutez avec un fournisseur cloud avec votre propre clé, sans ordinateur. Le désactiver conserve vos clés et vos discussions."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自分のキーでクラウドプロバイダーとチャットできます。コンピューターは不要です。オフにしてもキーとチャットは残ります。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Converse com um provedor na nuvem usando sua própria chave, sem computador. Desativar mantém suas chaves e conversas."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用你自己的密钥与云服务商聊天，无需电脑。关闭后会保留你的密钥和聊天。"
+          }
+        }
+      }
+    },
+    "Or try a model provider on this iPhone (beta)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oder einen Modellanbieter auf diesem iPhone ausprobieren (Beta)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O prueba un proveedor de modelos en este iPhone (beta)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ou essayez un fournisseur de modèles sur cet iPhone (bêta)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "またはこのiPhoneでモデルプロバイダを試す（ベータ）"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ou experimente um provedor de modelos neste iPhone (beta)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "或在此 iPhone 上试用模型服务商（测试版）"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

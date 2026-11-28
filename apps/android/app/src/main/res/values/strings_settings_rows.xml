@@ -5,4 +5,7 @@
     <string name="settings_manage_computers">Manage computers</string>
     <string name="settings_models_on">Models on %1$s</string>
     <string name="settings_phone_provider_off">Off</string>
+    <string name="settings_beta">Beta</string>
+    <string name="settings_phone_cloud_beta">Cloud models on %1$s</string>
+    <string name="settings_phone_cloud_beta_detail">Chat with a cloud provider on your own key, with no computer. Turning it off keeps your keys and chats.</string>
 </resources>

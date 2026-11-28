@@ -28,9 +28,13 @@ struct WelcomeView: View {
                     .accessibilityIdentifier("welcome.cloud")
                 }
                 // No computer needed: chats can run on this iPhone, on a cloud provider (decision 0050).
+                // It is in beta and off for a new install: with no computer there is no Settings to
+                // turn it on from, so this link says beta and opening it turns the beta on.
                 NavigationLink(value: Route.phoneModels) {
-                    Label("Or use a model provider on this iPhone", systemImage: "iphone")
+                    Label(app.phone.available ? String(localized: "Or use a model provider on this iPhone")
+                                              : String(localized: "Or try a model provider on this iPhone (beta)"), systemImage: "iphone")
                 }
+                .simultaneousGesture(TapGesture().onEnded { if !app.phone.available { app.setPhoneCloudBeta(true) } })
                 .accessibilityIdentifier("welcome.phoneModels")
             }
             .padding(20)

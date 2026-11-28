@@ -215,8 +215,12 @@ fun NekkoNavHost(
                 com.nekko.android.phone.PhoneScreen(app.phoneChats, startChat = entry.arguments?.getString("chat"), openProviders = open != null, addProvider = open == "add", startProvider = open?.removePrefix("provider:")?.takeIf { open.startsWith("provider:") }) { nav.popBackStack() }
             }
             composable(Routes.CHATS) {
+                val chatsPhone = (LocalContext.current.applicationContext as? com.nekko.android.NekkoApp)?.phoneChats?.state?.collectAsStateWithLifecycle()?.value
                 Column(Modifier.fillMaxSize()) {
-                    androidx.compose.material3.TextButton(onClick = { nav.navigate(Routes.phone()) }, modifier = Modifier.padding(top = 24.dp)) { Text("This phone") }
+                    // Only while the beta setting is on (Settings → Beta).
+                    if (chatsPhone?.available == true) {
+                        androidx.compose.material3.TextButton(onClick = { nav.navigate(Routes.phone()) }, modifier = Modifier.padding(top = 24.dp)) { Text(stringResource(R.string.chats_this_phone)) }
+                    }
                     Box(Modifier.weight(1f)) {
                         PhoneComputerHome(repo, phonePrefs, mode, window, panes, shareInbox, nav, startFresh)
                     }
@@ -295,7 +299,7 @@ fun NekkoNavHost(
                         shareInbox.handOff(id)
                         nav.onMain { navigate(Routes.chat(id)) { popUpTo(Routes.NEW) { inclusive = true } } }
                     },
-                    onThisPhone = { nav.navigate(Routes.phone()) { popUpTo(Routes.NEW) { inclusive = true } } },
+                    onThisPhone = if (newChatPhone.available) { { nav.navigate(Routes.phone()) { popUpTo(Routes.NEW) { inclusive = true } } } } else null,
                     onFolders = { nav.navigate(Routes.FILES) },
                     onConnectors = { nav.navigate(Routes.CONNECTORS) },
                     connectors = newChatApp.connectors.state,

@@ -402,20 +402,30 @@ struct SettingsView: View {
                 }
                 .disabled(!store.pcSettings.known || store.conn != .online)
             }
-            Section {
-                // Chats that run on this iPhone, on its own cloud providers (decision 0050).
-                ForEach(phone.providers) { p in
-                    NavigationLink(value: Route.phoneProvider(p.id)) { PhoneProviderRow(provider: p) }
-                        .accessibilityIdentifier("settings.phoneProvider")
-                }
-                NavigationLink(value: Route.phoneModels) { Label("Add a provider", systemImage: "plus").labelStyle(.quietRow) }
-                    .accessibilityIdentifier("settings.phoneModels")
-            } header: { SectionHeader("Models on \(ChatPlace.phoneName)") }
+            if phone.available {
+                Section {
+                    // Chats that run on this iPhone, on its own cloud providers (decision 0050), in beta.
+                    ForEach(phone.providers) { p in
+                        NavigationLink(value: Route.phoneProvider(p.id)) { PhoneProviderRow(provider: p) }
+                            .accessibilityIdentifier("settings.phoneProvider")
+                    }
+                    NavigationLink(value: Route.phoneModels) { Label("Add a provider", systemImage: "plus").labelStyle(.quietRow) }
+                        .accessibilityIdentifier("settings.phoneModels")
+                } header: { SectionHeader("Models on \(ChatPlace.phoneName)") }
+            }
             Section {
                 // GitHub, Linear, Jira and the rest, on this iPhone itself (decision 0058).
                 NavigationLink(value: Route.connectors) { Label("Connectors", systemImage: "point.3.connected.trianglepath.dotted").labelStyle(.quietRow) }
                     .accessibilityIdentifier("settings.connectors")
                 NavigationLink(value: Route.connection) { Label("Connection", systemImage: "antenna.radiowaves.left.and.right").labelStyle(.quietRow) }
+            }
+            Section {
+                // Off for a new install (PhoneProviders.betaOn); off keeps the providers, keys and chats.
+                Toggle("Cloud models on \(ChatPlace.phoneName)", isOn: Binding(get: { phone.available }, set: { app.setPhoneCloudBeta($0) }))
+                    .accessibilityIdentifier("settings.phoneCloudBeta")
+            } header: { SectionHeader("Beta") } footer: {
+                Text("Chat with a cloud provider on your own key, with no computer. Turning it off keeps your keys and chats.")
+                    .foregroundStyle(palette.inkSoft)
             }
             Section {
                 LabeledContent("App", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?")

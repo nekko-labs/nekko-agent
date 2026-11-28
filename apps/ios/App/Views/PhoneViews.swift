@@ -36,11 +36,12 @@ struct ChatPlace: Equatable {
         return ChatPlace(id: c.id, name: c.name, icon: c.icon, color: Int(ComputerColors.computer(at: i)))
     }
 
-    /// Every place in the list, in order: the paired computers, then this iPhone, including before provider setup.
+    /// Every place in the list, in order: the paired computers, then this iPhone (including
+    /// before provider setup) while its beta setting is on.
     @MainActor
     static func all(store: ComputersStore, phone: PhoneChats) -> [ChatPlace] {
         let computers = store.computers.indices.compactMap { of(store.computers[$0].id, store: store) }
-        return computers + [phonePlace]
+        return phone.available ? computers + [phonePlace] : computers
     }
 }
 

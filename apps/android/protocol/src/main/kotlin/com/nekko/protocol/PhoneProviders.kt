@@ -17,6 +17,13 @@ data class PhoneRequest(val url: String, val headers: Map<String, String>, val b
 /** Direct phone APIs only: keys, and the ChatGPT sign-in (#3244). No local servers, tools or relay. */
 object PhoneProviders {
     /**
+     * Settings → Beta → cloud models on this phone: the user's choice once made. Before that,
+     * off for a new install and on for one that already set up a provider or kept a chat here,
+     * so nobody who used it before the beta setting loses it (the iPhone's `betaOn`).
+     */
+    fun betaOn(stored: Boolean?, hasAnything: Boolean): Boolean = stored ?: hasAnything
+
+    /**
      * [keyPage]: where the key is made, for the guided setup (open it, copy, come back, Paste);
      * such kinds need no name or address. [signIn]: OpenRouter's browser sign-in hands the key back.
      * [plan]: signs in to a subscription ([ChatGptSignIn]); there is no key to paste.

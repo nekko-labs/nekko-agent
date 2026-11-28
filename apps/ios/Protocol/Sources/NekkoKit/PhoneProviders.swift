@@ -13,6 +13,13 @@ public enum PhoneProviders {
     public static let chatPrefix = "phone:"
     public static func isPhoneChat(_ id: String) -> Bool { id.hasPrefix(chatPrefix) }
 
+    /// The beta setting's stored key (Settings → Beta → Models on this iPhone).
+    public static let betaKey = "phoneCloudBeta"
+    /// Whether chats on this iPhone's own providers are on: the user's choice once made.
+    /// Before that, off for a new install, and on for one that already set up a provider
+    /// or kept a chat here, so nobody who used it before the beta setting loses it.
+    public static func betaOn(stored: Bool?, hasAnything: Bool) -> Bool { stored ?? hasAnything }
+
     /// Which API a kind speaks.
     public enum Wire: String, Sendable { case anthropic, vertex, openai, responses }
 

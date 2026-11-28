@@ -5,4 +5,7 @@
     <string name="settings_manage_computers">Gestionar ordenadores</string>
     <string name="settings_models_on">Modelos en %1$s</string>
     <string name="settings_phone_provider_off">Desactivado</string>
+    <string name="settings_beta">Beta</string>
+    <string name="settings_phone_cloud_beta">Modelos en la nube en %1$s</string>
+    <string name="settings_phone_cloud_beta_detail">Chatea con un proveedor en la nube con tu propia clave, sin computadora. Si lo desactivas, se conservan tus claves y chats.</string>
 </resources>

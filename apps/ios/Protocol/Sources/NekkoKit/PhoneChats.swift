@@ -87,6 +87,12 @@ public final class PhoneChats {
     /// The tokens this iPhone's chats used, by provider, model and day. Kept on the phone only.
     public private(set) var usage = PhoneUsageLedger()
     public private(set) var tone: PhoneTone = .standard
+    /// The beta setting (Settings → Beta, off for a new install): chats on this iPhone's own
+    /// cloud providers. Off hides every way in and stops replies that are coming in; the
+    /// providers, keys and chats stay, so turning it back on finds them as they were.
+    public var available: Bool {
+        didSet { if !available { for id in running { stop(id) } } }
+    }
 
     private let secrets: SecureStore
     private let files: OfflineFiles?
@@ -106,7 +112,7 @@ public final class PhoneChats {
     static let usageFile = "phone-usage"
     static let toneFile = "phone-tone"
 
-    public init(secrets: SecureStore, files: OfflineFiles?, http: PhoneHTTP,
+    public init(secrets: SecureStore, files: OfflineFiles?, http: PhoneHTTP, available: Bool = true,
                 now: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) },
                 newId: @escaping () -> String = { UUID().uuidString.lowercased() }) {
         self.secrets = secrets
@@ -114,6 +120,7 @@ public final class PhoneChats {
         self.http = http
         self.now = now
         self.newId = newId
+        self.available = available
         providers = Self.decode([PhoneProvider].self, files?.load(PhoneProviders.computerId, Self.providersFile)) ?? []
         chats = Self.decode([PhoneChat].self, files?.load(PhoneProviders.computerId, Self.file)) ?? []
         usage = Self.decode(PhoneUsageLedger.self, files?.load(PhoneProviders.computerId, Self.usageFile)) ?? PhoneUsageLedger()
@@ -128,8 +135,11 @@ public final class PhoneChats {
         }
     }
 
-    /// The phone runs chats: it has a provider that is on.
-    public var isSetUp: Bool { providers.contains(where: \.enabled) }
+    /// The phone runs chats: the beta is on and it has a provider that is on.
+    public var isSetUp: Bool { available && providers.contains(where: \.enabled) }
+
+    /// Anything was ever set up here: a provider (on or off) or a chat. Decides the beta's first value.
+    public var hasAnything: Bool { !providers.isEmpty || !chats.isEmpty }
 
     /// The chat list's rows: every top-level chat, newest first.
     public var summaries: [SessionSummary] {
@@ -344,6 +354,8 @@ public final class PhoneChats {
     /// Start a chat here and send its first message.
     public func create(providerId: String, modelId: String, first: String, images: [String] = []) -> String {
         let id = PhoneProviders.chatPrefix + newId()
+        // The beta is off: nothing is added, so no empty chat is left behind.
+        guard available else { return id }
         var chat = PhoneChat(id: id, title: PhoneChat.title(from: first), providerId: providerId, modelId: modelId, createdAt: now())
         if chat.title.isEmpty { chat.title = images.isEmpty ? String(localized: "New chat") : String(localized: "Photo") }
         chats.append(chat)
@@ -360,7 +372,7 @@ public final class PhoneChats {
     public func send(_ chatId: String, _ text: String, images: [String] = []) {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let images = Array(images.filter { PhoneProviders.imagePart($0) != nil }.prefix(PhoneProviders.maxImages))
-        guard !text.isEmpty || !images.isEmpty, !running.contains(chatId), let i = index(chatId) else { return }
+        guard available, !text.isEmpty || !images.isEmpty, !running.contains(chatId), let i = index(chatId) else { return }
         chats[i].messages.append(PhoneMessage(id: newId(), role: .user, text: text, at: now(), images: images))
         chats[i].archivedAt = nil
         reply(chatId)
@@ -368,7 +380,7 @@ public final class PhoneChats {
 
     /// Ask again after a reply that failed or was stopped: the last one is replaced.
     public func retry(_ chatId: String) {
-        guard !running.contains(chatId), let i = index(chatId) else { return }
+        guard available, !running.contains(chatId), let i = index(chatId) else { return }
         if chats[i].messages.last?.role == .assistant { chats[i].messages.removeLast() }
         guard chats[i].messages.last?.role == .user else { return }
         reply(chatId)

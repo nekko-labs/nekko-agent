@@ -5,4 +5,7 @@
     <string name="settings_manage_computers">Gérer les ordinateurs</string>
     <string name="settings_models_on">Modèles sur %1$s</string>
     <string name="settings_phone_provider_off">Désactivé</string>
+    <string name="settings_beta">Bêta</string>
+    <string name="settings_phone_cloud_beta">Modèles cloud sur %1$s</string>
+    <string name="settings_phone_cloud_beta_detail">Discutez avec un fournisseur cloud avec votre propre clé, sans ordinateur. Le désactiver conserve vos clés et vos discussions.</string>
 </resources>

@@ -31,6 +31,8 @@ import com.nekko.protocol.PhoneProviders
 fun PhoneModelsSection(deps: SettingsDeps) {
     val phone = deps.phone ?: return
     val s by phone.state.collectAsStateWithLifecycle()
+    // Settings → Beta turns this on (PhoneCloudBeta).
+    if (!s.available) return
     val p = Nekko.palette
     SectionHeader(stringResource(R.string.settings_models_on, stringResource(R.string.chats_this_phone)))
     Column(Modifier.padding(horizontal = 16.dp)) {
