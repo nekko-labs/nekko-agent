@@ -3000,17 +3000,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // Suggestions share the Mode row, anchored at its far right.
   const promptSuggestions = !imageMode && expertMode && showSuggest && <div className="composer-suggestions ml-auto shrink-0 empty:hidden" data-composer-suggestions>
     <PromptAnalyzer
-      variant="chip"
       text={deferredDraft}
       sessionId={sessionId}
-      canModelFill={hasProvider}
       workspaces={settings?.workspaces ?? []}
       contextItems={ctx?.items ?? []}
       activeWorkspaceIds={session ? getSessionWorkspaceIds(session) : []}
-      onFill={({ snippet, placement }) => {
-        setDraft((d) =>
-          placement === 'start' ? `${snippet}\n\n${d.replace(/^\s+/, '')}` : `${d.replace(/\s+$/, '')}\n\n${snippet}`,
-        );
+      onFill={(snippet) => {
+        setDraft((d) => `${d.trimEnd()}\n\n${snippet}`);
         composerRef.current?.focus();
       }}
     />
@@ -3639,10 +3635,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   onDrop={onDropFiles}
                 >
                   {/* The → badge announces the ghost-accept key, top-right in the
-                      textarea's padding so it never overlaps the text. */}
+                      editor's padding so it never overlaps the text. */}
                   {ghostSuggestion && (
                     <span
-                      className="pointer-events-none absolute right-3 top-5 z-10 select-none rounded-md border border-line bg-surface-2 px-2 py-0.5 font-mono text-2xs leading-none text-ink-faint"
+                      className="pointer-events-none absolute right-3 top-2 z-10 select-none rounded-md border border-line bg-surface-2 px-2 py-0.5 font-mono text-2xs leading-none text-ink-faint"
                       aria-hidden
                     >
                       →
@@ -3650,7 +3646,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   )}
                   <MarkdownEditor
                     ref={composerRef}
-                    className={`relative ${compact ? 'min-h-[44px]' : 'min-h-[64px]'} w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent px-5 pb-2 pt-4 text-sm text-ink caret-ink outline-hidden [scrollbar-gutter:stable] empty:before:content-[attr(data-placeholder)] empty:before:text-ink-faint`}
+                    className="relative min-h-[32px] w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent px-5 pb-1 pt-2 text-sm leading-[20px] text-ink caret-ink outline-hidden [scrollbar-gutter:stable] empty:before:block empty:before:truncate empty:before:content-[attr(data-placeholder)] empty:before:text-ink-faint"
                     placeholder={remoteBlock ? remoteBlock : imageMode ? 'Describe your picture: who or what, where, the light, the style…' : streaming ? 'Add a message for the agent…' : ghostSuggestion ?? (setupNeeded ? 'Add a model provider in Models first' : 'Message Nekko Agent…  (/ for prompts, @ to attach files)')}
                     value={draft}
                     aria-expanded={slashMenuOpen || atMenuOpen}
