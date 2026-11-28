@@ -11,6 +11,7 @@ import { pictureModelBlurb, pictureTimeText } from './pictureModelText.js';
 import { useStore } from '../../store.js';
 import { formatBytes } from '../runtimes/verdict.js';
 import { familyProblem, localTypeLabel, paramsLabel, paramsText, sizeRangeText } from './modelFacts.js';
+import { companionKind, installedCompanionPairs, unpairedCompanionReason } from './installedCompanions.js';
 import { ModelGpuFacts } from './ModelGpuFacts.js';
 
 /**
@@ -184,23 +185,34 @@ export function ModelsHome({
   const picks = useMemo(() => setUpPictureModels(recs), [recs]);
   // The starter list stays chat only: the picks join it under Pictures or Video, or once there is a search.
   const shelves = useMemo(() => shelveCatalog(catalog, picks, models, kind !== 'all' || !!webQuery), [catalog, picks, models, kind, webQuery]);
+  const { byBase, pairedIds } = useMemo(() => installedCompanionPairs(models), [models]);
   const families = useMemo(() => {
-    const grouped = familiesFor(mode, groupModelFamilies(models, [...shelves.listed, ...shelves.more]));
+    const topLevel = mode === 'installed' ? models.filter(m => !pairedIds.has(m.id)) : models;
+    const grouped = familiesFor(mode, groupModelFamilies(topLevel, [...shelves.listed, ...shelves.more]));
     return mode === 'installed' ? sortModelFamilies(grouped, sortBy) : grouped;
-  }, [models, shelves, mode, sortBy]);
+  }, [models, shelves, mode, sortBy, pairedIds]);
   const matching = useMemo(() => {
     const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    return families.filter(f => (kind === 'all' || familyKind(f) === kind) && words.every(word => [f.name, ...f.local.flatMap(m => [m.name, m.sourceRepo, m.quantization, m.folderProvider]), ...f.catalog.flatMap(m => [m.name, m.id, ...m.tags])].join(' ').toLowerCase().includes(word)));
-  }, [families, query, kind]);
+    return families.filter(f => {
+      if (kind !== 'all' && familyKind(f) !== kind) return false;
+      const companions = mode === 'installed' ? f.local.flatMap(m => byBase.get(m.id) ?? []) : [];
+      const searchable = [f.name,
+        ...f.local.flatMap(m => [m.name, m.sourceRepo, m.quantization, m.folderProvider]),
+        ...companions.flatMap(({ model }) => [model.name, model.id, model.sourceRepo]),
+        ...f.catalog.flatMap(m => [m.name, m.id, ...m.tags]),
+      ].join(' ').toLowerCase();
+      return words.every(word => searchable.includes(word));
+    });
+  }, [families, query, kind, mode, byBase]);
   useEffect(() => {
     if (!focus || focusLoaded || mode !== 'installed') return;
-    const family = families.find(f => f.local.some(m => m.id === focus));
+    const family = families.find(f => f.local.some(m => m.id === focus || byBase.get(m.id)?.some(({ model }) => model.id === focus)));
     if (!family) return;
     setQuery('');
     setKind('all');
     setSelectedKey(family.key);
     setRepoId(null);
-  }, [focus, focusLoaded, families, mode]);
+  }, [focus, focusLoaded, families, mode, byBase]);
   const moreIds = useMemo(() => new Set(shelves.more.map(m => m.id)), [shelves]);
   const extra = useMemo(() => matching.filter(f => isMoreFamily(f, moreIds)), [matching, moreIds]);
   const main = useMemo(() => matching.filter(f => !extra.includes(f)), [matching, extra]);
@@ -216,7 +228,8 @@ export function ModelsHome({
   const row = (f: ModelFamily) => {
     const setUp = setUpModelOf(f, picks);
     const line = familyLine(f, mode, memory, setUp);
-    const problem = mode === 'installed' ? familyProblem(f.local) : null;
+    const companionReason = mode === 'installed' && f.local.every(companionKind) ? unpairedCompanionReason(f.local[0]) : undefined;
+    const problem = companionReason ? { text: 'Needs a base', detail: companionReason, tone: 'warning' } as const : mode === 'installed' ? familyProblem(f.local) : null;
     const loaded = f.local.some(m => m.loaded);
     const on = selected?.key === f.key;
     const single = mode === 'installed' && f.local.length === 1 ? f.local[0] : undefined;
@@ -230,7 +243,7 @@ export function ModelsHome({
       <span className="min-w-0 flex-1">
         <span className="block break-words text-sm font-medium">{setUp?.name ?? f.name}{installed && f.local.some(actions.isDefault) && <span className="ml-2 text-2xs text-accent">Default</span>}</span>
         {facts && <span className="mt-(--q-tight) block text-xs text-ink-soft" data-model-facts>{facts.replace(/(\d) (GB|MB|KB|B)\b/g, '$1\u00a0$2')}</span>}
-        <span className={`block ${facts ? 'mt-0.5' : 'mt-(--q-tight)'} text-xs ${LINE_TONE[line.tone]}`} title={line.title} data-model-line>{installed && !problem ? (loaded ? 'In memory' : gpuGuidance(smallest?.sizeBytes, memory, smallest)) : line.text}</span>
+        <span className={`block ${facts ? 'mt-0.5' : 'mt-(--q-tight)'} text-xs ${companionReason ? 'text-warning-text' : LINE_TONE[line.tone]}`} title={companionReason ? undefined : line.title} data-model-line>{installed && !problem ? (loaded ? 'In memory' : gpuGuidance(smallest?.sizeBytes, memory, smallest)) : companionReason ?? line.text}</span>
       </span>
       {problem ? (
         <span className={`shrink-0 ${problem.tone === 'danger' ? 'text-danger' : 'text-warning'}`} role="img" aria-label={`${problem.text}: ${problem.detail}`} title={problem.detail} data-family-problem><WarningIcon className="h-4 w-4" /></span>
@@ -253,7 +266,7 @@ export function ModelsHome({
   };
 
   const emptyLibrary = mode === 'installed' && models.length === 0;
-  const firstVariant = selected?.local.slice().sort((a, b) => Number(b.loaded) - Number(a.loaded) || b.sizeBytes - a.sizeBytes)[0];
+  const firstVariant = selected?.local.filter(m => !companionKind(m)).sort((a, b) => Number(b.loaded) - Number(a.loaded) || b.sizeBytes - a.sizeBytes)[0];
 
   return (
     <>
@@ -305,7 +318,7 @@ export function ModelsHome({
           </p>
           {selected.local.length > 0 && <>
             <h5 className="mt-(--q-group) quiet-group-label">Variants on this machine</h5>
-            <div className="mt-(--q-heading)"><ModelLibrary key={selected.key} providerId={providerId} models={selected.local} actions={actions} resident={resident} memory={memory} canLoad={canLoad} onChanged={onChanged} autoloadIds={new Set(settings.autoload ?? [])} sortBy={mode === 'installed' ? sortBy : undefined} /></div>
+            <div className="mt-(--q-heading)"><ModelLibrary key={selected.key} providerId={providerId} models={selected.local} companionsByBase={mode === 'installed' ? byBase : undefined} actions={actions} resident={resident} memory={memory} canLoad={canLoad} onChanged={onChanged} autoloadIds={new Set(settings.autoload ?? [])} sortBy={mode === 'installed' ? sortBy : undefined} /></div>
             {firstVariant && <ModelGpuFacts key={firstVariant.id} providerId={providerId} model={firstVariant} resident={residentById.get(firstVariant.id)} others={residentNames(resident, models, firstVariant.id)} />}
           </>}
           {selected.local.length > 0 && repositories.length > 0 && <Rule />}

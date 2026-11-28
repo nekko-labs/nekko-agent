@@ -205,6 +205,8 @@ fall back to `--override-tensor` patterns or are left out. Edits are saved for t
 
 DFlash2 is an optional second model that guesses several tokens at once for the main model to check. Use it only with the original `Qwen/Qwen3.8-27B` checkpoint (a quantized copy is fine), not a fine-tune, merge or different Qwen release. Use a target and draft from the same row:
 
+In the catalog, a verified draft or GGUF LoRA shows **Download draft only** or **Download adapter only**. If its verified base is not already in My models, **Download both** names the compatible build and shows the combined download size before you choose it. Neither action loads the model or changes its settings. If the catalog cannot verify a compatible installed or downloadable base, it explains why instead of offering a download. The publisher’s training checkpoint is not necessarily a downloadable build for the local runtime.
+
 | Format | Stock target | Matching draft | Runtime |
 | --- | --- | --- | --- |
 | GGUF | `Qwen3.8-27B-Q4_K_M.gguf` from [ggml-org/Qwen3.8-27B-GGUF](https://huggingface.co/ggml-org/Qwen3.8-27B-GGUF) | `Qwen3.8-27B-DFlash2-Q4_K_M.gguf` from [incoai/Qwen3.8-27B-DFlash2-GGUF](https://huggingface.co/incoai/Qwen3.8-27B-DFlash2-GGUF) | Use Model Server's pinned llama.cpp build `b12556`. The pair was verified with the standalone macOS arm64 Metal release of that build (`50518b64c`). |

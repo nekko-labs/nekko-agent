@@ -16,6 +16,7 @@ import { ModelRowActions, type ModelRowControl } from './ModelRowActions.js';
 import { RunnableAlternativeOffer } from './RunnableAlternativeOffer.js';
 import { loadableFiles } from './runnableAlternative.js';
 import { modelProblem, paramsLabel } from './modelFacts.js';
+import { unpairedCompanionReason, type InstalledPair } from './installedCompanions.js';
 import { MiddleTruncate } from '../primitives/MiddleTruncate.js';
 
 /**
@@ -68,9 +69,11 @@ export function ModelLibrary({
   resident,
   sortBy,
   memory,
+  companionsByBase,
 }: {
   providerId: string;
   models: LibraryModel[];
+  companionsByBase?: ReadonlyMap<string, InstalledPair[]>;
   /** The GPU's size, so a model the busy GPU cannot hold now is not called too big. */
   memory?: EngineMemory;
   /** The engine's resident list, for where each loaded model actually sits. */
@@ -111,12 +114,14 @@ export function ModelLibrary({
     onChanged();
   };
 
-  const quickLoad = async (model: LocalModel & { loaded: boolean }) => {
+  const quickLoad = async (model: LocalModel, pair?: InstalledPair) => {
+    if (busy === model.id || unpairedCompanionReason(model)) return;
+    if (pair && (!canLoad || !companionsByBase?.get(model.id)?.includes(pair))) return;
     setBusy(model.id);
     // A row's Load uses whatever this model was last saved with, and the planner's
     // own answer when it has never been configured. Opening the drawer is for
     // changing that, not for performing it.
-    const req = loadLocalModel(providerId, model);
+    const req = loadLocalModel(providerId, model, pair);
     // The load is registered the moment the host picks the call up. Refreshing
     // now (and once a beat later, in case this read raced the registration)
     // puts the model in the "In memory" block while it is still streaming in,
@@ -332,7 +337,9 @@ export function ModelLibrary({
   );
 
   function renderRow(m: (typeof models)[number]) {
-    const unsupported = m.modality === 'image' ? undefined : cannotLoadReason(m);
+    const companionReason = unpairedCompanionReason(m);
+    const unsupported = companionReason ?? (m.modality === 'image' ? undefined : cannotLoadReason(m));
+    const pairs = companionsByBase?.get(m.id);
     const missingProjector = m.modality === 'vision' && !m.hasProjector;
     const live = residentById.get(m.id);
     const problem = modelProblem(m);
@@ -340,7 +347,12 @@ export function ModelLibrary({
     const expanded = !unsupported && open === m.id;
     const panelId = `${settingsId}-${m.id}`;
     const previewId = `${panelId}-memory`;
-    const details = (
+    const details = companionReason ? (
+      <span className="block min-w-0 flex-1">
+        <MiddleTruncate text={m.name} tail={20} className="block max-w-full text-sm font-medium text-ink-faint" />
+        <span className="mt-(--q-tight) block break-words text-xs text-ink-soft">{companionReason}</span>
+      </span>
+    ) : (
       <span className="block min-w-0 flex-1">
         <MiddleTruncate text={m.name} tail={20} className="block max-w-full text-sm font-medium" />
         <ModelFactChips model={m} />
@@ -423,6 +435,27 @@ export function ModelLibrary({
           </div>
         </div>
 
+        {!unsupported && pairs?.length ? (
+          <ul aria-label={`Installed companions for ${m.name}`} className="ml-5">
+            {pairs.map(pair => (
+              <li key={pair.model.id} data-model-companion={pair.model.id} className="quiet-row flex min-w-0 flex-wrap items-center justify-between gap-2 px-2 py-1">
+                <span className="min-w-0 flex-[1_1_10rem]" title={pair.model.path}>
+                  <span className="block break-words text-sm font-medium">{pair.model.name}</span>
+                  <span className="block text-xs text-ink-faint">{pair.kind === 'lora' ? 'LoRA adapter' : 'DFlash2 draft'} · {formatBytes(pair.model.sizeBytes)}</span>
+                </span>
+                <div className="ml-auto flex shrink-0 flex-wrap items-center gap-1">
+                  <ModelRowActions model={pair.model} actions={actions} />
+                  <button type="button" className="btn btn-ghost shrink-0 text-xs touch:min-h-11!"
+                    aria-label={`${m.loaded ? 'Reload' : 'Load'} ${m.name} with ${pair.model.name}`}
+                    disabled={!canLoad || busy === m.id} onClick={() => void quickLoad(m, pair)}>
+                    {busy === m.id ? 'Loading…' : m.loaded ? 'Reload pair' : 'Load pair'}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
         {!unsupported && (
           <ModelSettingsReveal id={panelId} open={expanded}>
             {autoloadIds && <div className="mb-3 flex items-center justify-between gap-3">
@@ -450,13 +483,13 @@ export function ModelLibrary({
           </ModelSettingsReveal>
         )}
 
-        {unsupported && (
+        {unsupported && !companionReason && (
           <p className="mt-(--q-tight) flex items-start gap-2 px-2 text-2xs text-warning-text">
             <WarningIcon className="mt-0.5 h-3 w-3 shrink-0" />
             {unsupported}
           </p>
         )}
-        {unsupported && <RunnableAlternativeOffer model={m} have={haveFiles} onChanged={onChanged} />}
+        {unsupported && !companionReason && <RunnableAlternativeOffer model={m} have={haveFiles} onChanged={onChanged} />}
         {!unsupported && m.loadCheck?.level === 'warning' && (
           <p className="mt-(--q-tight) flex items-start gap-2 px-2 text-2xs text-warning-text" data-model-load-warning>
             <WarningIcon className="mt-0.5 h-3 w-3 shrink-0" />

@@ -1,4 +1,5 @@
-import type { LocalModel } from '@nekko-agent/shared';
+import type { LocalModel, LoadParams } from '@nekko-agent/shared';
+import type { InstalledPair } from './installedCompanions.js';
 
 /**
  * The few local models someone used last, offered beside what is loaded so
@@ -67,11 +68,27 @@ export function localModelShortcuts({ models, resident, seen, chats }: {
  * saved with, or the planner's own answer when it has never been configured.
  * A picture model loads with its saved files and no planner pass.
  */
-export async function loadLocalModel(providerId: string, model: LocalModel): Promise<{ ok: boolean; message?: string }> {
-  const params = model.preset ? { ...model.preset, budgetFraction: undefined } : null;
-  return (params || model.modality === 'image'
-    ? window.nekko.runtimeLoad(providerId, model.id, params ?? {})
-    : autoLoad(providerId, model.id)).catch((e: Error) => ({ ok: false, message: e.message }));
+export async function loadLocalModel(providerId: string, model: LocalModel, pair?: InstalledPair): Promise<{ ok: boolean; message?: string }> {
+  try {
+    const preset = model.preset && { ...model.preset, budgetFraction: undefined };
+    const params: LoadParams & { adapterModelId?: string } = preset ?? (model.modality === 'image' ? {} : await autoLoadParams(providerId, model.id));
+    // An explicit companion replaces a saved companion, not the base's other
+    // settings. Do not save this choice or enable it on future quick loads.
+    if (pair) {
+      delete params.draftModelId;
+      delete params.adapterModelId;
+      if (pair.kind === 'lora') {
+        params.adapterModelId = pair.model.id;
+        params.speculative = false;
+      } else {
+        params.draftModelId = pair.model.id;
+        params.speculative = true;
+      }
+    }
+    return await window.nekko.runtimeLoad(providerId, model.id, params);
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 /**
@@ -81,14 +98,14 @@ export async function loadLocalModel(providerId: string, model: LocalModel): Pro
  * planner the drawer asks means the quick path and the considered path cannot
  * disagree.
  */
-async function autoLoad(providerId: string, modelId: string): Promise<{ ok: boolean; message?: string }> {
+async function autoLoadParams(providerId: string, modelId: string): Promise<LoadParams> {
   const auto = await window.nekko.runtimeAutoFit(providerId, modelId, 0.75).catch(() => null);
-  return window.nekko.runtimeLoad(providerId, modelId, {
+  return {
     contextTokens: auto?.request.contextTokens,
     kvCacheDtype: auto?.request.kvCacheDtype,
     gpuLayers:
       auto?.plan.totalLayers && auto.request.gpuLayerFraction < 1
         ? Math.round(auto.plan.totalLayers * auto.request.gpuLayerFraction)
         : undefined,
-  });
+  };
 }

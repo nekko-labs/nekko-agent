@@ -17,7 +17,8 @@ export function loadCatalogDetail(id: string): Promise<CatalogModelDetail | null
   if (kept && Date.now() - kept.at < TTL_MS) return kept.page;
   const page = window.nekko.engineCatalogDetail(id).then(
     (m) => {
-      if (!m) pages.delete(id);
+      // Installed bases can change independently of the Hub catalog cache.
+      if (!m || m.dependent || m.quants.some(q => q.companion)) pages.delete(id);
       return m;
     },
     (e) => {
