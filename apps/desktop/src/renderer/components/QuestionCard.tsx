@@ -6,8 +6,8 @@ import { RepoBrowser } from './RepoBrowser.js';
 
 /**
  * What a host does for an option's environment action (#2404). Each returns
- * the line the agent reads alongside the answer; `run` returns null when the
- * user cancelled (the folder picker closed), which keeps the card open.
+ * the line the agent reads alongside the answer. `run` returns an empty string
+ * for a no-op or null if the picker was cancelled, which keeps the card open.
  */
 export interface QuestionActions {
   run: (action: Exclude<AskAction, { kind: 'connectRepo' }>) => Promise<string | null>;
@@ -424,7 +424,7 @@ export function pendingAction(
 export function withActionNotes(answers: AskAnswer[], notes: Record<string, { label: string; note: string }>): AskAnswer[] {
   return answers.map((a) => {
     const done = notes[a.questionId];
-    if (!done || !a.labels.includes(done.label)) return a;
+    if (!done?.note || !a.labels.includes(done.label)) return a;
     return { ...a, note: [a.note, done.note].filter(Boolean).join(' ') };
   });
 }
