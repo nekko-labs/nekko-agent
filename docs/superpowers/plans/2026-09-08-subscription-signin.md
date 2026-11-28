@@ -1,6 +1,6 @@
 # Subscription Sign-In (Claude + ChatGPT) Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Historical only:** The Claude subscription approach in this plan was retired. Do not implement it or impersonate the first-party CLI; see the [current Claude policy](../../../spec/product/claude-policy.md).
 
 **Goal:** Let users run Nekko Agent on their existing Claude (Pro/Max) or ChatGPT (Plus/Pro/Business) subscription instead of a metered API key, with a one-click browser sign-in; API keys remain available as the secondary path.
 
@@ -19,7 +19,7 @@
 - Scopes: `org:create_api_key user:profile user:inference`
 - PKCE: S256. **Quirk: `state` must equal the PKCE verifier** (not a random nonce).
 - Redirect: loopback `http://localhost:<port>/callback` works for this client (try a port range); the manual fallback is `redirect_uri=https://console.anthropic.com/oauth/code/callback`, which renders a `code#state` string the user pastes back.
-- API calls: `Authorization: Bearer <access>` (NOT `x-api-key`) + `anthropic-beta: oauth-2025-04-20` header. The subscription endpoint validates a system-prompt prefix, so the first system block must be `You are Claude Code, Anthropic's official CLI for Claude.`; our real system prompt follows as a second block.
+- The former direct subscription API path is obsolete. Use the current, unmodified Claude Code integration for plan access.
 - Refresh: same token endpoint, `grant_type: 'refresh_token'` (JSON).
 - Long-lived token path: `claude setup-token` in the Claude Code CLI mints a durable token the user can paste.
 
@@ -46,7 +46,7 @@
 - Create: `packages/host/src/oauth.ts` — PKCE, loopback listener, exchange, refresh, token store, CLI-import readers.
 - Modify: `packages/host/src/host.ts`, `dispatch.ts` — five-touch wiring.
 - Modify: `apps/desktop/src/preload/index.ts`, `apps/desktop/src/renderer/web-client.ts` — five-touch wiring (client methods only; the flow itself runs host-side).
-- Modify: `packages/core/src/providers/anthropic.ts` — subscription auth mode (Bearer + beta header + system prefix).
+- `AnthropicProvider` direct subscription mode: retired; do not restore.
 - Create: `packages/core/src/providers/chatgpt.ts` — Responses API provider.
 - Modify: `packages/core/src/providers/index.ts` — construct by kind/auth.
 - Modify: `packages/host/src/chat.ts` (or wherever providers are instantiated) — resolve `tokenKey` → fresh access token before each run; trigger refresh on 401 once.
@@ -77,21 +77,6 @@ export interface OAuthSessionInfo {
   mode: 'loopback' | 'manual';
   expiresAt: number;
 }
-```
-
-```ts
-// AnthropicProvider.headers() subscription branch
-if (this.config.auth === 'subscription') {
-  return {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${this.config.apiKey}`, // host injects the fresh access token here
-    'anthropic-version': '2023-06-01',
-    'anthropic-beta': 'oauth-2025-04-20',
-  };
-}
-// chat(): when auth === 'subscription', send system as a block array whose first
-// element is { type: 'text', text: 'You are Claude Code, Anthropic\'s official CLI for Claude.' }
-// and the second carries req.system.
 ```
 
 ```ts
@@ -138,7 +123,7 @@ if (this.config.auth === 'subscription') {
 
 ### PR 2 — `feat/claude-signin`
 
-- [ ] **T5: AnthropicProvider subscription mode** — Bearer + `anthropic-beta` header, system-block prefix, `test()` reports subscription status. Unit-test the header/prefix shape.
+- **T5: Historical AnthropicProvider subscription mode** — retired; do not implement.
 - [ ] **T6: `SubscriptionSignIn.tsx`** — card: "Sign in with Claude" button → `oauthBegin('claude')` → open `authUrl` (desktop `shell.openExternal`; web `window.open`) → waiting state → on `oauthStatus` event, create the `anthropic` provider with `auth:'subscription'`, `tokenKey`, `accountId` (email from `user:profile` if returned) → test + persist. Paste-code fallback input wired to `oauthFinish`. "Paste a setup token instead" link (`claude setup-token` output accepted directly as a long-lived access token).
 - [ ] **T7: Models page integration** — in the add-provider flow, picking Anthropic shows the subscription CTA first with "Use an API key instead" as the secondary disclosure; connected card shows Subscription badge + account + Sign out (`oauth:signout` clears token + provider or demotes to apikey-less).
 - [ ] **T8: verify + commit.**

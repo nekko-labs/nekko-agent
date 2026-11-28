@@ -1,0 +1,2 @@
+#!/bin/sh
+exec node "$(git rev-parse --show-toplevel)/scripts/check-git-attribution.mjs" --commit-msg "$1"

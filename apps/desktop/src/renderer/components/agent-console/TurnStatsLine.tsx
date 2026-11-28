@@ -97,7 +97,7 @@ export function DoneRow({ done, stats, names }: { done: boolean; stats?: TurnSta
   );
 }
 
-/** Measurements only: speaker identity belongs above the reply, never in its footer. */
+/** Turn measurements and model provenance when there is no Done row. */
 export function ReplyStatsRow({ stats, names }: { stats: TurnStats; names?: TurnStatsNames }) {
   return <TurnStatsLine stats={stats} names={names} />;
 }
