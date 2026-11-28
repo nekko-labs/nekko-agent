@@ -7,7 +7,7 @@ import { measureEditorContent, observeWallComposer, wallEditorHeight } from './c
 
 vi.mock('./store.js', (original) => liveStore(original as never));
 
-const size = (overrides: Partial<Parameters<typeof wallEditorHeight>[0]> = {}) => wallEditorHeight({ content: 64, chrome: 80, extra: 0, preferred: null, viewport: 900, ...overrides });
+const size = (overrides: Partial<Parameters<typeof wallEditorHeight>[0]> = {}) => wallEditorHeight({ content: 32, chrome: 80, extra: 0, preferred: null, viewport: 900, ...overrides });
 afterEach(() => vi.unstubAllGlobals());
 
 const styles = stylesheet('styles.css');
@@ -35,16 +35,16 @@ describe('wall composer sizing', () => {
     expect(cssRule(board, '.command-wall-stage')).toMatchObject({ position: 'relative', 'min-height': '304px' });
   });
   it('grows with rendered multiline/wrapped rows and shrinks after removal', () => {
-    expect(size()).toBe(64);
+    expect(size()).toBe(32);
     expect(size({ content: 124 })).toBe(124);
     expect(size({ content: 244 })).toBe(244);
-    expect(size({ content: 64 })).toBe(64);
+    expect(size({ content: 32 })).toBe(32);
   });
   it('keeps saved shell height as a preference, not a ceiling', () => {
     expect(size({ preferred: 240 })).toBe(160);
     expect(size({ preferred: 240, content: 300 })).toBe(300);
-    expect(size({ preferred: 240, content: 64 })).toBe(160);
-    expect(size({ preferred: null })).toBe(64);
+    expect(size({ preferred: 240, content: 32 })).toBe(160);
+    expect(size({ preferred: null })).toBe(32);
   });
   it('adds queue, attachment and skill rows without consuming preferred text space', () => {
     expect(size({ preferred: 240, chrome: 190, extra: 110 })).toBe(160);
@@ -54,7 +54,7 @@ describe('wall composer sizing', () => {
     expect(size({ content: 4000 })).toBe(370);
     expect(size({ content: 4000, viewport: 1600 })).toBe(400);
     expect(size({ content: 4000, viewport: 400 })).toBe(120);
-    expect(size({ content: 4000, chrome: 500, viewport: 400 })).toBe(64);
+    expect(size({ content: 4000, chrome: 500, viewport: 400 })).toBe(32);
     expect(size({ preferred: 4000 })).toBe(370);
   });
   it('releases the previous height to measure deletion and restores scroll position', () => {
@@ -68,7 +68,7 @@ describe('wall composer sizing', () => {
   });
 
   it('remeasures actual input, wrapping, long unbroken text, dynamic rows and viewport changes without React renders', () => {
-    let textHeight = 64;
+    let textHeight = 32;
     let chrome = 80;
     let extra = 0;
     let width = 600;
@@ -121,7 +121,7 @@ describe('wall composer sizing', () => {
     // Queue + attachments + skill grow the shell, while reducing the text cap.
     chrome = 190; extra = 110; mutate(); flush();
     expect(editor.style.height).toBe('260px');
-    textHeight = 64; mutate(); flush();
+    textHeight = 32; mutate(); flush();
     expect(editor.style.height).toBe('160px');
     chrome = 80; extra = 0; mutate(); flush();
     expect(editor.style.height).toBe('160px');

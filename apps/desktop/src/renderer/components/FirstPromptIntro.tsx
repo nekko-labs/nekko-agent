@@ -3,11 +3,10 @@ import { createRoot } from 'react-dom/client';
 import { Player } from '@remotion/player';
 import { AbsoluteFill, Easing, interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { Modal } from './primitives/Modal.js';
-import { CloseIcon, FileIcon, PlusIcon } from '../icons.js';
+import { CloseIcon, FileIcon, PlusIcon, WandIcon } from '../icons.js';
 import { PeekNekkoArt, greetingGaze } from './GreetingNekko.js';
 import { GREETING_QUESTIONS } from './CleanStartGreeting.js';
 import { NekkoAvatar } from './Mascot.js';
-import { GRADE_COLOR } from '../promptAnalysis.js';
 
 /*
  * The "Send your first prompt" intro: three short looping demos drawn with
@@ -141,7 +140,7 @@ function Scene({ children }: { children: React.ReactNode }) {
 /* ---------- Pieces (each mirrors its source in the app) ---------- */
 
 /** The composer's size in the app (ChatPane .composer, clean start), narrowed to the demo. */
-const COMPOSER = { x: 24, w: 592, editor: 52, bar: 48, strip: 45 };
+const COMPOSER = { x: 24, w: 592, editor: 32, bar: 48, strip: 45 };
 /** PeekNekkoArt at 3 px per art pixel (a whole number; the app draws 2.5). */
 const U = 3;
 const NEKKO = { w: 32 * U, h: 30 * U };
@@ -204,11 +203,11 @@ function FilePill({ show = 1 }: { show?: number }) {
 }
 const pillWidth = () => 8 + 14 + 8 + textWidth(FILE, 12) + 8 + 2 + textWidth('✕', 12) + 8 + 2;
 
-/** PromptAnalyzer's chip (variant="chip"): .composer-suggestions-chip with a GradeBadge, shown once there is text. */
+/** The composer shows Suggestions once there is a draft. */
 function SuggestionsChip({ show }: { show: number }) {
   if (show < 0.01) return null;
   return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 28, padding: '0 12px 0 8px', boxSizing: 'border-box', border: `1px solid ${theme.colors.line}`, borderRadius: 999, background: theme.colors.surface2, fontSize: 12, color: theme.colors.soft, whiteSpace: 'nowrap', opacity: show, transform: `scale(${mix(0.9, 1, show)})` }}>
-    <span style={{ display: 'grid', placeItems: 'center', width: 16, height: 16, borderRadius: 999, background: GRADE_COLOR.A, color: theme.colors.onColour, fontSize: 11, fontWeight: 700 }}>A</span>Suggestions
+    <Icon size={14} color={theme.colors.soft}><WandIcon /></Icon>Suggestions
   </span>;
 }
 
@@ -229,7 +228,7 @@ function Composer({ bottom, strip = 0, pill = 0, draft = '', hint = 1, caret = f
     <div style={{ height: strip * COMPOSER.strip, flexShrink: 0, borderBottom: strip > 0.02 ? `1px solid ${theme.colors.line}` : 'none', display: 'flex', alignItems: 'center', padding: '0 12px', boxSizing: 'border-box', overflow: 'hidden' }}>
       <FilePill show={pill} />
     </div>
-    <div style={{ height: COMPOSER.editor, boxSizing: 'border-box', padding: '8px 16px', fontSize: 14, lineHeight: '20px', color: ready ? theme.colors.ink : theme.colors.faint, whiteSpace: 'pre' }}>
+    <div style={{ height: COMPOSER.editor, boxSizing: 'border-box', padding: '8px 16px 4px', fontSize: 14, lineHeight: '20px', color: ready ? theme.colors.ink : theme.colors.faint, whiteSpace: 'pre' }}>
       {draft || <span style={{ opacity: hint }}>{PLACEHOLDER}</span>}
       {caret && <span style={{ display: 'inline-block', width: 1.5, height: 18, marginLeft: 1, verticalAlign: 'text-bottom', background: theme.colors.ink, opacity: on ? 1 : 0 }} />}
     </div>

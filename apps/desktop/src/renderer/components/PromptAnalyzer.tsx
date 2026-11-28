@@ -1,31 +1,9 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { ContextItem, SpecDocStatus, WorkspaceFolder } from '@nekko-agent/shared';
-import {
-  analyzePrompt,
-  detectFolderMentions,
-  suggestPartFill,
-  GRADE_COLOR,
-  SEVERITY_COLOR,
-  type Finding,
-  type MentionMatch,
-  type MentionProject,
-  type PartFill,
-  type Severity,
-} from '../promptAnalysis.js';
+import { detectFolderMentions, draftSuggestions, type MentionProject } from '../promptAnalysis.js';
 import { CATEGORY } from '../tokens.js';
-import { FolderIcon } from '../icons.js';
-
-/**
- * Live prompt analyzer in the composer. Zero-latency, client-side: shows a health
- * grade, which parts of a good prompt are present/missing, inline-underlined weak
- * spots, concrete suggestions, and a model recommendation. It also spots the
- * projects, codebases, and folders the prompt names — highlighting them inline
- * and surfacing the context (folders, guidelines, specs) each one pulls in — so
- * you can see what the agent will actually reference before you send. A marketing
- * edge: "Nekko helps you write the prompt," not just answer it.
- */
-const SEV_ORDER: Record<Severity, number> = { critical: 0, warn: 1, info: 2 };
+import { FolderIcon, WandIcon } from '../icons.js';
 
 /** A single piece of context a mentioned project drags in. */
 type RefKind = 'guideline' | 'spec' | 'file' | 'code';
@@ -67,8 +45,6 @@ export function PromptAnalyzer({
   contextItems = [],
   activeWorkspaceIds = [],
   onFill,
-  canModelFill = false,
-  variant = 'bar',
 }: {
   text: string;
   sessionId?: string;
@@ -77,20 +53,12 @@ export function PromptAnalyzer({
   contextItems?: ContextItem[];
   /** Workspace ids grounding this chat (primary + supporting). */
   activeWorkspaceIds?: string[];
-  /** Insert a starter snippet for a missing part into the draft. */
-  onFill?: (fill: PartFill) => void;
-  /** A provider is configured, so missing-part chips can ask the model to
-   *  draft the snippet from this prompt (deterministic text is the fallback). */
-  canModelFill?: boolean;
-  /** A bar above the editor, or one "Suggestions" chip among the composer's actions. */
-  variant?: 'bar' | 'chip';
+  /** Append an editable suggestion; never send the draft. */
+  onFill?: (snippet: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [specDocs, setSpecDocs] = useState<Record<string, SpecDocStatus[]>>({});
-  /** Part id whose model fill is in flight, for the chip's busy state. */
-  const [filling, setFilling] = useState<string | null>(null);
-
-  const a = useMemo(() => analyzePrompt(text), [text]);
+  const { suggestions, warnings } = useMemo(() => draftSuggestions(text), [text]);
 
   const projects = useMemo<MentionProject[]>(
     () => workspaces.map((w) => ({ id: w.id, name: w.name, base: baseName(w.path) })),
@@ -154,39 +122,8 @@ export function PromptAnalyzer({
     return map;
   }, [mentionedIds, workspaces, activeWorkspaceIds, contextItems, specDocs]);
 
-  // Render collapsed (zero height) rather than unmounted below the threshold,
-  // so the bar grows in smoothly instead of shoving the composer mid-keystroke.
   const active = text.trim().length >= 12;
-
-  const present = a.parts.filter((p) => p.present).length;
-  const issues = a.findings.length;
   const refCount = mentionedIds.length + looseFolders.length;
-  const showAnnotated = a.findings.some((f) => f.start != null) || mentions.length > 0;
-
-  /**
-   * Click-to-fill for a missing part. With a provider the model drafts the
-   * snippet from the prompt itself (a "Role" chip on a code prompt writes a
-   * code persona); anything unavailable falls back to the deterministic text.
-   */
-  const fillPart = async (p: { id: string; label: string }) => {
-    if (filling || !onFill) return;
-    const fallback = suggestPartFill(p.id, text);
-    const placement: PartFill['placement'] = p.id === 'role' ? 'start' : 'end';
-    if (!canModelFill || !sessionId) {
-      if (fallback) onFill(fallback);
-      return;
-    }
-    setFilling(p.id);
-    try {
-      const snippet = await window.nekko.fillPromptPart(sessionId, p.id, text);
-      const fill: PartFill | null = snippet ? { snippet, placement } : fallback;
-      if (fill) onFill(fill);
-    } catch {
-      if (fallback) onFill(fallback);
-    } finally {
-      setFilling(null);
-    }
-  };
 
   const details = (
     <div className="space-y-2 p-3 text-xs">
@@ -244,219 +181,83 @@ export function PromptAnalyzer({
         </div>
       )}
   
-      {/* Present parts read as badges; missing ones are buttons that insert
-          a starter snippet matched to what the prompt is about. */}
-      <div className="flex flex-wrap gap-1">
-        {a.parts.map((p) => {
-          if (p.present) {
-            return (
-              <span
-                key={p.id}
-                title={p.hint}
-                className="cursor-help rounded-full border px-2 py-0.5 text-2xs"
-                style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}
-              >
-                ✓ {p.label}
-              </span>
-            );
-          }
-          const fill = onFill ? suggestPartFill(p.id, text) : null;
-          if (!fill && !(canModelFill && sessionId)) {
-            return (
-              <span
-                key={p.id}
-                title={p.hint}
-                className="cursor-help rounded-full border px-2 py-0.5 text-2xs"
-                style={{ borderColor: 'var(--line)', color: 'var(--ink-faint)' }}
-              >
-                + {p.label}
-              </span>
-            );
-          }
-          const busy = filling === p.id;
-          return (
-            <button
-              key={p.id}
-              disabled={busy}
-              title={
-                canModelFill && sessionId
-                  ? `${p.hint} Click to have the model draft it for this prompt.`
-                  : `${p.hint} Click to insert: "${fill?.snippet}"`
-              }
-              className="rounded-full border border-dashed border-line px-2 py-0.5 text-2xs text-ink-faint transition-colors hover:border-solid hover:border-accent hover:text-accent disabled:opacity-60"
-              onClick={() => void fillPart(p)}
-            >
-              + {p.label}{busy && <span className="dots" />}
-            </button>
-          );
-        })}
-      </div>
-  
-      <p className="text-2xs text-ink-faint">
-        <span className="font-medium text-ink-soft">Suggested model:</span> {a.model.reason}
-      </p>
-  
-      {a.findings.length > 0 ? (
+      {warnings.length > 0 && (
+        <ul className="space-y-1" aria-label="Privacy reminders">
+          {warnings.map((message) => <li key={message} className="text-ink">{message}</li>)}
+        </ul>
+      )}
+      {suggestions.length > 0 ? (
         <ul className="space-y-1">
-          {[...a.findings].sort((x, y) => SEV_ORDER[x.severity] - SEV_ORDER[y.severity]).map((f, i) => (
-            <li key={i} className="flex items-start gap-2">
-              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: SEVERITY_COLOR[f.severity] }} />
-              <span className="text-ink-soft">{f.message}</span>
+          {suggestions.map(({ label, description, snippet }) => (
+            <li key={label}>
+              <button type="button" className="w-full rounded-lg border border-line px-3 py-2 text-left hover:bg-surface-2" onClick={() => {
+                setOpen(false);
+                onFill?.(snippet);
+              }}>
+                <span className="block font-medium text-ink">{label}</span>
+                <span className="block text-ink-soft">{description}</span>
+              </button>
             </li>
           ))}
         </ul>
-      ) : (
-        <p className="text-ink-faint">Clear task and structure, nothing to flag.</p>
-      )}
-
-      {showAnnotated && (
-        <div className="rounded-lg border border-line p-2 font-mono text-2xs leading-relaxed" style={{ background: 'var(--surface-2)' }}>
-          <Annotated text={text} findings={a.findings} mentions={mentions} />
-        </div>
-      )}
+      ) : <p className="text-ink-soft">No suggested additions for this draft.</p>}
     </div>
   );
 
-  // The chip opens its details over the page, anchored above itself; the
-  // composer it sits in clips its overflow, so the popover is portaled out.
+  // The composer clips its overflow; portaling keeps the popover outside it.
   const chipRef = useRef<HTMLButtonElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
   const [anchor, setAnchor] = useState<{ left: number; bottom: number } | null>(null);
   useLayoutEffect(() => {
-    if (variant !== 'chip' || !open) { setAnchor(null); return; }
+    if (!open || !active) { setAnchor(null); return; }
     const place = () => {
       const r = chipRef.current?.getBoundingClientRect();
-      if (r) setAnchor({ left: Math.max(8, Math.min(r.left, window.innerWidth - 488)), bottom: window.innerHeight - r.top + 6 });
+      if (r) setAnchor({ left: Math.max(8, Math.min(r.right - 360, window.innerWidth - 368)), bottom: window.innerHeight - r.top + 6 });
     };
     place();
     const down = (e: MouseEvent) => { if (!chipRef.current?.contains(e.target as Node) && !popRef.current?.contains(e.target as Node)) setOpen(false); };
     const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { setOpen(false); chipRef.current?.focus(); } };
     window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
     window.addEventListener('mousedown', down);
     window.addEventListener('keydown', key);
-    return () => { window.removeEventListener('resize', place); window.removeEventListener('mousedown', down); window.removeEventListener('keydown', key); };
-  }, [variant, open]);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('mousedown', down);
+      window.removeEventListener('keydown', key);
+    };
+  }, [open, active]);
   useEffect(() => { if (!active) setOpen(false); }, [active]);
+  const panelVisible = open && anchor !== null;
+  useLayoutEffect(() => { if (panelVisible) popRef.current?.focus(); }, [panelVisible]);
 
-  if (variant === 'chip') {
-    if (!active) return null;
-    const label = issues === 0 ? 'Suggestions' : `${issues} suggestion${issues === 1 ? '' : 's'}`;
-    return (
-      <>
-        <button
-          ref={chipRef}
-          type="button"
-          data-prompt-suggestions
-          className={`composer-suggestions-chip ${open ? 'is-open' : ''}`}
-          aria-expanded={open}
-          aria-haspopup="dialog"
-          aria-label={label}
-          title={`Prompt health ${a.grade} · ${present}/${a.parts.length} parts · ${a.model.tier} model`}
-          onClick={() => setOpen((o) => !o)}
-        >
-          <GradeBadge grade={a.grade} />
-          <span className="composer-suggestions-label">{label}</span>
-        </button>
-        {open && anchor && createPortal(
-          <div ref={popRef} role="dialog" aria-label="Prompt suggestions" className="card fixed z-[100] max-h-[60vh] w-[480px] max-w-[calc(100vw-16px)] overflow-y-auto shadow-(--shadow-float)" style={{ left: anchor.left, bottom: anchor.bottom, background: 'var(--paper)' }}>
-            <div className="flex items-center gap-2 border-b border-line px-3 py-1 text-2xs text-ink-soft">
-              <GradeBadge grade={a.grade} />
-              <span>{present}/{a.parts.length} parts</span>
-              {refCount > 0 && <span className="flex items-center gap-1 text-accent"><FolderIcon className="h-3 w-3" />{refCount}</span>}
-              <span className="ml-auto chip text-2xs uppercase" title={a.model.reason}>{a.model.tier} model</span>
-            </div>
-            {details}
-          </div>,
-          document.body,
-        )}
-      </>
-    );
-  }
-
+  if (!active) return null;
   return (
-    <div className={`collapse-wrap ${active ? '' : 'collapsed'}`} aria-hidden={!active}>
-      <div className="min-h-0 overflow-hidden">
-        <div className="mx-auto mb-2 w-full max-w-3xl">
-      <div className="flex items-center gap-2 rounded-lg border border-line px-3 py-1 text-2xs" style={{ background: 'var(--surface-2)' }}>
-        <GradeBadge grade={a.grade} />
-        <button onClick={() => setOpen((o) => !o)} className="flex flex-1 items-center gap-2 text-left text-ink-soft">
-          <span>{present}/{a.parts.length} parts</span>
-          <span className="text-ink-faint">·</span>
-          <span>{issues === 0 ? 'looks good' : `${issues} suggestion${issues === 1 ? '' : 's'}`}</span>
-          {refCount > 0 && (
-            <>
-              <span className="text-ink-faint">·</span>
-              <span className="flex items-center gap-1 text-accent" title="Projects and folders this prompt will pull into context">
-                <FolderIcon className="h-3 w-3" />{refCount}
-              </span>
-            </>
-          )}
-          <span className="ml-auto chip text-2xs uppercase" title={a.model.reason}>{a.model.tier} model</span>
-          <span className="text-ink-faint">{open ? '▾' : '▸'}</span>
-        </button>
-      </div>
-
-      {open && <div className="mt-1 rounded-lg border border-line" style={{ background: 'var(--surface)' }}>{details}</div>}
-        </div>
-      </div>
-    </div>
+    <>
+      <button
+        ref={chipRef}
+        type="button"
+        data-prompt-suggestions
+        className={`composer-suggestions-chip ${open ? 'is-open' : ''}`}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        aria-label="Suggestions"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <WandIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        <span className="composer-suggestions-label">Suggestions</span>
+      </button>
+      {open && anchor && createPortal(
+        <div ref={popRef} tabIndex={-1} role="dialog" aria-label="Prompt suggestions" className="card fixed z-[100] w-[360px] max-w-[calc(100vw-16px)] overflow-y-auto outline-hidden shadow-(--shadow-float)" style={{ left: anchor.left, bottom: anchor.bottom, maxHeight: `min(60vh, max(0px, calc(100vh - ${anchor.bottom + 8}px)))`, background: 'var(--paper)' }}>
+          <div className="border-b border-line px-3 py-2 text-xs">
+            <p className="font-medium text-ink">Improve your draft</p>
+            <p className="text-ink-soft">Pick an optional addition, then edit it before sending.</p>
+          </div>
+          {details}
+        </div>,
+        document.body,
+      )}
+    </>
   );
-}
-
-function GradeBadge({ grade }: { grade: 'A' | 'B' | 'C' | 'D' | 'F' }) {
-  return (
-    <span
-      className="grid h-4 w-4 shrink-0 place-items-center rounded-full text-2xs font-bold text-white"
-      style={{ background: GRADE_COLOR[grade] }}
-      title={`Prompt health: ${grade}`}
-    >
-      {grade}
-    </span>
-  );
-}
-
-type Mark =
-  | { start: number; end: number; kind: 'mention' }
-  | { start: number; end: number; kind: 'finding'; sev: Severity };
-
-/**
- * Render the prompt with mentioned projects/folders highlighted and flagged weak
- * spots wavy-underlined by severity. Mentions win any overlap with a finding.
- */
-function Annotated({ text, findings, mentions }: { text: string; findings: Finding[]; mentions: MentionMatch[] }) {
-  const marks: Mark[] = [];
-  for (const m of mentions) marks.push({ start: m.start, end: m.end, kind: 'mention' });
-  for (const f of findings) if (f.start != null && f.end != null) marks.push({ start: f.start, end: f.end, kind: 'finding', sev: f.severity });
-  // By position; on a tie, mentions first so they win the overlap-drop below.
-  marks.sort((x, y) => x.start - y.start || (x.kind === 'mention' ? -1 : 1));
-
-  const segs: React.ReactNode[] = [];
-  let pos = 0;
-  let key = 0;
-  let lastEnd = 0;
-  for (const mk of marks) {
-    if (mk.start < lastEnd) continue; // skip overlaps
-    if (mk.start > pos) segs.push(text.slice(pos, mk.start));
-    const slice = text.slice(mk.start, mk.end);
-    if (mk.kind === 'mention') {
-      segs.push(
-        <span key={key++} className="rounded-sm px-0.5" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
-          {slice}
-        </span>,
-      );
-    } else {
-      segs.push(
-        <span
-          key={key++}
-          style={{ textDecoration: 'underline', textDecorationStyle: 'wavy', textDecorationColor: SEVERITY_COLOR[mk.sev], textUnderlineOffset: 2 }}
-        >
-          {slice}
-        </span>,
-      );
-    }
-    pos = mk.end;
-    lastEnd = mk.end;
-  }
-  if (pos < text.length) segs.push(text.slice(pos));
-  return <span className="whitespace-pre-wrap wrap-break-word text-ink-soft">{segs}</span>;
 }
