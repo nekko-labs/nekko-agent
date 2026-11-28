@@ -61,7 +61,6 @@ function StepQuestionCard({
   /** Runs options' environment actions. Without it they are plain answers. */
   actions?: QuestionActions;
 }) {
-  const hue = tone === 'attention' ? 'var(--warning)' : 'var(--accent)';
   const [step, setStep] = useState(0);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
@@ -255,16 +254,10 @@ function StepQuestionCard({
   return (
     <div
       ref={rootRef}
-      className="question-card rounded-xl border p-3 outline-hidden"
+      className="question-card rounded-2xl p-3 outline-hidden"
       aria-busy={sending || undefined}
       data-question-tone={tone}
-      style={{
-        ...(tone === 'attention' ? { '--accent': 'var(--warning)', '--on-accent': '#201609' } : {}),
-        borderColor: `color-mix(in srgb, ${hue} 70%, transparent)`,
-        borderWidth: 1.5,
-        background: `color-mix(in srgb, ${hue} 8%, var(--surface-2))`,
-        boxShadow: `0 0 0 3px color-mix(in srgb, ${hue} 14%, transparent)`,
-      } as React.CSSProperties}
+      style={tone === 'attention' ? { '--accent': 'var(--warning)', '--on-accent': '#201609' } as React.CSSProperties : undefined}
       role="group"
       aria-label="The agent is asking a question"
       tabIndex={0}
