@@ -205,9 +205,9 @@ The Agent Monitor and child-chat banner show the child's provider and model when
 
 ### Model and effort controls
 
-Changing the model or effort in an existing chat shows **Tokens on your next turn**: an estimate of the input tokens needed to resend the chat’s context. Nothing is sent just by changing your selection. To save tokens, start a new chat and include only what it needs instead of carrying over the old history. Actual usage and cost depend on context trimming and provider caching and billing.
+Changing the model or effort in an existing chat shows **Resend chat history?** with an approximate input-token count. **Got it** keeps you in the chat. **Move to new chat** takes your unsent prompt text to a fresh chat with the selected model; history and attachments stay behind. Neither button sends a prompt. Actual usage and cost depend on context trimming and provider caching and billing.
 
-Check **Got it. Don’t show me again.** and click **Got it** to hide this notice across chats. To bring it back, enable **Settings → System → Developer → Show model-switch token notice**. Closing the notice without acknowledging does not save that checkbox.
+Turn on **Don’t show me again** before choosing either button to hide the notice. Bring it back in **Settings → System → Developer → Show model-switch token notice**. Closing the notice without choosing either button does not save the preference.
 
 The composer shows the model title without a subscription suffix. Open its menu for provider and account details. Cloud providers appear first under **Cloud**, followed by **Local**; when both exist they occupy independently scrolling columns. Your default model is marked inside its provider group instead of repeated at the top.
 

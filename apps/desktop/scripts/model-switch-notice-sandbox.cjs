@@ -15,9 +15,17 @@ app.whenReady().then(async () => {
   const wait = async s => { for (let i = 0; i < 80; i++) { if (await run(s)) return; await sleep(100); } throw Error(`Timed out: ${s}`); };
   const check = async (name, s) => { const passed = !!await run(s); report.checks.push({ name, passed }); if (!passed) throw Error(name + ': ' + await run("document.body.innerText")); };
   const shot = async name => { for (let i = 0; i < 3; i++) { win.webContents.invalidate(); await sleep(400); await win.capturePage(undefined, { stayHidden: true }); } const file = path.join(out, name + '.png'); fs.writeFileSync(file, (await win.capturePage(undefined, { stayHidden: true })).toPNG()); report.captures.push(file); };
-  const pick = async (id = 'second') => {
+  const openPicker = async () => {
     await run("[...document.querySelectorAll('button[aria-haspopup=listbox]')].filter(e=>e.getBoundingClientRect().width>0).at(-1).click()");
     await wait("!!document.querySelector('[role=listbox]')");
+  };
+  const effort = async value => {
+    await openPicker();
+    await run(`(() => { const el = document.querySelector('[data-effort-section] input'); if (!el) throw Error('Missing effort slider'); el.focus(); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el, ${JSON.stringify(String(value))}); el.dispatchEvent(new Event('input',{bubbles:true})); })()`);
+    await sleep(300);
+  };
+  const pick = async (id = 'second') => {
+    await openPicker();
     // Only fixed fixture ids enter the script, never external input.
     await run(`[...document.querySelectorAll('[role=listbox] button')].find(e=>e.textContent.includes('${id} model')).click()`);
     await sleep(350);
@@ -42,12 +50,13 @@ app.whenReady().then(async () => {
     win.setContentSize(1100, 900);
     if (changed) {
       await run('noticeFixture.chat()'); await sleep(350); await pick();
-      await run("document.querySelector('[role=dialog] input[type=checkbox]').click(); [...document.querySelectorAll('[role=dialog] button')].find(e=>e.textContent==='Got it').click()");
+      await run("document.querySelector('[role=dialog] [role=switch]').click()");
+      await run("[...document.querySelectorAll('[role=dialog] button')].find(e=>e.textContent==='Got it').click()");
       await wait("!document.querySelector('[role=dialog]')");
       await check('dismissal persisted without losing sibling settings', "noticeFixture.saved().developer.showContextChangeNotice===false && noticeFixture.saved().developer.serverControls===true");
       await pick('first');
       await check('later model change suppressed', "!document.querySelector('[role=dialog]')");
-      await run("document.querySelector('.effort-trigger').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}))"); await sleep(300);
+      await effort(1);
       await check('effort change saved without notice when disabled', "!document.querySelector('[role=dialog]') && layoutFixture.records[0].effort==='high'");
       await win.reload();
       await wait('!!window.noticeFixture'); await sleep(500); await pick();
@@ -66,16 +75,18 @@ app.whenReady().then(async () => {
       await run('noticeFixture.chat()'); await sleep(400); await pick();
       await check('notice returns after re-enabling', "!!document.querySelector('[role=dialog]')");
       await dismiss(); await sleep(100);
-      await run("document.querySelector('.effort-trigger').focus(); document.querySelector('.effort-trigger').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}))"); await sleep(300);
+      await effort(0);
       await check('effort changes show the restored notice', "!!document.querySelector('[role=dialog]') && layoutFixture.records[0].effort==='low'");
-      await run("document.querySelector('[role=dialog] button').focus(); document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}))");
-      await check('Tab wraps into checkbox', "document.activeElement.matches('[role=dialog] input[type=checkbox]')");
-      await run("noticeFixture.failSave=true; document.querySelector('[role=dialog] input[type=checkbox]').click(); [...document.querySelectorAll('[role=dialog] button')].find(e=>e.textContent==='Got it').click()");
+      await run("document.querySelector('[role=dialog] button.btn-primary').focus(); document.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}))");
+      await check('Tab wraps into the switch', "document.activeElement.matches('[role=dialog] [role=switch]')");
+      await run("noticeFixture.failSave=true; document.querySelector('[role=dialog] [role=switch]').click()");
+      await run("[...document.querySelectorAll('[role=dialog] button')].find(e=>e.textContent==='Got it').click()");
       await sleep(300);
       await check('save failure keeps notice open and preference enabled', "!!document.querySelector('[role=dialog]') && noticeFixture.saved().developer.showContextChangeNotice===true && document.querySelector('[role=dialog]').textContent.includes('Could not save')");
       await run('noticeFixture.failSave=false'); await dismiss(); await sleep(100);
-      await check('Escape with checkbox checked does not save dismissal', 'noticeFixture.saved().developer.showContextChangeNotice===true');
-      await check('effort dismissal restores keyboard focus', "document.activeElement.matches('.effort-trigger')");
+      await check('Escape with switch on does not save dismissal', 'noticeFixture.saved().developer.showContextChangeNotice===true');
+      await check('effort dismissal restores keyboard focus', "document.activeElement.matches('[data-effort-section] input')");
+      if (await run("!!document.querySelector('[role=listbox]')")) { await dismiss(); await sleep(150); }
       await pick();
       await check('unchanged model does not open notice', "!document.querySelector('[role=dialog]')");
       await run('noticeFixture.chat(true)'); await sleep(300); await pick();
@@ -83,6 +94,25 @@ app.whenReady().then(async () => {
       await run('noticeFixture.noEstimate=true; noticeFixture.chat()'); await sleep(350); await pick();
       await check('missing estimate is explicit', "document.querySelector('[role=dialog]').textContent.includes('estimate is unavailable')");
       await check('selection alone sends no model request', '!layoutFixture.lastSend');
+      await dismiss(); await sleep(100);
+      await run(`noticeFixture.noEstimate=false; noticeFixture.chat();`); await sleep(350);
+      const draft = 'Unsent follow-up in the fresh chat';
+      await run(`(() => { const el = document.querySelector('[aria-multiline=true]'); el.textContent = ${JSON.stringify(draft)}; el.dispatchEvent(new Event('input', {bubbles:true})); })()`);
+      await pick();
+      const move = () => run("[...document.querySelectorAll('[role=dialog] button')].find(e=>e.textContent==='Move to new chat').click()");
+      await run('noticeFixture.failCreate=true'); await move();
+      await wait("!!document.querySelector('[role=alert]')");
+      await check('failed create leaves source draft and no new chat', `layoutFixture.records.length===1 && document.querySelector('[aria-multiline=true]').value===${JSON.stringify(draft)}`);
+      await run('noticeFixture.failCreate=false; noticeFixture.failConfigure=true'); await move();
+      await wait("!!document.querySelector('[role=alert]')");
+      await check('failed setup removes empty chat and preserves draft', `layoutFixture.records.length===1 && document.querySelector('[aria-multiline=true]').value===${JSON.stringify(draft)}`);
+      await run("noticeFixture.failConfigure=false; document.querySelector('[role=dialog] [role=switch]').click()"); await move();
+      await wait(`document.querySelector('[aria-multiline=true]')?.value===${JSON.stringify(draft)} && layoutFixture.store.getState().activeSessionId.startsWith('new-')`);
+      await check('new chat has selected model and no source history', "layoutFixture.records[1].modelId==='second' && !layoutFixture.records[1].messages.length && layoutFixture.records[0].messages.length===2");
+      await check('move saves opt-out without sending', '!layoutFixture.lastSend && noticeFixture.saved().developer.showContextChangeNotice===false');
+      await run("layoutFixture.store.setState({activeSessionId:'a'})");
+      await wait("document.querySelector('[aria-multiline=true]')?.value==='' ");
+      await check('draft text moves rather than remaining in both chats', "document.querySelector('[aria-multiline=true]').value==='' ");
     }
     report.bounds = win.getBounds(); report.hidden = !win.isVisible();
   } catch (e) { report.errors.push(String(e.stack || e)); }

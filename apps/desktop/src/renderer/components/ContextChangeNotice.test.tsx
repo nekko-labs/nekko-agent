@@ -7,7 +7,7 @@ import { ContextChangeNotice, showContextChangeNotice } from './ContextChangeNot
 vi.mock('../store.js', () => ({ useStore: { getState: () => ({ settings: {} }), setState: vi.fn() } }));
 vi.mock('./primitives/Modal.js', () => ({ Modal: ({ children }: { children: React.ReactNode }) => <div role="dialog">{children}</div> }));
 
-const html = (tokens?: number) => renderToStaticMarkup(<ContextChangeNotice tokens={tokens} onClose={() => {}} />);
+const html = (tokens?: number) => renderToStaticMarkup(<ContextChangeNotice tokens={tokens} change="model" hasAttachments={false} onClose={() => {}} onMove={async () => {}} />);
 
 describe('next-turn context notice', () => {
   it('defaults on for new and existing settings, and honors both explicit choices', () => {
@@ -19,10 +19,10 @@ describe('next-turn context notice', () => {
   it('leads with approximate input tokens for the next turn, not an immediate charge', () => {
     const text = html(106143);
     expect(text).toContain('106,143 input tokens');
-    expect(text).toContain('Your next turn with this selection will use about');
-    expect(text).toContain('open a new chat instead');
-    expect(text).toContain('Nothing is sent until your next turn');
-    expect(text).toContain('provider caching and billing');
+    expect(text).toContain('Changing models resends this chat’s history on your next turn');
+    expect(text).toContain('The new chat won’t have this history.');
+    expect(text).toContain('Move to new chat');
+    expect(text).toContain('Got it');
   });
   it('distinguishes unavailable estimates from zero', () => {
     expect(html()).toContain('estimate is unavailable');
@@ -31,9 +31,9 @@ describe('next-turn context notice', () => {
   });
   it('offers opt-in suppression and explains how to restore the notice', () => {
     const text = html(12);
-    expect(text).toContain('type="checkbox"');
-    expect(text).not.toContain('checked=""');
-    expect(text).toContain('Got it. Don’t show me again.');
+    expect(text).toContain('role="switch"');
+    expect(text).not.toContain('aria-checked="true"');
+    expect(text).toContain('Don’t show me again');
     expect(text).toContain('Settings → System → Developer');
   });
 });
