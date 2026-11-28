@@ -191,6 +191,15 @@ describe('environment actions on options (#2404)', () => {
     expect(pendingAction(q, ['From GitHub'], { q1: { label: 'Choose a folder' } })?.action).toEqual({ kind: 'connectRepo' });
   });
 
+  it('preserves the selected answer and typed text when a folder action is a no-op', () => {
+    const done = { q1: { label: 'Choose a folder', note: '' } };
+    const pick = { questionId: 'q1', labels: ['Choose a folder'] };
+    expect(pendingAction(q, pick.labels, done)).toBeUndefined();
+    expect(withActionNotes([pick], done)).toEqual([pick]);
+    const typed = { ...pick, note: 'Keep this text' };
+    expect(withActionNotes([typed], done)).toEqual([typed]);
+  });
+
   it('tells the agent what was added alongside the picked answer', () => {
     const notes = { q1: { label: 'Choose a folder', note: '(Added the folder app at /code/app.)' } };
     expect(withActionNotes([{ questionId: 'q1', labels: ['Choose a folder'] }], notes))

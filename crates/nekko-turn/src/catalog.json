@@ -725,7 +725,7 @@
            },
            "action": {
             "type": "object",
-            "description": "Optional. Something the app does when the user answers with this option, before you read the answer: \"pickFolder\" lets the user choose a folder on this computer and adds it to the chat's environment; \"addFolder\" adds `path` (a folder you found) to the environment; \"connectRepo\" lets the user pick a repository from their connected GitHub or GitLab (or connect one) and clones it into the environment. The answer tells you what was added.",
+            "description": "Optional. Omit this field for ordinary choices such as scope or implementation. Use it only when the option explicitly offers to add a missing folder or repository. Do not use it for a folder or managed git worktree the chat already works in. When the user selects the option: \"pickFolder\" lets the user choose a folder on this computer and adds it to the chat's environment; \"addFolder\" adds `path` (a folder you found) to the environment; \"connectRepo\" lets the user pick a repository from their connected GitHub or GitLab (or connect one) and clones it into the environment. The answer tells you what was added.",
             "properties": {
              "kind": {
               "type": "string",
