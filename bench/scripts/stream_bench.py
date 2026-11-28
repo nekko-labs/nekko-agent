@@ -86,13 +86,30 @@ WORKLOADS = {
 
 
 def code_block(text):
-    """The first ```python block of a reply, or None."""
-    start = text.find("```python")
+    """The last ```python block of a reply, or None.
+
+    The last, not the first: models that think inline (Qwen3.8 ignores
+    /no_think) can name the fence in their reasoning before writing the file.
+    """
+    start = text.rfind("```python")
     if start < 0:
         return None
     start = text.find("\n", start) + 1
     end = text.find("```", start)
     return text[start:end] if end >= 0 else None
+
+
+# Extra request fields every server gets alike (set by --no-think).
+EXTRA_BODY = {}
+
+# Thinking off (or as low as the model goes) through the chat template, for
+# models that ignore /no_think. llama-server passes chat_template_kwargs to the
+# template: Qwen3.8 reads enable_thinking, Inkling 2 reads reasoning_effort
+# (effort 0 still thinks briefly). LM Studio reads the top-level
+# reasoning_effort. Each ignores what it does not know, so every server gets
+# the same body.
+NO_THINK = {"chat_template_kwargs": {"enable_thinking": False, "reasoning_effort": "none"},
+            "reasoning_effort": "none"}
 
 
 def one_request(url, model, max_tokens, api_key, timeout, prompt=PROMPT):
@@ -109,6 +126,7 @@ def one_request(url, model, max_tokens, api_key, timeout, prompt=PROMPT):
         "max_tokens": max_tokens,
         "temperature": 0,
         "seed": 42,
+        **EXTRA_BODY,
     }
     headers = {"Content-Type": "application/json"}
     if api_key:
@@ -293,10 +311,15 @@ def main():
     ap.add_argument("--max-tokens", type=int, help="default 512 for chat, 4096 for code-edit")
     ap.add_argument("--speculative", action="store_true",
                     help="speculative decoding is what this run measures, so draft tokens are expected")
+    ap.add_argument("--no-think", action="store_true",
+                    help="turn the model's thinking off through the chat template (chat_template_kwargs and"
+                         " reasoning_effort), for models that ignore /no_think")
     ap.add_argument("--exploratory", action="store_true", help="run even if checks fail; file it under exploratory/")
     ap.add_argument("--api-key")
     ap.add_argument("--timeout", type=float, default=600)
     args = ap.parse_args()
+    if args.no_think:
+        EXTRA_BODY.update(NO_THINK)
     prompt, default_max = WORKLOADS[args.workload]
     if args.max_tokens is None:
         args.max_tokens = default_max
@@ -470,6 +493,7 @@ def finish(args, targets, models, prompt, problems, out, results, width, before,
             "runs": args.runs, "warmup": args.warmup,
             "max_tokens": args.max_tokens, "temperature": 0, "seed": 42, "stream": True,
             "speculative_expected": args.speculative,
+            "extra_body": EXTRA_BODY,
             "scenario": args.scenario, "pause_s": args.pause, "preheat_s": args.preheat,
             "max_drift_pct": args.max_drift,
             "workload": args.workload,

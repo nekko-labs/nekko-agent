@@ -1,0 +1,410 @@
+{
+  "name": "burst-chat-lm-studio-vs-llama-server-inkling-2-mini",
+  "valid": true,
+  "problems": [],
+  "notes": "M1 Max 64 GB, burst. Inkling 2 Mini (inkling2_loop) does not load on Nekko's pinned llama.cpp b12565, so every llama.cpp arm here runs the official b12818 release (commit a38695013, archive sha256 b05fc72e...) and both Nekko arms are llama-server started with Nekko's exact argv, not through Nekko's router. This is what Nekko would deliver after its engine pin moves to b12818 or later; it is not what the shipped app does today. Drafter: maternion/Inkling-2-Mini-DFlash2-GGUF Q8_0 (community conversion). --no-think sets reasoning_effort none; Inkling still thinks briefly at effort 0. Pairwise against llama-server-plain (-m --port -c 8192; its default context would take the whole 64 GB) because two 27B servers fill the GPU working set. nekko-dflash2: Nekko router on 11500, preset draftModelId=draft/maternion_Inkling-2-Mini-DFlash2-GGUF/Inkling-2-Mini-DFlash2-Draft-Q8_0; Nekko argv --ctx-size 65536 --cache-type-k q8_0 --cache-type-v q8_0 --cache-reuse 256 --no-cache-idle-slots --spec-default --spec-draft-model <drafter> --spec-draft-ngl all --spec-type draft-dflash --spec-draft-n-max 7. nekko-classic: llama-server started with Nekko's exact default argv (n-gram --spec-default, no drafter), outside the router because Nekko's memory budget keeps one 27B model resident. lm-studio: LM Studio, llama.cpp runtime 2.81.0, lms load defaults (8192 context, parallel 4, its repeat penalty), same file by hard link. Code edits are judged on the reply's last python block (Qwen3.8 reasons inline despite /no_think).",
+  "settings": {
+    "targets": {
+      "lm-studio": "http://127.0.0.1:1338/v1",
+      "llama-server-plain": "http://127.0.0.1:8090/v1"
+    },
+    "model": "m",
+    "target_models": {
+      "lm-studio": "m",
+      "llama-server-plain": "m"
+    },
+    "target_weights_sha256": {
+      "lm-studio": "ed38ac618a24ee65142c27073783a80aa3b100546a21212d59690c9081945a9b",
+      "llama-server-plain": "ed38ac618a24ee65142c27073783a80aa3b100546a21212d59690c9081945a9b"
+    },
+    "runs": 8,
+    "warmup": 3,
+    "max_tokens": 512,
+    "temperature": 0,
+    "seed": 42,
+    "stream": true,
+    "speculative_expected": true,
+    "extra_body": {},
+    "scenario": "burst",
+    "pause_s": 20.0,
+    "preheat_s": 0,
+    "max_drift_pct": 3.0,
+    "workload": "chat",
+    "prompt_sha256": "6e41cfca89c4d2b3d5904ad0cf7f7edb0f86dc007a230720614e89d874ed292c",
+    "script_sha256": "654caa428a3a643023afee62edf7c9f00af91feb831a9479454fc6f2f5d78776"
+  },
+  "summary": {
+    "lm-studio": {
+      "ttft_ms": {
+        "median": 2435.6443125288934,
+        "min": 2417.924250010401,
+        "max": 2493.0377500131726,
+        "n": 8
+      },
+      "decode_tok_s": {
+        "median": 22.384583887284805,
+        "min": 22.30857250231371,
+        "max": 22.504551294672762,
+        "n": 8
+      },
+      "prefill_tok_s_est": {
+        "median": 202.8053566185937,
+        "min": 197.75071596785693,
+        "max": 203.51464214002357,
+        "n": 8
+      },
+      "server_decode_tok_s_median": null,
+      "server_prefill_tok_s_median": null,
+      "decode_drift_pct": -0.3,
+      "decode_all_tokens_tok_s": 22.396549284870066,
+      "drafts": null
+    },
+    "llama-server-plain": {
+      "ttft_ms": {
+        "median": 2420.6411249761004,
+        "min": 2389.345916977618,
+        "max": 2434.9033340113238,
+        "n": 8
+      },
+      "decode_tok_s": {
+        "median": 24.118709082087197,
+        "min": 24.000487806016597,
+        "max": 24.204424220201474,
+        "n": 8
+      },
+      "prefill_tok_s_est": {
+        "median": 204.09888994163478,
+        "min": 203.29349140301352,
+        "max": 206.3326186873837,
+        "n": 8
+      },
+      "server_decode_tok_s_median": 24.016496453217325,
+      "server_prefill_tok_s_median": 219.4622138287154,
+      "decode_drift_pct": 0.6,
+      "decode_all_tokens_tok_s": 24.102969116470835,
+      "drafts": null
+    }
+  },
+  "replies": {
+    "lm-studio": {
+      "completion_tokens": [
+        512
+      ],
+      "same_as_most_common_reply": 1,
+      "of": 8
+    },
+    "llama-server-plain": {
+      "completion_tokens": [
+        512
+      ],
+      "same_as_most_common_reply": 0,
+      "of": 8
+    }
+  },
+  "conditions_before": {
+    "taken_at": "2026-11-28T17:25:55.996583+00:00",
+    "machine": {
+      "model": "MacBookPro18,2",
+      "chip": "Apple M1 Max",
+      "memory_bytes": 68719476736,
+      "macos": "27.2.1",
+      "macos_build": "26B131",
+      "python": "3.14.7"
+    },
+    "power": {
+      "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=9044067)\t100%; charged; 0:00 remaining present: true",
+      "on_ac": true,
+      "power_mode": 0,
+      "low_power_mode": 0,
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+    },
+    "targets": [
+      {
+        "port": 1338,
+        "pid": 6095,
+        "processes": [
+          {
+            "pid": 6095,
+            "command": "/Applications/LM Studio.app/Contents/MacOS/LM Studio",
+            "version": null
+          },
+          {
+            "pid": 6204,
+            "command": "/Applications/LM Studio.app/Contents/Frameworks/LM Studio Helper (GPU).app/Contents/MacOS/LM Studio Helper (GPU) --type=gpu-process --user-data-dir=/Users/gomi/Library/Application Support/LM Studio --gpu-preferences=SAAAAAAAAAAgAAAIAAAAAAAAAAAAAGAAAwAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAABAAAAAAAAAACAAAAAAAAAAIAAAAAAAAAA== --shared-files --field-trial-handle=1718379636,r,16968044278297944792,9114245335490892366,262144 --enable-features=PdfUseShowSaveFilePicker,ScreenCaptureKitPickerScreen,ScreenCaptureKitStreamPickerSonoma --disable-features=MacWebContentsOcclusion,ScreenAIOCREnabled,SpareRendererForSitePerProcess,TimeoutHangingVideoCaptureStarts,TraceSiteInstanceGetProcessCreation --variations-seed-version --seatbelt-client=30",
+            "version": null
+          },
+          {
+            "pid": 6205,
+            "command": "/Applications/LM Studio.app/Contents/Frameworks/LM Studio Helper.app/Contents/MacOS/LM Studio Helper --type=utility --utility-sub-type=network.mojom.NetworkService --lang=en-US --service-sandbox-type=network --user-data-dir=/Users/gomi/Library/Application Support/LM Studio --shared-files --field-trial-handle=1718379636,r,16968044278297944792,9114245335490892366,262144 --enable-features=PdfUseShowSaveFilePicker,ScreenCaptureKitPickerScreen,ScreenCaptureKitStreamPickerSonoma --disable-features=MacWebContentsOcclusion,ScreenAIOCREnabled,SpareRendererForSitePerProcess,TimeoutHangingVideoCaptureStarts,TraceSiteInstanceGetProcessCreation --variations-seed-version --seatbelt-client=30",
+            "version": null
+          },
+          {
+            "pid": 6206,
+            "command": "/Users/gomi/.lmstudio/.internal/utils/node -e \\012function connectPort(port) {\\012  const handlersMap = new Map();\\012  return {\\012    postMessage: data => process.send({ port: port, data }),\\012    on: (event, handler) => {\\012      if (event !== \"message\") {\\012        throw new Error(\"Unsupported event: \" + event);\\012      }\\012      const innerHandler = payload => {\\012        if (payload.port === port) {\\012          handler({ data: payload.data });\\012        }\\012      }\\012      handlersMap.set(handler, innerHandler);\\012      process.on('message', innerHandler);\\012    },\\012    off: (event, handler) => {\\012      if (event !== \"message\") {\\012        throw new Error(\"Unsupported event: \" + event);\\012      }\\012      const innerHandler = handlersMap.get(handler);\\012      if (innerHandler) {\\012        process.off('message', innerHandler);\\012        handlersMap.delete(handler);\\012      }\\012    },\\012  };\\012}\\012process.parentPort = connectPort(0);\\012process.rcPort = connectPort(1);\\012process.resourcesPath = \"/Applications/LM Studio.app/Contents/Resources\";\\012require(\"/Applications/LM Studio.app/Contents/Resources/app/.webpack/lib/systemresourcesworker.js\"); /Applications/LM Studio.app/Contents/Resources/app/.webpack/lib/systemresourcesworker.js /Applications/LM Studio.app/Contents/Resources/app/.webpack/bin/liblmstudio/metal/liblmstudio_bindings.node",
+            "version": null
+          },
+          {
+            "pid": 78396,
+            "command": "/Users/gomi/.lmstudio/extensions/backends/llama.cpp-mac-arm64-apple-metal-advsimd-2.81.0/llama-server --model /Users/gomi/.lmstudio/models/bartowski/Inkling-2-Mini-GGUF/Inkling-2-Mini-Q4_K_M.gguf --host 127.0.0.1 --port 54182 --api-key GCGUX_WA4c59loyJ4fJvyjPjKKIK9udYP3AWt4w6T0A --verbosity 3 --no-webui --jinja --chat-template-file /Users/gomi/.lmstudio/.internal/temp/lmstudio-chat-template-D3UWdh/chat-template.jinja --lazy-mode auto --ctx-size 8192 --n-gpu-layers 999999 --n-cpu-moe 0 --main-gpu 0 --tensor-split 0 --split-mode layer --ctx-checkpoints 32 --batch-size 2048 --ubatch-size 512 --threads 7 --parallel 4 --cache-type-k f16 --cache-type-v f16 --flash-attn on --kv-offload --kv-unified --load-mode mmap+mlock",
+            "version": "version: 1.0.0-dev (build 1, commit e6d624b)\nbuilt with AppleClang 17.0.0.17000013 for Darwin arm64"
+          }
+        ]
+      },
+      {
+        "port": 8090,
+        "pid": 30702,
+        "processes": [
+          {
+            "pid": 30702,
+            "command": "/Users/gomi/code/nekko-agent/.scratch/llama-b12818/x/llama-b12818/llama-server -m /Users/gomi/.nekko/nekko-agent/models/chat/bartowski_Inkling-2-Mini-GGUF/Inkling-2-Mini-Q4_K_M.gguf --port 8090 -c 8192",
+            "version": "version: 1.1.0-dev (build 12818, commit a38695013)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64"
+          }
+        ]
+      }
+    ],
+    "inference_processes": [
+      {
+        "kind": "llama-server",
+        "pid": 30702,
+        "command": "/Users/gomi/code/nekko-agent/.scratch/llama-b12818/x/llama-b12818/llama-server -m /Users/gomi/.nekko/nekko-agent/models/chat/bartowski_Inkling-2-Mini-GGUF/Inkling-2-Mini-Q4_K_M.gguf --port 8090 -c 8192",
+        "part_of_target": true
+      },
+      {
+        "kind": "llama-server",
+        "pid": 78396,
+        "command": "/Users/gomi/.lmstudio/extensions/backends/llama.cpp-mac-arm64-apple-metal-advsimd-2.81.0/llama-server --model /Users/gomi/.lmstudio/models/bartowski/Inkling-2-Mini-GGUF/Inkling-2-Mini-Q4_K_M.gguf --host 127.0.0.1 --port 54182 --api-key GCGUX_WA4c59loyJ4fJvyjPjKKIK9udYP3AWt4w6T0A --verbosity 3 --no-webui --jinja --chat-template-file /Users/gomi/.lmstudio/.internal/temp/lmstudio-chat-template-D3UWdh/chat-template.jinja --lazy-mode auto --ctx-size 8192 --n-gpu-layers 999999 --n-cpu-moe 0 --main-gpu 0 --tensor-split 0 --split-mode layer --ctx-checkpoints 32 --batch-size 2048 --ubatch-size 512 --threads 7 --parallel 4 --cache-type-k f16 --cache-type-v f16 --flash-attn on --kv-offload --kv-unified --load-mode mmap+mlock",
+        "part_of_target": true
+      }
+    ],
+    "busiest_other_processes": [
+      {
+        "pid": 822,
+        "cpu": 32.5,
+        "command": "/Applications/iTerm.app/Contents/MacOS/iTerm2"
+      },
+      {
+        "pid": 1873,
+        "cpu": 10.0,
+        "command": "/Applications/NordVPN.app/Contents/MacOS/NordVPN"
+      },
+      {
+        "pid": 1677,
+        "cpu": 6.1,
+        "command": "/usr/bin/powermetrics -i 2000 --samplers cpu_power gpu_power -a --hide-cpu-duty-cycle"
+      },
+      {
+        "pid": 1678,
+        "cpu": 6.1,
+        "command": "/usr/bin/powermetrics -i 2000 --samplers cpu_power gpu_power -a --hide-cpu-duty-cycle"
+      },
+      {
+        "pid": 829,
+        "cpu": 5.1,
+        "command": "/System/Applications/Utilities/Activity Monitor.app/Contents/MacOS/Activity Monitor"
+      },
+      {
+        "pid": 1353,
+        "cpu": 3.8,
+        "command": "/Users/gomi/Library/Application Support/iStat Menus 7/iStat Menus Menubar.app/Contents/MacOS/iStat Menus Menubar"
+      },
+      {
+        "pid": 200,
+        "cpu": 3.1,
+        "command": "/usr/libexec/runningboardd"
+      },
+      {
+        "pid": 79095,
+        "cpu": 2.3,
+        "command": "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/mdworker_shared -s mdworker -c MDSImporterWorker -m com.apple.mdworker.shared"
+      }
+    ],
+    "scripts": {
+      "commit": "2d958b6ca96f0f92d44ec0a865aad1bb3bb5f21e",
+      "uncommitted_changes": false
+    },
+    "model_file": {
+      "path": "/Users/gomi/.nekko/nekko-agent/models/chat/bartowski_Inkling-2-Mini-GGUF/Inkling-2-Mini-Q4_K_M.gguf",
+      "bytes": 18658096192,
+      "sha256": "ed38ac618a24ee65142c27073783a80aa3b100546a21212d59690c9081945a9b"
+    },
+    "target_model_files": {
+      "lm-studio": {
+        "path": "/Users/gomi/.lmstudio/models/bartowski/Inkling-2-Mini-GGUF/Inkling-2-Mini-Q4_K_M.gguf",
+        "bytes": 18658096192,
+        "sha256": "ed38ac618a24ee65142c27073783a80aa3b100546a21212d59690c9081945a9b"
+      },
+      "llama-server-plain": {
+        "path": "/Users/gomi/.nekko/nekko-agent/models/chat/bartowski_Inkling-2-Mini-GGUF/Inkling-2-Mini-Q4_K_M.gguf",
+        "bytes": 18658096192,
+        "sha256": "ed38ac618a24ee65142c27073783a80aa3b100546a21212d59690c9081945a9b"
+      }
+    }
+  },
+  "conditions_after": {
+    "taken_at": "2026-11-28T17:40:33.811669+00:00",
+    "machine": {
+      "model": "MacBookPro18,2",
+      "chip": "Apple M1 Max",
+      "memory_bytes": 68719476736,
+      "macos": "27.2.1",
+      "macos_build": "26B131",
+      "python": "3.14.7"
+    },
+    "power": {
+      "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=9044067)\t100%; charged; 0:00 remaining present: true",
+      "on_ac": true,
+      "power_mode": 0,
+      "low_power_mode": 0,
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+    },
+    "targets": [
+      {
+        "port": 1338,
+        "pid": 6095,
+        "processes": [
+          {
+            "pid": 6095,
+            "command": "/Applications/LM Studio.app/Contents/MacOS/LM Studio",
+            "version": null
+          },
+          {
+            "pid": 6204,
+            "command": "/Applications/LM Studio.app/Contents/Frameworks/LM Studio Helper (GPU).app/Contents/MacOS/LM Studio Helper (GPU) --type=gpu-process --user-data-dir=/Users/gomi/Library/Application Support/LM Studio --gpu-preferences=SAAAAAAAAAAgAAAIAAAAAAAAAAAAAGAAAwAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAABAAAAAAAAAACAAAAAAAAAAIAAAAAAAAAA== --shared-files --field-trial-handle=1718379636,r,16968044278297944792,9114245335490892366,262144 --enable-features=PdfUseShowSaveFilePicker,ScreenCaptureKitPickerScreen,ScreenCaptureKitStreamPickerSonoma --disable-features=MacWebContentsOcclusion,ScreenAIOCREnabled,SpareRendererForSitePerProcess,TimeoutHangingVideoCaptureStarts,TraceSiteInstanceGetProcessCreation --variations-seed-version --seatbelt-client=30",
+            "version": null
+          },
+          {
+            "pid": 6205,
+            "command": "/Applications/LM Studio.app/Contents/Frameworks/LM Studio Helper.app/Contents/MacOS/LM Studio Helper --type=utility --utility-sub-type=network.mojom.NetworkService --lang=en-US --service-sandbox-type=network --user-data-dir=/Users/gomi/Library/Application Support/LM Studio --shared-files --field-trial-handle=1718379636,r,16968044278297944792,9114245335490892366,262144 --enable-features=PdfUseShowSaveFilePicker,ScreenCaptureKitPickerScreen,ScreenCaptureKitStreamPickerSonoma --disable-features=MacWebContentsOcclusion,ScreenAIOCREnabled,SpareRendererForSitePerProcess,TimeoutHangingVideoCaptureStarts,TraceSiteInstanceGetProcessCreation --variations-seed-version --seatbelt-client=30",
+            "version": null
+          },
+          {
+            "pid": 6206,
+            "command": "/Users/gomi/.lmstudio/.internal/utils/node -e \\012function connectPort(port) {\\012  const handlersMap = new Map();\\012  return {\\012    postMessage: data => process.send({ port: port, data }),\\012    on: (event, handler) => {\\012      if (event !== \"message\") {\\012        throw new Error(\"Unsupported event: \" + event);\\012      }\\012      const innerHandler = payload => {\\012        if (payload.port === port) {\\012          handler({ data: payload.data });\\012        }\\012      }\\012      handlersMap.set(handler, innerHandler);\\012      process.on('message', innerHandler);\\012    },\\012    off: (event, handler) => {\\012      if (event !== \"message\") {\\012        throw new Error(\"Unsupported event: \" + event);\\012      }\\012      const innerHandler = handlersMap.get(handler);\\012      if (innerHandler) {\\012        process.off('message', innerHandler);\\012        handlersMap.delete(handler);\\012      }\\012    },\\012  };\\012}\\012process.parentPort = connectPort(0);\\012process.rcPort = connectPort(1);\\012process.resourcesPath = \"/Applications/LM Studio.app/Contents/Resources\";\\012require(\"/Applications/LM Studio.app/Contents/Resources/app/.webpack/lib/systemresourcesworker.js\"); /Applications/LM Studio.app/Contents/Resources/app/.webpack/lib/systemresourcesworker.js /Applications/LM Studio.app/Contents/Resources/app/.webpack/bin/liblmstudio/metal/liblmstudio_bindings.node",
+            "version": null
+          },
+          {
+            "pid": 78396,
+            "command": "/Users/gomi/.lmstudio/extensions/backends/llama.cpp-mac-arm64-apple-metal-advsimd-2.81.0/llama-server --model /Users/gomi/.lmstudio/models/bartowski/Inkling-2-Mini-GGUF/Inkling-2-Mini-Q4_K_M.gguf --host 127.0.0.1 --port 54182 --api-key GCGUX_WA4c59loyJ4fJvyjPjKKIK9udYP3AWt4w6T0A --verbosity 3 --no-webui --jinja --chat-template-file /Users/gomi/.lmstudio/.internal/temp/lmstudio-chat-template-D3UWdh/chat-template.jinja --lazy-mode auto --ctx-size 8192 --n-gpu-layers 999999 --n-cpu-moe 0 --main-gpu 0 --tensor-split 0 --split-mode layer --ctx-checkpoints 32 --batch-size 2048 --ubatch-size 512 --threads 7 --parallel 4 --cache-type-k f16 --cache-type-v f16 --flash-attn on --kv-offload --kv-unified --load-mode mmap+mlock",
+            "version": "version: 1.0.0-dev (build 1, commit e6d624b)\nbuilt with AppleClang 17.0.0.17000013 for Darwin arm64"
+          }
+        ]
+      },
+      {
+        "port": 8090,
+        "pid": 30702,
+        "processes": [
+          {
+            "pid": 30702,
+            "command": "/Users/gomi/code/nekko-agent/.scratch/llama-b12818/x/llama-b12818/llama-server -m /Users/gomi/.nekko/nekko-agent/models/chat/bartowski_Inkling-2-Mini-GGUF/Inkling-2-Mini-Q4_K_M.gguf --port 8090 -c 8192",
+            "version": "version: 1.1.0-dev (build 12818, commit a38695013)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64"
+          }
+        ]
+      }
+    ],
+    "inference_processes": [
+      {
+        "kind": "llama-server",
+        "pid": 30702,
+        "command": "/Users/gomi/code/nekko-agent/.scratch/llama-b12818/x/llama-b12818/llama-server -m /Users/gomi/.nekko/nekko-agent/models/chat/bartowski_Inkling-2-Mini-GGUF/Inkling-2-Mini-Q4_K_M.gguf --port 8090 -c 8192",
+        "part_of_target": true
+      },
+      {
+        "kind": "llama-server",
+        "pid": 78396,
+        "command": "/Users/gomi/.lmstudio/extensions/backends/llama.cpp-mac-arm64-apple-metal-advsimd-2.81.0/llama-server --model /Users/gomi/.lmstudio/models/bartowski/Inkling-2-Mini-GGUF/Inkling-2-Mini-Q4_K_M.gguf --host 127.0.0.1 --port 54182 --api-key GCGUX_WA4c59loyJ4fJvyjPjKKIK9udYP3AWt4w6T0A --verbosity 3 --no-webui --jinja --chat-template-file /Users/gomi/.lmstudio/.internal/temp/lmstudio-chat-template-D3UWdh/chat-template.jinja --lazy-mode auto --ctx-size 8192 --n-gpu-layers 999999 --n-cpu-moe 0 --main-gpu 0 --tensor-split 0 --split-mode layer --ctx-checkpoints 32 --batch-size 2048 --ubatch-size 512 --threads 7 --parallel 4 --cache-type-k f16 --cache-type-v f16 --flash-attn on --kv-offload --kv-unified --load-mode mmap+mlock",
+        "part_of_target": true
+      }
+    ],
+    "busiest_other_processes": [
+      {
+        "pid": 822,
+        "cpu": 19.1,
+        "command": "/Applications/iTerm.app/Contents/MacOS/iTerm2"
+      },
+      {
+        "pid": 1353,
+        "cpu": 2.5,
+        "command": "/Users/gomi/Library/Application Support/iStat Menus 7/iStat Menus Menubar.app/Contents/MacOS/iStat Menus Menubar"
+      },
+      {
+        "pid": 93991,
+        "cpu": 1.7,
+        "command": "/Applications/Discord.app/Contents/Frameworks/Discord Helper (Renderer).app/Contents/MacOS/Discord Helper (Renderer) --type=renderer --user-data-dir=/Users/gomi/Library/Application Support/discord --s"
+      },
+      {
+        "pid": 1873,
+        "cpu": 1.3,
+        "command": "/Applications/NordVPN.app/Contents/MacOS/NordVPN"
+      },
+      {
+        "pid": 829,
+        "cpu": 1.2,
+        "command": "/System/Applications/Utilities/Activity Monitor.app/Contents/MacOS/Activity Monitor"
+      },
+      {
+        "pid": 195,
+        "cpu": 1.0,
+        "command": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon"
+      },
+      {
+        "pid": 200,
+        "cpu": 0.8,
+        "command": "/usr/libexec/runningboardd"
+      },
+      {
+        "pid": 84007,
+        "cpu": 0.5,
+        "command": "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/mdworker_shared -s mdworker -c MDSImporterWorker -m com.apple.mdworker.shared"
+      }
+    ],
+    "scripts": {
+      "commit": "2d958b6ca96f0f92d44ec0a865aad1bb3bb5f21e",
+      "uncommitted_changes": false
+    }
+  },
+  "cpu_during_run": {
+    "seconds": 857.6,
+    "busiest_other_processes": [
+      {
+        "pid": 822,
+        "cpu": 24.2,
+        "command": "/Applications/iTerm.app/Contents/MacOS/iTerm2"
+      },
+      {
+        "pid": 1873,
+        "cpu": 7.2,
+        "command": "/Applications/NordVPN.app/Contents/MacOS/NordVPN"
+      },
+      {
+        "pid": 829,
+        "cpu": 3.5,
+        "command": "/System/Applications/Utilities/Activity Monitor.app/Contents/MacOS/Activity Monitor"
+      },
+      {
+        "pid": 200,
+        "cpu": 3.4,
+        "command": "/usr/libexec/runningboardd"
+      },
+      {
+        "pid": 93991,
+        "cpu": 2.8,
+        "command": "/Applications/Discord.app/Contents/Frameworks/Discord Helper (Renderer).app/Contents/MacOS/Discord Helper (Renderer) --type=renderer --user-data-dir=/Users/gomi/Library/Application Support/discord --s"
+      },
+      {
+        "pid": 1353,
+        "cpu": 2.6,
+        "command": "/Users/gomi/Library/Application Support/iStat Menus 7/iStat Menus Menubar.app/Contents/MacOS/iStat Menus Menubar"
+      },
+      {
+        "pid": 385,
+        "cpu": 2.5,
+        "command": "/usr/libexec/sysmond"
+      },
+      {
+        "pid": 195,
+        "cpu": 2.2,
+        "command": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon"
+      }
+    ]
+  }
+}
