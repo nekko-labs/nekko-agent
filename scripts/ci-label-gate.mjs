@@ -16,6 +16,11 @@
 // iOS, with or without `deploy:ios` (#3094), a green `Native iOS (batch)` status on its head counts as much
 // as a green Native iOS run on it, and with neither yet, `gate` waits for one.
 //
+// A draft or `hold` PR never joins a batch (batchCandidates), so `gate` does
+// not wait for one there: it fails at once instead of holding a runner and the
+// PR's CI concurrency slot for 170 minutes, and auto-merge.yml re-runs it when
+// the PR is marked ready or `hold` comes off (ci.yml has no trigger for either).
+//
 // Usage (from ci.yml's gate job, with GH_TOKEN and GITHUB_REPOSITORY set):
 //   node scripts/ci-label-gate.mjs pr --pr <number> --sha <head sha>
 
@@ -69,7 +74,9 @@ export function labelRuns(runs, { batch = null, iosRequired = false } = {}) {
     const verdict = iosVerdict({ run, status: batch, required: iosRequired });
     const entry = verdict === 'passed' && run && PASSED.has(run.conclusion) ? run
       : { name: 'Native iOS', status: verdict === 'pending' ? 'pending' : 'completed', conclusion: verdict === 'passed' ? 'success' : 'failure',
-          html_url: batch?.target_url ?? run?.html_url ?? 'no batch has taken it yet' };
+          html_url: batch?.target_url ?? run?.html_url ?? 'no batch has taken it yet',
+          // Nothing but a batch can settle it: no Native iOS run on the head is still going.
+          batchOnly: !(run && run.status !== 'completed') };
     if (verdict !== 'none') out[verdict].push(entry);
   }
   return out;
@@ -98,6 +105,16 @@ export function needsLabelRuns(pr) {
   return labelsOf(pr).some(label => DEPLOY_LABELS.includes(label));
 }
 
+/** Why no batch will take this PR (draft or `hold`, as batchCandidates skips), or null. */
+export function outOfBatch(pr) {
+  if (pr.draft ?? pr.isDraft) return 'it is a draft';
+  if (labelsOf(pr).includes(HOLD_LABEL)) return `it is labelled \`${HOLD_LABEL}\``;
+  return null;
+}
+
+/** Whether `gate` is waiting on a batch status rather than on a real run it can see. */
+export const waitsOnBatch = state => state.pending.some(run => run.batchOnly);
+
 const describe = run => `${run.name} (${run.status === 'completed' ? run.conclusion : run.status}): ${run.html_url}`;
 
 function gh(args) {
@@ -112,11 +129,18 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function waitForPr(repo, pr, sha, { timeoutMin, pollSec }) {
   const until = Date.now() + timeoutMin * 60_000;
-  const labelled = needsLabelRuns(JSON.parse(gh(['api', `repos/${repo}/pulls/${pr}`])));
   for (;;) {
-    const state = labelRuns(gateRuns(runsFor(repo, sha), labelled), iosContext(repo, pr, sha));
+    // Read each poll: a PR can be marked draft or held while gate waits.
+    const info = JSON.parse(gh(['api', `repos/${repo}/pulls/${pr}`]));
+    const state = labelRuns(gateRuns(runsFor(repo, sha), needsLabelRuns(info)), iosContext(repo, pr, sha));
     if (state.failed.length) {
       console.error(`Deploy-label runs failed on ${sha}:\n${state.failed.map(describe).join('\n')}`);
+      return 1;
+    }
+    const why = waitsOnBatch(state) && outOfBatch(info);
+    if (why) {
+      console.error(`Native iOS has not run on ${sha}, and no batch will take this PR while ${why}.\n`
+        + 'Marking it ready or removing `hold` re-runs gate (auto-merge.yml); a batch takes it within about 30 minutes.');
       return 1;
     }
     if (!state.pending.length) {

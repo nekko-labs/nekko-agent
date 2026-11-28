@@ -163,6 +163,12 @@ names.) To keep a ready PR from merging, mark it draft or label it `hold`: the
 auto-merge workflow turns auto-merge off for either, and back on when you mark it
 ready or remove `hold`.
 
+No iOS batch takes a draft or held PR, so on an iOS change `gate` fails at once
+there ("no batch will take this PR while ...") rather than waiting 170 minutes for
+a batch that never comes. Marking the PR ready or removing `hold` re-runs the
+head's red CI (auto-merge.yml's `rerun-gate`; ci.yml has no trigger for either),
+and the re-run `gate` waits for the next batch.
+
 Platform builds run nightly, not per change. With a `deploy:linux`, `deploy:windows`,
 `deploy:macos`, `deploy:ios` or `deploy:android` label, `gate` on the PR waits for the
 runs the label turns on (ci.yml's per-OS daemon and capture, Native iOS, Native Android,

@@ -50,6 +50,33 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
 
+  # ci.yml runs on opened, synchronize, reopened and labeled, not on leaving
+  # draft or `hold`. A draft or held iOS PR's `gate` fails at once (no batch
+  # takes it, scripts/ci-label-gate.mjs), so without this the PR sat red after
+  # it was marked ready, the sweeper's one re-run could already be spent, and
+  # it stayed open overnight. Re-run the head's failed CI jobs here; a batch
+  # takes the PR within about 30 minutes and the re-run gate waits for it.
+  rerun-gate:
+    if: ${{ github.event.pull_request.base.ref == 'main' && !github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'hold') && (github.event.action == 'ready_for_review' || (github.event.action == 'unlabeled' && github.event.label.name == 'hold')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Re-run the head's red CI
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          run=$(gh run list --workflow ci.yml --commit "$SHA" --event pull_request --limit 1 --json databaseId,status,conclusion \
+            -q '.[0] | select(.status == "completed" and .conclusion != "success") | .databaseId')
+          if [ -z "$run" ]; then
+            echo "CI on $SHA is green, still running or absent; nothing to re-run."
+            exit 0
+          fi
+          gh run rerun "$run" --failed || echo "::warning::Could not re-run CI run $run."
+
   auto-merge:
     if: ${{ github.event.pull_request.base.ref == 'main' && !github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'hold') }}
     runs-on: ubuntu-latest

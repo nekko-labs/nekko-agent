@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { LABEL_WORKFLOWS, gateRuns, labelRuns, needsLabelRuns } from './ci-label-gate.mjs';
+import { LABEL_WORKFLOWS, gateRuns, labelRuns, needsLabelRuns, outOfBatch, waitsOnBatch } from './ci-label-gate.mjs';
 
 const run = (id, path, status, conclusion = null) => ({ id, name: path.split('/').pop(), path, status, conclusion, html_url: `https://example/${id}` });
 const ios = '.github/workflows/ios-native.yml';
@@ -122,4 +122,22 @@ test('desktop icon generation does not recreate the retired phone app', () => {
   const icons = readFileSync(new URL('../apps/desktop/scripts/make-icons.cjs', import.meta.url), 'utf8');
   assert.doesNotMatch(icons, /MOBILE|join\(.*'mobile'/);
   for (const artifact of ['icon.svg', 'icon.png', 'icon.ico', 'installerSidebar.bmp']) assert.ok(icons.includes(artifact));
+});
+
+test('a draft or held PR fails gate at once instead of waiting for a batch that will never take it', () => {
+  assert.equal(outOfBatch({ draft: true, labels: [] }), 'it is a draft');
+  assert.equal(outOfBatch({ isDraft: false, labels: { nodes: [{ name: 'hold' }] } }), 'it is labelled `hold`');
+  assert.equal(outOfBatch({ draft: false, labels: [{ name: 'deploy:ios' }] }), null);
+  // No batch status and no Native iOS run on the head: only a batch can settle it.
+  assert.equal(waitsOnBatch(labelRuns([], { iosRequired: true })), true);
+  // A Native iOS run dispatched on the branch is real: wait for it, held or not.
+  assert.equal(waitsOnBatch(labelRuns([run(4, ios, 'in_progress')], { iosRequired: true })), false);
+  assert.equal(waitsOnBatch(labelRuns([run(5, devIdentity, 'queued')])), false);
+});
+
+test('leaving draft or hold re-runs a red gate, since ci.yml has no trigger for either', () => {
+  const yml = readFileSync(new URL('../.github/workflows/auto-merge.yml', import.meta.url), 'utf8');
+  assert.match(yml, /rerun-gate:/);
+  assert.match(yml, /ready_for_review/);
+  assert.match(yml, /github\.event\.label\.name == 'hold'/);
 });
