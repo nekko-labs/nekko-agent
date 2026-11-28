@@ -27,6 +27,13 @@ test('preserves provider references, quoted examples and human trailers', () => 
   }, [commit('Update provider docs\n\nCo-authored-by: Claude Martin <claude@human.example>\nSigned-off-by: Dev <dev@example.org>')]), []);
 });
 
+test('handles long incomplete trailers without scanning for word boundaries repeatedly', () => {
+  const name = `Co-authored-by: Claude Code ${'-'.repeat(20_000)}`;
+  assert.deepEqual(attributionViolations({}, [commit(name)]), []);
+  assert.deepEqual(attributionViolations({}, [commit(`${name} <bot@example.org>`)]), ['commit 123456789abc']);
+  assert.deepEqual(attributionViolations({}, [commit('Co-authored-by: Assistant <bot@users.anthropic.com>')]), ['commit 123456789abc']);
+});
+
 test('commit-msg hook rejects generated attribution and accepts ordinary messages', async () => {
   const { spawnSync } = await import('node:child_process');
   const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
