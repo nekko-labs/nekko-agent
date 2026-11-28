@@ -2,8 +2,10 @@
 
 How fast local runtimes run the same model on the same Mac: Nekko Agent, plain
 llama.cpp (`llama-bench`, `llama-server`), Ollama, LM Studio (GGUF and MLX) and
-mlx-lm. It measures speed, not model quality. Results: [REPORT.md](REPORT.md),
-summarised on [the docs page](../docs/benchmarks.md).
+mlx-lm. It measures speed, not model quality. Results: [REPORT.md](REPORT.md)
+(M5 Max, Qwen3-8B), summarised on [the docs page](../docs/benchmarks.md), and
+[REPORT-m1-max-qwen38-inkling2.md](REPORT-m1-max-qwen38-inkling2.md) (M1 Max,
+Qwen3.8-27B and Inkling 2 Mini, DFlash2 against classic). One report per machine.
 
 Everything here is meant to be rerun, checked and improved: every number in the
 report comes from a run folder below, and every run folder records how it was
@@ -19,8 +21,9 @@ measured.
     front, as a ceiling.
   - `conditions.py`: records the machine's state and decides whether a run can
     count.
-  - `report.py`: rewrites the results section of `REPORT.md` from the run
-    folders, re-checking every run against the current rules.
+  - `report.py`: rewrites a report's results section from the run folders,
+    re-checking every run against the current rules. `--report` picks the file
+    and `--only` the runs (`--only qwen3-8b calibrate` for `REPORT.md`).
   - `code_edit_source.py`: the file the code-edit workload asks the model to edit.
 - `runs/`: valid runs, one folder each: `raw.jsonl` (every request, with every
   token's arrival time and the reply's text) and `manifest.json` (server command
@@ -29,6 +32,8 @@ measured.
   also hold a `powermetrics.txt` record and a `NOTES.md` about it.
 - `exploratory/`: runs that fail a check land here, with the reasons. Ignored
   by git.
+- `exploratory-kept/`: exploratory runs a report quotes, committed so the
+  numbers can be checked; the report says why each one is not valid.
 
 ## Running it
 
@@ -47,6 +52,10 @@ python3 bench/scripts/report.py
   and return the whole file).
 - `--scenario burst --pause 20` measures a cool chip; `--scenario sustained
   --preheat 420` measures after seven minutes of nonstop work.
+- `--no-think` turns the model's thinking off through the chat template, the
+  same request body for every server (`chat_template_kwargs` for llama-server,
+  `reasoning_effort` for LM Studio). Use it for code edits on models that ignore
+  `/no_think` (Qwen3.8), or reply lengths vary from request to request.
 - `--speculative` allows speculative decoding drafts; without it, a server that
   drafts fails the run.
 - `--target-model` and `--target-model-file` give one server a different model
