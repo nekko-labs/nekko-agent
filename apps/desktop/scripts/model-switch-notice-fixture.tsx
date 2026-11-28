@@ -5,7 +5,7 @@ const records: any[] = [{ id: 'a', title: 'Project review', createdAt: 1, update
 const bridge: any = {
   getAppInfo: async () => ({ version: '0.0.0-fixture', platform: 'darwin' }),
   getSettings: async () => initialSettings, listProviders: async () => [provider],
-  getSession: async () => records[0], listSessionSummaries: async () => [],
+  getSession: async (id: string) => records.find(s => s.id === id), listSessionSummaries: async () => [],
   listTasks: async () => [], listInstalledSkills: async () => [], listExternalSkills: async () => [],
   listTools: async () => [], getMcpStatus: async () => [], listShells: async () => [],
   listChanges: async () => [], listFiles: async () => [], getUsageSummary: async () => null,
@@ -38,11 +38,26 @@ const bridge: any = {
     return settings;
   };
   f.bridge.listModels = async () => models;
-  f.bridge.setSessionOptions = async (id: string, patch: any) => Object.assign(f.records.find((s: any) => s.id === id), patch);
+  let nextId = 0;
+  f.bridge.createSession = async () => {
+    if ((window as any).noticeFixture.failCreate) throw Error('Synthetic create failure');
+    const record = { ...records[0], id: `new-${++nextId}`, modelId: 'first', messages: [], attachments: [], queuedPrompts: [] };
+    records.push(record);
+    return record;
+  };
+  f.bridge.setSessionOptions = async (id: string, patch: any) => {
+    if (id !== 'a' && (window as any).noticeFixture.failConfigure) throw Error('Synthetic configuration failure');
+    return Object.assign(f.records.find((s: any) => s.id === id), patch);
+  };
+  f.bridge.deleteSession = async (id: string) => { records.splice(records.findIndex(s => s.id === id), 1); };
   f.bridge.previewContext = async () => (window as any).noticeFixture.noEstimate ? null : ({ items: [{ id: 'history', included: true, tokens: 106143, source: 'conversation', label: 'History', content: '' }], totalTokens: 106143, budget: 500000 });
+  function ActiveChat() {
+    const id = useStore(s => s.activeSessionId) ?? 'a';
+    return React.createElement(ChatPane, { key: id, sessionId: id });
+  }
   let mount = 0;
   (window as any).noticeFixture = {
-    failSave: false, noEstimate: false,
+    failSave: false, failCreate: false, failConfigure: false, noEstimate: false,
     chat: (empty = false) => {
       const record = f.records[0];
       Object.assign(record, { modelId: 'first', autoModel: false, messages: empty ? [] : [
@@ -51,7 +66,7 @@ const bridge: any = {
       ] });
       f.putCachedSession(record);
       f.store.setState({ settings, providers: settings.providers, models, activeSessionId: 'a', running: new Set() });
-      root.render(React.createElement('div', { style: { height: '100vh' } }, React.createElement(ChatPane, { key: ++mount, sessionId: 'a' })));
+      root.render(React.createElement('div', { style: { height: '100vh' } }, React.createElement(ActiveChat, { key: ++mount })));
     },
     settings: () => root.render(React.createElement(UpdateProvider, null, React.createElement(SettingsView))),
     saved: () => settings,

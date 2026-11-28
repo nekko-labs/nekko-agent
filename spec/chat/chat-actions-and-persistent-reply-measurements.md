@@ -120,11 +120,11 @@ Implemented with focused helper tests: opening a visible agent composer places t
 
 ### Clear next-turn token notice and persistent dismissal
 
-[Implemented; 32 focused tests, desktop/shared typechecks, 21 isolated macOS Electron interaction assertions, and inspected matched wide/narrow renderer screenshots pass] The existing-chat model/effort notice leads with **Tokens on your next turn** and the approximate included-context input token count. If context is unavailable it says so, rather than showing zero. It recommends opening a new chat and bringing only the necessary information to avoid resending history, not promising that the whole estimate becomes free. Selection alone sends no request; trimming, provider caching and billing may change actual token use and charges.
+The existing-chat model/effort notice explains that continuing resends chat history on the next turn and shows an approximate input-token count when available. **Got it** keeps the user in the current chat. **Move to new chat** opens a fresh chat with the selected model and moves only the unsent prompt text. Nothing is sent automatically. History, queued prompts and attachments stay in the original chat. If opening the new chat fails, the prompt stays in the original composer.
 
-**Got it. Don’t show me again.** is unchecked by default. Checking it and acknowledging persists `developer.showContextChangeNotice: false` through the existing app settings bridge, suppressing both model and effort notices across chats and reloads. **Settings → System → Developer → Show model-switch token notice** restores it; the command palette indexes the same control. Missing settings mean enabled. Escape/outside dismissal does not save a checked box; a failed save leaves the notice open with a retry message. Other Developer preferences stay intact. The preference never changes routing, sends a chat request, or deletes history. Scope: shared desktop/Local Web UI renderer; native phone notices are not changed.
+The compact **Don’t show me again** switch starts off. Either explicit action saves it when on, across chats and reloads. Escape or clicking outside does not save it. **Settings → System → Developer → Show model-switch token notice** restores the notice. A failed settings save leaves the dialog open. Scope: desktop and Local Web UI; native phone notices are unchanged.
 
-Acceptance: known/zero/unavailable estimates are distinct; existing chats show the notice on model or effort changes unless disabled; new chats and unchanged model selections do not trigger it; suppression persists and is reversible; keyboard dismissal returns focus; failed persistence does not silently hide future notices.
+Acceptance: verify both actions, no automatic send or copied history, retry without losing the draft, persisted and reversible opt-out, keyboard focus, and readable narrow layout.
 
 ## Agent-row title space and timestamps (#2096)
 

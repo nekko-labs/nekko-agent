@@ -38,7 +38,7 @@ import { CHAT_MODE_LABEL, chatCodeModeSavings, privacyMode, CLAUDE_CODE_PROVIDER
 import type { AutoProviderPick, BootedSimulator, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { approvalAfterResult } from './ChatPane.approval.js';
-import { useStore } from '../store.js';
+import { addCreatedSession, useStore } from '../store.js';
 import { useModelCatalogVersion } from '../modelCatalog.js';
 import { SubagentBanner } from './SubagentBanner.js';
 import { useGitStatus } from '../useGitStatus.js';
@@ -867,10 +867,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // open the very picker it points at.
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const contextChangeNoticeEnabled = useStore(s => showContextChangeNotice(s.settings));
-  const [contextChangeNotice, setContextChangeNotice] = useState(false);
+  const [contextChangeNotice, setContextChangeNotice] = useState<'model' | 'effort' | null>(null);
   const contextNoticeTrigger = useRef<HTMLElement | null>(null);
   const closeContextNotice = () => {
-    setContextChangeNotice(false);
+    setContextChangeNotice(null);
     requestAnimationFrame(() => contextNoticeTrigger.current?.focus());
   };
   // The "choose a model" tooltip is a one-shot nudge: opening the picker means
@@ -2917,7 +2917,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const effortProps = {
     metadata: selectedModelInfo?.effort,
     session, onSessionChange: setSession, modelId: autoPick?.modelId ?? (modelId === AUTO_MODEL_ID ? undefined : modelId ?? undefined),
-    onChanged: () => { if (session?.messages.length && contextChangeNoticeEnabled) { contextNoticeTrigger.current = document.activeElement as HTMLElement; setContextChangeNotice(true); } },
+    onChanged: () => { if (session?.messages.length && contextChangeNoticeEnabled) { contextNoticeTrigger.current = document.activeElement as HTMLElement; setContextChangeNotice('effort'); } },
   };
   const autoQualityControl = modelId === AUTO_MODEL_ID ? (
     <AutoQualityMenu
@@ -2939,6 +2939,50 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       }}
     />
   ) : null;
+  const movePromptToNewChat = async () => {
+    if (!session) throw new Error('Missing source chat');
+    const created = await window.nekko.createSession(session.workspaceId);
+    let next: Session;
+    try {
+      const saved = await window.nekko.setSessionOptions(created.id, {
+        ...(providerId ? { providerId } : {}),
+        ...(modelId && modelId !== AUTO_MODEL_ID ? { modelId } : {}),
+        autoModel: modelId === AUTO_MODEL_ID,
+        autoProviderSwitch: modelId === AUTO_MODEL_ID && autoSwitch,
+        autoQuality,
+        effort: session.effort,
+        offline: session.offline ?? false,
+        cloudOnly: session.cloudOnly ?? false,
+        incognito: session.incognito ?? false,
+        syncOff: session.syncOff ?? false,
+        ...(session.privacy ? { privacy: session.privacy } : {}),
+        executionMode: session.executionMode ?? 'unified',
+        mode: session.mode,
+        disabledTools: session.disabledTools ?? [],
+        disabledMcpServers: session.disabledMcpServers ?? [],
+        disabledConnectors: session.disabledConnectors ?? [],
+        ...(session.chatType === 'image' ? { chatType: 'image', imageParams: session.imageParams } : {}),
+      }, { chatOnly: true });
+      if (!saved) throw new Error('Could not configure new chat');
+      next = saved;
+    } catch (error) {
+      await window.nekko.deleteSession(created.id).catch(() => {});
+      throw error;
+    }
+    // Transfer only unsent text. Attachments are tied to the original chat.
+    // Update the flush snapshot before navigation can unmount this composer.
+    const text = voiceDraft.current;
+    const store = useStore.getState();
+    putCachedSession(next);
+    addCreatedSession(next);
+    if (text.trim()) {
+      store.seedComposer(next.id, text, []);
+      latestDraft.current = { ...latestDraft.current, text: '' };
+      setVoiceDraft('');
+    }
+    setContextChangeNotice(null);
+    store.showNewChat(next.id);
+  };
   const modelControls = (
     <div className="flex min-w-0 shrink items-center gap-2 rounded-lg">
     {(showModel || needsModel) && <ModelPicker
@@ -2969,7 +3013,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       onModel={(pid, v) => {
         if (session?.messages.length && contextChangeNoticeEnabled && (pid !== providerId || v !== modelId)) {
           contextNoticeTrigger.current = paneRef.current?.querySelector('button[aria-haspopup="listbox"]') ?? null;
-          setContextChangeNotice(true);
+          setContextChangeNotice('model');
         }
         if (pid) setProviderId(pid);
         pickedModel.current = pid ? { sessionId, providerId: pid, modelId: v } : null;
@@ -3023,7 +3067,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     <ChatImages.Provider value={chatImages}>
     {/* Portaled popups (the Mode panel and its lists) bubble here through React but are not part of the chat. */}
     <div ref={paneRef} onContextMenu={(e) => { if (surface === 'composer' || e.defaultPrevented || !e.currentTarget.contains(e.target as Node) || (e.target as HTMLElement).closest('a, img, textarea, [contenteditable], [data-agent-logs]')) return; e.preventDefault(); const picked = window.getSelection(); setChatMenu({ x: e.clientX, y: e.clientY, selection: picked && e.currentTarget.contains(picked.anchorNode) ? picked.toString() : '' }); }} data-session-id={sessionId} data-pane-hidden={paneShown ? undefined : ''} data-chat-surface={surface} data-clean-start={cleanStart || undefined} data-chat-expanding={expanding || undefined} onAnimationEnd={expanding ? (e) => { if (e.animationName === 'composer-expand-in') setExpanding(false); } : undefined} className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
-      {contextChangeNotice && <ContextChangeNotice tokens={ctx ? ctxUsed : undefined} onClose={closeContextNotice} />}
+      {contextChangeNotice && <ContextChangeNotice tokens={ctx ? ctxUsed : undefined} change={contextChangeNotice} hasAttachments={pendingImages.length + pendingVideos.length + freshPaths.length > 0} onClose={closeContextNotice} onMove={movePromptToNewChat} />}
       {chatMenu && <ContextMenu x={chatMenu.x} y={chatMenu.y} onClose={() => setChatMenu(null)}>
         {chatMenu.selection && <ContextAction onClick={() => { void navigator.clipboard.writeText(chatMenu.selection).catch(() => useStore.getState().pushToast('error', "Couldn't copy text.")); setChatMenu(null); }}><CopyIcon className="mr-2 inline h-3.5 w-3.5" />Copy</ContextAction>}
         <ContextAction onClick={() => { void navigator.clipboard.writeText(chatMarkdown()).catch(() => useStore.getState().pushToast('error', "Couldn't copy chat.")); setChatMenu(null); }}><CopyIcon className="mr-2 inline h-3.5 w-3.5" />Copy chat</ContextAction>
