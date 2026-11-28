@@ -1,0 +1,647 @@
+{
+  "name": "burst-chat-nekko-dflash2-vs-llama-server-qwen38-27b",
+  "valid": true,
+  "problems": [],
+  "notes": "M1 Max 64 GB, burst. Every llama.cpp arm runs llama.cpp b12565 (Nekko's pinned build). Pairwise against llama-server-plain (-m --port -c 8192; its default context would take the whole 64 GB) because two 27B servers fill the GPU working set. nekko-dflash2: Nekko router on 11500, preset draftModelId=Qwen3.8-27B-DFlash2-Q4_K_M; Nekko argv --ctx-size 65536 --cache-type-k q8_0 --cache-type-v q8_0 --cache-reuse 256 --no-cache-idle-slots --spec-default --spec-draft-model <drafter> --spec-draft-ngl all --spec-type draft-dflash --spec-draft-n-max 7. nekko-classic: llama-server started with Nekko's exact default argv (n-gram --spec-default, no drafter), outside the router because Nekko's memory budget keeps one 27B model resident. lm-studio: LM Studio, llama.cpp runtime 2.81.0, lms load defaults (8192 context, parallel 4, its repeat penalty), same file by hard link. Code edits are judged on the reply's last python block (Qwen3.8 reasons inline despite /no_think).",
+  "settings": {
+    "targets": {
+      "nekko-dflash2": "http://127.0.0.1:11500/v1",
+      "llama-server-plain": "http://127.0.0.1:8090/v1"
+    },
+    "model": "m",
+    "target_models": {
+      "nekko-dflash2": "Qwen3.8-27B-Q4_K_M",
+      "llama-server-plain": "m"
+    },
+    "target_weights_sha256": {
+      "nekko-dflash2": "d15d4b6de55f662ac40e867702d31afe738d032fa06b829b2b1a21a49d4a48ee",
+      "llama-server-plain": "d15d4b6de55f662ac40e867702d31afe738d032fa06b829b2b1a21a49d4a48ee"
+    },
+    "runs": 16,
+    "warmup": 3,
+    "max_tokens": 512,
+    "temperature": 0,
+    "seed": 42,
+    "stream": true,
+    "speculative_expected": true,
+    "extra_body": {},
+    "scenario": "burst",
+    "pause_s": 20.0,
+    "preheat_s": 0,
+    "max_drift_pct": 3.0,
+    "workload": "chat",
+    "prompt_sha256": "6e41cfca89c4d2b3d5904ad0cf7f7edb0f86dc007a230720614e89d874ed292c",
+    "script_sha256": "3c9e34ac4a3688ab3bbb9bfa4787a7d4a820ab5ac750aedf22b5a7dbcbb430ff"
+  },
+  "summary": {
+    "nekko-dflash2": {
+      "ttft_ms": {
+        "median": 3730.666499992367,
+        "min": 3667.9821249854285,
+        "max": 4576.66220900137,
+        "n": 16
+      },
+      "decode_tok_s": {
+        "median": 33.83093571349815,
+        "min": 24.928626409439403,
+        "max": 56.25170531692106,
+        "n": 16
+      },
+      "prefill_tok_s_est": {
+        "median": 136.43685954375997,
+        "min": 111.43492281272869,
+        "max": 138.76839707936747,
+        "n": 16
+      },
+      "server_decode_tok_s_median": 33.83091543740754,
+      "server_prefill_tok_s_median": 126.98182122236769,
+      "decode_drift_pct": -19.7,
+      "decode_all_tokens_tok_s": 33.49837007520767,
+      "drafts": {
+        "accepted_per_request": {
+          "median": 452.5,
+          "min": 389,
+          "max": 491
+        },
+        "acceptance_rate": 0.487
+      }
+    },
+    "llama-server-plain": {
+      "ttft_ms": {
+        "median": 4157.105521007907,
+        "min": 4080.444708990399,
+        "max": 4532.236125000054,
+        "n": 16
+      },
+      "decode_tok_s": {
+        "median": 13.107920803627014,
+        "min": 13.083542462852442,
+        "max": 13.151934934608414,
+        "n": 16
+      },
+      "prefill_tok_s_est": {
+        "median": 122.92206797138678,
+        "min": 112.74787674483618,
+        "max": 124.98637682219358,
+        "n": 16
+      },
+      "server_decode_tok_s_median": 13.10783835720726,
+      "server_prefill_tok_s_median": 125.30909896979611,
+      "decode_drift_pct": -0.1,
+      "decode_all_tokens_tok_s": 13.110836469550986,
+      "drafts": null
+    }
+  },
+  "replies": {
+    "nekko-dflash2": {
+      "completion_tokens": [
+        512
+      ],
+      "same_as_most_common_reply": 0,
+      "of": 16
+    },
+    "llama-server-plain": {
+      "completion_tokens": [
+        512
+      ],
+      "same_as_most_common_reply": 6,
+      "of": 16
+    }
+  },
+  "conditions_before": {
+    "taken_at": "2026-11-27T21:54:35.247131+00:00",
+    "machine": {
+      "model": "MacBookPro18,2",
+      "chip": "Apple M1 Max",
+      "memory_bytes": 68719476736,
+      "macos": "27.2.1",
+      "macos_build": "26B131",
+      "python": "3.14.7"
+    },
+    "power": {
+      "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=9044067)\t99%; finishing charge; 0:47 remaining present: true",
+      "on_ac": true,
+      "power_mode": 0,
+      "low_power_mode": 0,
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+    },
+    "targets": [
+      {
+        "port": 8090,
+        "pid": 5211,
+        "processes": [
+          {
+            "pid": 5211,
+            "command": "/Users/gomi/.nekko/nekko-agent/engine/macos-arm64-metal/llama-b12565/llama-server -m /Users/gomi/code/nekko-agent/.worktrees/qwen38-dflash-local/.scratch/qwen38/Qwen3.8-27B-Q4_K_M.gguf --port 8090 -c 8192",
+            "version": "version: 1.0.0-dev (build 12565, commit d7d1b632d)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64"
+          }
+        ]
+      },
+      {
+        "port": 11500,
+        "pid": 6122,
+        "processes": [
+          {
+            "pid": 6122,
+            "command": "/Users/gomi/code/nekko-agent/target/dev-daemon/nekkod --config-stdin",
+            "version": null
+          },
+          {
+            "pid": 6174,
+            "command": "/Users/gomi/code/nekko-agent/target/dev-daemon/nekko-vm egress",
+            "version": null
+          },
+          {
+            "pid": 6179,
+            "command": "/Users/gomi/code/nekko-agent/target/dev-daemon/nekko-vm host",
+            "version": null
+          },
+          {
+            "pid": 16305,
+            "command": "/opt/homebrew/bin/node /Users/gomi/code/floop/packages/cli/dist/floop.js mcp --profile nekko-agent",
+            "version": null
+          },
+          {
+            "pid": 39487,
+            "command": "/bin/sh -c set -eu; BASE=$(mktemp -d /tmp/hypergate-140-baseline.XXXXXX); printf '%s\\n' \"$BASE\"; git archive HEAD apps/site | tar -xf - -C \"$BASE\"; cd \"$BASE/apps/site\"; npm ci --no-audit --no-fund; VITE_HYPERGATE_POSTHOG_KEY= VITE_HYPERGATE_POSTHOG_HOST= npm run build; npm run preview -- --host 127.0.0.1 --port 4510 --strictPort",
+            "version": null
+          },
+          {
+            "pid": 39618,
+            "command": "npm run preview --host 127.0.0.1 --port 4510 --strictPort         ",
+            "version": null
+          },
+          {
+            "pid": 39650,
+            "command": "node /private/tmp/hypergate-140-baseline.v6ZRAn/apps/site/node_modules/.bin/vite preview --port 4391 --host 127.0.0.1 --port 4510 --strictPort",
+            "version": null
+          },
+          {
+            "pid": 39653,
+            "command": "/private/tmp/hypergate-140-baseline.v6ZRAn/apps/site/node_modules/@esbuild/darwin-arm64/bin/esbuild --service=0.25.12 --ping",
+            "version": null
+          },
+          {
+            "pid": 50426,
+            "command": "/bin/sh -c set -eu; CHECK=$(cat /tmp/hypergate-140-after-path); rsync -a --exclude=node_modules --exclude=dist --exclude='.env*' apps/site/ \"$CHECK/apps/site/\"; if [ -f packages/browser-analytics/index.ts ]; then cp -R packages/browser-analytics \"$CHECK/packages/\"; else mkdir -p \"$CHECK/packages/browser-analytics\"; cat > \"$CHECK/packages/browser-analytics/index.ts\" <<'EOF'\\012// Isolated screenshot/test double only. Not part of the worktree.\\012export function createAnalytics(scope: string, { key, host }: { key?: string; host?: string }) {\\012  const choiceKey = `fixture:${scope}:choice`, idKey = `fixture:${scope}:id`;\\012  const available = () => Boolean(key && host);\\012  const consent = () => localStorage.getItem(choiceKey) ?? 'unset';\\012  function setConsent(v: 'granted' | 'denied') { if (!available()) return; localStorage.setItem(choiceKey, v); if (v === 'denied') localStorage.removeItem(idKey); }\\012  function track(event: string, value: string) {\\012    if (!available() || consent() !== 'granted') return;\\012    const id = localStorage.getItem(idKey) || crypto.randomUUID(); localStorage.setItem(idKey, id);\\012    void fetch(`${host}/capture`, { method: 'POST', body: JSON.stringify({ event, properties: { distinct_id: id, value } }), headers: { 'content-type': 'application/json' }, credentials: 'omit', referrerPolicy: 'no-referrer', keepalive: true }).catch(() => {});\\012  }\\012  return { available, consent, setConsent, track };\\012}\\012EOF\\012fi; cd \"$CHECK/apps/site\"; VITE_HYPERGATE_POSTHOG_KEY=phc_site_test VITE_HYPERGATE_POSTHOG_HOST=https://analytics.invalid npm run build -- --outDir dist; VITE_HYPERGATE_POSTHOG_KEY= VITE_HYPERGATE_POSTHOG_HOST= npm run build -- --outDir dist-off; npm run preview -- --host 127.0.0.1 --port 4511 --strictPort",
+            "version": null
+          },
+          {
+            "pid": 50526,
+            "command": "npm run preview --host 127.0.0.1 --port 4511 --strictPort         ",
+            "version": null
+          },
+          {
+            "pid": 50558,
+            "command": "node /private/tmp/hypergate-140-after.BSFULj/apps/site/node_modules/.bin/vite preview --port 4391 --host 127.0.0.1 --port 4511 --strictPort",
+            "version": null
+          },
+          {
+            "pid": 50559,
+            "command": "/private/tmp/hypergate-140-baseline.v6ZRAn/apps/site/node_modules/@esbuild/darwin-arm64/bin/esbuild --service=0.25.12 --ping",
+            "version": null
+          },
+          {
+            "pid": 50589,
+            "command": "/bin/sh -c CHECK=$(cat /tmp/hypergate-140-after-path); cd \"$CHECK/apps/site\"; test -f dist-off/index.html; npm run preview -- --outDir dist-off --host 127.0.0.1 --port 4512 --strictPort",
+            "version": null
+          },
+          {
+            "pid": 50592,
+            "command": "npm run preview --outDir dist-off --host 127.0.0.1 --port 4512 --strictPort           ",
+            "version": null
+          },
+          {
+            "pid": 50625,
+            "command": "node /private/tmp/hypergate-140-after.BSFULj/apps/site/node_modules/.bin/vite preview --port 4391 --outDir dist-off --host 127.0.0.1 --port 4512 --strictPort",
+            "version": null
+          },
+          {
+            "pid": 50632,
+            "command": "/private/tmp/hypergate-140-baseline.v6ZRAn/apps/site/node_modules/@esbuild/darwin-arm64/bin/esbuild --service=0.25.12 --ping",
+            "version": null
+          },
+          {
+            "pid": 71101,
+            "command": "node apps/web/node_modules/.manager-140/fixture.cjs /tmp/hypergate-manager-140.eUjcWR/apps/web/dist 43170",
+            "version": null
+          },
+          {
+            "pid": 89613,
+            "command": "/Users/gomi/.local/bin/claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --replay-user-messages --session-id 9628f522-0ad3-4177-91f4-6114ce633dd1 --model claude-opus-5-5 --effort high --permission-mode acceptEdits --mcp-config /Users/gomi/.nekko/nekko-agent/harness/s_mwz4l7hi_kZ9vz0Pz.mcp.json --permission-prompt-tool mcp__nekko_bridge__approve --add-dir /Users/gomi/.nekko",
+            "version": null
+          },
+          {
+            "pid": 89622,
+            "command": "/Users/gomi/code/nekko-agent/apps/desktop/.dev-runtime/45.0.0/Nekko Agent.app/Contents/MacOS/Electron /Users/gomi/code/nekko-agent/apps/cli/app-dist/nekko-agent-cli.cjs mcp --bridge --url http://127.0.0.1:49721",
+            "version": null
+          },
+          {
+            "pid": 90485,
+            "command": "node apps/web/node_modules/.manager-140/fixture.cjs /tmp/hypergate-manager-build.9b4srJ/apps/web/dist 43171",
+            "version": null
+          },
+          {
+            "pid": 93081,
+            "command": "node apps/web/node_modules/.manager-140/fixture.cjs /tmp/hypergate-manager-build.9b4srJ/apps/web/dist-unconfigured 43172",
+            "version": null
+          },
+          {
+            "pid": 95777,
+            "command": "/bin/zsh -c source /Users/gomi/.claude-account-2/shell-snapshots/snapshot-zsh-1795792714371-mksd0j.sh 2>/dev/null || true && setopt NO_EXTENDED_GLOB NO_BARE_GLOB_QUAL 2>/dev/null || true && { \\builtin unalias -- 'which'; \\builtin unset -f -- 'which'; } >/dev/null 2>&1 || true && { \\builtin unalias -- 'unsetenv'; \\builtin unset -f -- 'unsetenv'; } >/dev/null 2>&1 || true && eval 'prev=\"\"\\012while true; do\\012  cur=\"\"\\012  for r in 46055619035 46055622873; do\\012    cur=\"$cur\\012run $r: $(hypergate run --agent claude-code-c6e0 -- gh run view $r --json status,conclusion,jobs -q '\"'\"'\"\\(.status) \\(.conclusion // \"\") failed=[\\([.jobs[]|select(.conclusion==\"failure\")|.name]|join(\",\"))]\"'\"'\"' 2>/dev/null | grep -v \"^hypergate\")\"\\012  done\\012  for p in 3618 3614 3616; do\\012    cur=\"$cur\\012PR $p: $(hypergate run --agent claude-code-c6e0 -- gh pr view $p --json state -q .state 2>/dev/null | grep -v \"^hypergate\")\"\\012  done\\012  if [ \"$cur\" != \"$prev\" ]; then echo \"$cur\" | grep -v '\"'\"'^$'\"'\"'; prev=\"$cur\"; fi\\012  [ $(echo \"$cur\" | grep -c \"^run .*: completed\") -eq 2 ] && exit 0\\012  sleep 120\\012done' < /dev/null && pwd -P >| /tmp/claude-7a65-cwd",
+            "version": null
+          },
+          {
+            "pid": 96241,
+            "command": "/Users/gomi/.local/bin/claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --replay-user-messages --session-id 75e31ddd-e209-433b-9346-24fa940d33f5 --model claude-opus-5-5 --effort medium --permission-mode acceptEdits --mcp-config /Users/gomi/.nekko/nekko-agent/harness/s_mwz6kqkh_NIjHzJgo.mcp.json --permission-prompt-tool mcp__nekko_bridge__approve --add-dir /Users/gomi/.nekko",
+            "version": null
+          },
+          {
+            "pid": 96249,
+            "command": "/Users/gomi/code/nekko-agent/apps/desktop/.dev-runtime/45.0.0/Nekko Agent.app/Contents/MacOS/Electron /Users/gomi/code/nekko-agent/apps/cli/app-dist/nekko-agent-cli.cjs mcp --bridge --url http://127.0.0.1:49721",
+            "version": null
+          },
+          {
+            "pid": 97104,
+            "command": "/bin/zsh -c source /Users/gomi/.claude-account-2/shell-snapshots/snapshot-zsh-1795796131486-4iq29y.sh 2>/dev/null || true && setopt NO_EXTENDED_GLOB NO_BARE_GLOB_QUAL 2>/dev/null || true && { \\builtin unalias -- 'which'; \\builtin unset -f -- 'which'; } >/dev/null 2>&1 || true && { \\builtin unalias -- 'unsetenv'; \\builtin unset -f -- 'unsetenv'; } >/dev/null 2>&1 || true && eval 'until grep -q \"ALL DONE\" /tmp/bench-logs/pairs-qwen38-chat.log; do sleep 60; done; grep -v -E \"run [0-9]+/|Loading|warmup:\" /tmp/bench-logs/pairs-qwen38-chat.log' < /dev/null && pwd -P >| /tmp/claude-0bbc-cwd",
+            "version": null
+          },
+          {
+            "pid": 97189,
+            "command": "/Users/gomi/.nekko/nekko-agent/engine/macos-arm64-metal/llama-b12565/llama-server --model /Users/gomi/code/nekko-agent/.worktrees/qwen38-dflash-local/.scratch/qwen38/Qwen3.8-27B-Q4_K_M.gguf --alias Qwen3.8-27B-Q4_K_M --host 127.0.0.1 --port 57132 --ctx-size 65536 --cache-type-k q8_0 --cache-type-v q8_0 --cache-reuse 256 --no-cache-idle-slots --spec-default --spec-draft-model /Users/gomi/code/nekko-agent/.worktrees/qwen38-dflash-local/.scratch/qwen38/Qwen3.8-27B-DFlash2-Q4_K_M.gguf --spec-draft-ngl all --spec-type draft-dflash --spec-draft-n-max 7",
+            "version": "version: 1.0.0-dev (build 12565, commit d7d1b632d)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64"
+          },
+          {
+            "pid": 97480,
+            "command": "sleep 120",
+            "version": null
+          },
+          {
+            "pid": 97966,
+            "command": "sleep 60",
+            "version": null
+          }
+        ]
+      }
+    ],
+    "inference_processes": [
+      {
+        "kind": "llama-server",
+        "pid": 5211,
+        "command": "/Users/gomi/.nekko/nekko-agent/engine/macos-arm64-metal/llama-b12565/llama-server -m /Users/gomi/code/nekko-agent/.worktrees/qwen38-dflash-local/.scratch/qwen38/Qwen3.8-27B-Q4_K_M.gguf --port 8090 -c 8192",
+        "part_of_target": true
+      },
+      {
+        "kind": "llama-server",
+        "pid": 97189,
+        "command": "/Users/gomi/.nekko/nekko-agent/engine/macos-arm64-metal/llama-b12565/llama-server --model /Users/gomi/code/nekko-agent/.worktrees/qwen38-dflash-local/.scratch/qwen38/Qwen3.8-27B-Q4_K_M.gguf --alias Qwen3.8-27B-Q4_K_M --host 127.0.0.1 --port 57132 --ctx-size 65536 --cache-type-k q8_0 --cache-type-v q8_0 --cache-reuse 256 --no-cache-idle-slots --spec-default --spec-draft-model /Users/gomi/code/nekko-agent/.worktrees/qwen38-dflash-local/.scratch/qwen38/Qwen3.8-27B-DFlash2-Q4_K_M.gguf --spec-draft-ngl all --spec-type draft-dflash --spec-draft-n-max 7",
+        "part_of_target": true
+      }
+    ],
+    "busiest_other_processes": [
+      {
+        "pid": 822,
+        "cpu": 13.1,
+        "command": "/Applications/iTerm.app/Contents/MacOS/iTerm2"
+      },
+      {
+        "pid": 195,
+        "cpu": 3.2,
+        "command": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon"
+      },
+      {
+        "pid": 93991,
+        "cpu": 2.8,
+        "command": "/Applications/Discord.app/Contents/Frameworks/Discord Helper (Renderer).app/Contents/MacOS/Discord Helper (Renderer) --type=renderer --user-data-dir=/Users/gomi/Library/Application Support/discord --s"
+      },
+      {
+        "pid": 200,
+        "cpu": 2.6,
+        "command": "/usr/libexec/runningboardd"
+      },
+      {
+        "pid": 1873,
+        "cpu": 1.8,
+        "command": "/Applications/NordVPN.app/Contents/MacOS/NordVPN"
+      },
+      {
+        "pid": 36083,
+        "cpu": 1.4,
+        "command": "/System/Library/Frameworks/Virtualization.framework/Versions/A/XPCServices/com.apple.Virtualization.VirtualMachine.xpc/Contents/MacOS/com.apple.Virtualization.VirtualMachine"
+      },
+      {
+        "pid": 340,
+        "cpu": 1.3,
+        "command": "/System/Library/DriverExtensions/com.apple.DriverKit-AppleBCMWLAN.dext/com.apple.DriverKit-AppleBCMWLAN com.apple.bcmwlan 0x100000dd4 com.apple.DriverKit-AppleBCMWLAN"
+      },
+      {
+        "pid": 1677,
+        "cpu": 1.0,
+        "command": "/usr/bin/powermetrics -i 2000 --samplers cpu_power gpu_power -a --hide-cpu-duty-cycle"
+      }
+    ],
+    "scripts": {
+      "commit": "e48acc29674f339d60e9752e39c6ef34dd8b9031",
+      "uncommitted_changes": false
+    },
+    "model_file": {
+      "path": "/Users/gomi/code/nekko-agent/.worktrees/qwen38-dflash-local/.scratch/qwen38/Qwen3.8-27B-Q4_K_M.gguf",
+      "bytes": 19403684480,
+      "sha256": "d15d4b6de55f662ac40e867702d31afe738d032fa06b829b2b1a21a49d4a48ee"
+    },
+    "target_model_files": {
+      "nekko-dflash2": {
+        "path": "/Users/gomi/code/nekko-agent/.worktrees/qwen38-dflash-local/.scratch/qwen38/Qwen3.8-27B-Q4_K_M.gguf",
+        "bytes": 19403684480,
+        "sha256": "d15d4b6de55f662ac40e867702d31afe738d032fa06b829b2b1a21a49d4a48ee"
+      },
+      "llama-server-plain": {
+        "path": "/Users/gomi/code/nekko-agent/.worktrees/qwen38-dflash-local/.scratch/qwen38/Qwen3.8-27B-Q4_K_M.gguf",
+        "bytes": 19403684480,
+        "sha256": "d15d4b6de55f662ac40e867702d31afe738d032fa06b829b2b1a21a49d4a48ee"
+      }
+    }
+  },
+  "conditions_after": {
+    "taken_at": "2026-11-27T22:25:11.665156+00:00",
+    "machine": {
+      "model": "MacBookPro18,2",
+      "chip": "Apple M1 Max",
+      "memory_bytes": 68719476736,
+      "macos": "27.2.1",
+      "macos_build": "26B131",
+      "python": "3.14.7"
+    },
+    "power": {
+      "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=9044067)\t100%; finishing charge; (no estimate) present: true",
+      "on_ac": true,
+      "power_mode": 0,
+      "low_power_mode": 0,
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+    },
+    "targets": [
+      {
+        "port": 8090,
+        "pid": 5211,
+        "processes": [
+          {
+            "pid": 5211,
+            "command": "/Users/gomi/.nekko/nekko-agent/engine/macos-arm64-metal/llama-b12565/llama-server -m /Users/gomi/code/nekko-agent/.worktrees/qwen38-dflash-local/.scratch/qwen38/Qwen3.8-27B-Q4_K_M.gguf --port 8090 -c 8192",
+            "version": "version: 1.0.0-dev (build 12565, commit d7d1b632d)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64"
+          }
+        ]
+      },
+      {
+        "port": 11500,
+        "pid": 6122,
+        "processes": [
+          {
+            "pid": 6122,
+            "command": "/Users/gomi/code/nekko-agent/target/dev-daemon/nekkod --config-stdin",
+            "version": null
+          },
+          {
+            "pid": 6174,
+            "command": "/Users/gomi/code/nekko-agent/target/dev-daemon/nekko-vm egress",
+            "version": null
+          },
+          {
+            "pid": 6179,
+            "command": "/Users/gomi/code/nekko-agent/target/dev-daemon/nekko-vm host",
+            "version": null
+          },
+          {
+            "pid": 6440,
+            "command": "/bin/zsh -c source /Users/gomi/.claude-account-2/shell-snapshots/snapshot-zsh-1795792714371-mksd0j.sh 2>/dev/null || true && setopt NO_EXTENDED_GLOB NO_BARE_GLOB_QUAL 2>/dev/null || true && { \\builtin unalias -- 'which'; \\builtin unset -f -- 'which'; } >/dev/null 2>&1 || true && { \\builtin unalias -- 'unsetenv'; \\builtin unset -f -- 'unsetenv'; } >/dev/null 2>&1 || true && eval 'prev=\"\"\\012while true; do\\012  cur=\"run 46075392648: $(hypergate run --agent claude-code-c6e0 -- gh run view 46075392648 --json status,conclusion,jobs -q '\"'\"'\"\\(.status) \\(.conclusion // \"\") failed=[\\([.jobs[]|select(.conclusion==\"failure\")|.name]|join(\",\"))]\"'\"'\"' 2>/dev/null | grep -v \"^hypergate\")\"\\012  for p in 3614 3616; do\\012    j=$(hypergate run --agent claude-code-c6e0 -- gh pr view $p --json state,statusCheckRollup 2>/dev/null | grep -v \"^hypergate\") || true\\012    cur=\"$cur\\012PR $p: $(echo \"$j\" | jq -r .state) failing=[$(echo \"$j\" | jq -r '\"'\"'[.statusCheckRollup[]?|select(.conclusion==\"FAILURE\")|.name]|join(\",\")'\"'\"')] gate=$(echo \"$j\" | jq -r '\"'\"'[.statusCheckRollup[]?|select(.name==\"gate\")|(.conclusion // .status)]|last'\"'\"')\"\\012  done\\012  if [ \"$cur\" != \"$prev\" ]; then echo \"$cur\"; prev=\"$cur\"; fi\\012  echo \"$cur\" | grep -q \"PR 3614: OPEN\\|PR 3616: OPEN\" || exit 0\\012  sleep 120\\012done' < /dev/null && pwd -P >| /tmp/claude-dc37-cwd",
+            "version": null
+          },
+          {
+            "pid": 9604,
+            "command": "sleep 60",
+            "version": null
+          },
+          {
+            "pid": 9830,
+            "command": "sleep 120",
+            "version": null
+          },
+          {
+            "pid": 16305,
+            "command": "/opt/homebrew/bin/node /Users/gomi/code/floop/packages/cli/dist/floop.js mcp --profile nekko-agent",
+            "version": null
+          },
+          {
+            "pid": 39487,
+            "command": "/bin/sh -c set -eu; BASE=$(mktemp -d /tmp/hypergate-140-baseline.XXXXXX); printf '%s\\n' \"$BASE\"; git archive HEAD apps/site | tar -xf - -C \"$BASE\"; cd \"$BASE/apps/site\"; npm ci --no-audit --no-fund; VITE_HYPERGATE_POSTHOG_KEY= VITE_HYPERGATE_POSTHOG_HOST= npm run build; npm run preview -- --host 127.0.0.1 --port 4510 --strictPort",
+            "version": null
+          },
+          {
+            "pid": 39618,
+            "command": "npm run preview --host 127.0.0.1 --port 4510 --strictPort         ",
+            "version": null
+          },
+          {
+            "pid": 39650,
+            "command": "node /private/tmp/hypergate-140-baseline.v6ZRAn/apps/site/node_modules/.bin/vite preview --port 4391 --host 127.0.0.1 --port 4510 --strictPort",
+            "version": null
+          },
+          {
+            "pid": 39653,
+            "command": "/private/tmp/hypergate-140-baseline.v6ZRAn/apps/site/node_modules/@esbuild/darwin-arm64/bin/esbuild --service=0.25.12 --ping",
+            "version": null
+          },
+          {
+            "pid": 50426,
+            "command": "/bin/sh -c set -eu; CHECK=$(cat /tmp/hypergate-140-after-path); rsync -a --exclude=node_modules --exclude=dist --exclude='.env*' apps/site/ \"$CHECK/apps/site/\"; if [ -f packages/browser-analytics/index.ts ]; then cp -R packages/browser-analytics \"$CHECK/packages/\"; else mkdir -p \"$CHECK/packages/browser-analytics\"; cat > \"$CHECK/packages/browser-analytics/index.ts\" <<'EOF'\\012// Isolated screenshot/test double only. Not part of the worktree.\\012export function createAnalytics(scope: string, { key, host }: { key?: string; host?: string }) {\\012  const choiceKey = `fixture:${scope}:choice`, idKey = `fixture:${scope}:id`;\\012  const available = () => Boolean(key && host);\\012  const consent = () => localStorage.getItem(choiceKey) ?? 'unset';\\012  function setConsent(v: 'granted' | 'denied') { if (!available()) return; localStorage.setItem(choiceKey, v); if (v === 'denied') localStorage.removeItem(idKey); }\\012  function track(event: string, value: string) {\\012    if (!available() || consent() !== 'granted') return;\\012    const id = localStorage.getItem(idKey) || crypto.randomUUID(); localStorage.setItem(idKey, id);\\012    void fetch(`${host}/capture`, { method: 'POST', body: JSON.stringify({ event, properties: { distinct_id: id, value } }), headers: { 'content-type': 'application/json' }, credentials: 'omit', referrerPolicy: 'no-referrer', keepalive: true }).catch(() => {});\\012  }\\012  return { available, consent, setConsent, track };\\012}\\012EOF\\012fi; cd \"$CHECK/apps/site\"; VITE_HYPERGATE_POSTHOG_KEY=phc_site_test VITE_HYPERGATE_POSTHOG_HOST=https://analytics.invalid npm run build -- --outDir dist; VITE_HYPERGATE_POSTHOG_KEY= VITE_HYPERGATE_POSTHOG_HOST= npm run build -- --outDir dist-off; npm run preview -- --host 127.0.0.1 --port 4511 --strictPort",
+            "version": null
+          },
+          {
+            "pid": 50526,
+            "command": "npm run preview --host 127.0.0.1 --port 4511 --strictPort         ",
+            "version": null
+          },
+          {
+            "pid": 50558,
+            "command": "node /private/tmp/hypergate-140-after.BSFULj/apps/site/node_modules/.bin/vite preview --port 4391 --host 127.0.0.1 --port 4511 --strictPort",
+            "version": null
+          },
+          {
+            "pid": 50559,
+            "command": "/private/tmp/hypergate-140-baseline.v6ZRAn/apps/site/node_modules/@esbuild/darwin-arm64/bin/esbuild --service=0.25.12 --ping",
+            "version": null
+          },
+          {
+            "pid": 50589,
+            "command": "/bin/sh -c CHECK=$(cat /tmp/hypergate-140-after-path); cd \"$CHECK/apps/site\"; test -f dist-off/index.html; npm run preview -- --outDir dist-off --host 127.0.0.1 --port 4512 --strictPort",
+            "version": null
+          },
+          {
+            "pid": 50592,
+            "command": "npm run preview --outDir dist-off --host 127.0.0.1 --port 4512 --strictPort           ",
+            "version": null
+          },
+          {
+            "pid": 50625,
+            "command": "node /private/tmp/hypergate-140-after.BSFULj/apps/site/node_modules/.bin/vite preview --port 4391 --outDir dist-off --host 127.0.0.1 --port 4512 --strictPort",
+            "version": null
+          },
+          {
+            "pid": 50632,
+            "command": "/private/tmp/hypergate-140-baseline.v6ZRAn/apps/site/node_modules/@esbuild/darwin-arm64/bin/esbuild --service=0.25.12 --ping",
+            "version": null
+          },
+          {
+            "pid": 71101,
+            "command": "node apps/web/node_modules/.manager-140/fixture.cjs /tmp/hypergate-manager-140.eUjcWR/apps/web/dist 43170",
+            "version": null
+          },
+          {
+            "pid": 89613,
+            "command": "/Users/gomi/.local/bin/claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --replay-user-messages --session-id 9628f522-0ad3-4177-91f4-6114ce633dd1 --model claude-opus-5-5 --effort high --permission-mode acceptEdits --mcp-config /Users/gomi/.nekko/nekko-agent/harness/s_mwz4l7hi_kZ9vz0Pz.mcp.json --permission-prompt-tool mcp__nekko_bridge__approve --add-dir /Users/gomi/.nekko",
+            "version": null
+          },
+          {
+            "pid": 89622,
+            "command": "/Users/gomi/code/nekko-agent/apps/desktop/.dev-runtime/45.0.0/Nekko Agent.app/Contents/MacOS/Electron /Users/gomi/code/nekko-agent/apps/cli/app-dist/nekko-agent-cli.cjs mcp --bridge --url http://127.0.0.1:49721",
+            "version": null
+          },
+          {
+            "pid": 90485,
+            "command": "node apps/web/node_modules/.manager-140/fixture.cjs /tmp/hypergate-manager-build.9b4srJ/apps/web/dist 43171",
+            "version": null
+          },
+          {
+            "pid": 93081,
+            "command": "node apps/web/node_modules/.manager-140/fixture.cjs /tmp/hypergate-manager-build.9b4srJ/apps/web/dist-unconfigured 43172",
+            "version": null
+          },
+          {
+            "pid": 96241,
+            "command": "/Users/gomi/.local/bin/claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --replay-user-messages --session-id 75e31ddd-e209-433b-9346-24fa940d33f5 --model claude-opus-5-5 --effort medium --permission-mode acceptEdits --mcp-config /Users/gomi/.nekko/nekko-agent/harness/s_mwz6kqkh_NIjHzJgo.mcp.json --permission-prompt-tool mcp__nekko_bridge__approve --add-dir /Users/gomi/.nekko",
+            "version": null
+          },
+          {
+            "pid": 96249,
+            "command": "/Users/gomi/code/nekko-agent/apps/desktop/.dev-runtime/45.0.0/Nekko Agent.app/Contents/MacOS/Electron /Users/gomi/code/nekko-agent/apps/cli/app-dist/nekko-agent-cli.cjs mcp --bridge --url http://127.0.0.1:49721",
+            "version": null
+          },
+          {
+            "pid": 97104,
+            "command": "/bin/zsh -c source /Users/gomi/.claude-account-2/shell-snapshots/snapshot-zsh-1795796131486-4iq29y.sh 2>/dev/null || true && setopt NO_EXTENDED_GLOB NO_BARE_GLOB_QUAL 2>/dev/null || true && { \\builtin unalias -- 'which'; \\builtin unset -f -- 'which'; } >/dev/null 2>&1 || true && { \\builtin unalias -- 'unsetenv'; \\builtin unset -f -- 'unsetenv'; } >/dev/null 2>&1 || true && eval 'until grep -q \"ALL DONE\" /tmp/bench-logs/pairs-qwen38-chat.log; do sleep 60; done; grep -v -E \"run [0-9]+/|Loading|warmup:\" /tmp/bench-logs/pairs-qwen38-chat.log' < /dev/null && pwd -P >| /tmp/claude-0bbc-cwd",
+            "version": null
+          },
+          {
+            "pid": 97189,
+            "command": "/Users/gomi/.nekko/nekko-agent/engine/macos-arm64-metal/llama-b12565/llama-server --model /Users/gomi/code/nekko-agent/.worktrees/qwen38-dflash-local/.scratch/qwen38/Qwen3.8-27B-Q4_K_M.gguf --alias Qwen3.8-27B-Q4_K_M --host 127.0.0.1 --port 57132 --ctx-size 65536 --cache-type-k q8_0 --cache-type-v q8_0 --cache-reuse 256 --no-cache-idle-slots --spec-default --spec-draft-model /Users/gomi/code/nekko-agent/.worktrees/qwen38-dflash-local/.scratch/qwen38/Qwen3.8-27B-DFlash2-Q4_K_M.gguf --spec-draft-ngl all --spec-type draft-dflash --spec-draft-n-max 7",
+            "version": "version: 1.0.0-dev (build 12565, commit d7d1b632d)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64"
+          }
+        ]
+      }
+    ],
+    "inference_processes": [
+      {
+        "kind": "llama-server",
+        "pid": 5211,
+        "command": "/Users/gomi/.nekko/nekko-agent/engine/macos-arm64-metal/llama-b12565/llama-server -m /Users/gomi/code/nekko-agent/.worktrees/qwen38-dflash-local/.scratch/qwen38/Qwen3.8-27B-Q4_K_M.gguf --port 8090 -c 8192",
+        "part_of_target": true
+      },
+      {
+        "kind": "llama-server",
+        "pid": 97189,
+        "command": "/Users/gomi/.nekko/nekko-agent/engine/macos-arm64-metal/llama-b12565/llama-server --model /Users/gomi/code/nekko-agent/.worktrees/qwen38-dflash-local/.scratch/qwen38/Qwen3.8-27B-Q4_K_M.gguf --alias Qwen3.8-27B-Q4_K_M --host 127.0.0.1 --port 57132 --ctx-size 65536 --cache-type-k q8_0 --cache-type-v q8_0 --cache-reuse 256 --no-cache-idle-slots --spec-default --spec-draft-model /Users/gomi/code/nekko-agent/.worktrees/qwen38-dflash-local/.scratch/qwen38/Qwen3.8-27B-DFlash2-Q4_K_M.gguf --spec-draft-ngl all --spec-type draft-dflash --spec-draft-n-max 7",
+        "part_of_target": true
+      }
+    ],
+    "busiest_other_processes": [
+      {
+        "pid": 1873,
+        "cpu": 12.5,
+        "command": "/Applications/NordVPN.app/Contents/MacOS/NordVPN"
+      },
+      {
+        "pid": 822,
+        "cpu": 11.4,
+        "command": "/Applications/iTerm.app/Contents/MacOS/iTerm2"
+      },
+      {
+        "pid": 1353,
+        "cpu": 5.1,
+        "command": "/Users/gomi/Library/Application Support/iStat Menus 7/iStat Menus Menubar.app/Contents/MacOS/iStat Menus Menubar"
+      },
+      {
+        "pid": 200,
+        "cpu": 3.4,
+        "command": "/usr/libexec/runningboardd"
+      },
+      {
+        "pid": 195,
+        "cpu": 2.4,
+        "command": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon"
+      },
+      {
+        "pid": 93991,
+        "cpu": 2.2,
+        "command": "/Applications/Discord.app/Contents/Frameworks/Discord Helper (Renderer).app/Contents/MacOS/Discord Helper (Renderer) --type=renderer --user-data-dir=/Users/gomi/Library/Application Support/discord --s"
+      },
+      {
+        "pid": 1678,
+        "cpu": 1.6,
+        "command": "/usr/bin/powermetrics -i 2000 --samplers cpu_power gpu_power -a --hide-cpu-duty-cycle"
+      },
+      {
+        "pid": 340,
+        "cpu": 1.4,
+        "command": "/System/Library/DriverExtensions/com.apple.DriverKit-AppleBCMWLAN.dext/com.apple.DriverKit-AppleBCMWLAN com.apple.bcmwlan 0x100000dd4 com.apple.DriverKit-AppleBCMWLAN"
+      }
+    ],
+    "scripts": {
+      "commit": "e48acc29674f339d60e9752e39c6ef34dd8b9031",
+      "uncommitted_changes": false
+    }
+  },
+  "cpu_during_run": {
+    "seconds": 1825.8,
+    "busiest_other_processes": [
+      {
+        "pid": 822,
+        "cpu": 16.4,
+        "command": "/Applications/iTerm.app/Contents/MacOS/iTerm2"
+      },
+      {
+        "pid": 607,
+        "cpu": 15.9,
+        "command": "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd"
+      },
+      {
+        "pid": 1873,
+        "cpu": 7.6,
+        "command": "/Applications/NordVPN.app/Contents/MacOS/NordVPN"
+      },
+      {
+        "pid": 18032,
+        "cpu": 5.4,
+        "command": "/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd"
+      },
+      {
+        "pid": 200,
+        "cpu": 3.3,
+        "command": "/usr/libexec/runningboardd"
+      },
+      {
+        "pid": 829,
+        "cpu": 3.1,
+        "command": "/System/Applications/Utilities/Activity Monitor.app/Contents/MacOS/Activity Monitor"
+      },
+      {
+        "pid": 1353,
+        "cpu": 2.8,
+        "command": "/Users/gomi/Library/Application Support/iStat Menus 7/iStat Menus Menubar.app/Contents/MacOS/iStat Menus Menubar"
+      },
+      {
+        "pid": 93991,
+        "cpu": 2.8,
+        "command": "/Applications/Discord.app/Contents/Frameworks/Discord Helper (Renderer).app/Contents/MacOS/Discord Helper (Renderer) --type=renderer --user-data-dir=/Users/gomi/Library/Application Support/discord --s"
+      }
+    ]
+  }
+}

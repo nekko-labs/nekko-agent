@@ -6,8 +6,11 @@ never typed by hand. Each run is checked again against the current rules, using
 the conditions its manifest recorded at run time, so a run that was valid under
 older, looser rules is listed apart with the reason instead of in the tables.
 
-    python3 bench/scripts/report.py           # rewrite the section
-    python3 bench/scripts/report.py --check   # exit 1 if REPORT.md is out of date
+    python3 bench/scripts/report.py --only qwen3-8b calibrate   # REPORT.md (M5 Max)
+    python3 bench/scripts/report.py --report REPORT-m1-max-qwen38-inkling2.md --only qwen38 inkling
+    add --check to exit 1 instead if the report is out of date
+
+One report per machine: the machine line comes from the report's first run.
 """
 
 import argparse
@@ -196,8 +199,10 @@ def describe(m):
     return "no scenario"
 
 
-def section():
+def section(only=None):
     runs = sorted(glob.glob(os.path.join(ROOT, "runs", "*")))
+    if only:
+        runs = [r for r in runs if any(o in os.path.basename(r) for o in only)]
     ok, excluded = [], []
     for run in runs:
         m, rows = load(run)
@@ -233,17 +238,20 @@ def section():
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--check", action="store_true")
+    ap.add_argument("--report", default="REPORT.md", help="the report to rewrite, relative to bench/")
+    ap.add_argument("--only", nargs="+", metavar="TEXT",
+                    help="only runs whose folder name contains one of these, e.g. qwen3-8b; one report per machine")
     args = ap.parse_args()
-    path = os.path.join(ROOT, "REPORT.md")
+    path = os.path.join(ROOT, args.report)
     text = open(path).read()
     if START not in text or END not in text:
-        raise SystemExit(f"REPORT.md needs {START} and {END} markers")
-    new = text[:text.index(START)] + section() + text[text.index(END) + len(END):]
+        raise SystemExit(f"{args.report} needs {START} and {END} markers")
+    new = text[:text.index(START)] + section(args.only) + text[text.index(END) + len(END):]
     if args.check:
         raise SystemExit(0 if new == text else 1)
     with open(path, "w") as f:
         f.write(new)
-    print("REPORT.md results section rewritten")
+    print(f"{args.report} results section rewritten")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,377 @@
+{
+  "name": "burst-chat-nekko-classic-vs-llama-server-qwen38-27b",
+  "valid": true,
+  "problems": [],
+  "notes": "M1 Max 64 GB, burst. Every llama.cpp arm runs llama.cpp b12565 (Nekko's pinned build). Pairwise against llama-server-plain (-m --port -c 8192; its default context would take the whole 64 GB) because two 27B servers fill the GPU working set. nekko-dflash2: Nekko router on 11500, preset draftModelId=Qwen3.8-27B-DFlash2-Q4_K_M; Nekko argv --ctx-size 65536 --cache-type-k q8_0 --cache-type-v q8_0 --cache-reuse 256 --no-cache-idle-slots --spec-default --spec-draft-model <drafter> --spec-draft-ngl all --spec-type draft-dflash --spec-draft-n-max 7. nekko-classic: llama-server started with Nekko's exact default argv (n-gram --spec-default, no drafter), outside the router because Nekko's memory budget keeps one 27B model resident. lm-studio: LM Studio, llama.cpp runtime 2.81.0, lms load defaults (8192 context, parallel 4, its repeat penalty), same file by hard link. Code edits are judged on the reply's last python block (Qwen3.8 reasons inline despite /no_think).",
+  "settings": {
+    "targets": {
+      "nekko-classic": "http://127.0.0.1:8091/v1",
+      "llama-server-plain": "http://127.0.0.1:8090/v1"
+    },
+    "model": "m",
+    "target_models": {
+      "nekko-classic": "m",
+      "llama-server-plain": "m"
+    },
+    "target_weights_sha256": {
+      "nekko-classic": "d15d4b6de55f662ac40e867702d31afe738d032fa06b829b2b1a21a49d4a48ee",
+      "llama-server-plain": "d15d4b6de55f662ac40e867702d31afe738d032fa06b829b2b1a21a49d4a48ee"
+    },
+    "runs": 16,
+    "warmup": 3,
+    "max_tokens": 512,
+    "temperature": 0,
+    "seed": 42,
+    "stream": true,
+    "speculative_expected": true,
+    "extra_body": {},
+    "scenario": "burst",
+    "pause_s": 20.0,
+    "preheat_s": 0,
+    "max_drift_pct": 3.0,
+    "workload": "chat",
+    "prompt_sha256": "6e41cfca89c4d2b3d5904ad0cf7f7edb0f86dc007a230720614e89d874ed292c",
+    "script_sha256": "3c9e34ac4a3688ab3bbb9bfa4787a7d4a820ab5ac750aedf22b5a7dbcbb430ff"
+  },
+  "summary": {
+    "nekko-classic": {
+      "ttft_ms": {
+        "median": 3636.6041875007795,
+        "min": 3599.0747080068104,
+        "max": 4066.2744170113,
+        "n": 16
+      },
+      "decode_tok_s": {
+        "median": 18.17885417904591,
+        "min": 13.625414279265454,
+        "max": 51.05785280442446,
+        "n": 16
+      },
+      "prefill_tok_s_est": {
+        "median": 140.44426329434432,
+        "min": 125.42193361727134,
+        "max": 141.4252387891907,
+        "n": 16
+      },
+      "server_decode_tok_s_median": 18.17875025981541,
+      "server_prefill_tok_s_median": 130.3948216323815,
+      "decode_drift_pct": -21.0,
+      "decode_all_tokens_tok_s": 20.019056300316084,
+      "drafts": {
+        "accepted_per_request": {
+          "median": 223.5,
+          "min": 67,
+          "max": 468
+        },
+        "acceptance_rate": 0.538
+      }
+    },
+    "llama-server-plain": {
+      "ttft_ms": {
+        "median": 4154.8409374954645,
+        "min": 4059.7141250036657,
+        "max": 4170.693291001953,
+        "n": 16
+      },
+      "decode_tok_s": {
+        "median": 13.10841008515408,
+        "min": 13.096407979170186,
+        "max": 13.160790194388088,
+        "n": 16
+      },
+      "prefill_tok_s_est": {
+        "median": 122.71556412784366,
+        "min": 122.08778630482709,
+        "max": 125.45004975227214,
+        "n": 16
+      },
+      "server_decode_tok_s_median": 13.108312955310273,
+      "server_prefill_tok_s_median": 125.28567222514698,
+      "decode_drift_pct": 0.0,
+      "decode_all_tokens_tok_s": 13.110973862574212,
+      "drafts": null
+    }
+  },
+  "replies": {
+    "nekko-classic": {
+      "completion_tokens": [
+        512
+      ],
+      "same_as_most_common_reply": 0,
+      "of": 16
+    },
+    "llama-server-plain": {
+      "completion_tokens": [
+        512
+      ],
+      "same_as_most_common_reply": 4,
+      "of": 16
+    }
+  },
+  "conditions_before": {
+    "taken_at": "2026-11-27T22:25:20.908600+00:00",
+    "machine": {
+      "model": "MacBookPro18,2",
+      "chip": "Apple M1 Max",
+      "memory_bytes": 68719476736,
+      "macos": "27.2.1",
+      "macos_build": "26B131",
+      "python": "3.14.7"
+    },
+    "power": {
+      "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=9044067)\t100%; finishing charge; (no estimate) present: true",
+      "on_ac": true,
+      "power_mode": 0,
+      "low_power_mode": 0,
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+    },
+    "targets": [
+      {
+        "port": 8090,
+        "pid": 5211,
+        "processes": [
+          {
+            "pid": 5211,
+            "command": "/Users/gomi/.nekko/nekko-agent/engine/macos-arm64-metal/llama-b12565/llama-server -m /Users/gomi/code/nekko-agent/.worktrees/qwen38-dflash-local/.scratch/qwen38/Qwen3.8-27B-Q4_K_M.gguf --port 8090 -c 8192",
+            "version": "version: 1.0.0-dev (build 12565, commit d7d1b632d)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64"
+          }
+        ]
+      },
+      {
+        "port": 8091,
+        "pid": 9965,
+        "processes": [
+          {
+            "pid": 9965,
+            "command": "/Users/gomi/.nekko/nekko-agent/engine/macos-arm64-metal/llama-b12565/llama-server --model /Users/gomi/.lmstudio/models/ggml-org/Qwen3.8-27B-GGUF/Qwen3.8-27B-Q4_K_M.gguf --alias m --host 127.0.0.1 --port 8091 --ctx-size 65536 --cache-type-k q8_0 --cache-type-v q8_0 --cache-reuse 256 --no-cache-idle-slots --spec-default",
+            "version": "version: 1.0.0-dev (build 12565, commit d7d1b632d)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64"
+          }
+        ]
+      }
+    ],
+    "inference_processes": [
+      {
+        "kind": "llama-server",
+        "pid": 5211,
+        "command": "/Users/gomi/.nekko/nekko-agent/engine/macos-arm64-metal/llama-b12565/llama-server -m /Users/gomi/code/nekko-agent/.worktrees/qwen38-dflash-local/.scratch/qwen38/Qwen3.8-27B-Q4_K_M.gguf --port 8090 -c 8192",
+        "part_of_target": true
+      },
+      {
+        "kind": "llama-server",
+        "pid": 9965,
+        "command": "/Users/gomi/.nekko/nekko-agent/engine/macos-arm64-metal/llama-b12565/llama-server --model /Users/gomi/.lmstudio/models/ggml-org/Qwen3.8-27B-GGUF/Qwen3.8-27B-Q4_K_M.gguf --alias m --host 127.0.0.1 --port 8091 --ctx-size 65536 --cache-type-k q8_0 --cache-type-v q8_0 --cache-reuse 256 --no-cache-idle-slots --spec-default",
+        "part_of_target": true
+      }
+    ],
+    "busiest_other_processes": [
+      {
+        "pid": 822,
+        "cpu": 17.5,
+        "command": "/Applications/iTerm.app/Contents/MacOS/iTerm2"
+      },
+      {
+        "pid": 1873,
+        "cpu": 7.7,
+        "command": "/Applications/NordVPN.app/Contents/MacOS/NordVPN"
+      },
+      {
+        "pid": 385,
+        "cpu": 7.3,
+        "command": "/usr/libexec/sysmond"
+      },
+      {
+        "pid": 89613,
+        "cpu": 6.1,
+        "command": "/Users/gomi/.local/bin/claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --replay-user-messages --session-id 9628f522-0ad3-4177-91f4-6114ce633dd1 --"
+      },
+      {
+        "pid": 829,
+        "cpu": 4.4,
+        "command": "/System/Applications/Utilities/Activity Monitor.app/Contents/MacOS/Activity Monitor"
+      },
+      {
+        "pid": 1353,
+        "cpu": 2.5,
+        "command": "/Users/gomi/Library/Application Support/iStat Menus 7/iStat Menus Menubar.app/Contents/MacOS/iStat Menus Menubar"
+      },
+      {
+        "pid": 6034,
+        "cpu": 2.5,
+        "command": "/Users/gomi/code/nekko-agent/apps/desktop/.dev-runtime/45.0.0/Nekko Agent.app/Contents/MacOS/Electron /Users/gomi/code/nekko-agent/apps/desktop"
+      },
+      {
+        "pid": 93991,
+        "cpu": 1.9,
+        "command": "/Applications/Discord.app/Contents/Frameworks/Discord Helper (Renderer).app/Contents/MacOS/Discord Helper (Renderer) --type=renderer --user-data-dir=/Users/gomi/Library/Application Support/discord --s"
+      }
+    ],
+    "scripts": {
+      "commit": "e48acc29674f339d60e9752e39c6ef34dd8b9031",
+      "uncommitted_changes": false
+    },
+    "model_file": {
+      "path": "/Users/gomi/code/nekko-agent/.worktrees/qwen38-dflash-local/.scratch/qwen38/Qwen3.8-27B-Q4_K_M.gguf",
+      "bytes": 19403684480,
+      "sha256": "d15d4b6de55f662ac40e867702d31afe738d032fa06b829b2b1a21a49d4a48ee"
+    },
+    "target_model_files": {
+      "nekko-classic": {
+        "path": "/Users/gomi/code/nekko-agent/.worktrees/qwen38-dflash-local/.scratch/qwen38/Qwen3.8-27B-Q4_K_M.gguf",
+        "bytes": 19403684480,
+        "sha256": "d15d4b6de55f662ac40e867702d31afe738d032fa06b829b2b1a21a49d4a48ee"
+      },
+      "llama-server-plain": {
+        "path": "/Users/gomi/code/nekko-agent/.worktrees/qwen38-dflash-local/.scratch/qwen38/Qwen3.8-27B-Q4_K_M.gguf",
+        "bytes": 19403684480,
+        "sha256": "d15d4b6de55f662ac40e867702d31afe738d032fa06b829b2b1a21a49d4a48ee"
+      }
+    }
+  },
+  "conditions_after": {
+    "taken_at": "2026-11-27T22:59:36.657343+00:00",
+    "machine": {
+      "model": "MacBookPro18,2",
+      "chip": "Apple M1 Max",
+      "memory_bytes": 68719476736,
+      "macos": "27.2.1",
+      "macos_build": "26B131",
+      "python": "3.14.7"
+    },
+    "power": {
+      "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=9044067)\t100%; finishing charge; (no estimate) present: true",
+      "on_ac": true,
+      "power_mode": 0,
+      "low_power_mode": 0,
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+    },
+    "targets": [
+      {
+        "port": 8090,
+        "pid": 5211,
+        "processes": [
+          {
+            "pid": 5211,
+            "command": "/Users/gomi/.nekko/nekko-agent/engine/macos-arm64-metal/llama-b12565/llama-server -m /Users/gomi/code/nekko-agent/.worktrees/qwen38-dflash-local/.scratch/qwen38/Qwen3.8-27B-Q4_K_M.gguf --port 8090 -c 8192",
+            "version": "version: 1.0.0-dev (build 12565, commit d7d1b632d)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64"
+          }
+        ]
+      },
+      {
+        "port": 8091,
+        "pid": 9965,
+        "processes": [
+          {
+            "pid": 9965,
+            "command": "/Users/gomi/.nekko/nekko-agent/engine/macos-arm64-metal/llama-b12565/llama-server --model /Users/gomi/.lmstudio/models/ggml-org/Qwen3.8-27B-GGUF/Qwen3.8-27B-Q4_K_M.gguf --alias m --host 127.0.0.1 --port 8091 --ctx-size 65536 --cache-type-k q8_0 --cache-type-v q8_0 --cache-reuse 256 --no-cache-idle-slots --spec-default",
+            "version": "version: 1.0.0-dev (build 12565, commit d7d1b632d)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64"
+          }
+        ]
+      }
+    ],
+    "inference_processes": [
+      {
+        "kind": "llama-server",
+        "pid": 5211,
+        "command": "/Users/gomi/.nekko/nekko-agent/engine/macos-arm64-metal/llama-b12565/llama-server -m /Users/gomi/code/nekko-agent/.worktrees/qwen38-dflash-local/.scratch/qwen38/Qwen3.8-27B-Q4_K_M.gguf --port 8090 -c 8192",
+        "part_of_target": true
+      },
+      {
+        "kind": "llama-server",
+        "pid": 9965,
+        "command": "/Users/gomi/.nekko/nekko-agent/engine/macos-arm64-metal/llama-b12565/llama-server --model /Users/gomi/.lmstudio/models/ggml-org/Qwen3.8-27B-GGUF/Qwen3.8-27B-Q4_K_M.gguf --alias m --host 127.0.0.1 --port 8091 --ctx-size 65536 --cache-type-k q8_0 --cache-type-v q8_0 --cache-reuse 256 --no-cache-idle-slots --spec-default",
+        "part_of_target": true
+      }
+    ],
+    "busiest_other_processes": [
+      {
+        "pid": 822,
+        "cpu": 16.2,
+        "command": "/Applications/iTerm.app/Contents/MacOS/iTerm2"
+      },
+      {
+        "pid": 1873,
+        "cpu": 11.7,
+        "command": "/Applications/NordVPN.app/Contents/MacOS/NordVPN"
+      },
+      {
+        "pid": 1678,
+        "cpu": 7.4,
+        "command": "/usr/bin/powermetrics -i 2000 --samplers cpu_power gpu_power -a --hide-cpu-duty-cycle"
+      },
+      {
+        "pid": 1353,
+        "cpu": 4.6,
+        "command": "/Users/gomi/Library/Application Support/iStat Menus 7/iStat Menus Menubar.app/Contents/MacOS/iStat Menus Menubar"
+      },
+      {
+        "pid": 200,
+        "cpu": 3.1,
+        "command": "/usr/libexec/runningboardd"
+      },
+      {
+        "pid": 195,
+        "cpu": 2.2,
+        "command": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon"
+      },
+      {
+        "pid": 93991,
+        "cpu": 1.7,
+        "command": "/Applications/Discord.app/Contents/Frameworks/Discord Helper (Renderer).app/Contents/MacOS/Discord Helper (Renderer) --type=renderer --user-data-dir=/Users/gomi/Library/Application Support/discord --s"
+      },
+      {
+        "pid": 671,
+        "cpu": 0.5,
+        "command": "/System/Library/CoreServices/ControlCenter.app/Contents/MacOS/ControlCenter"
+      }
+    ],
+    "scripts": {
+      "commit": "e48acc29674f339d60e9752e39c6ef34dd8b9031",
+      "uncommitted_changes": false
+    }
+  },
+  "cpu_during_run": {
+    "seconds": 2044.8,
+    "busiest_other_processes": [
+      {
+        "pid": 607,
+        "cpu": 17.6,
+        "command": "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd"
+      },
+      {
+        "pid": 822,
+        "cpu": 16.4,
+        "command": "/Applications/iTerm.app/Contents/MacOS/iTerm2"
+      },
+      {
+        "pid": 1873,
+        "cpu": 8.3,
+        "command": "/Applications/NordVPN.app/Contents/MacOS/NordVPN"
+      },
+      {
+        "pid": 200,
+        "cpu": 3.2,
+        "command": "/usr/libexec/runningboardd"
+      },
+      {
+        "pid": 829,
+        "cpu": 3.1,
+        "command": "/System/Applications/Utilities/Activity Monitor.app/Contents/MacOS/Activity Monitor"
+      },
+      {
+        "pid": 93991,
+        "cpu": 2.8,
+        "command": "/Applications/Discord.app/Contents/Frameworks/Discord Helper (Renderer).app/Contents/MacOS/Discord Helper (Renderer) --type=renderer --user-data-dir=/Users/gomi/Library/Application Support/discord --s"
+      },
+      {
+        "pid": 1353,
+        "cpu": 2.7,
+        "command": "/Users/gomi/Library/Application Support/iStat Menus 7/iStat Menus Menubar.app/Contents/MacOS/iStat Menus Menubar"
+      },
+      {
+        "pid": 195,
+        "cpu": 2.4,
+        "command": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon"
+      }
+    ]
+  }
+}
