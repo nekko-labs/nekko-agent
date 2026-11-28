@@ -97,7 +97,7 @@ export function ModelDetail({
     return next[file];
   };
 
-  const picks = useMemo(() => (model ? recommendedBuilds(model.quants, memory, checks) : { balanced: null, best: null }), [model, memory, checks]);
+  const picks = useMemo(() => (model ? recommendedBuilds(model.quants.filter(q => !q.companion && !model.dependent), memory, checks) : { balanced: null, best: null }), [model, memory, checks]);
 
   const prepareDownload = async (quant: CatalogQuant) => {
     if (preparing.current) return false;
@@ -140,7 +140,8 @@ export function ModelDetail({
           <header className="mt-4">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-semibold">{model.name}</h1>
-              {model.parameterSize && <span className="chip">{model.parameterSize}</span>}
+              {model.dependent && <Badge tone="neutral" variant="soft">Requires a base model</Badge>}
+              {!model.dependent && model.parameterSize && <span className="chip">{model.parameterSize}</span>}
               {installed.length > 0 && (
                 <Badge tone="success" variant="soft" title="Already in your library">
                   <CheckIcon className="h-3 w-3" /> downloaded
@@ -173,7 +174,7 @@ export function ModelDetail({
 
           <section className="mt-5">
             <h2 className="text-base font-semibold">Variants</h2>
-            <p className="mt-0.5 text-xs text-ink-faint">
+            {model.dependent ? <p className="mt-0.5 text-xs text-ink-faint">These weights cannot run on their own.</p> : <p className="mt-0.5 text-xs text-ink-faint">
               Same model, compressed differently. Lower numbers are smaller files that need less memory and answer a
               little worse; higher numbers keep more of the model and cost disk and RAM.{' '}
               {picks.balanced && picks.best && picks.balanced !== picks.best
@@ -181,7 +182,7 @@ export function ModelDetail({
                 : picks.best
                   ? <><strong>{quantOf(picks.best)}</strong> is our pick for this machine, marked below.</>
                   : <><strong>Q4_K_M</strong> is the usual choice{picks.balanced ? ', marked below' : ''}.</>}
-            </p>
+            </p>}
             {releasesOf(model.quants).map(({ variant, quants }) => (
             <Group
               key={variant ?? ''}
@@ -192,6 +193,8 @@ export function ModelDetail({
             >
               {quants.map((q) => {
                 const have = installed.find((m) => isInstalledBuild(m, q, variant !== undefined));
+                if (q.companion || model.dependent) return <CompanionBuild key={q.file} quant={q} modelId={modelId} have={have}
+                  onResult={res => { pushToast(res.ok ? 'info' : 'error', res.message); if (res.ok) onQueued(); }} />;
                 const fit = memory ? downloadFitVerdict(q.sizeBytes, memory.budgetBytes) : 'unknown';
                 const check = checks[q.file];
                 const pick = picks.best && picks.balanced !== picks.best
@@ -263,7 +266,7 @@ export function ModelDetail({
               <Row label="Published by" value={model.owner} />
               <Row label="License" value={model.license ?? 'not declared'} />
               <Row label="Task" value={model.pipelineTag ?? '—'} />
-              <Row label="Converted from" value={model.baseModel ?? '—'} mono />
+              <Row label={model.dependent ? "Publisher’s base model" : "Converted from"} value={model.baseModel ?? '—'} mono />
               <Row label="First published" value={model.createdAt ? new Date(model.createdAt).toLocaleDateString() : '—'} />
               <Row
                 label="Last updated"
@@ -593,6 +596,42 @@ export function releasesOf(quants: CatalogQuant[]): { variant?: string; quants: 
  * Whether a library model is this build. In a repo of several releases the
  * builds share quantizations, so they are told apart by file name.
  */
+/** These actions acquire files only. The base's load settings are not changed. */
+function CompanionBuild({ quant, modelId, have, onResult }: {
+  quant: CatalogQuant; modelId: string; have?: LocalModel;
+  onResult: (res: { ok: boolean; message: string }) => void;
+}) {
+  const companion = quant.companion;
+  const installed = companion?.installedBase;
+  const base = companion?.base;
+  const canDownload = !!companion && !companion.reason && !!(installed || base);
+  const size = quant.sizeBytes ? formatBytes(quant.sizeBytes) : 'Size unknown';
+  const kind = companion?.kind === 'lora' ? 'LoRA adapter' : companion?.kind === 'draft' ? 'DFlash2 draft' : 'Companion weights';
+  return <div className="grid min-w-0 gap-2 py-2 text-xs" data-companion-build={companion?.kind ?? 'unsupported'}>
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span className="font-medium">{kind}</span>
+      <span className="font-mono text-ink-soft">{quantOf(quant)}</span>
+      <span className="tabular-nums text-ink-faint">{size}</span>
+      {have && <Badge tone="success" variant="soft" title={have.path}><CheckIcon className="h-3 w-3" /> in your library</Badge>}
+    </div>
+    <div className="min-w-0 space-y-1 break-words text-ink-soft">
+      {installed ? <p>Uses your installed base: <strong>{installed.name}</strong>.</p>
+        : base ? <p>Compatible base: <strong>{base.repo}</strong> · {base.quant} · {formatBytes(base.sizeBytes)} download.</p>
+        : companion?.baseRepo ? <p>Required checkpoint: <strong>{companion.baseRepo}</strong>.</p> : null}
+      {companion?.kind === 'draft' && <p>{quant.format === 'mlx' ? 'Requires mlx-vlm 0.8.1 on Apple Silicon.' : 'Requires a DFlash2-capable llama.cpp runtime (b12556 or newer).'} Load the draft from its row under the installed base.</p>}
+      {companion?.kind === 'lora' && canDownload && <p>Load the adapter from its row under the installed base.</p>}
+      {!canDownload && <p>{companion?.reason ?? 'No compatible base could be verified.'}</p>}
+    </div>
+    {!have && canDownload && <div className="flex flex-wrap items-start gap-2">
+      <ModelDownloadButton modelId={modelId} quant={quant.label} variant="quiet"
+        label={companion.kind === 'draft' ? 'Download draft only' : 'Download adapter only'} choice={{ file: quant.file }} onResult={onResult} />
+      {!installed && base && <ModelDownloadButton modelId={modelId} quant={quant.label} variant="quiet"
+        label={quant.sizeBytes ? `Download both (${formatBytes(quant.sizeBytes + base.sizeBytes)})` : 'Download both'}
+        choice={{ file: quant.file, base }} onResult={onResult} />}
+    </div>}
+  </div>;
+}
+
 export function isInstalledBuild(m: LocalModel, q: CatalogQuant, releases: boolean): boolean {
   if (releases) {
     const file = q.file.split('/').pop() ?? q.file;

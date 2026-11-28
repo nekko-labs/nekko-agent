@@ -4,6 +4,7 @@ import { CheckIcon, StarIcon, TrashIcon } from '../../icons.js';
 import { useStore } from '../../store.js';
 import { notifyModelsChanged } from '../../modelCatalog.js';
 import { confirmDeletion } from '../DeleteConfirmation.js';
+import { companionKind } from './installedCompanions.js';
 import { nextFavoriteModels } from '../agent-console/modelPickerInteractions.js';
 
 function deletionPrompt(model: LocalModel) {
@@ -21,7 +22,7 @@ function deletionPrompt(model: LocalModel) {
 
 export function chatDefaultEligible(model: LocalModel): boolean {
   const type = model.modality ?? modelModality(model);
-  return (type === 'chat' || type === 'vision') && !cannotLoadReason(model);
+  return !companionKind(model) && (type === 'chat' || type === 'vision') && !cannotLoadReason(model);
 }
 
 /** One owner for the family list and the variant pane, including in-flight actions. */
@@ -73,9 +74,9 @@ export function ModelRowActions({ model, label = model.name, actions }: { model:
   const starred = actions.isFavorite(model);
   const isDefault = actions.isDefault(model);
   return <div className="flex shrink-0 flex-wrap items-center gap-0.5" aria-label={`Actions for ${label}`} role="group">
-    <button type="button" className={`${button} ${starred ? 'text-accent' : 'text-ink-faint'}`} aria-pressed={starred} aria-label={`Favorite ${label}`} title={starred ? 'Remove from favorites' : 'Add to favorites'} disabled={actions.busy || !actions.ready} onClick={() => void actions.favorite(model)}>
+    {!companionKind(model) && <button type="button" className={`${button} ${starred ? 'text-accent' : 'text-ink-faint'}`} aria-pressed={starred} aria-label={`Favorite ${label}`} title={starred ? 'Remove from favorites' : 'Add to favorites'} disabled={actions.busy || !actions.ready} onClick={() => void actions.favorite(model)}>
       <StarIcon className="h-4 w-4" filled={starred} />
-    </button>
+    </button>}
     {chatDefaultEligible(model) && <button type="button" className={`${button} ${isDefault ? 'text-accent' : 'text-ink-faint'}`} aria-pressed={isDefault} aria-label={`Set ${label} as default`} title={isDefault ? 'Default for new chats' : 'Set as default for new chats'} disabled={actions.busy || !actions.ready} onClick={() => { if (!isDefault) void actions.setDefault(model); }}>
       <CheckIcon className="h-4 w-4" />
     </button>}
