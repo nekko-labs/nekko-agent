@@ -41,7 +41,7 @@ export const STEP_UP_DESKTOP_GUARDED = {
   /** Raise a chat's mode, or the default mode (the same rule as the phone's). */
   modeRaise: ['session:setOptions', 'settings:update'],
   /** Turn remote access on, change the relay or the connection. */
-  remoteAccess: ['remote:enable', 'remote:attach', 'remote:setRelays'],
+  remoteAccess: ['remote:enable', 'remote:attach', 'remote:setRelays', 'remote:setAccountDevices'],
   /** Pair a device, rotate the secret (*Sign out all phones*). */
   pairing: ['remote:pair', 'remote:pairComputer', 'remote:rotate'],
   /** Change what a phone may do (Read / Change switches, *Lock phones*), or how it may connect. */

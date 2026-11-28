@@ -477,6 +477,7 @@ export const IpcChannels = {
   remoteSetRoute: 'remote:setRoute',
   /** Decision 0116: the relays this computer is also reachable through (Nekko Cloud Relay beside Tailscale). */
   remoteSetRelays: 'remote:setRelays',
+  remoteSetAccountDevices: 'remote:setAccountDevices',
   // Desktop only: the relay this computer can run on its Tailscale address.
   localRelayStatus: 'localRelay:status',
   localRelayStart: 'localRelay:start',
@@ -1532,6 +1533,8 @@ export interface NekkoApi {
   setRemoteRoute?(deviceId: string, route: import('./remote.js').DeviceRoute): Promise<import('./remote.js').RemoteDevice[]>;
   /** Decision 0116: the relays this computer is also reachable through, besides the main one. */
   setRemoteRelays?(urls: string[]): Promise<import('./remote.js').RemoteStatus>;
+  /** Decision 0128: whether devices of this computer's Nekko Cloud account connect without pairing. */
+  setRemoteAccountDevices?(on: boolean): Promise<import('./remote.js').RemoteStatus>;
   /** A paired phone's Change actions, oldest first, allowed or refused (IO-33). */
   getRemoteActivity(deviceId: string): Promise<import('./phone-access.js').PhoneActivityEntry[]>;
   /**

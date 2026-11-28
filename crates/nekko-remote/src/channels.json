@@ -178,6 +178,7 @@
  "remote:revoke",
  "remote:rotate",
  "remote:setAccess",
+ "remote:setAccountDevices",
  "remote:setRelays",
  "remote:setRoute",
  "remote:status",

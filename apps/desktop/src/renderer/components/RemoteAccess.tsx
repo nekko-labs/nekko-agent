@@ -300,9 +300,12 @@ export function RemoteAccess() {
       const target = routeTargets(next, tailnetUrl, status.alsoRelays ?? []);
       if (!target) return setUrlProblem('Tailscale isn’t connected on this computer.');
       let s = status;
+      const turningOn = !s.enabled;
       if (!s.enabled || s.relayUrl !== target.main) s = await window.nekko.enableRemote(target.main);
       const have = (s.alsoRelays ?? []).join(' ');
-      if (have !== target.also.join(' ')) s = (await window.nekko.setRemoteRelays?.(target.also)) ?? s;
+      // Turning on always says which relays, so the computer remembers an unticked
+      // Nekko Cloud Relay and the Pro default doesn't add it back.
+      if (turningOn || have !== target.also.join(' ')) s = (await window.nekko.setRemoteRelays?.(target.also)) ?? s;
       setStatus(s);
     } catch (e) {
       setUrlProblem(String((e as Error)?.message ?? e).replace(/^Error:\s*/, ''));
@@ -519,12 +522,14 @@ export function RemoteAccess() {
                   ))}
               </ul>
             )}
+            <AccountDeviceRows rows={status.fleet ?? []} />
           </div>
 
           <div className="text-xs">
             <Field label="Room" value={status.room!} mono />
           </div>
           {picks.tailscale && <LocalRelayCard inUse={status.relayUrl} onStatus={setLocalRelay} />}
+          {cloud?.signedIn && <AccountDevicesSwitch on={status.accountDevices !== false} onChanged={setStatus} />}
           <NetworkVisibilitySwitch />
           <PhoneChangesSwitch />
           <PhoneAccess devices={active} onChanged={() => void refresh()} />
@@ -1126,6 +1131,44 @@ export function PhoneAccessView({
         })}
       </ul>
     </div>
+  );
+}
+
+/**
+ * Decision 0128: phones and computers signed in to this computer's Nekko Cloud
+ * account connect without pairing (on unless turned off). Off turns away the
+ * ones connected that way now; paired devices are not touched.
+ */
+export function AccountDevicesSwitch({ on, onChanged }: { on: boolean; onChanged: (s: RemoteStatus) => void }) {
+  const set = (v: boolean) => {
+    void window.nekko.setRemoteAccountDevices?.(v)
+      .then(onChanged)
+      .catch((e) => useStore.getState().pushToast('error', String(e)));
+  };
+  return (
+    <SettingRow
+      title="Devices on your Nekko Cloud account connect without pairing"
+      detail="A phone signed in to the same account finds this computer and connects through Nekko Cloud Relay, end-to-end encrypted. Turn off to require pairing for every device."
+      control={<Toggle value={on} onChange={set} label="Devices on your Nekko Cloud account connect without pairing" />}
+    />
+  );
+}
+
+/** Devices connected now through the account, not a pairing (decision 0128). */
+export function AccountDeviceRows({ rows }: { rows: NonNullable<RemoteStatus['fleet']> }) {
+  const mine = rows.filter((r) => r.account);
+  if (!mine.length) return null;
+  return (
+    <ul className="mt-(--q-inline)" aria-label="Connected from your Nekko Cloud account">
+      {mine.map((r) => (
+        <li key={r.id} className="quiet-row text-xs">
+          {r.computer ? <ComputerIcon className="h-4 w-4 text-ink-faint" /> : <PhoneIcon className="h-4 w-4 text-ink-faint" />}
+          <span className="text-sm font-medium">{r.name || (r.computer ? 'Computer' : 'Phone')}</span>
+          <StatusDot tone="success" title="Connected now" />
+          <span className="ml-auto text-ink-faint">connected, from your Nekko Cloud account</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
