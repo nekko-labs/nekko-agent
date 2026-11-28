@@ -22,7 +22,9 @@ app.whenReady().then(async () => {
     await run('layoutFixture.showStrategy()');
     for (let i = 0; i < 50 && !await run(`document.body.innerText.includes('Read the project brief.')`); i++) await sleep(100);
     const strategies = await run(`Array.from(document.querySelectorAll('section[data-turn-strategy]')).map(e => e.innerText.split(String.fromCharCode(10)).filter(Boolean).join(String.fromCharCode(10)))`);
-    assert.deepEqual(strategies, process.env.NEKKO_BEFORE === '1' ? [] : ['Strategy\nTool list · Direct · No coordination needed', 'Strategy\nCode mode · Orchestration · Coordination requested']);
+    const direct = 'Strategy\nTool list · Direct · No coordination needed\nModel: gpt-fixture';
+    assert.deepEqual(strategies, [direct, direct, 'Strategy\nCode mode · Orchestration · Coordination requested\nModel: gpt-fixture\nPlanned sub-agent model: gpt-fixture-mini']);
+    assert(await run(`document.body.innerText.indexOf('Read the project brief.') < document.body.innerText.indexOf('Strategy') && document.body.innerText.indexOf('Strategy') < document.body.innerText.indexOf('The brief calls for checking')`));
     report.checks.push({ strategies });
     assert(await run('document.documentElement.scrollWidth <= innerWidth'));
     assert(await run(`document.body.innerText.includes('The two ledgers agree with the audit totals.')`));

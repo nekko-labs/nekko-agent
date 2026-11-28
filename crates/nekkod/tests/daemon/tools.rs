@@ -734,10 +734,14 @@ async fn orchestrate_uses_direct_tools_for_simple_turns_and_saves_actual_strateg
         }
         let saved = saved_session(&rig, "s_strategy");
         let user = saved["messages"].as_array().unwrap().iter().rfind(|m| m["role"] == "user").unwrap();
-        assert_eq!(
-            user["turnStrategy"],
-            json!({ "tools": "list", "orchestration": if coord { "coordinator" } else { "direct" }, "reason": reason })
-        );
+        let mut strategy = json!({
+            "tools": "list", "orchestration": if coord { "coordinator" } else { "direct" },
+            "reason": reason, "modelId": "synthetic",
+        });
+        if coord {
+            strategy["subagentsDeferred"] = json!(true);
+        }
+        assert_eq!(user["turnStrategy"], strategy);
     }
 }
 

@@ -7,12 +7,12 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class TurnStrategyRowsTest {
-    @Test fun `strategy sections sit before their prompts in detailed and folded transcripts`() {
+    @Test fun `strategy rows follow their prompts in detailed and folded transcripts`() {
         val session = Session.from(Json.parseToJsonElement("""{"id":"s","messages":[
             {"id":"old","role":"user","content":"Older chat"},
             {"id":"u1","role":"user","content":"Check it","turnStrategy":{"tools":"code","orchestration":"direct"}},
             {"id":"a","role":"assistant","content":"Okay","reasoning":"Checking"},
-            {"id":"u2","role":"user","content":"Then plan","turnStrategy":{"tools":"code","orchestration":"coordinator"}}
+            {"id":"u2","role":"user","content":"Then plan","turnStrategy":{"tools":"code","orchestration":"direct"}}
         ]}"""))!!
         val projector = ChatProjector()
         val blocks = projector.blocks(session, emptyList())
@@ -20,7 +20,7 @@ class TurnStrategyRowsTest {
         for ((showSteps, open) in listOf(true to emptySet(), false to emptySet(), false to setOf("assistant:a"))) {
             val rows = transcriptRows(keyed, showSteps, running = false, open = open, strategies = projector.strategies)
             assertEquals(
-                listOf("user:old", "strategy:user:u1", "user:u1", "assistant:a", "strategy:user:u2", "user:u2"),
+                listOf("user:old", "user:u1", "strategy:user:u1", "assistant:a", "user:u2", "strategy:user:u2"),
                 rows.filterNot { it is TranscriptRow.Steps }.map(::rowKey),
             )
         }
